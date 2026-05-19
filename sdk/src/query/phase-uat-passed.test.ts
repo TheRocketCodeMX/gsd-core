@@ -7,6 +7,7 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { isPhaseUatPassed, REASON_CODE, PhaseUatPassedError, ERROR_CODE } from './phase-uat-passed.js';
+import { createRegistry } from './index.js';
 
 const UAT_PASS_CONTENT = `---
 status: complete
@@ -433,6 +434,32 @@ result: PASS
       expect(result.reasons.length).toBe(1);
       expect(result.reasons[0].code).toBe(REASON_CODE.CASE_MISMATCH);
       expect(result.reasons[0].capturedValue).toBe('PASS');
+    } finally {
+      await rm(localTmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('phase.uat-passed registry wire-up (cycle 16)', () => {
+  it('phase.uat-passed is registered and dispatchable through the query registry', async () => {
+    const localTmp = await mkdtemp(join(tmpdir(), 'gsd-uat-c16-'));
+    try {
+      const phaseDir = join(localTmp, '.planning', 'phases', '05-walking-skeleton');
+      await mkdir(phaseDir, { recursive: true });
+      await writeFile(join(phaseDir, '05-HUMAN-UAT.md'), UAT_PASS_CONTENT);
+
+      const registry = createRegistry();
+
+      // The handler must be found — if not registered, this returns undefined.
+      expect(registry.has('phase.uat-passed'), 'phase.uat-passed handler not found in registry').toBe(true);
+
+      // Dispatch via the real registry path; args[0] is the phase token.
+      const result = await registry.dispatch('phase.uat-passed', ['5'], localTmp);
+
+      const data = result.data as { passed: boolean; items: Array<Record<string, unknown>>; reasons: unknown[] };
+      expect(data.passed).toBe(true);
+      expect(data.items.length).toBe(1);
+      expect(data.items[0].result).toBe('pass');
     } finally {
       await rm(localTmp, { recursive: true, force: true });
     }

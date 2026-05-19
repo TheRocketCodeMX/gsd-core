@@ -11,6 +11,7 @@ import { resolvePhaseDir } from './phase-list-queries.js';
 import { extractFrontmatter } from './frontmatter.js';
 import { parseVerificationFrontmatterItems } from './uat.js';
 import { GSDError, ErrorClassification } from '../errors.js';
+import type { QueryHandler } from './utils.js';
 
 export const REASON_CODE = Object.freeze({
   NON_PASS_RESULT: 'non_pass_result',
@@ -27,6 +28,7 @@ export type ReasonCode = typeof REASON_CODE[keyof typeof REASON_CODE];
 
 export const ERROR_CODE = Object.freeze({
   PROJECT_DIR_MISSING: 'project_dir_missing',
+  INVALID_PHASE_NUM: 'invalid_phase_num',
 } as const);
 export type ErrorCode = typeof ERROR_CODE[keyof typeof ERROR_CODE];
 
@@ -246,3 +248,21 @@ export async function isPhaseUatPassed(
 
   return { passed, reasons, reasonsHuman: [], items };
 }
+
+/**
+ * QueryHandler adapter for `phase.uat-passed` registry entry.
+ *
+ * args[0] — phase token (required, e.g. '5' or '05-walking-skeleton').
+ * Matches the args convention used by phase.list-plans / phase.list-artifacts.
+ */
+export const phaseUatPassed: QueryHandler = async (args, projectDir, workstream) => {
+  const phase = args[0];
+  if (typeof phase !== 'string' || phase.trim() === '') {
+    throw new PhaseUatPassedError(
+      'phase argument is required',
+      ERROR_CODE.INVALID_PHASE_NUM,
+    );
+  }
+  const result = await isPhaseUatPassed(projectDir, phase, workstream);
+  return { data: result };
+};
