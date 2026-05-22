@@ -21,13 +21,14 @@ are permitted on release/hotfix branches).
 Targets all tags (`~ALL`). Blocks tag updates and deletions — tags are
 immutable once created. Tag creation is unrestricted.
 
-## 3-PR Rollout Plan
+## 4-PR Rollout Plan
 
 | PR | Branch | Action |
 |----|--------|--------|
-| PR-1 (this PR) | `chore/branch-protection-specs` | Check in spec files; `enforcement: disabled` — no effect on repo |
-| PR-2 | `chore/branch-protection-evaluate` | Run `sync-rulesets.sh` with `ENFORCEMENT=evaluate`; 1-week dry-run via rule-suite logs |
-| PR-3 | `chore/branch-protection-active` | Run `sync-rulesets.sh` with `ENFORCEMENT=active`; protection live |
+| PR-1 | `chore/branch-protection-specs` | Check in spec files; `enforcement: disabled` — no effect on repo |
+| PR-2 | `chore/ci-skip-tests-on-docs` | Add path filter to `test.yml` + new `test-skip.yml` noop; doc-only PRs satisfy required checks in <30s |
+| PR-3 | `chore/branch-protection-evaluate` | Run `sync-rulesets.sh` with `ENFORCEMENT=evaluate`; 1-week dry-run via rule-suite logs |
+| PR-4 | `chore/branch-protection-active` | Run `sync-rulesets.sh` with `ENFORCEMENT=active`; protection live |
 
 ## Running `sync-rulesets.sh`
 
@@ -60,6 +61,58 @@ gh api repos/$REPO/rulesets/$RULESET_ID/rule-suites
 Each entry shows the actor, ref, result (`pass`/`fail`), and which rules
 triggered. Use this to validate no legitimate workflows are broken before
 flipping to `active` in PR-3.
+
+
+## Path filters
+
+The `test.yml` workflow uses a `paths:` filter on its `pull_request:` trigger so
+the 6-lane matrix only runs when code-touching files change. A companion workflow,
+`test-skip.yml`, fires on the inverse (`paths-ignore:`) and emits instant noop
+jobs with **identical job IDs and matrix dimensions**. This ensures the 7 required
+status checks (`lint-tests` + 6× `test (...)`) are always satisfied — whether the
+real matrix ran or the noop ran.
+
+### Why dual workflow instead of paths-ignore alone?
+
+GitHub required-status-checks expect a specific context string to appear as
+"passed" on every PR. If `test.yml` is suppressed by `paths-ignore` on a doc-only
+PR, those contexts never fire and the PR is permanently blocked. The noop workflow
+produces the same context strings via matching job IDs + matrix, resolving the
+deadlock.
+
+### Canonical code-paths list
+
+Both `test.yml` (`paths:`) and `test-skip.yml` (`paths-ignore:`) use this list:
+
+```
+bin/**
+get-shit-done/**
+agents/**
+commands/**
+hooks/**
+sdk/**
+tests/**
+scripts/**
+package.json
+package-lock.json
+tsconfig*.json
+.github/workflows/test.yml
+.github/workflows/test-skip.yml
+```
+
+This list also mirrors `changeset-required.yml`'s path filter. Keep all three in sync.
+
+### Adding a new code path
+
+When adding a directory or file that should trigger real tests:
+
+1. Add the glob to `paths:` in `.github/workflows/test.yml`
+2. Add the **same** glob to `paths-ignore:` in `.github/workflows/test-skip.yml`
+3. Add the same glob to `changeset-required.yml` if changesets should be required
+   for that path
+
+Failure to update `test-skip.yml` means doc PRs that happen to touch the new
+path will deadlock (real matrix never fires, noop never fires either).
 
 ## Phase-2 TODO
 
