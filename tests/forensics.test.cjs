@@ -150,7 +150,7 @@ describe('forensics workflow', () => {
     // contains the repo string.
     assert.match(
       content,
-      /gh issue create[\s\S]{0,250}--repo\s+gsd-build\/get-shit-done/,
+      /gh issue create[\s\S]{0,250}--repo\s+GSD-redux\/get-shit-done-redux/,
       'gh issue create must use --repo GSD-redux/get-shit-done-redux to avoid submitting to the user\'s current project repo'
     );
   });
@@ -160,7 +160,7 @@ describe('forensics workflow', () => {
     // Regex is more robust than a fixed-length slice to formatting changes
     assert.match(
       content,
-      /gh label list[\s\S]{0,250}--repo\s+gsd-build\/get-shit-done/,
+      /gh label list[\s\S]{0,250}--repo\s+GSD-redux\/get-shit-done-redux/,
       'gh label list must target GSD-redux/get-shit-done-redux'
     );
   });
