@@ -18,7 +18,14 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createHub, ERROR_KINDS } = require('../get-shit-done/bin/lib/command-routing-hub.cjs');
+const {
+  createHub,
+  ERROR_KINDS,
+  makeUnknownCommand,
+  makeInvalidArgs,
+  makeHandlerRefusal,
+  makeHandlerFailure,
+} = require('../get-shit-done/bin/lib/command-routing-hub.cjs');
 
 // ─── Frozen taxonomy lock ─────────────────────────────────────────────────────
 // #175: SdkDispatchFailed and SdkLoadFailed are removed from the closed enum.
@@ -200,9 +207,9 @@ describe('CommandRoutingHub — happy path, CJS dispatch', () => {
   });
 });
 
-// ─── errorKind: UnknownCommand ────────────────────────────────────────────────
+// ─── kind: UnknownCommand ─────────────────────────────────────────────────────
 
-describe('CommandRoutingHub — errorKind: UnknownCommand', () => {
+describe('CommandRoutingHub — kind: UnknownCommand', () => {
   test('unknown family in manifest returns UnknownCommand', () => {
     const hub = createHub({
       cjsRegistry: {},
@@ -212,7 +219,7 @@ describe('CommandRoutingHub — errorKind: UnknownCommand', () => {
     const result = hub.dispatch({ family: 'bogus', subcommand: 'add', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
   });
 
   test('unknown subcommand in manifest returns UnknownCommand', () => {
@@ -224,7 +231,7 @@ describe('CommandRoutingHub — errorKind: UnknownCommand', () => {
     const result = hub.dispatch({ family: 'phase', subcommand: 'nonexistent', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
   });
 
   test('missing family in cjsRegistry returns UnknownCommand (no manifest)', () => {
@@ -235,7 +242,7 @@ describe('CommandRoutingHub — errorKind: UnknownCommand', () => {
     const result = hub.dispatch({ family: 'bogus-family', subcommand: 'sub', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
   });
 
   test('missing subcommand in cjsRegistry returns UnknownCommand', () => {
@@ -246,21 +253,22 @@ describe('CommandRoutingHub — errorKind: UnknownCommand', () => {
     const result = hub.dispatch({ family: 'phase', subcommand: 'not-there', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
   });
 });
 
-// ─── errorKind: InvalidArgs ───────────────────────────────────────────────────
+// ─── kind: InvalidArgs ────────────────────────────────────────────────────────
 
-describe('CommandRoutingHub — errorKind: InvalidArgs', () => {
+describe('CommandRoutingHub — kind: InvalidArgs', () => {
   test('handler returning InvalidArgs result propagates it', () => {
     const hub = createHub({
       cjsRegistry: {
         phase: {
           insert: (_ctx) => ({
             ok: false,
-            errorKind: ERROR_KINDS.InvalidArgs,
-            message: 'phase insert requires a phase number',
+            kind: ERROR_KINDS.InvalidArgs,
+            arg: 'phase-number',
+            reason: 'phase insert requires a phase number',
           }),
         },
       },
@@ -269,22 +277,22 @@ describe('CommandRoutingHub — errorKind: InvalidArgs', () => {
     const result = hub.dispatch({ family: 'phase', subcommand: 'insert', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.InvalidArgs);
-    assert.ok(result.message.includes('phase number'));
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs);
+    assert.ok(result.reason.includes('phase number'));
   });
 });
 
-// ─── errorKind: HandlerRefusal ────────────────────────────────────────────────
+// ─── kind: HandlerRefusal ─────────────────────────────────────────────────────
 
-describe('CommandRoutingHub — errorKind: HandlerRefusal', () => {
+describe('CommandRoutingHub — kind: HandlerRefusal', () => {
   test('handler returning HandlerRefusal result propagates it', () => {
     const hub = createHub({
       cjsRegistry: {
         phase: {
           'list-plans': (_ctx) => ({
             ok: false,
-            errorKind: ERROR_KINDS.HandlerRefusal,
-            message: 'phase list-plans is SDK-only',
+            kind: ERROR_KINDS.HandlerRefusal,
+            reason: 'phase list-plans is SDK-only',
           }),
         },
       },
@@ -293,13 +301,13 @@ describe('CommandRoutingHub — errorKind: HandlerRefusal', () => {
     const result = hub.dispatch({ family: 'phase', subcommand: 'list-plans', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.HandlerRefusal);
+    assert.equal(result.kind, ERROR_KINDS.HandlerRefusal);
   });
 });
 
-// ─── errorKind: HandlerFailure ────────────────────────────────────────────────
+// ─── kind: HandlerFailure ─────────────────────────────────────────────────────
 
-describe('CommandRoutingHub — errorKind: HandlerFailure', () => {
+describe('CommandRoutingHub — kind: HandlerFailure', () => {
   test('hub does not throw when CJS handler throws — returns HandlerFailure', () => {
     const hub = createHub({
       cjsRegistry: {
@@ -315,11 +323,11 @@ describe('CommandRoutingHub — errorKind: HandlerFailure', () => {
     });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.HandlerFailure);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
     assert.ok(result.message.includes('handler blew up'));
   });
 
-  test('HandlerFailure details.originalError carries the thrown error', () => {
+  test('HandlerFailure cause carries the thrown error', () => {
     const originalError = new Error('boom');
     const hub = createHub({
       cjsRegistry: {
@@ -332,8 +340,8 @@ describe('CommandRoutingHub — errorKind: HandlerFailure', () => {
     const result = hub.dispatch({ family: 'state', subcommand: 'load', args: [], cwd: '/', raw: false });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.HandlerFailure);
-    assert.strictEqual(result.details.originalError, originalError);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.strictEqual(result.cause, originalError);
   });
 });
 
@@ -349,7 +357,7 @@ describe('CommandRoutingHub — hub never throws', () => {
     });
 
     assert.ok(!result.ok);
-    assert.equal(result.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
   });
 
   test('hub does not throw when dispatch receives malformed request', () => {
@@ -363,6 +371,158 @@ describe('CommandRoutingHub — hub never throws', () => {
 
     // Result is an error, not a thrown exception
     assert.ok(!result.ok);
+  });
+});
+
+// ─── P1.2: Typed-payload discriminated union (#176) ──────────────────────────
+// Each error variant carries ONLY its own typed payload.
+// `errorKind` field renamed to `kind`; generic `message`/`details` removed
+// from variants that have dedicated fields.
+
+describe('CommandRoutingHub — P1.2 typed-payload discriminated union (#176)', () => {
+  // ── UnknownCommand: { ok, kind, command } — no message, no details ──────────
+  test('UnknownCommand has exactly { ok, kind, command } — nothing else', () => {
+    const hub = createHub({
+      cjsRegistry: {},
+      manifest: { phase: ['add'] },
+    });
+
+    const result = hub.dispatch({ family: 'bogus', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
+    assert.equal(typeof result.command, 'string');
+    assert.ok(result.command.length > 0, 'command field must be non-empty');
+    // Strict field set — no errorKind, no message, no details
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['command', 'kind', 'ok']);
+  });
+
+  test('UnknownCommand for unknown subcommand carries the command string', () => {
+    const hub = createHub({
+      cjsRegistry: {},
+      manifest: { phase: ['add'] },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'nonexistent', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
+    assert.ok(result.command.includes('nonexistent'), `Expected command to include 'nonexistent', got: ${result.command}`);
+  });
+
+  test('UnknownCommand from missing cjsRegistry family carries the command string', () => {
+    const hub = createHub({
+      cjsRegistry: { state: { load: () => ({ ok: true, data: null }) } },
+    });
+
+    const result = hub.dispatch({ family: 'bogus-family', subcommand: 'sub', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
+    assert.ok(result.command.includes('bogus-family'), `Expected command to include 'bogus-family', got: ${result.command}`);
+  });
+
+  // ── InvalidArgs: { ok, kind, arg, reason } — no message, no details ─────────
+  test('InvalidArgs result from handler is propagated with kind/arg/reason fields', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          insert: (_ctx) => ({
+            ok: false,
+            kind: ERROR_KINDS.InvalidArgs,
+            arg: '--dry-run',
+            reason: 'phase insert does not support --dry-run',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'insert', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs);
+    assert.equal(result.arg, '--dry-run');
+    assert.ok(result.reason.includes('--dry-run'));
+    // Strict field set
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['arg', 'kind', 'ok', 'reason']);
+  });
+
+  // ── HandlerRefusal: { ok, kind, reason } — no message, no details ────────────
+  test('HandlerRefusal result from handler is propagated with kind/reason fields', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          'list-plans': (_ctx) => ({
+            ok: false,
+            kind: ERROR_KINDS.HandlerRefusal,
+            reason: 'phase list-plans is SDK-only',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'list-plans', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerRefusal);
+    assert.ok(result.reason.includes('SDK-only'));
+    // Strict field set
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['kind', 'ok', 'reason']);
+  });
+
+  // ── HandlerFailure: { ok, kind, message, cause? } — cause carries the Error ──
+  test('HandlerFailure from throw has { ok, kind, message, cause } — no details', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => { throw new Error('handler blew up'); },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: ['desc'], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(result.message.includes('handler blew up'));
+    assert.ok(result.cause instanceof Error);
+    // Strict field set (cause present when Error thrown)
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['cause', 'kind', 'message', 'ok']);
+  });
+
+  test('HandlerFailure cause carries the original thrown Error object', () => {
+    const originalError = new Error('boom');
+    const hub = createHub({
+      cjsRegistry: {
+        state: {
+          load: (_ctx) => { throw originalError; },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'state', subcommand: 'load', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.strictEqual(result.cause, originalError);
+  });
+
+  // ── ERROR_KINDS values used as `kind` discriminator — still work ─────────────
+  test('ERROR_KINDS.UnknownCommand === result.kind for UnknownCommand', () => {
+    const hub = createHub({ cjsRegistry: {} });
+    const result = hub.dispatch({ family: 'nope', subcommand: 'x', args: [], cwd: '/', raw: false });
+    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
+  });
+
+  test('ERROR_KINDS values are stable string constants matching their key names', () => {
+    assert.equal(ERROR_KINDS.UnknownCommand, 'UnknownCommand');
+    assert.equal(ERROR_KINDS.InvalidArgs, 'InvalidArgs');
+    assert.equal(ERROR_KINDS.HandlerRefusal, 'HandlerRefusal');
+    assert.equal(ERROR_KINDS.HandlerFailure, 'HandlerFailure');
   });
 });
 
@@ -402,6 +562,287 @@ describe('CommandRoutingHub — single CJS dispatch invariant (#175)', () => {
 
     assert.ok(known.ok);
     assert.ok(!unknown.ok);
-    assert.equal(unknown.errorKind, ERROR_KINDS.UnknownCommand);
+    assert.equal(unknown.kind, ERROR_KINDS.UnknownCommand);
+  });
+});
+
+// ─── P1.2 Review Finding 1: Hub runtime-validates ok:false handler returns ────
+// A handler that returns { ok: false, kind: 'InvalidArgs', message: 'oops' }
+// (missing `reason`, has stray `message`) must NOT pass through unchanged.
+// Hub must coerce it to a HandlerFailure with a contract-violation message.
+
+describe('CommandRoutingHub — Finding 1: runtime-validation of handler ok:false returns', () => {
+  test('malformed InvalidArgs return (missing reason, has stray message) is coerced to HandlerFailure', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => ({
+            ok: false,
+            kind: 'InvalidArgs',
+            message: 'oops',  // wrong: should be reason, not message
+            // missing: arg, reason
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok, 'result must be an error');
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure,
+      `Expected HandlerFailure but got kind: ${result.kind}`);
+    assert.ok(
+      result.message.includes('malformed') || result.message.includes('contract') ||
+      result.message.includes('InvalidArgs') || result.message.includes('reason'),
+      `Expected contract-violation message, got: ${result.message}`
+    );
+  });
+
+  test('malformed HandlerRefusal return (missing reason) is coerced to HandlerFailure', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => ({
+            ok: false,
+            kind: 'HandlerRefusal',
+            message: 'refuse',  // wrong: should be reason
+            // missing: reason
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(typeof result.message === 'string' && result.message.length > 0);
+  });
+
+  test('malformed HandlerFailure return (missing message) is coerced to HandlerFailure', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => ({
+            ok: false,
+            kind: 'HandlerFailure',
+            // missing: message
+            details: 'something',  // extraneous
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(typeof result.message === 'string' && result.message.length > 0);
+  });
+
+  test('well-formed InvalidArgs return is NOT coerced — passes through unchanged', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => ({
+            ok: false,
+            kind: 'InvalidArgs',
+            arg: '--dry-run',
+            reason: 'not supported',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs);
+    assert.equal(result.arg, '--dry-run');
+    assert.equal(result.reason, 'not supported');
+  });
+
+  test('unknown kind in ok:false return is coerced to HandlerFailure', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => ({
+            ok: false,
+            kind: 'SomeLegacyKind',
+            errorKind: 'SomeLegacyKind',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+  });
+});
+
+// ─── P1.2 Review Finding 2: Non-Error throws preserve the original throwable ──
+// When a handler throws a non-Error (plain object, string, number), the Hub must
+// wrap it in an Error and attach .thrown = originalValue.
+
+describe('CommandRoutingHub — Finding 2: non-Error throws preserve original throwable', () => {
+  test('handler throwing a plain object → HandlerFailure with cause.thrown === original', () => {
+    const thrown = { custom: 'payload', code: 42 };
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => { throw thrown; },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(result.cause instanceof Error,
+      `result.cause must be an Error, got: ${typeof result.cause}`);
+    assert.strictEqual(result.cause.thrown, thrown,
+      'cause.thrown must be the original thrown object');
+  });
+
+  test('handler throwing a string → HandlerFailure with cause.thrown === original string', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => { throw 'just a string'; },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(result.cause instanceof Error,
+      `result.cause must be an Error, got: ${typeof result.cause}`);
+    assert.strictEqual(result.cause.thrown, 'just a string',
+      'cause.thrown must be the original thrown string');
+  });
+
+  test('handler throwing a number → HandlerFailure with cause.thrown === original number', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => { throw 404; },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.ok(result.cause instanceof Error);
+    assert.strictEqual(result.cause.thrown, 404);
+  });
+
+  test('handler throwing a real Error still works — cause is the Error itself (no .thrown wrapping)', () => {
+    const original = new Error('real error');
+    const hub = createHub({
+      cjsRegistry: {
+        phase: {
+          add: (_ctx) => { throw original; },
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'phase', subcommand: 'add', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.HandlerFailure);
+    assert.strictEqual(result.cause, original, 'Error throws must have cause === original Error');
+    // No .thrown on real Error cause
+    assert.equal(result.cause.thrown, undefined);
+  });
+});
+
+// ─── P1.2 Review Finding 3: Factory returns are Object.frozen ─────────────────
+// Each makeXxx factory must return a frozen object so callers cannot mutate
+// the variant invariant.
+
+describe('CommandRoutingHub — Finding 3: factory returns are Object.frozen', () => {
+  test('makeUnknownCommand returns a frozen object', () => {
+    const result = makeUnknownCommand('phase bogus');
+    assert.ok(Object.isFrozen(result),
+      'makeUnknownCommand must return a frozen object');
+  });
+
+  test('makeInvalidArgs returns a frozen object', () => {
+    const result = makeInvalidArgs('--dry-run', 'not supported');
+    assert.ok(Object.isFrozen(result),
+      'makeInvalidArgs must return a frozen object');
+  });
+
+  test('makeHandlerRefusal returns a frozen object', () => {
+    const result = makeHandlerRefusal('SDK-only');
+    assert.ok(Object.isFrozen(result),
+      'makeHandlerRefusal must return a frozen object');
+  });
+
+  test('makeHandlerFailure returns a frozen object', () => {
+    const result = makeHandlerFailure('something broke', new Error('orig'));
+    assert.ok(Object.isFrozen(result),
+      'makeHandlerFailure must return a frozen object');
+  });
+
+  test('frozen factory results cannot be mutated', () => {
+    const result = makeUnknownCommand('phase bogus');
+    // In strict mode, mutation of a frozen object throws TypeError
+    assert.throws(
+      () => { result.command = 'tampered'; },
+      TypeError,
+      'Mutating a frozen factory result must throw TypeError'
+    );
+  });
+});
+
+// ─── P1.2 Review Finding 4: makeHandlerFailure wraps non-Error causes ─────────
+// If cause is provided but is not an Error, wrap it so .cause instanceof Error.
+// Attach .thrown = originalCause so it is not silently dropped.
+
+describe('CommandRoutingHub — Finding 4: makeHandlerFailure wraps non-Error causes', () => {
+  test('makeHandlerFailure("msg", "string-cause") → cause instanceof Error', () => {
+    const result = makeHandlerFailure('msg', 'string-cause');
+    assert.ok(result.cause instanceof Error,
+      `cause must be an Error, got: ${typeof result.cause}`);
+  });
+
+  test('makeHandlerFailure("msg", "string-cause") → cause.thrown === "string-cause"', () => {
+    const result = makeHandlerFailure('msg', 'string-cause');
+    assert.strictEqual(result.cause.thrown, 'string-cause',
+      'cause.thrown must be the original non-Error cause');
+  });
+
+  test('makeHandlerFailure with a plain object cause → cause instanceof Error with .thrown', () => {
+    const obj = { code: 42, detail: 'bad' };
+    const result = makeHandlerFailure('msg', obj);
+    assert.ok(result.cause instanceof Error);
+    assert.strictEqual(result.cause.thrown, obj);
+  });
+
+  test('makeHandlerFailure with a real Error cause → cause is the original Error (no wrapping)', () => {
+    const original = new Error('real');
+    const result = makeHandlerFailure('msg', original);
+    assert.strictEqual(result.cause, original,
+      'Real Error causes must not be wrapped');
+  });
+
+  test('makeHandlerFailure without cause → result.cause is undefined', () => {
+    const result = makeHandlerFailure('msg');
+    assert.equal(result.cause, undefined);
+  });
+
+  test('makeHandlerFailure with null cause → behaves as no cause (undefined)', () => {
+    // null is not an Error, but "not provided" — treat as absent
+    const result = makeHandlerFailure('msg', null);
+    // null should not be wrapped into an Error — it's equivalent to "no cause"
+    assert.equal(result.cause, undefined);
   });
 });
