@@ -44,14 +44,53 @@ describe('makeDispatchEvent — shape', () => {
     assert.notEqual(a.traceId, b.traceId, 'consecutive calls must produce different traceIds');
   });
 
-  test('parentTraceId is always undefined in P1.3', () => {
+  test('parentTraceId is undefined when not provided (default, backward-compat with P1.3)', () => {
     const event = makeDispatchEvent({
       command: 'plan',
       result: { kind: 'ok', data: null },
-      parentTraceId: 'should-be-ignored',
     });
-    // P1.3: parentTraceId field exists but is always undefined
-    assert.strictEqual(event.parentTraceId, undefined, 'parentTraceId must be undefined in P1.3');
+    // P1.4: when no parentTraceId supplied, field is still undefined
+    assert.strictEqual(event.parentTraceId, undefined, 'parentTraceId must be undefined when not provided');
+  });
+
+  test('parentTraceId propagates when provided as a string (P1.4)', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    });
+    assert.strictEqual(event.parentTraceId, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      'parentTraceId must be propagated when provided as a string');
+  });
+
+  test('parentTraceId is undefined when null is passed (defensive normalization)', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: null,
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'null parentTraceId must be normalised to undefined');
+  });
+
+  test('non-string parentTraceId is set to undefined for defensive safety', () => {
+    // Style choice: surrounding code uses undefined for absent/invalid optional fields
+    // (e.g. args is omitted rather than coerced). Consistent policy: non-string → undefined.
+    const eventNum = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: 42,
+    });
+    assert.strictEqual(eventNum.parentTraceId, undefined,
+      'number parentTraceId must be normalised to undefined');
+
+    const eventObj = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: { id: 'x' },
+    });
+    assert.strictEqual(eventObj.parentTraceId, undefined,
+      'object parentTraceId must be normalised to undefined');
   });
 
   test('command is set from input', () => {
@@ -113,6 +152,107 @@ describe('makeDispatchEvent — args field', () => {
     });
     assert.ok('args' in event, 'args must be present when includeArgs is true');
     assert.deepStrictEqual(event.args, ['--foo', 'bar']);
+  });
+});
+
+describe('makeDispatchEvent — parentTraceId UUID v4 validation', () => {
+  const { randomUUID } = require('crypto');
+
+  test('invalid empty string parentTraceId is dropped to undefined', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: '',
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'empty string parentTraceId must be coerced to undefined');
+  });
+
+  test('invalid whitespace-only parentTraceId is dropped to undefined', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: '   ',
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'whitespace-only parentTraceId must be coerced to undefined');
+  });
+
+  test('invalid non-UUID string parentTraceId is dropped to undefined', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: 'junk',
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      '"junk" parentTraceId must be coerced to undefined');
+  });
+
+  test('invalid oversized string parentTraceId is dropped to undefined', () => {
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: 'a'.repeat(10000),
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      '10000-char string parentTraceId must be coerced to undefined');
+  });
+
+  test('invalid UUID v1 parentTraceId is dropped to undefined', () => {
+    // Version nibble is 1, not 4 — rejected by UUID v4 regex
+    const uuidV1Like = 'aaaaaaaa-bbbb-1ccc-8ddd-eeeeeeeeeeee';
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: uuidV1Like,
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'UUID v1 parentTraceId must be dropped to undefined');
+  });
+
+  test('invalid UUID v4 missing hyphens parentTraceId is dropped to undefined', () => {
+    // 32 hex chars, no hyphens
+    const noHyphens = '1234567812345678123456781234567812';
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: noHyphens,
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'UUID v4 missing hyphens must be coerced to undefined');
+  });
+
+  test('invalid UUID v4 with extra chars parentTraceId is dropped to undefined', () => {
+    const withExtra = randomUUID() + 'x';
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: withExtra,
+    });
+    assert.strictEqual(event.parentTraceId, undefined,
+      'UUID v4 with trailing extra char must be coerced to undefined');
+  });
+
+  test('valid UPPERCASE UUID v4 parentTraceId is propagated (case-insensitive)', () => {
+    const upperUUID = randomUUID().toUpperCase();
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: upperUUID,
+    });
+    assert.strictEqual(event.parentTraceId, upperUUID,
+      'uppercase UUID v4 parentTraceId must be propagated as-is');
+  });
+
+  test('valid lowercase UUID v4 parentTraceId is propagated', () => {
+    const lowerUUID = randomUUID(); // crypto.randomUUID() is always lowercase
+    const event = makeDispatchEvent({
+      command: 'plan',
+      result: { kind: 'ok', data: null },
+      parentTraceId: lowerUUID,
+    });
+    assert.strictEqual(event.parentTraceId, lowerUUID,
+      'lowercase UUID v4 parentTraceId must be propagated');
   });
 });
 

@@ -179,12 +179,89 @@ describe('Hub + logger — event shape', () => {
     );
   });
 
-  test('event.parentTraceId is undefined in P1.3', () => {
+  test('event.parentTraceId is undefined when req omits parentTraceId (backward-compat with P1.3)', () => {
     const tracking = makeTrackingLogger();
     const hub = makeHub(tracking);
     hub.dispatch({ family: 'plan', subcommand: '' });
     assert.strictEqual(tracking.calls[0].parentTraceId, undefined,
-      'parentTraceId must be undefined in P1.3');
+      'parentTraceId must be undefined when req does not include it');
+  });
+
+  test('dispatch passes req.parentTraceId through to the emitted event', () => {
+    const tracking = makeTrackingLogger();
+    const hub = makeHub(tracking);
+    const parentId = 'ffffffff-0000-4000-8000-aaaaaaaaaaaa';
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: parentId });
+    assert.strictEqual(tracking.calls[0].parentTraceId, parentId,
+      'parentTraceId must be present on the event when passed via req');
+  });
+
+  test('multiple dispatches with the same parentTraceId all carry that parentTraceId on their events', () => {
+    const tracking = makeTrackingLogger();
+    const hub = makeHub(tracking);
+    const sharedParentId = 'cccccccc-0000-4000-8000-111111111111';
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    for (const event of tracking.calls) {
+      assert.strictEqual(event.parentTraceId, sharedParentId,
+        'every child dispatch must carry the shared parentTraceId');
+    }
+  });
+
+  test('each dispatch still gets a unique traceId even when parentTraceId is shared (correlation tree invariant)', () => {
+    const tracking = makeTrackingLogger();
+    const hub = makeHub(tracking);
+    const sharedParentId = 'dddddddd-0000-4000-8000-222222222222';
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: sharedParentId });
+    const traceIds = tracking.calls.map(e => e.traceId);
+    const unique = new Set(traceIds);
+    assert.equal(unique.size, 3,
+      'each dispatch must produce a unique traceId even when parentTraceId is shared');
+  });
+});
+
+// ─── Invalid parentTraceId silently dropped at the Hub seam ─────────────────
+
+describe('Hub + logger — invalid parentTraceId handling', () => {
+  test('dispatch with invalid parentTraceId still emits event with parentTraceId: undefined', () => {
+    const tracking = makeTrackingLogger();
+    const hub = makeHub(tracking);
+
+    // Send an invalid parentTraceId — not a UUID v4
+    hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: 'junk' });
+
+    assert.equal(tracking.calls.length, 1, 'onEvent must still be called once');
+    const event = tracking.calls[0];
+    // Factory must coerce invalid parentTraceId to undefined — logger never sees the bad value
+    assert.strictEqual(event.parentTraceId, undefined,
+      'event.parentTraceId must be undefined when an invalid value was passed');
+  });
+
+  test('dispatch with invalid parentTraceId does NOT trigger the logger-failure warn path', () => {
+    // The _notifyLogger warn path fires only when logger.onEvent throws.
+    // Silent coercion in the factory means the invalid parentTraceId never reaches
+    // the logger — so the throwing/warn code path must stay dormant.
+    const stderrOutput = captureStderr(() => {
+      const throwingLogger = {
+        // This logger would throw if it ever saw a non-UUID parentTraceId value, but it
+        // must never be reached — the factory drops it before calling the logger.
+        onEvent(event) {
+          if (event.parentTraceId !== undefined) {
+            throw new Error('factory passed invalid parentTraceId to logger');
+          }
+        },
+      };
+      const hub = makeHub(throwingLogger);
+      hub.dispatch({ family: 'plan', subcommand: '', parentTraceId: '' });
+    });
+
+    // If the logger had thrown, the Hub would have emitted a level:warn to stderr.
+    // Empty stderr confirms the factory silently dropped the bad value before calling onEvent.
+    assert.equal(stderrOutput, '',
+      'no stderr warn must appear — factory coerces invalid parentTraceId without involving logger');
   });
 });
 
