@@ -29,7 +29,7 @@ describe('bug #3212 execute-phase stall detection and safe resume', () => {
     // Use the CJS runtime Set for CJS; use the manifest directly for SDK-side
     // verification (since config-schema.ts no longer has inline literals).
     const { VALID_CONFIG_KEYS: cjsKeys } = require('../get-shit-done/bin/lib/config-schema.cjs');
-    const manifest = JSON.parse(read('sdk/shared/config-schema.manifest.json'));
+    const manifest = JSON.parse(read('get-shit-done/bin/shared/config-schema.manifest.json'));
     const manifestKeys = new Set(manifest.validKeys);
 
     for (const key of ['executor.stall_detect_interval_minutes', 'executor.stall_threshold_minutes']) {

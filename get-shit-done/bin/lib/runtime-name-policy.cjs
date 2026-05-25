@@ -26,12 +26,17 @@ function normalizeRuntimeToken(value) {
 }
 
 function loadAliasManifest() {
-  try {
-    const manifestPath = path.resolve(__dirname, '../../../sdk/shared/runtime-aliases.manifest.json');
-    const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {
-    // Fall through to fallback aliases.
+  const manifestCandidates = [
+    path.resolve(__dirname, '..', 'shared', 'runtime-aliases.manifest.json'),
+    path.resolve(__dirname, '../../../sdk/shared/runtime-aliases.manifest.json'),
+  ];
+  for (const manifestPath of manifestCandidates) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      // Try next candidate.
+    }
   }
   return FALLBACK_ALIASES;
 }

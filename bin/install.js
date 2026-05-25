@@ -215,16 +215,9 @@ const _profileArgRaw = (() => {
 // configDir is resolved) and may override 'full' — see writeActiveProfile call below.
 const _profileIsCore = _profileArgRaw === 'core';
 const _requestedProfileName = (hasMinimal || _profileIsCore) ? 'core' : (_profileArgRaw || null);
-const hasSdk = args.includes('--sdk');
-const hasNoSdk = args.includes('--no-sdk');
 
 if (hasMinimal && _profileArgRaw) {
   console.error(`  ${yellow}Cannot specify both --minimal/--core-only and --profile${reset}`);
-  process.exit(1);
-}
-
-if (hasSdk && hasNoSdk) {
-  console.error(`  ${yellow}Cannot specify both --sdk and --no-sdk${reset}`);
   process.exit(1);
 }
 
@@ -8547,22 +8540,19 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     failures.push('get-shit-done');
   }
 
-  // #3288 / #3571 — Copy sdk/shared manifests into the get-shit-done payload
+  // Copy shared manifests into the get-shit-done payload
   // at the co-located path that CJS modules resolve first:
   //   get-shit-done/bin/shared/*.json
   //
-  // The install copies get-shit-done/ but NOT sdk/ — CJS modules' legacy
-  // source-repo paths (3 levels up → sdk/shared/) therefore resolve to a
-  // non-existent location in every post-install layout. Copying these shared
-  // files alongside the CJS files ensures require() succeeds without needing
-  // sdk/ to exist.
+  // This source now lives under get-shit-done/bin/shared in-repo.
   const sharedPayloadFiles = [
     'model-catalog.json',
     'config-defaults.manifest.json',
     'config-schema.manifest.json',
+    'runtime-aliases.manifest.json',
   ];
   for (const fileName of sharedPayloadFiles) {
-    const sharedSrc = path.join(src, 'sdk', 'shared', fileName);
+    const sharedSrc = path.join(src, 'get-shit-done', 'bin', 'shared', fileName);
     const sharedDest = path.join(skillDest, 'bin', 'shared', fileName);
     const displayPath = `get-shit-done/bin/shared/${fileName}`;
     if (fs.existsSync(sharedSrc)) {
@@ -8574,7 +8564,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
         failures.push(displayPath);
       }
     } else {
-      failures.push(`sdk/shared/${fileName} (source missing)`);
+      failures.push(`get-shit-done/bin/shared/${fileName} (source missing)`);
     }
   }
 
@@ -11239,13 +11229,6 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
 
   const finalize = (shouldInstallStatusline, shouldInstallBanner) => {
     try {
-      // Verify sdk/dist/cli.js is present and executable. The dist is shipped
-      // prebuilt in the tarball (fix/2441-sdk-decouple); gsd-sdk reaches users via
-      // the parent package's bin/gsd-sdk.js shim, so no sub-install is needed.
-      // Skip with --no-sdk. Skip with isLocal (#2678 — local installs don't own global npm).
-      // #3033: pass forceSdk so --sdk overrides the local-install skip.
-      installSdkIfNeeded({ isLocal: !isGlobal, forceSdk: hasSdk, throwOnFailure: true });
-
       const printSummaries = () => {
         for (const result of results) {
           const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;

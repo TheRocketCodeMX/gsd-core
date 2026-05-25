@@ -14,7 +14,7 @@
  *   1. model-catalog.cjs must use a resolve-chain that checks a co-located
  *      path first (bin/shared/model-catalog.json) before the legacy
  *      source-repo path.
- *   2. bin/install.js must copy sdk/shared/model-catalog.json into
+ *   2. bin/install.js must copy shared model-catalog.json into
  *      get-shit-done/bin/shared/model-catalog.json (co-located inside the
  *      get-shit-done/ payload).
  *
@@ -33,7 +33,7 @@ const os = require('node:os');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const MODEL_CATALOG_CJS = path.join(REPO_ROOT, 'get-shit-done', 'bin', 'lib', 'model-catalog.cjs');
-const MODEL_CATALOG_JSON = path.join(REPO_ROOT, 'sdk', 'shared', 'model-catalog.json');
+const MODEL_CATALOG_JSON = path.join(REPO_ROOT, 'get-shit-done', 'bin', 'shared', 'model-catalog.json');
 
 const { install } = require('../bin/install.js');
 
