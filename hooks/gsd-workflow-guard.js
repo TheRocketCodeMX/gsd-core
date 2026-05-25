@@ -65,6 +65,17 @@ function currentBranch(cwd) {
   return result.stdout.trim();
 }
 
+function workflowGuardEnabled(cwd) {
+  const configPath = path.join(cwd, '.planning', 'config.json');
+  if (!fs.existsSync(configPath)) return false;
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    return Boolean(config.hooks?.workflow_guard);
+  } catch (e) {
+    return false;
+  }
+}
+
 let input = '';
 const stdinTimeout = setTimeout(() => process.exit(0), 3000);
 process.stdin.setEncoding('utf8');
@@ -75,8 +86,12 @@ process.stdin.on('end', () => {
     const data = JSON.parse(input);
     const toolName = data.tool_name;
     const cwd = data.cwd || process.cwd();
+    const isWorkflowGuardEnabled = workflowGuardEnabled(cwd);
 
     if (toolName === 'Bash') {
+      if (!isWorkflowGuardEnabled) {
+        process.exit(0);
+      }
       const command = data.tool_input?.command || '';
       for (const gitCwd of forceGitAddCwds(command, cwd)) {
         const branch = currentBranch(gitCwd);
@@ -92,8 +107,8 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // Only guard Write and Edit tool calls
-    if (toolName !== 'Write' && toolName !== 'Edit') {
+    // Only guard Write, Edit, and MultiEdit tool calls
+    if (!['Write', 'Edit', 'MultiEdit'].includes(toolName)) {
       process.exit(0);
     }
 
@@ -125,19 +140,8 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // Check if workflow guard is enabled
-    const configPath = path.join(cwd, '.planning', 'config.json');
-    if (fs.existsSync(configPath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (!config.hooks?.workflow_guard) {
-          process.exit(0); // Guard disabled (default)
-        }
-      } catch (e) {
-        process.exit(0);
-      }
-    } else {
-      process.exit(0); // No GSD project — don't guard
+    if (!isWorkflowGuardEnabled) {
+      process.exit(0); // Guard disabled (default) or no GSD project
     }
 
     // If we get here: GSD project, guard enabled, file edit outside .planning/,
