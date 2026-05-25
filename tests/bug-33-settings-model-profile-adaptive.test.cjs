@@ -9,7 +9,7 @@
  * model_profile UI shows 4 options, schema has 5 — `adaptive` missing from
  * `settings.md` AskUserQuestion.
  *
- * The schema (sdk/shared/model-catalog.json `profiles` array) defines 5 valid
+ * The schema (get-shit-done/bin/shared/model-catalog.json `profiles` array) defines 5 valid
  * model_profile values: quality, balanced, budget, adaptive, inherit. The
  * settings.md AskUserQuestion block for model_profile originally listed only 4
  * options (Quality, Balanced, Budget, Inherit) — `adaptive` was missing.
@@ -29,7 +29,7 @@ const path = require('node:path');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const SETTINGS_PATH = path.join(REPO_ROOT, 'get-shit-done', 'workflows', 'settings.md');
-const CATALOG_PATH = path.join(REPO_ROOT, 'sdk', 'shared', 'model-catalog.json');
+const CATALOG_PATH = path.join(REPO_ROOT, 'get-shit-done', 'bin', 'shared', 'model-catalog.json');
 
 /**
  * Collect every label: "..." value within a text block, lowercased.
@@ -62,7 +62,7 @@ describe('issue #33: model_profile schema and settings.md UI are in sync', () =>
   test('schema includes the adaptive model_profile value', () => {
     assert.ok(
       Array.isArray(catalog.profiles),
-      'sdk/shared/model-catalog.json must have a "profiles" array'
+      'model-catalog.json must have a "profiles" array'
     );
     assert.ok(
       catalog.profiles.includes('adaptive'),
@@ -73,7 +73,7 @@ describe('issue #33: model_profile schema and settings.md UI are in sync', () =>
   test('schema includes adaptive as a model_profile value', () => {
     assert.ok(
       catalog.profiles.includes('adaptive'),
-      '"adaptive" must be in sdk/shared/model-catalog.json profiles. Got: [' + catalog.profiles.join(', ') + ']'
+      '"adaptive" must be in model-catalog.json profiles. Got: [' + catalog.profiles.join(', ') + ']'
     );
   });
 

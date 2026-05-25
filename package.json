@@ -4,8 +4,7 @@
   "description": "A meta-prompting, context engineering and spec-driven development system for Claude Code, OpenCode, Gemini and Codex by TÂCHES.",
   "bin": {
     "get-shit-done-redux": "bin/install.js",
-    "gsd-sdk": "bin/gsd-sdk.js",
-    "gsd-tools": "bin/gsd-sdk.js"
+    "gsd-tools": "get-shit-done/bin/gsd-tools.cjs"
   },
   "files": [
     "bin",
@@ -13,14 +12,7 @@
     "get-shit-done",
     "agents",
     "hooks",
-    "scripts",
-    "sdk/src",
-    "sdk/shared",
-    "sdk/prompts",
-    "sdk/dist",
-    "sdk/package.json",
-    "sdk/package-lock.json",
-    "sdk/tsconfig.json"
+    "scripts"
   ],
   "keywords": [
     "claude",
@@ -64,12 +56,11 @@
   "scripts": {
     "check:env": "bash scripts/check-env.sh",
     "check:integrity": "./scripts/check-npm-integrity.sh",
-    "build": "npm run build:sdk",
+    "build": "npm run build:hooks",
     "build:hooks": "node scripts/build-hooks.js",
-    "build:sdk": "cd sdk && npm ci && npm run build",
-    "prepublishOnly": "npm run build:hooks && npm run build:sdk",
-    "pretest": "npm run build:sdk && npm run lint:skill-deps",
-    "pretest:coverage": "npm run build:sdk",
+    "prepublishOnly": "npm run build:hooks",
+    "pretest": "npm run lint:skill-deps",
+    "pretest:coverage": "npm run lint:skill-deps",
     "lint:descriptions": "node scripts/lint-descriptions.cjs",
     "lint:skill-deps": "node scripts/lint-skill-deps.cjs",
     "lint:tests": "node scripts/lint-no-source-grep.cjs",

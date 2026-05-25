@@ -27,7 +27,6 @@ const REPO_ROOT = path.join(__dirname, '..');
 
 const TEMPLATE_PATHS = [
   path.join(REPO_ROOT, 'get-shit-done', 'templates', 'state.md'),
-  path.join(REPO_ROOT, 'sdk', 'prompts', 'templates', 'state.md'),
 ];
 
 /**
@@ -185,16 +184,4 @@ describe('bug #21 — STATE.md template must carry YAML frontmatter', () => {
     });
   }
 
-  test('both templates produce byte-equal File Template blocks', () => {
-    const [bodyA, bodyB] = TEMPLATE_PATHS.map((p) =>
-      extractFileTemplate(fs.readFileSync(p, 'utf-8')),
-    );
-    assert.strictEqual(
-      bodyA,
-      bodyB,
-      'File Template code blocks in get-shit-done/templates/state.md and ' +
-      'sdk/prompts/templates/state.md must be identical. ' +
-      'Edit both files together to keep them in sync.',
-    );
-  });
 });

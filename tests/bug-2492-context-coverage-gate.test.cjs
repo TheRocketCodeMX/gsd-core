@@ -21,13 +21,7 @@ const path = require('path');
 
 const PLAN_PHASE = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'plan-phase.md');
 const VERIFY_PHASE = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'verify-phase.md');
-const CONFIG_TS = path.join(__dirname, '..', 'sdk', 'src', 'config.ts');
-const CONFIG_MUTATION_TS = path.join(__dirname, '..', 'sdk', 'src', 'query', 'config-mutation.ts');
-// #2653 — allowlist moved to shared schema module.
-const CONFIG_SCHEMA_TS = path.join(__dirname, '..', 'sdk', 'src', 'query', 'config-schema.ts');
-const CONFIG_GATES_TS = path.join(__dirname, '..', 'sdk', 'src', 'query', 'config-gates.ts');
-const QUERY_INDEX_TS = path.join(__dirname, '..', 'sdk', 'src', 'query', 'registry-assembly.ts');
-const QUERY_ASSEMBLY_DESCRIPTOR_TS = path.join(__dirname, '..', 'sdk', 'src', 'query', 'registry-assembly-descriptor.ts');
+const SCHEMA_MANIFEST_JSON = path.join(__dirname, '..', 'get-shit-done', 'bin', 'shared', 'config-schema.manifest.json');
 
 describe('plan-phase decision-coverage gate (#2492)', () => {
   const md = fs.readFileSync(PLAN_PHASE, 'utf-8');
@@ -142,41 +136,12 @@ describe('verify-phase decision-coverage gate (#2492)', () => {
   });
 });
 
-describe('SDK wiring for #2492 gates', () => {
-  test('config.ts WorkflowConfig has context_coverage_gate key', () => {
-    const c = fs.readFileSync(CONFIG_TS, 'utf-8');
-    assert.ok(c.includes('context_coverage_gate'), 'WorkflowConfig must declare context_coverage_gate');
-    assert.ok(
-      /context_coverage_gate:\s*true/.test(c),
-      'CONFIG_DEFAULTS.workflow.context_coverage_gate must default to true',
-    );
-  });
-
-  test('config-schema.ts VALID_CONFIG_KEYS allows workflow.context_coverage_gate', () => {
-    // #2653 — allowlist moved out of config-mutation.ts into shared config-schema.ts.
-    // After Cycle 5 (#3536), config-schema.ts is a thin adapter; verify via the
-    // manifest (the single source of truth for both CJS and SDK).
-    const manifestPath = path.join(__dirname, '..', 'sdk', 'shared', 'config-schema.manifest.json');
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+describe('runtime wiring for #2492 gates', () => {
+  test('schema manifest includes context_coverage_gate', () => {
+    const manifest = JSON.parse(fs.readFileSync(SCHEMA_MANIFEST_JSON, 'utf-8'));
     assert.ok(
       manifest.validKeys.includes('workflow.context_coverage_gate'),
-      'workflow.context_coverage_gate must be in manifest validKeys (SDK config-schema.ts sources from manifest)',
+      'workflow.context_coverage_gate must be present in config-schema manifest',
     );
-  });
-
-  test('config-gates.ts surfaces context_coverage_gate', () => {
-    const c = fs.readFileSync(CONFIG_GATES_TS, 'utf-8');
-    assert.ok(
-      c.includes('context_coverage_gate'),
-      'check.config-gates must expose context_coverage_gate to workflows',
-    );
-  });
-
-  test('query registry assembly registers the new handlers', () => {
-    const c = fs.readFileSync(QUERY_INDEX_TS, 'utf-8');
-    const d = fs.readFileSync(QUERY_ASSEMBLY_DESCRIPTOR_TS, 'utf-8');
-    assert.ok(c.includes('REGISTRY_ASSEMBLY_PLAN'), 'registry assembly must be driven by declarative plan');
-    assert.ok(d.includes('VERIFY_DECISION_STATIC_CATALOG'), 'decision-coverage handlers must be sourced from verify-decision catalog');
-    assert.ok(d.includes("{ kind: 'static', key: 'VERIFY_DECISION_STATIC_CATALOG' }"), 'verify-decision catalog must be present in assembly plan');
   });
 });

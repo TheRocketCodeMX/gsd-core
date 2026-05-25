@@ -16,7 +16,7 @@ const path = require('node:path');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const CONFIGURATION_CJS = path.join(REPO_ROOT, 'get-shit-done', 'bin', 'lib', 'configuration.cjs');
-const SDK_SHARED_DIR = path.join(REPO_ROOT, 'sdk', 'shared');
+const SHARED_DIR = path.join(REPO_ROOT, 'get-shit-done', 'bin', 'shared');
 
 const { install } = require('../bin/install.js');
 
@@ -78,11 +78,11 @@ describe('bug #3571: configuration generated manifests resolve in install layout
     const installedCjs = path.join(gsdLibDir, 'configuration.cjs');
     fs.copyFileSync(CONFIGURATION_CJS, installedCjs);
     fs.copyFileSync(
-      path.join(SDK_SHARED_DIR, 'config-defaults.manifest.json'),
+      path.join(SHARED_DIR, 'config-defaults.manifest.json'),
       path.join(gsdSharedDir, 'config-defaults.manifest.json')
     );
     fs.copyFileSync(
-      path.join(SDK_SHARED_DIR, 'config-schema.manifest.json'),
+      path.join(SHARED_DIR, 'config-schema.manifest.json'),
       path.join(gsdSharedDir, 'config-schema.manifest.json')
     );
 
