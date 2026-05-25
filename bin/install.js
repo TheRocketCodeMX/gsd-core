@@ -9556,18 +9556,24 @@ function install(isGlobal, runtime = 'claude', options = {}) {
 
     // Configure workflow guard hook (opt-in via hooks.workflow_guard: true)
     // Detects file edits outside GSD workflow context and advises using
-    // /gsd-quick or /gsd-fast for state-tracked changes. Advisory only.
+    // /gsd-quick or /gsd-fast for state-tracked changes. Also hard-blocks
+    // unsafe Bash commands that violate worktree-agent isolation.
     const workflowGuardCommand = isGlobal
       ? buildHookCommand(targetDir, 'gsd-workflow-guard.js', hookOpts)
       : localCmd('gsd-workflow-guard.js');
-    const hasWorkflowGuardHook = settings.hooks[preToolEvent].some(entry =>
+    const workflowGuardMatcher = 'Bash|Edit|Write|MultiEdit';
+    const workflowGuardHookEntry = settings.hooks[preToolEvent].find(entry =>
       entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-workflow-guard'))
     );
+    const hasWorkflowGuardHook = Boolean(workflowGuardHookEntry);
 
     const workflowGuardFile = path.join(targetDir, 'hooks', 'gsd-workflow-guard.js');
-    if (!hasWorkflowGuardHook && fs.existsSync(workflowGuardFile) && workflowGuardCommand) {
+    if (hasWorkflowGuardHook && workflowGuardHookEntry.matcher !== workflowGuardMatcher) {
+      workflowGuardHookEntry.matcher = workflowGuardMatcher;
+      console.log(`  ${green}✓${reset} Updated workflow guard hook matcher`);
+    } else if (!hasWorkflowGuardHook && fs.existsSync(workflowGuardFile) && workflowGuardCommand) {
       settings.hooks[preToolEvent].push({
-        matcher: 'Write|Edit',
+        matcher: workflowGuardMatcher,
         hooks: [
           {
             type: 'command',

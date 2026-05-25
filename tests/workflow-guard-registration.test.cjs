@@ -54,15 +54,23 @@ describe('workflow-guard hook registration (#1767)', () => {
 
   test('install.js pushes workflow-guard entry with correct matcher', () => {
     const content = fs.readFileSync(INSTALL_JS, 'utf-8');
-    // Extract the section between "workflow-guard" command construction
-    // and the next console.log confirmation. The push block should have:
-    // matcher: 'Write|Edit' and command referencing workflow-guard
+    // Extract the workflow-guard registration section. It should install the
+    // Bash-aware matcher and upgrade old edit-only entries on reinstall.
     const workflowGuardSection = content.match(
-      /workflowGuardCommand[\s\S]*?console\.log\([^)]*workflow.guard/i
+      /workflowGuardCommand[\s\S]*?Configure commit validation hook/i
     );
     assert.ok(
       workflowGuardSection,
       'install.js must have a push block for workflow-guard with a console.log confirmation'
+    );
+    assert.ok(
+      workflowGuardSection[0].includes("const workflowGuardMatcher = 'Bash|Edit|Write|MultiEdit'") &&
+        workflowGuardSection[0].includes('matcher: workflowGuardMatcher'),
+      'workflow guard must be registered for Bash so worktree-agent git safety checks can run'
+    );
+    assert.ok(
+      workflowGuardSection[0].includes('workflowGuardHookEntry.matcher = workflowGuardMatcher'),
+      'installer must upgrade existing workflow guard hook entries to the Bash-aware matcher'
     );
   });
 });
