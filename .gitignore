@@ -89,3 +89,7 @@ claude-test-command.md
 .stryker-tmp/
 .stryker-incremental.json
 reports/mutation/
+
+# Local Crabbox machine configuration
+.crabbox.yaml
+.crabbox.local.yaml
