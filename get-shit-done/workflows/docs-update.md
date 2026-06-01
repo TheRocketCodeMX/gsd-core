@@ -374,7 +374,7 @@ After all decisions recorded, continue to detect_runtime_capabilities.
 <step name="dispatch_wave_1" condition="Task tool is available">
 **Read the work manifest first:** `Read .planning/tmp/docs-work-manifest.json` — use `canonical_queue` items with `wave: 1` for this step.
 
-Spawn 3 parallel gsd-doc-writer agents for Wave 1 docs: README, ARCHITECTURE, CONFIGURATION.
+Spawn 3 parallel gsd-doc-writer agents for Wave 1 docs: README, ARCHITECTURE, CONFIGURATION (each runs in a subagent — no output until they return, ~1–5 min; expected, not a freeze).
 
 These are foundational docs with no cross-references needed, making them ideal for parallel generation.
 
@@ -831,7 +831,8 @@ Extract `canonical_queue` (items with `status: "completed"`) and `review_queue` 
 
 For each doc in `canonical_queue` that was successfully written to disk:
 
-1. Spawn the `gsd-doc-verifier` agent (or invoke sequentially if Task tool is unavailable) with a `<verify_assignment>` block:
+1. Print: `◆ Spawning doc verifier for {doc_path}... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)`
+   Spawn the `gsd-doc-verifier` agent (or invoke sequentially if Task tool is unavailable) with a `<verify_assignment>` block:
    ```xml
    <verify_assignment>
    doc_path: {relative path to the doc file, e.g. README.md}
@@ -849,7 +850,8 @@ This is NOT optional. Every doc in `review_queue` MUST be verified.
 
 For each doc in `review_queue` from the manifest:
 
-1. Spawn the `gsd-doc-verifier` agent with the same `<verify_assignment>` block as above.
+1. Print: `◆ Spawning doc verifier for {doc_path}... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)`
+   Spawn the `gsd-doc-verifier` agent with the same `<verify_assignment>` block as above.
 2. Read the result JSON from `.planning/tmp/verify-{doc_filename}.json`.
 3. Update the manifest: set `status: "verified"` for each review_queue doc processed.
 
