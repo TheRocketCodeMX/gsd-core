@@ -973,8 +973,8 @@ function extractCurrentMilestone(content, cwd) {
 
   // 2. Fallback: derive version from getMilestoneInfo pattern in ROADMAP.md itself
   if (!version) {
-    // Check for 🚧 in-progress marker
-    const inProgressMatch = content.match(/🚧\s*\*\*v(\d+\.\d+)\s/);
+    // Check for 🚧 or 🔄 in-progress marker in bold version line
+    const inProgressMatch = content.match(/(?:🚧|🔄)\s*\*\*v(\d+\.\d+)\s/);
     if (inProgressMatch) {
       version = 'v' + inProgressMatch[1];
     }
@@ -984,19 +984,57 @@ function extractCurrentMilestone(content, cwd) {
 
   // 3. Find the section matching this version
   // Match headings like: ## Roadmap v3.0: Name, ## v3.0 Name, etc.
+  // Also match <summary> tags that contain the version (milestone in <details open>).
+  // Exclude phase headings (e.g. "### Phase 1: v1.3 migration") so that a phase title
+  // that mentions the milestone version does not bypass the <summary> fallback.
   const escapedVersion = escapeRegex(version);
   const sectionPattern = new RegExp(
-    `(^#{1,3}\\s+.*${escapedVersion}\\b[^\\n]*)`,
+    `(^#{1,3}\\s+(?!Phase\\s+\\S).*${escapedVersion}\\b[^\\n]*)`,
     'gmi'
   );
-  const allMatches = [...content.matchAll(sectionPattern)];
+  const summaryPattern = new RegExp(
+    `<summary[^>]*>([^<]*${escapedVersion}[^<]*)<\\/summary>`,
+    'i'
+  );
+  const headingMatches = [...content.matchAll(sectionPattern)];
 
-  if (allMatches.length === 0) return stripShippedMilestones(content);
+  // If the version appears only inside a <summary> tag (not in a heading),
+  // locate the enclosing <details open> block and treat its content as the
+  // current milestone section instead of falling through to stripShippedMilestones().
+  if (headingMatches.length === 0) {
+    const summaryMatch = content.match(summaryPattern);
+    if (summaryMatch) {
+      // Find the <details ...> opening tag that precedes this <summary>
+      const summaryIdx = content.indexOf(summaryMatch[0]);
+      const beforeSummary = content.slice(0, summaryIdx);
+      const detailsOpenIdx = beforeSummary.lastIndexOf('<details');
+      if (detailsOpenIdx !== -1) {
+        // Find the matching </details> closing tag
+        const afterDetails = content.slice(detailsOpenIdx);
+        const closingMatch = afterDetails.match(/<\/details>/i);
+        const detailsEnd = closingMatch
+          ? detailsOpenIdx + closingMatch.index + '</details>'.length
+          : content.length;
+        // Preamble: everything before the first milestone-level section
+        const anyMilestoneOrDetails = /^#{1,3}\s+(?!Phase\s+\S)(?:.*v\d+\.\d+|✅|📋|🚧|🔄)|<details/im;
+        const firstMilestoneMatch = content.match(anyMilestoneOrDetails);
+        const preambleCutoff = firstMilestoneMatch ? firstMilestoneMatch.index : detailsOpenIdx;
+        const preamble = content.slice(0, preambleCutoff)
+          .replace(/<details>[\s\S]*?<\/details>/gi, '')
+          .replace(/^#{2,4}\s*Phase\s+[\w][\w.-]*\s*:[^\n]*(?:\n(?!#{1,6}\s)[^\n]*)*\n?/gim, '')
+          .replace(/^#{1,4}\s*Phase Details\b[^\n]*\n?/gim, '');
+        return preamble + content.slice(detailsOpenIdx, detailsEnd);
+      }
+    }
+    return stripShippedMilestones(content);
+  }
+
+  const allMatches = headingMatches;
 
   // Select the first non-closed heading; fall back to first match if all are closed.
   // A heading is "closed" only if it carries a closed marker AND no active marker.
   const closedMarkerPattern = /\b(?:CLOSED|ARCHIVED|ABANDONED|SHIPPED|FAILED)\b|✅|🗄/i;
-  const activeMarkerPattern = /\b(?:STARTED|ACTIVE|WIP)\b|in\s+progress|🚧/i;
+  const activeMarkerPattern = /\b(?:STARTED|ACTIVE|WIP)\b|in\s+progress|🚧|🔄/i;
   const isClosed = (h) => closedMarkerPattern.test(h) && !activeMarkerPattern.test(h);
   const firstMatch = allMatches[0];
   const selected = allMatches.find((m) => !isClosed(m[1])) || firstMatch;
@@ -1890,14 +1928,42 @@ function getMilestonePhaseFilter(cwd, versionOverride) {
 
     if (versionOverride) {
       const escapedVersion = escapeRegex(versionOverride);
-      const sectionPattern = new RegExp(`(^#{1,3}\\s+.*${escapedVersion}[^\\n]*)`, 'mi');
-      const sectionMatch = roadmapContent.match(sectionPattern);
+      // Exclude phase headings (e.g. "### Phase 1: v1.3 migration") that mention
+      // the version but are not milestone-level headings. Same guard as sectionPattern
+      // in extractCurrentMilestone().
+      const sectionPattern = new RegExp(`(^#{1,3}\\s+(?!Phase\\s+\\S).*${escapedVersion}[^\\n]*)`, 'mi');
+      let sectionMatch = roadmapContent.match(sectionPattern);
+
+      // If no heading match, check whether the version lives in a <summary> tag
+      // (milestone wrapped in <details open>). If so, extract that block's heading
+      // so the phase-filter can scope correctly.
       if (!sectionMatch) {
-        // Only treat this as an error case when the roadmap is milestone-versioned.
+        const summaryPat = new RegExp(`<summary[^>]*>[^<]*${escapedVersion}[^<]*<\\/summary>`, 'i');
+        const summaryHit = roadmapContent.match(summaryPat);
+        if (summaryHit) {
+          // Treat the <summary> content as a synthetic heading match so the code
+          // below can extract the section boundaries from it.
+          // We fabricate a match object pointing at the <details> block start.
+          const beforeSummary = roadmapContent.slice(0, summaryHit.index);
+          const detailsIdx = beforeSummary.lastIndexOf('<details');
+          if (detailsIdx !== -1) {
+            // Use extractCurrentMilestone (already called above) which now handles
+            // <summary> correctly — roadmap is already scoped. Skip the override
+            // re-scoping: roadmap is already the current milestone content.
+            // Do nothing: keep roadmap as-is from extractCurrentMilestone.
+            sectionMatch = null; // fall through without setting missingExplicitVersion
+          }
+        }
+      }
+
+      if (!sectionMatch) {
+        // Only treat this as an error case when the roadmap is milestone-versioned
+        // AND the version is genuinely absent (not in a <summary> tag handled above).
         // Older/flat roadmap formats without vX.Y milestone headings should keep
         // legacy pass-through behavior for milestone.complete.
-        const hasVersionedMilestones = /^#{1,3}\s+.*v\d+\.\d+/mi.test(roadmapContent);
-        if (hasVersionedMilestones) {
+        const hasVersionedMilestones = /^#{1,3}\s+(?!Phase\s+\S).*v\d+\.\d+/mi.test(roadmapContent);
+        const versionInSummary = new RegExp(`<summary[^>]*>[^<]*${escapedVersion}[^<]*<\\/summary>`, 'i').test(roadmapContent);
+        if (hasVersionedMilestones && !versionInSummary) {
           roadmap = '';
           missingExplicitVersion = true;
         }
