@@ -208,12 +208,22 @@ function migrationChecksum(migration: MigrationRecord): string {
   return `sha256:${sha256Text(JSON.stringify(serializable))}`;
 }
 
+function migrationLegacyChecksums(migration: MigrationRecord): string[] {
+  return Array.isArray(migration.legacyChecksums)
+    ? migration.legacyChecksums.filter((checksum): checksum is string => typeof checksum === 'string' && checksum.length > 0)
+    : [];
+}
+
+function migrationAcceptedChecksums(migration: MigrationRecord): Set<string> {
+  return new Set([migrationChecksum(migration), ...migrationLegacyChecksums(migration)]);
+}
+
 function assertAppliedMigrationChecksums(applied: Map<string, Record<string, unknown>>, migrations: MigrationRecord[]): void {
   for (const migration of migrations) {
     const entry = applied.get(migration.id as string);
     if (!entry || !entry.checksum) continue;
-    const checksum = migrationChecksum(migration);
-    if (entry.checksum !== checksum) {
+    const accepted = migrationAcceptedChecksums(migration);
+    if (!accepted.has(entry.checksum as string)) {
       throw new Error(
         `applied migration checksum changed for ${migration.id as string}; create a new fix-forward migration id`
       );
@@ -923,6 +933,7 @@ export = {
   acquireInstallMigrationLock,
   applyInstallerMigrationPlan,
   classifyArtifact,
+  computeInstallerMigrationChecksum: migrationChecksum,
   discoverInstallerMigrations,
   planInstallerMigrations,
   readInstallManifest,

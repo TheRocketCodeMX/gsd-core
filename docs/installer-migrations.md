@@ -125,6 +125,11 @@ The checksum is calculated from the migration definition. If an applied
 migration's checksum changes, the installer must warn and refuse to silently
 re-run it. Fix-forward migrations should use a new migration id.
 
+Migration records may pin a stable `checksum` and list `legacyChecksums` for
+checksums already written by published packages. This is only for compatibility
+with released install state; new behavior should still ship as a new migration
+id rather than mutating an already-applied migration in place.
+
 ## Migration Record
 
 Each migration exports a plain record plus pure planning logic.
