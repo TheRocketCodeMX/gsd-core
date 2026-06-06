@@ -175,6 +175,24 @@ describe('resolveRuntimeArtifactLayout — qwen', () => {
   });
 });
 
+describe('resolveRuntimeArtifactLayout — kimi', () => {
+  test('returns global skills layout and guarded empty local layout for kimi', () => {
+    const globalLayout = resolveRuntimeArtifactLayout('kimi', FAKE_DIR, 'global');
+    assert.strictEqual(globalLayout.runtime, 'kimi');
+    assert.strictEqual(globalLayout.configDir, FAKE_DIR);
+    assert.strictEqual(globalLayout.kinds.length, 1);
+    assert.strictEqual(globalLayout.kinds[0].kind, 'skills');
+    assert.strictEqual(globalLayout.kinds[0].destSubpath, 'skills');
+    assert.strictEqual(globalLayout.kinds[0].prefix, 'gsd-');
+    assert.strictEqual(typeof globalLayout.kinds[0].stage, 'function');
+
+    const localLayout = resolveRuntimeArtifactLayout('kimi', FAKE_DIR, 'local');
+    assert.strictEqual(localLayout.runtime, 'kimi');
+    assert.strictEqual(localLayout.configDir, FAKE_DIR);
+    assert.deepStrictEqual(localLayout.kinds, []);
+  });
+});
+
 describe('resolveRuntimeArtifactLayout — hermes', () => {
   test('returns correct layout for hermes', () => {
     const layout = resolveRuntimeArtifactLayout('hermes', FAKE_DIR);
@@ -376,6 +394,23 @@ describe('stage — skills kind (claude global)', () => {
       const skillMd = path.join(stagedDir, entry, 'SKILL.md');
       assert.ok(fs.existsSync(skillMd), `SKILL.md must exist in ${entry}`);
     }
+  });
+});
+
+describe('stage — skills kind (kimi global)', () => {
+  test('stage returns Kimi SKILL.md dirs with /skill:gsd-* invocations', () => {
+    const layout = resolveRuntimeArtifactLayout('kimi', FAKE_STAGE_DIR, 'global');
+    const skillsKind = layout.kinds.find(k => k.kind === 'skills');
+    assert.ok(skillsKind, 'should have a skills kind');
+
+    const stagedDir = skillsKind.stage(PROFILE_CORE);
+    assert.ok(fs.existsSync(stagedDir), 'stagedDir must exist');
+    const skillMd = path.join(stagedDir, 'gsd-new-project', 'SKILL.md');
+    assert.ok(fs.existsSync(skillMd), 'gsd-new-project/SKILL.md must exist');
+    const content = fs.readFileSync(skillMd, 'utf8');
+    assert.match(content, /^name: gsd-new-project$/m);
+    assert.match(content, /\/skill:gsd-new-project/);
+    assert.doesNotMatch(content, /kimi_cli\.tools|system_prompt_path|^version: 1$/m);
   });
 });
 

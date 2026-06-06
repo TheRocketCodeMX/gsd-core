@@ -49,13 +49,13 @@ const RESOLVED_CORE = resolveProfile({ modes: ['core'], manifest: MANIFEST });
 
 const SKILLS_RUNTIMES_LAYOUT = [
   'claude', 'cursor', 'codex', 'copilot', 'antigravity',
-  'windsurf', 'augment', 'trae', 'qwen', 'codebuddy',
+  'windsurf', 'augment', 'trae', 'qwen', 'kimi', 'codebuddy',
 ];
 
 const ALL_RUNTIMES_LAYOUT = [
   'claude', 'cursor', 'gemini', 'codex', 'copilot', 'antigravity',
   'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy',
-  'cline', 'opencode', 'kilo',
+  'cline', 'kimi', 'opencode', 'kilo',
 ];
 
 function countPrefixedEntries(destDir, prefix) {
@@ -93,6 +93,15 @@ describe('installRuntimeArtifacts — skills runtimes write gsd-prefixed skill d
         fs.existsSync(path.join(destDir, `${skillsKind.prefix}help`, 'SKILL.md')),
         `${runtime}: ${skillsKind.prefix}help/SKILL.md must exist`
       );
+
+      if (runtime === 'kimi') {
+        const newProjectSkill = path.join(destDir, 'gsd-new-project', 'SKILL.md');
+        assert.ok(fs.existsSync(newProjectSkill), 'kimi: gsd-new-project/SKILL.md must exist');
+        const content = fs.readFileSync(newProjectSkill, 'utf8');
+        assert.match(content, /^name: gsd-new-project$/m);
+        assert.match(content, /\/skill:gsd-new-project/);
+        assert.doesNotMatch(content, /kimi_cli\.tools|system_prompt_path|^version: 1$/m);
+      }
 
       if (RESOLVED_CORE.skills !== '*') {
         const prefixedCount = countPrefixedEntries(destDir, skillsKind.prefix || 'gsd-');

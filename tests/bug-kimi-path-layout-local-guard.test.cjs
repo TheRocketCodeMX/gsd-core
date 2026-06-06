@@ -94,11 +94,15 @@ describe('Kimi runtime homes', () => {
 });
 
 describe('Kimi runtime artifact layout', () => {
-  test('known runtime with empty Phase 1 layout placeholder', () => {
+  test('global layout stages Kimi skills while local layout remains guarded', () => {
     const globalLayout = resolveRuntimeArtifactLayout('kimi', '/tmp/kimi-config', 'global');
     assert.strictEqual(globalLayout.runtime, 'kimi');
     assert.strictEqual(globalLayout.configDir, '/tmp/kimi-config');
-    assert.deepStrictEqual(globalLayout.kinds, []);
+    assert.strictEqual(globalLayout.kinds.length, 1);
+    assert.strictEqual(globalLayout.kinds[0].kind, 'skills');
+    assert.strictEqual(globalLayout.kinds[0].destSubpath, 'skills');
+    assert.strictEqual(globalLayout.kinds[0].prefix, 'gsd-');
+    assert.strictEqual(typeof globalLayout.kinds[0].stage, 'function');
 
     const localLayout = resolveRuntimeArtifactLayout('kimi', '/tmp/kimi-config', 'local');
     assert.strictEqual(localLayout.runtime, 'kimi');
@@ -139,7 +143,7 @@ describe('Kimi local install guard', () => {
     }
   });
 
-  test('--kimi --global exits successfully without writing unconverted Kimi artifacts', () => {
+  test('--kimi --global writes converted Kimi skills only', () => {
     const tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-kimi-global-project-'));
     const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-kimi-global-config-'));
     const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-kimi-global-home-'));
@@ -157,14 +161,20 @@ describe('Kimi local install guard', () => {
       assert.strictEqual(
         result.status,
         0,
-        `expected --kimi --global skeleton guard to no-op successfully\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+        `expected --kimi --global to install Kimi skills successfully\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
       );
       const combined = `${result.stdout}\n${result.stderr}`;
-      assert.match(combined, /Kimi global install/i);
-      assert.match(combined, /deferred/i);
+      assert.match(combined, /Installing for .*Kimi/i);
+      assert.match(combined, /Installed \d+ skills to skills\//i);
 
-      assert.ok(!fs.existsSync(path.join(tmpConfig, 'skills')), 'must not write unconverted Kimi skills');
-      assert.ok(!fs.existsSync(path.join(tmpConfig, 'agents')), 'must not write unconverted Kimi agents');
+      const skillFile = path.join(tmpConfig, 'skills', 'gsd-new-project', 'SKILL.md');
+      assert.ok(fs.existsSync(skillFile), 'must write gsd-new-project/SKILL.md');
+      const skillContent = fs.readFileSync(skillFile, 'utf8');
+      assert.match(skillContent, /^name: gsd-new-project$/m);
+      assert.match(skillContent, /\/skill:gsd-new-project/);
+      assert.doesNotMatch(skillContent, /kimi_cli\.tools|system_prompt_path|^version: 1$/m);
+
+      assert.ok(!fs.existsSync(path.join(tmpConfig, 'agents')), 'must not write Kimi agents');
       assert.ok(!fs.existsSync(path.join(tmpConfig, 'gsd-core')), 'must not write workflow payloads as Kimi artifacts');
       assert.ok(!fs.existsSync(path.join(tmpConfig, 'hooks')), 'must not write hooks under the Kimi root');
     } finally {
