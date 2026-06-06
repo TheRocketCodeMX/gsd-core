@@ -180,11 +180,15 @@ describe('resolveRuntimeArtifactLayout — kimi', () => {
     const globalLayout = resolveRuntimeArtifactLayout('kimi', FAKE_DIR, 'global');
     assert.strictEqual(globalLayout.runtime, 'kimi');
     assert.strictEqual(globalLayout.configDir, FAKE_DIR);
-    assert.strictEqual(globalLayout.kinds.length, 1);
+    assert.strictEqual(globalLayout.kinds.length, 2);
     assert.strictEqual(globalLayout.kinds[0].kind, 'skills');
     assert.strictEqual(globalLayout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(globalLayout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof globalLayout.kinds[0].stage, 'function');
+    assert.strictEqual(globalLayout.kinds[1].kind, 'kimi-agents');
+    assert.strictEqual(globalLayout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(globalLayout.kinds[1].prefix, 'gsd');
+    assert.strictEqual(typeof globalLayout.kinds[1].stage, 'function');
 
     const localLayout = resolveRuntimeArtifactLayout('kimi', FAKE_DIR, 'local');
     assert.strictEqual(localLayout.runtime, 'kimi');
@@ -398,7 +402,7 @@ describe('stage — skills kind (claude global)', () => {
 });
 
 describe('stage — skills kind (kimi global)', () => {
-  test('stage returns Kimi SKILL.md dirs with /skill:gsd-* invocations', () => {
+  test('stage returns Kimi SKILL.md dirs and agent YAML/prompt artifacts', () => {
     const layout = resolveRuntimeArtifactLayout('kimi', FAKE_STAGE_DIR, 'global');
     const skillsKind = layout.kinds.find(k => k.kind === 'skills');
     assert.ok(skillsKind, 'should have a skills kind');
@@ -411,6 +415,34 @@ describe('stage — skills kind (kimi global)', () => {
     assert.match(content, /^name: gsd-new-project$/m);
     assert.match(content, /\/skill:gsd-new-project/);
     assert.doesNotMatch(content, /kimi_cli\.tools|system_prompt_path|^version: 1$/m);
+
+    const agentsKind = layout.kinds.find(k => k.kind === 'kimi-agents');
+    assert.ok(agentsKind, 'should have a kimi-agents kind');
+
+    const stagedAgentsDir = agentsKind.stage(PROFILE_FULL);
+    const rootYamlPath = path.join(stagedAgentsDir, 'gsd.yaml');
+    const rootPromptPath = path.join(stagedAgentsDir, 'gsd.md');
+    const executorYamlPath = path.join(stagedAgentsDir, 'subagents', 'gsd-executor.yaml');
+    const executorPromptPath = path.join(stagedAgentsDir, 'subagents', 'gsd-executor.md');
+    assert.ok(fs.existsSync(rootYamlPath), 'agents/gsd.yaml must be staged');
+    assert.ok(fs.existsSync(rootPromptPath), 'agents/gsd.md must be staged');
+    assert.ok(fs.existsSync(executorYamlPath), 'agents/subagents/gsd-executor.yaml must be staged');
+    assert.ok(fs.existsSync(executorPromptPath), 'agents/subagents/gsd-executor.md must be staged');
+
+    const rootYaml = fs.readFileSync(rootYamlPath, 'utf8');
+    assert.match(rootYaml, /^version: 1$/m);
+    assert.match(rootYaml, /^agent:$/m);
+    assert.match(rootYaml, /extend: default/);
+    assert.match(rootYaml, /system_prompt_path: \.\/gsd\.md/);
+    assert.match(rootYaml, /tools:/);
+    assert.match(rootYaml, /subagents:/);
+    assert.match(rootYaml, /kimi_cli\.tools\./);
+    assert.doesNotMatch(rootYaml, /mcp__/);
+
+    const executorYaml = fs.readFileSync(executorYamlPath, 'utf8');
+    assert.match(executorYaml, /system_prompt_path: \.\/gsd-executor\.md/);
+    assert.match(executorYaml, /kimi_cli\.tools\./);
+    assert.doesNotMatch(executorYaml, /mcp__/);
   });
 });
 
