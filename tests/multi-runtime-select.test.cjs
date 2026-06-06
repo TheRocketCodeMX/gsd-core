@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 const {
   runtimeMap,
   allRuntimes,
+  selectRuntimesFromArgs,
   parseRuntimeInput,
   buildRuntimePromptText,
 } = require('../bin/install.js');
@@ -48,7 +49,7 @@ describe('multi-runtime selection parsing', () => {
 
   test('space-separated choices return multiple runtimes', () => {
     assert.deepStrictEqual(parseRuntimeInput('1 7 9'), ['claude', 'copilot', 'gemini']);
-    assert.deepStrictEqual(parseRuntimeInput('8 11'), ['cursor', 'kilo']);
+    assert.deepStrictEqual(parseRuntimeInput('8 12'), ['cursor', 'kilo']);
   });
 
   test('mixed comma and space separators work', () => {
@@ -122,7 +123,7 @@ describe('multi-runtime selection parsing', () => {
 
   test('preserves selection order', () => {
     assert.deepStrictEqual(parseRuntimeInput('9,1,7'), ['gemini', 'claude', 'copilot']);
-    assert.deepStrictEqual(parseRuntimeInput('11,2,8'), ['kilo', 'antigravity', 'cursor']);
+    assert.deepStrictEqual(parseRuntimeInput('12,2,8'), ['kilo', 'antigravity', 'cursor']);
   });
 });
 
@@ -167,6 +168,17 @@ describe('install.js exports multi-select runtime metadata', () => {
 
   test('"All" shortcut (option 17) selects every runtime', () => {
     assert.deepStrictEqual(parseRuntimeInput('17'), allRuntimes);
+  });
+
+  test('--kimi flag selects Kimi without interactive prompt', () => {
+    assert.deepStrictEqual(selectRuntimesFromArgs(['--kimi']), ['kimi']);
+  });
+
+  test('--all flag includes Kimi exactly once', () => {
+    const selected = selectRuntimesFromArgs(['--all']);
+    assert.ok(selected.includes('kimi'), '--all includes kimi');
+    assert.strictEqual(selected.filter((runtime) => runtime === 'kimi').length, 1,
+      '--all includes kimi exactly once');
   });
 
   test('prompt lists Hermes Agent (10), Kimi (11), Qwen Code (14), Trae (15), and All (17)', () => {

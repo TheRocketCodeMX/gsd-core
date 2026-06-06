@@ -30,6 +30,8 @@ const {
 } = require(path.join(__dirname, '..', 'scripts', 'fix-slash-commands.cjs'));
 const {
   resolveAntigravityGlobalDir,
+  getGlobalConfigDir,
+  getGlobalSkillsBase,
 } = require('../gsd-core/bin/lib/runtime-homes.cjs');
 
 /**
@@ -239,23 +241,6 @@ const {
 const args = process.argv.slice(2);
 const hasGlobal = args.includes('--global') || args.includes('-g');
 const hasLocal = args.includes('--local') || args.includes('-l');
-const hasOpencode = args.includes('--opencode');
-const hasClaude = args.includes('--claude');
-const hasGemini = args.includes('--gemini');
-const hasKilo = args.includes('--kilo');
-const hasCodex = args.includes('--codex');
-const hasCopilot = args.includes('--copilot');
-const hasAntigravity = args.includes('--antigravity');
-const hasCursor = args.includes('--cursor');
-const hasWindsurf = args.includes('--windsurf');
-const hasAugment = args.includes('--augment');
-const hasTrae = args.includes('--trae');
-const hasQwen = args.includes('--qwen');
-const hasHermes = args.includes('--hermes');
-const hasCodebuddy = args.includes('--codebuddy');
-const hasCline = args.includes('--cline');
-const hasBoth = args.includes('--both'); // Legacy flag, keeps working
-const hasAll = args.includes('--all');
 const hasUninstall = args.includes('--uninstall') || args.includes('-u');
 const hasSkillsRoot = args.includes('--skills-root');
 const hasPortableHooks = args.includes('--portable-hooks') || process.env.GSD_PORTABLE_HOOKS === '1';
@@ -282,29 +267,36 @@ if (hasMinimal && _profileArgRaw) {
   process.exit(1);
 }
 
-// Runtime selection - can be set by flags or interactive prompt
-let selectedRuntimes = [];
-if (hasAll) {
-  selectedRuntimes = ['claude', 'kilo', 'opencode', 'gemini', 'codex', 'copilot', 'antigravity', 'cursor', 'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy', 'cline'];
-} else if (hasBoth) {
-  selectedRuntimes = ['claude', 'opencode'];
-} else {
-  if (hasClaude) selectedRuntimes.push('claude');
-  if (hasOpencode) selectedRuntimes.push('opencode');
-  if (hasGemini) selectedRuntimes.push('gemini');
-  if (hasKilo) selectedRuntimes.push('kilo');
-  if (hasCodex) selectedRuntimes.push('codex');
-  if (hasCopilot) selectedRuntimes.push('copilot');
-  if (hasAntigravity) selectedRuntimes.push('antigravity');
-  if (hasCursor) selectedRuntimes.push('cursor');
-  if (hasWindsurf) selectedRuntimes.push('windsurf');
-  if (hasAugment) selectedRuntimes.push('augment');
-  if (hasTrae) selectedRuntimes.push('trae');
-  if (hasQwen) selectedRuntimes.push('qwen');
-  if (hasHermes) selectedRuntimes.push('hermes');
-  if (hasCodebuddy) selectedRuntimes.push('codebuddy');
-  if (hasCline) selectedRuntimes.push('cline');
+function selectRuntimesFromArgs(runtimeArgs) {
+  if (runtimeArgs.includes('--all')) {
+    return ['claude', 'kimi', 'kilo', 'opencode', 'gemini', 'codex', 'copilot', 'antigravity', 'cursor', 'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy', 'cline'];
+  }
+  if (runtimeArgs.includes('--both')) {
+    return ['claude', 'opencode'];
+  }
+
+  const selected = [];
+  if (runtimeArgs.includes('--claude')) selected.push('claude');
+  if (runtimeArgs.includes('--opencode')) selected.push('opencode');
+  if (runtimeArgs.includes('--gemini')) selected.push('gemini');
+  if (runtimeArgs.includes('--kilo')) selected.push('kilo');
+  if (runtimeArgs.includes('--codex')) selected.push('codex');
+  if (runtimeArgs.includes('--copilot')) selected.push('copilot');
+  if (runtimeArgs.includes('--antigravity')) selected.push('antigravity');
+  if (runtimeArgs.includes('--cursor')) selected.push('cursor');
+  if (runtimeArgs.includes('--windsurf')) selected.push('windsurf');
+  if (runtimeArgs.includes('--augment')) selected.push('augment');
+  if (runtimeArgs.includes('--trae')) selected.push('trae');
+  if (runtimeArgs.includes('--qwen')) selected.push('qwen');
+  if (runtimeArgs.includes('--hermes')) selected.push('hermes');
+  if (runtimeArgs.includes('--kimi')) selected.push('kimi');
+  if (runtimeArgs.includes('--codebuddy')) selected.push('codebuddy');
+  if (runtimeArgs.includes('--cline')) selected.push('cline');
+  return selected;
 }
+
+// Runtime selection - can be set by flags or interactive prompt
+let selectedRuntimes = selectRuntimesFromArgs(args);
 
 // WSL + Windows Node.js detection
 // When Windows-native Node runs on WSL, os.homedir() and path.join() produce
@@ -354,6 +346,7 @@ function getDirName(runtime) {
   if (runtime === 'trae') return '.trae';
   if (runtime === 'qwen') return '.qwen';
   if (runtime === 'hermes') return '.hermes';
+  if (runtime === 'kimi') return '.kimi';
   if (runtime === 'codebuddy') return '.codebuddy';
   if (runtime === 'cline') return '.cline';
   return '.claude';
@@ -400,6 +393,7 @@ function getConfigDirFromHome(runtime, isGlobal) {
   if (runtime === 'hermes') return "'.hermes'";
   if (runtime === 'codebuddy') return "'.codebuddy'";
   if (runtime === 'cline') return "'.cline'";
+  if (runtime === 'kimi') return "'.config', 'agents'";
   return "'.claude'";
 }
 
@@ -603,6 +597,13 @@ function getGlobalDir(runtime, explicitDir = null) {
       return expandTilde(process.env.CLINE_CONFIG_DIR);
     }
     return path.join(os.homedir(), '.cline');
+  }
+
+  if (runtime === 'kimi') {
+    if (explicitDir) {
+      return expandTilde(explicitDir);
+    }
+    return getGlobalConfigDir('kimi');
   }
 
   // Claude Code: --config-dir > CLAUDE_CONFIG_DIR > ~/.claude
@@ -8234,6 +8235,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const isOpencode = runtime === 'opencode';
   const isGemini = runtime === 'gemini';
   const isKilo = runtime === 'kilo';
+  const isKimi = runtime === 'kimi';
   const isCodex = runtime === 'codex';
   const isCopilot = runtime === 'copilot';
   const isAntigravity = runtime === 'antigravity';
@@ -8247,6 +8249,23 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const isCline = runtime === 'cline';
   const dirName = getDirName(runtime);
   const src = path.join(__dirname, '..');
+
+  if (isKimi && !isGlobal) {
+    console.log(`  ${yellow}⚠${reset} Kimi local install is deferred for Phase 1.`);
+    console.log(`      No .kimi/skills or .agents/skills project artifacts were written.`);
+    console.log(`      Use ${cyan}--kimi --global${reset} for the Phase 1 runtime skeleton.`);
+    return {
+      runtime,
+      skipped: true,
+      reason: 'kimi_local_deferred',
+      configDir: null,
+      settingsPath: null,
+      settings: null,
+      statuslineCommand: null,
+      updateBannerCommand: null,
+      rollbackInstallerMigrations: () => {},
+    };
+  }
 
   // Reusable helper to copy hooks/lib/ (git-cmd.js + gsd-graphify-rebuild.sh).
   // Defined early so it is visible to both the main and Codex code paths.
@@ -8374,6 +8393,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   if (isTrae) runtimeLabel = 'Trae';
   if (isQwen) runtimeLabel = 'Qwen Code';
   if (isHermes) runtimeLabel = 'Hermes Agent';
+  if (isKimi) runtimeLabel = 'Kimi';
   if (isCodebuddy) runtimeLabel = 'CodeBuddy';
   if (isCline) runtimeLabel = 'Cline';
 
@@ -8657,7 +8677,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   // handles per-runtime path + branding rewrites, including Qwen/Hermes.
   const _isSkillsRuntime = isCodex || isCopilot || isAntigravity || isCursor || isWindsurf ||
     isAugment || isTrae || isCodebuddy || isQwen || isHermes ||
-    (runtime === 'claude' && isGlobal);
+    isKimi || (runtime === 'claude' && isGlobal);
 
   if (_isSkillsRuntime) {
     // Layout-driven install for skills-based runtimes (full and minimal modes)
@@ -8684,6 +8704,8 @@ function install(isGlobal, runtime = 'claude', options = {}) {
       } else {
         failures.push('skills/gsd/*');
       }
+    } else if (isKimi) {
+      console.log(`  ${yellow}⚠${reset} Kimi SKILL.md conversion is deferred for Phase 2; no skills were written.`);
     } else {
       const skillsDir = path.join(targetDir, 'skills');
       if (fs.existsSync(skillsDir)) {
@@ -10348,14 +10370,15 @@ const runtimeMap = {
   '8': 'cursor',
   '9': 'gemini',
   '10': 'hermes',
-  '11': 'kilo',
-  '12': 'opencode',
-  '13': 'qwen',
-  '14': 'trae',
-  '15': 'windsurf'
+  '11': 'kimi',
+  '12': 'kilo',
+  '13': 'opencode',
+  '14': 'qwen',
+  '15': 'trae',
+  '16': 'windsurf'
 };
-const allRuntimes = ['claude', 'antigravity', 'augment', 'cline', 'codebuddy', 'codex', 'copilot', 'cursor', 'gemini', 'hermes', 'kilo', 'opencode', 'qwen', 'trae', 'windsurf'];
-const ALL_RUNTIMES_OPTION = '16';
+const allRuntimes = ['claude', 'antigravity', 'augment', 'cline', 'codebuddy', 'codex', 'copilot', 'cursor', 'gemini', 'hermes', 'kimi', 'kilo', 'opencode', 'qwen', 'trae', 'windsurf'];
+const ALL_RUNTIMES_OPTION = '17';
 
 /**
  * Build the runtime-selection prompt text shown by the interactive installer.
@@ -10373,12 +10396,13 @@ function buildRuntimePromptText() {
   ${cyan}8${reset}) Cursor       ${dim}(~/.cursor)${reset}
   ${cyan}9${reset}) Gemini       ${dim}(~/.gemini)${reset}
   ${cyan}10${reset}) Hermes Agent ${dim}(~/.hermes)${reset}
-  ${cyan}11${reset}) Kilo         ${dim}(~/.config/kilo)${reset}
-  ${cyan}12${reset}) OpenCode     ${dim}(~/.config/opencode)${reset}
-  ${cyan}13${reset}) Qwen Code    ${dim}(~/.qwen)${reset}
-  ${cyan}14${reset}) Trae         ${dim}(~/.trae)${reset}
-  ${cyan}15${reset}) Windsurf     ${dim}(~/.codeium/windsurf)${reset}
-  ${cyan}16${reset}) All
+  ${cyan}11${reset}) Kimi         ${dim}(~/.config/agents)${reset}
+  ${cyan}12${reset}) Kilo         ${dim}(~/.config/kilo)${reset}
+  ${cyan}13${reset}) OpenCode     ${dim}(~/.config/opencode)${reset}
+  ${cyan}14${reset}) Qwen Code    ${dim}(~/.qwen)${reset}
+  ${cyan}15${reset}) Trae         ${dim}(~/.trae)${reset}
+  ${cyan}16${reset}) Windsurf     ${dim}(~/.codeium/windsurf)${reset}
+  ${cyan}17${reset}) All
 
   ${dim}Select multiple: 1,2,6 or 1 2 6${reset}
 `;
@@ -10389,7 +10413,7 @@ function buildRuntimePromptText() {
  * Pure function — exported so tests can verify split/dedupe/fallback behavior.
  *  - Accepts comma- and/or whitespace-separated choices
  *  - Deduplicates while preserving order
- *  - Maps option 16 ("All") to every runtime
+ *  - Maps option 17 ("All") to every runtime
  *  - Falls back to ['claude'] when nothing valid is selected
  */
 function parseRuntimeInput(answer) {
@@ -10841,6 +10865,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
     try {
       const printSummaries = () => {
         for (const result of results) {
+          if (result && result.skipped) continue;
           const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;
           finishInstall(
             result.settingsPath,
@@ -11002,6 +11027,7 @@ module.exports = {
     maybeSuggestPathExport,
     runtimeMap,
     allRuntimes,
+    selectRuntimesFromArgs,
     GSD_UNINSTALL_HOOKS,
     parseRuntimeInput,
     buildRuntimePromptText,
@@ -11047,12 +11073,11 @@ if (require.main === module && !process.env.GSD_TEST_MODE) {
       console.error('Usage: node install.js --skills-root <runtime>');
       process.exit(1);
     }
-    const globalDir = getGlobalDir(runtimeArg, null);
-    // Hermes nests GSD skills under skills/gsd/ as a single category (#2841).
-    // Other runtimes use a flat skills/ root.
-    const skillsRoot = runtimeArg === 'hermes'
-      ? path.join(globalDir, 'skills', 'gsd')
-      : path.join(globalDir, 'skills');
+    const skillsRoot = getGlobalSkillsBase(runtimeArg);
+    if (skillsRoot === null) {
+      console.error(`${runtimeArg} does not use a skills directory`);
+      process.exit(1);
+    }
     console.log(skillsRoot);
   } else if (hasGlobal && hasLocal) {
     console.error(`  ${yellow}Cannot specify both --global and --local${reset}`);

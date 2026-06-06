@@ -167,7 +167,7 @@ function findAgentsSourceRoot(runtimeConfigDir?: string): string {
 const ALLOWED_RUNTIMES = new Set([
   'claude', 'cursor', 'gemini', 'codex', 'copilot', 'antigravity',
   'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy',
-  'cline', 'opencode', 'kilo',
+  'cline', 'kimi', 'opencode', 'kilo',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -301,6 +301,12 @@ function resolveRuntimeArtifactLayout(runtime: string, configDir: string, scope:
       break;
 
     case 'cline':
+      kinds = [];
+      break;
+
+    case 'kimi':
+      // Phase 1 skeleton only: Kimi is recognized by the layout seam, but
+      // SKILL.md conversion and local project semantics are deferred.
       kinds = [];
       break;
 
