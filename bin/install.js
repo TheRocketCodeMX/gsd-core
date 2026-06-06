@@ -1868,6 +1868,35 @@ const claudeToGeminiTools = {
   TodoWrite: 'write_todos',
 };
 
+// Tool name mapping from Claude/GSD agents to Kimi CLI module paths.
+// Kimi custom agent YAML requires fully-qualified module paths.
+const claudeToKimiTools = {
+  Read: 'kimi_cli.tools.file:ReadFile',
+  ReadFile: 'kimi_cli.tools.file:ReadFile',
+  Write: 'kimi_cli.tools.file:WriteFile',
+  WriteFile: 'kimi_cli.tools.file:WriteFile',
+  Edit: 'kimi_cli.tools.file:StrReplaceFile',
+  MultiEdit: 'kimi_cli.tools.file:StrReplaceFile',
+  StrReplaceFile: 'kimi_cli.tools.file:StrReplaceFile',
+  Bash: 'kimi_cli.tools.shell:Shell',
+  Shell: 'kimi_cli.tools.shell:Shell',
+  Grep: 'kimi_cli.tools.file:Grep',
+  Glob: 'kimi_cli.tools.file:Glob',
+  Agent: 'kimi_cli.tools.agent:Agent',
+  Task: 'kimi_cli.tools.agent:Agent',
+  AskUserQuestion: 'kimi_cli.tools.ask_user:AskUserQuestion',
+  TodoWrite: 'kimi_cli.tools.todo:SetTodoList',
+  SetTodoList: 'kimi_cli.tools.todo:SetTodoList',
+  WebSearch: 'kimi_cli.tools.web:SearchWeb',
+  SearchWeb: 'kimi_cli.tools.web:SearchWeb',
+  WebFetch: 'kimi_cli.tools.web:FetchURL',
+  FetchURL: 'kimi_cli.tools.web:FetchURL',
+  ReadMediaFile: 'kimi_cli.tools.file:ReadMediaFile',
+  TaskList: 'kimi_cli.tools.task:TaskList',
+  TaskOutput: 'kimi_cli.tools.task:TaskOutput',
+  TaskStop: 'kimi_cli.tools.task:TaskStop',
+};
+
 /**
  * Convert a Claude Code tool name to OpenCode format
  * - Applies special mappings (AskUserQuestion -> question, etc.)
@@ -1915,6 +1944,63 @@ function convertGeminiToolName(claudeTool) {
   }
   // Default: lowercase
   return claudeTool.toLowerCase();
+}
+
+function createKimiToolDiagnostic(reason, tool, source = null) {
+  const isMcp = reason === 'mcp_managed';
+  return {
+    level: 'warning',
+    code: isMcp ? 'kimi_mcp_tool_excluded' : 'kimi_unsupported_tool',
+    reason,
+    message: isMcp
+      ? `MCP-managed tool '${tool}' is configured outside Kimi agent YAML.`
+      : `Tool '${tool}' is not supported by the Kimi tool mapper.`,
+    value: tool,
+    source,
+  };
+}
+
+/**
+ * Convert a Claude/GSD tool name to a Kimi CLI module path.
+ * @returns {string|null} Kimi module path, or null when excluded/unsupported.
+ */
+function convertKimiToolName(claudeTool) {
+  const tool = String(claudeTool || '').trim();
+  if (!tool) return null;
+  if (tool.startsWith('mcp__')) return null;
+  return claudeToKimiTools[tool] || null;
+}
+
+function mapClaudeToolsToKimiTools(claudeTools, options = {}) {
+  const diagnostics = [];
+  const tools = [];
+  const seen = new Set();
+  const source = options && Object.prototype.hasOwnProperty.call(options, 'source')
+    ? options.source
+    : null;
+
+  for (const rawTool of Array.isArray(claudeTools) ? claudeTools : []) {
+    const tool = String(rawTool || '').trim();
+    if (!tool) continue;
+
+    if (tool.startsWith('mcp__')) {
+      diagnostics.push(createKimiToolDiagnostic('mcp_managed', tool, source));
+      continue;
+    }
+
+    const kimiTool = convertKimiToolName(tool);
+    if (!kimiTool) {
+      diagnostics.push(createKimiToolDiagnostic('unsupported_tool', tool, source));
+      continue;
+    }
+
+    if (!seen.has(kimiTool)) {
+      seen.add(kimiTool);
+      tools.push(kimiTool);
+    }
+  }
+
+  return { tools, diagnostics };
 }
 
 const claudeToKiloAgentPermissions = {
@@ -2183,10 +2269,6 @@ function convertClaudeCommandToKimiSkill(content, skillName, _runtime = null, cm
 }
 
 const KIMI_CANONICAL_GSD_AGENT_RE = /^gsd-[a-z0-9-]+$/;
-const kimiAgentContractToolMap = {
-  Agent: 'kimi_cli.tools.agent:Agent',
-  Task: 'kimi_cli.tools.agent:Agent',
-};
 
 function parseKimiAgentSource(source) {
   if (typeof source === 'string') {
@@ -2254,43 +2336,9 @@ function addKimiAgentDiagnostic(diagnostics, code, message, value, source = null
 }
 
 function mapKimiAgentContractTools(toolNames, diagnostics, sourceName) {
-  const mapped = [];
-  const seen = new Set();
-
-  for (const rawTool of toolNames) {
-    const tool = String(rawTool || '').trim();
-    if (!tool) continue;
-
-    if (tool.startsWith('mcp__')) {
-      addKimiAgentDiagnostic(
-        diagnostics,
-        'kimi_mcp_tool_excluded',
-        `MCP-managed tool '${tool}' is configured outside Kimi agent YAML.`,
-        tool,
-        sourceName
-      );
-      continue;
-    }
-
-    const kimiTool = kimiAgentContractToolMap[tool];
-    if (!kimiTool) {
-      addKimiAgentDiagnostic(
-        diagnostics,
-        'kimi_unsupported_tool',
-        `Tool '${tool}' is not part of the Phase 3 Kimi agent contract mapper.`,
-        tool,
-        sourceName
-      );
-      continue;
-    }
-
-    if (!seen.has(kimiTool)) {
-      seen.add(kimiTool);
-      mapped.push(kimiTool);
-    }
-  }
-
-  return mapped;
+  const result = mapClaudeToolsToKimiTools(toolNames, { source: sourceName });
+  diagnostics.push(...result.diagnostics);
+  return result.tools;
 }
 
 function neutralizeKimiAgentPrompt(content) {
@@ -11319,6 +11367,8 @@ module.exports = {
     uninstall,
     convertClaudeCommandToCodexSkill,
     convertClaudeCommandToKimiSkill,
+    convertKimiToolName,
+    mapClaudeToolsToKimiTools,
     buildKimiAgentArtifacts,
     convertClaudeToOpencodeFrontmatter,
     convertClaudeToKiloFrontmatter,
