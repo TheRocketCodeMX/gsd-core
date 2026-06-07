@@ -5986,6 +5986,70 @@ function convertClaudeToKiloFrontmatter(content, { isAgent = false } = {}) {
 }
 
 /**
+ * Shared SKILL.md writer for the OpenCode-family runtimes (OpenCode + Kilo),
+ * which share a config schema (Kilo derives from OpenCode). OpenCode discovers
+ * skills as `skills/<name>/SKILL.md` and Kilo follows the same layout
+ * (https://opencode.ai/docs/skills, https://kilo.ai/docs/customize/skills).
+ *
+ * The skill body reuses the runtime's command-frontmatter converter for tool,
+ * path, and `/gsd:`→`/gsd-` body rewrites, then rebuilds a minimal skill
+ * frontmatter: only `name` (lowercase-hyphen, must match the containing
+ * directory) and `description` (1–1024 chars) are emitted, per the OpenCode
+ * skill spec. The command's `tools:`/`permission:` block is intentionally
+ * dropped — OpenCode skills are loaded on-demand via the native skill tool and
+ * inherit the calling agent's permissions.
+ *
+ * @param {string} content - Claude command markdown (with YAML frontmatter)
+ * @param {string} skillName - Skill directory name (e.g. gsd-help)
+ * @param {(content: string) => string} frontmatterConverter - runtime command converter
+ * @returns {string} SKILL.md content
+ */
+function convertClaudeCommandToOpencodeFamilySkill(content, skillName, frontmatterConverter) {
+  const converted = frontmatterConverter(content);
+  const { frontmatter, body } = extractFrontmatterAndBody(converted);
+  let description = `Run GSD workflow ${skillName}.`;
+  if (frontmatter) {
+    const maybeDescription = extractFrontmatterField(frontmatter, 'description');
+    if (maybeDescription) {
+      description = maybeDescription;
+    }
+  }
+  description = toSingleLine(description);
+  // OpenCode skill descriptions must be 1–1024 characters.
+  if (description.length > 1024) {
+    description = `${description.slice(0, 1021)}...`;
+  }
+  // `name` must be lowercase alphanumeric with single-hyphen separators and
+  // match the containing directory name (the staged dir is `${skillName}/`).
+  const name = yamlIdentifier(skillName);
+  return `---\nname: ${name}\ndescription: ${yamlQuote(description)}\n---\n\n${body.trimStart()}`;
+}
+
+/**
+ * Convert a Claude command (.md) to an OpenCode skill (SKILL.md).
+ * Thin wrapper over the shared OpenCode-family writer.
+ */
+function convertClaudeCommandToOpencodeSkill(content, skillName) {
+  return convertClaudeCommandToOpencodeFamilySkill(
+    content,
+    skillName,
+    (c) => convertClaudeToOpencodeFrontmatter(c),
+  );
+}
+
+/**
+ * Convert a Claude command (.md) to a Kilo skill (SKILL.md).
+ * Thin wrapper over the shared OpenCode-family writer (Kilo shares the schema).
+ */
+function convertClaudeCommandToKiloSkill(content, skillName) {
+  return convertClaudeCommandToOpencodeFamilySkill(
+    content,
+    skillName,
+    (c) => convertClaudeToKiloFrontmatter(c),
+  );
+}
+
+/**
  * Convert Claude Code markdown command to Gemini TOML format
  * @param {string} content - Markdown file content with YAML frontmatter
  * @returns {string} - TOML content
@@ -6037,6 +6101,31 @@ function convertClaudeToGeminiToml(content) {
  * @param {string} pathPrefix - Path prefix for file references
  * @param {string} runtime - Target runtime ('claude', 'opencode', or 'kilo')
  */
+/**
+ * Apply OpenCode-family (`opencode`/`kilo`) `@file` path-prefix rewrites to a
+ * RAW Claude command/skill body, BEFORE the frontmatter converter runs.
+ *
+ * This is the single source of truth shared by copyFlattenedCommands (commands)
+ * and installOpencodeFamilySkills (skills) so the two surfaces produce identical
+ * path references. Applying pathPrefix pre-conversion (rather than rewriting an
+ * already-converted body) is what avoids the converter's hardcoded default
+ * config dir leaking into --local / --config-dir installs, and the
+ * prefix-overlap double-rewrite hazard for custom dirs like `kilo-alt`. (#784)
+ *
+ * @param {string} content - raw Claude command markdown
+ * @param {string} runtime - 'opencode' or 'kilo'
+ * @param {string} pathPrefix - trailing-slash install-target prefix
+ * @returns {string}
+ */
+function applyOpencodeFamilyPathPrefix(content, runtime, pathPrefix) {
+  content = content.replace(/~\/\.claude\//g, pathPrefix);
+  content = content.replace(/\$HOME\/\.claude\//g, pathPrefix);
+  content = content.replace(/\.\/\.claude\//g, `./${getDirName(runtime)}/`);
+  content = content.replace(/~\/\.opencode\//g, pathPrefix);
+  content = content.replace(/~\/\.kilo\//g, pathPrefix);
+  return content;
+}
+
 function copyFlattenedCommands(srcDir, destDir, prefix, pathPrefix, runtime) {
   if (!fs.existsSync(srcDir)) {
     return;
@@ -6069,16 +6158,7 @@ function copyFlattenedCommands(srcDir, destDir, prefix, pathPrefix, runtime) {
       const destPath = path.join(destDir, destName);
 
       let content = fs.readFileSync(srcPath, 'utf8');
-      const globalClaudeRegex = /~\/\.claude\//g;
-      const globalClaudeHomeRegex = /\$HOME\/\.claude\//g;
-      const localClaudeRegex = /\.\/\.claude\//g;
-      const opencodeDirRegex = /~\/\.opencode\//g;
-      const kiloDirRegex = /~\/\.kilo\//g;
-      content = content.replace(globalClaudeRegex, pathPrefix);
-      content = content.replace(globalClaudeHomeRegex, pathPrefix);
-      content = content.replace(localClaudeRegex, `./${getDirName(runtime)}/`);
-      content = content.replace(opencodeDirRegex, pathPrefix);
-      content = content.replace(kiloDirRegex, pathPrefix);
+      content = applyOpencodeFamilyPathPrefix(content, runtime, pathPrefix);
       content = processAttribution(content, getCommitAttribution(runtime));
       content = runtime === 'kilo'
         ? convertClaudeToKiloFrontmatter(content)
@@ -6495,7 +6575,11 @@ function _applyRuntimeRewrites(content, runtime, pathPrefix) {
       break;
 
     default:
-      // Unknown runtime — no rewrites
+      // Unknown runtime — no rewrites.
+      // OpenCode/Kilo are intentionally absent: their skills are written by
+      // installOpencodeFamilySkills, which applies pathPrefix BEFORE the
+      // command→skill conversion (mirroring copyFlattenedCommands) rather than
+      // rewriting already-converted SKILL.md bodies. See #784.
       break;
   }
 
@@ -6822,6 +6906,87 @@ function installRuntimeArtifacts(runtime, configDir, scope, resolvedProfile) {
       _copyStaged(stagedForCopy, dest, kind);
     }
   }
+}
+
+/**
+ * Install the skills layout kind for an OpenCode-family runtime (OpenCode/Kilo).
+ *
+ * These runtimes do NOT go through installRuntimeArtifacts (their commands use a
+ * bespoke flattened-command writer), so this writes ONLY the skills kind
+ * alongside their existing command/ + agents/ surfaces. Uninstall is already
+ * layout-driven (uninstallRuntimeArtifacts iterates layout.kinds), so the
+ * skills/ dir is cleaned up automatically once the layout declares it.
+ *
+ * `rawCommandsDir` MUST be the SAME staged command directory the flattened
+ * command writer consumes (the caller passes its `_stageSkills()` output) so the
+ * command/ and skills/ surfaces always cover the identical, profile-resolved set
+ * — including the `--minimal`/`--core-only` alias path, which stages differently
+ * from a plain `--profile=core`.
+ *
+ * Mirrors copyFlattenedCommands exactly per file — pathPrefix rewrite →
+ * attribution → command→skill conversion — guaranteeing command/ and skills/
+ * bodies match byte-for-byte for global, --local, and --config-dir installs.
+ * We deliberately do NOT use skillsKindEntry.stage(): that converts before any
+ * pathPrefix is known, so its bodies would carry the converter's hardcoded
+ * default config dir. (#784)
+ *
+ * @param {string} runtime - 'opencode' or 'kilo'
+ * @param {string} targetDir - resolved runtime config directory
+ * @param {string} rawCommandsDir - staged RAW Claude command dir (caller's _stageSkills output)
+ * @param {string} pathPrefix - computed config-path prefix for body rewrites
+ * @returns {number} number of gsd-* skill directories written
+ */
+function installOpencodeFamilySkills(runtime, targetDir, rawCommandsDir, pathPrefix) {
+  const layout = resolveRuntimeArtifactLayout(runtime, targetDir);
+  const skillsKindEntry = layout.kinds.find((k) => k.kind === 'skills');
+  if (!skillsKindEntry) return 0;
+  const rawDir = rawCommandsDir;
+  if (!rawDir || !fs.existsSync(rawDir)) return 0;
+
+  const converter = runtime === 'kilo'
+    ? convertClaudeCommandToKiloSkill
+    : convertClaudeCommandToOpencodeSkill;
+
+  const dest = path.join(targetDir, skillsKindEntry.destSubpath);
+  fs.mkdirSync(dest, { recursive: true });
+
+  // Preserve user-owned GSD-prefixed skill dirs across the gsd-* prune.
+  // gsd-dev-preferences is generated by the user (via generate-dev-preferences)
+  // and lives at <configDir>/skills/gsd-dev-preferences — _removeGsdEntries
+  // would otherwise wipe it. Mirrors the preservation in installRuntimeArtifacts
+  // (#2973).
+  const USER_OWNED_SKILL_DIRS = ['gsd-dev-preferences'];
+  const toPreserve = new Map(); // dirName -> Map<relPath, Buffer>
+  for (const dirName of USER_OWNED_SKILL_DIRS) {
+    const skillDir = path.join(dest, dirName);
+    if (!fs.existsSync(skillDir)) continue;
+    const snap = _snapshotDir(skillDir);
+    if (snap.size > 0) toPreserve.set(dirName, snap);
+  }
+
+  _removeGsdEntries(dest, skillsKindEntry);
+
+  let count = 0;
+  for (const entry of fs.readdirSync(rawDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const stem = entry.name.slice(0, -3);
+    const skillName = `${skillsKindEntry.prefix}${stem}`;
+    let content = fs.readFileSync(path.join(rawDir, entry.name), 'utf8');
+    content = applyOpencodeFamilyPathPrefix(content, runtime, pathPrefix);
+    content = processAttribution(content, getCommitAttribution(runtime));
+    content = converter(content, skillName);
+    const skillDir = path.join(dest, skillName);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content);
+    count++;
+  }
+
+  // Restore user-owned dirs after the prune+copy.
+  for (const [dirName, snap] of toPreserve) {
+    _restoreDir(path.join(dest, dirName), snap);
+  }
+
+  return count;
 }
 
 /**
@@ -9046,6 +9211,17 @@ function install(isGlobal, runtime = 'claude', options = {}) {
       console.log(`  ${green}✓${reset} Installed ${count} commands to command/`);
     } else {
       failures.push('command/gsd-*');
+    }
+
+    // Also emit OpenCode-family skills (skills/<name>/SKILL.md). OpenCode and
+    // Kilo support native, on-demand skills in addition to flat commands — see
+    // resolveRuntimeArtifactLayout's opencode/kilo entries. Derive skills from
+    // the SAME staged command set (gsdSrc) so both surfaces match exactly. (#784)
+    const _skillCount = installOpencodeFamilySkills(runtime, targetDir, gsdSrc, pathPrefix);
+    if (_skillCount > 0) {
+      console.log(`  ${green}✓${reset} Installed ${_skillCount} skills to skills/`);
+    } else {
+      failures.push('skills/gsd-*');
     }
   } else if (isCline) {
     // Cline local install: rules-based only — commands are embedded in .clinerules (generated below).
@@ -11393,6 +11569,8 @@ module.exports = {
     convertClaudeCommandToCodexSkill,
     convertClaudeToOpencodeFrontmatter,
     convertClaudeToKiloFrontmatter,
+    convertClaudeCommandToOpencodeSkill,
+    convertClaudeCommandToKiloSkill,
     configureOpencodePermissions,
     neutralizeAgentReferences,
     GSD_CODEX_MARKER,
@@ -11471,6 +11649,7 @@ module.exports = {
     ensureCodexHooksJsonSessionStart,
     readGsdCommandNames,
     installRuntimeArtifacts,
+    installOpencodeFamilySkills,
     uninstallRuntimeArtifacts,
     parseConfigDirFromArgs,
     cleanupLegacyGsdCc,
