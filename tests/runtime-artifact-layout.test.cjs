@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { resolveRuntimeArtifactLayout } = require('../gsd-core/bin/lib/runtime-artifact-layout.cjs');
+const installProfiles = require('../gsd-core/bin/lib/install-profiles.cjs');
 
 const FAKE_DIR = '/tmp/fake-config-dir';
 
@@ -443,6 +444,42 @@ describe('stage — skills kind (kimi global)', () => {
     assert.match(executorYaml, /system_prompt_path: \.\/gsd-executor\.md/);
     assert.match(executorYaml, /kimi_cli\.tools\./);
     assert.doesNotMatch(executorYaml, /mcp__/);
+  });
+
+  test('tracks Kimi agent staging dir before writing artifacts', () => {
+    const layout = resolveRuntimeArtifactLayout('kimi', FAKE_STAGE_DIR, 'global');
+    const agentsKind = layout.kinds.find(k => k.kind === 'kimi-agents');
+    assert.ok(agentsKind, 'should have a kimi-agents kind');
+
+    const originalWriteFileSync = fs.writeFileSync;
+    const before = new Set(installProfiles.STAGED_DIRS);
+    let added = [];
+
+    try {
+      fs.writeFileSync = function writeFileSyncWithInjectedFailure(file, ...args) {
+        const filePath = String(file);
+        if (filePath.includes('gsd-kimi-agents-') && path.basename(filePath) === 'gsd.yaml') {
+          throw new Error('forced Kimi stage write failure');
+        }
+        return originalWriteFileSync.call(this, file, ...args);
+      };
+
+      assert.throws(
+        () => agentsKind.stage(PROFILE_FULL),
+        /forced Kimi stage write failure/
+      );
+
+      added = [...installProfiles.STAGED_DIRS]
+        .filter(dir => !before.has(dir) && path.basename(dir).startsWith('gsd-kimi-agents-'));
+      assert.strictEqual(added.length, 1, 'partially written Kimi stage dir must be tracked for cleanup');
+      assert.ok(fs.existsSync(added[0]), 'tracked partial Kimi stage dir should exist');
+    } finally {
+      fs.writeFileSync = originalWriteFileSync;
+      for (const dir of added) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        installProfiles.STAGED_DIRS.delete(dir);
+      }
+    }
   });
 });
 
