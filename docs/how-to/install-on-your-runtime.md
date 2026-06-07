@@ -110,7 +110,7 @@ GEMINI_CONFIG_DIR=~/.gemini-alt npx @opengsd/gsd-core@latest --gemini --global
 npx @opengsd/gsd-core@latest --opencode --global
 ```
 
-Skills land in `~/.config/opencode/` (XDG) or `~/.opencode/`. The installer converts agent frontmatter to OpenCode's schema — removing the `tools:` field and converting colour values to hex. See [Installing without Node.js — OpenCode transformations](#opencode--required-transformations) if you need to understand what changes.
+The installer writes three surfaces under `~/.config/opencode/` (XDG) or `~/.opencode/`: flat slash commands in `command/`, file-based subagents in `agents/`, and on-demand skills in `skills/<name>/SKILL.md`. It converts agent frontmatter to OpenCode's schema — removing the `tools:` field and converting colour values to hex — and emits each skill with spec-compliant frontmatter (`name` matching the skill directory plus a `description`). Skills are loaded on demand via OpenCode's native skill tool; commands remain invokable as `/gsd-*`. See [Installing without Node.js — OpenCode transformations](#opencode--required-transformations) if you need to understand what changes.
 
 **Override the install directory:**
 
@@ -126,7 +126,7 @@ OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @opengsd/gsd-core@latest --openco
 npx @opengsd/gsd-core@latest --kilo --global
 ```
 
-Skills land in `~/.config/kilo/` (XDG) or `~/.kilo/`. Uses the same OpenCode-style flat markdown command format.
+The installer writes the same three surfaces under `~/.config/kilo/` (XDG) or `~/.kilo/` as for OpenCode — flat commands in `command/`, subagents in `agents/`, and skills in `skills/<name>/SKILL.md` — since Kilo derives from OpenCode and shares its config schema and skill layout.
 
 **Override the install directory:**
 
@@ -215,6 +215,13 @@ npx @opengsd/gsd-core@latest --copilot --global
 
 Skills land in `~/.copilot/`. GSD installs as agent `.md` files and repository instruction files.
 
+GSD also wires Copilot's lifecycle hooks and instruction files:
+
+- **`AGENTS.md`** (local installs) — written at the repository root, which GitHub Copilot CLI reads as primary instructions, alongside `copilot-instructions.md`.
+- **Lifecycle hook** — a `sessionStart` hook config is written to `.github/hooks/gsd-session.json` (local) or `~/.copilot/hooks/gsd-session.json` (global). It is a self-contained inline `command` hook (no separate hook script to install), so it can never reference a missing script. The hook is advisory-only: at session start it surfaces whether the project has a `.planning/` workflow.
+
+Both are removed (and any user-authored content preserved) on `--uninstall`.
+
 **Override the install directory:**
 
 ```bash
@@ -257,17 +264,40 @@ WINDSURF_CONFIG_DIR=~/.codeium/windsurf-alt npx @opengsd/gsd-core@latest --winds
 
 ### Cline
 
-Cline uses a rules-based integration — GSD installs as `.clinerules` rather than slash commands.
+GSD gives Cline both skills (≥ v3.48.0) and the `.clinerules/` directory integration — no custom slash commands are registered.
 
 ```bash
-# Global install (all projects)
+# Global install (all projects — skills + rules directory)
 npx @opengsd/gsd-core@latest --cline --global
 
-# Local install (this project only)
+# Local install (this project only — rules directory only)
 npx @opengsd/gsd-core@latest --cline --local
 ```
 
-Global installs write to `~/.cline/`. Local installs write to `./.cline/`. Rules are loaded automatically by Cline — no custom slash commands are registered.
+GSD writes the [`.clinerules/` directory form](https://docs.cline.bot/customization/cline-rules):
+
+- **`.clinerules/gsd.md`** — the GSD rule file. Cline loads every `.md`/`.txt` file in
+  the `.clinerules/` directory automatically; no custom slash commands are registered.
+- **`.clinerules/hooks/PreToolUse`** — a [lifecycle hook](https://cline.bot/blog/cline-v3-36-hooks)
+  (Cline v3.36+). It is an executable script that receives the tool-call context as JSON on
+  stdin and returns a JSON decision (`cancel` / `errorMessage` / `contextModification`). The
+  GSD hook guards `.planning/` artifacts from direct edits and otherwise allows the operation;
+  it fails open, so a hook error never blocks you. Cline runs hooks on macOS and Linux only.
+
+**Global install additionally:**
+
+- Emits each GSD command as **`~/.cline/skills/<name>/SKILL.md`**. Cline ≥ v3.48.0 loads
+  skills from `~/.cline/skills/` automatically — no configuration needed.
+- Merges GSD instructions into **`~/.agents/AGENTS.md`**, the cross-tool global instruction
+  file Cline reads. The block is marker-delimited, so your own `AGENTS.md` content (and other
+  tools' entries) is preserved, and `--uninstall` strips only the GSD block.
+
+**Local install** writes the `.clinerules/` directory into the current project only. No skills
+directory is created for local scope.
+
+> Cline's *global* hook directory (`~/Documents/Cline/Rules/Hooks/`) is not yet populated by the
+> installer — project-scope hooks (`.clinerules/hooks/`) and the global `AGENTS.md` instruction
+> target cover the common cases.
 
 ---
 
@@ -297,6 +327,19 @@ Skills land in `~/.qwen/skills/gsd-*/SKILL.md`.
 QWEN_CONFIG_DIR=~/.qwen-alt npx @opengsd/gsd-core@latest --qwen --global
 ```
 
+**Hook coverage**
+
+Qwen Code supports 15 hook events. GSD registers the following events automatically on install:
+
+| Event | Hook | Purpose |
+|---|---|---|
+| `SessionStart` | `gsd-check-update.js`, `gsd-session-state.sh` | Update check, session orientation |
+| `PostToolUse` | `gsd-context-monitor.js`, `gsd-read-injection-scanner.js`, `gsd-phase-boundary.sh`, `gsd-graphify-update.sh` | Context monitoring, read-time scan, phase boundary detection |
+| `PreToolUse` | `gsd-prompt-guard.js`, `gsd-read-guard.js`, `gsd-workflow-guard.js`, `gsd-worktree-path-guard.js`, `gsd-validate-commit.sh` | Prompt guard, read-before-edit, workflow + worktree safety, commit validation |
+| `SubagentStop` | `gsd-context-monitor.js` | Context headroom tracking after subagent completion |
+| `Stop` | `gsd-context-monitor.js` | Context headroom tracking before model stop |
+| `PreCompact` | `gsd-context-monitor.js` | Context awareness before conversation compaction |
+
 ---
 
 ### Augment Code
@@ -305,7 +348,7 @@ QWEN_CONFIG_DIR=~/.qwen-alt npx @opengsd/gsd-core@latest --qwen --global
 npx @opengsd/gsd-core@latest --augment --global
 ```
 
-Skills land in `~/.augment/`. GSD installs skills and agents. No hook or statusline ownership.
+Skills land in `~/.augment/skills/` and slash command definitions land in `~/.augment/commands/`. GSD installs skills, agents, and commands (`/gsd-phase`, `/gsd-ship`, etc.). No hook or statusline ownership.
 
 ---
 
