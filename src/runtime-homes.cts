@@ -100,8 +100,15 @@ export function resolveKimiGlobalDir(opts: ResolveKimiOpts = {}): string {
 /**
  * Return the global config base directory for the given runtime.
  * Respects the same env-var overrides as bin/install.js getGlobalDir().
+ *
+ * @param runtime   - The runtime identifier (e.g. 'claude', 'opencode').
+ * @param explicitDir - If provided and non-empty, returned immediately after
+ *   tilde-expansion, overriding all env-var and default logic. This matches
+ *   the behaviour of bin/install.js getGlobalDir(runtime, explicitDir).
  */
-export function getGlobalConfigDir(runtime: string): string {
+export function getGlobalConfigDir(runtime: string, explicitDir?: string | null): string {
+  if (explicitDir) return expandTilde(explicitDir);
+
   const home = os.homedir();
   const env = process.env as Record<string, string | undefined>;
 
@@ -172,6 +179,7 @@ export function getGlobalConfigDir(runtime: string): string {
     // ── OpenCode (XDG) ───────────────────────────────────────────────────────
     case 'opencode': {
       if (env['OPENCODE_CONFIG_DIR']) return expandTilde(env['OPENCODE_CONFIG_DIR']);
+      if (env['OPENCODE_CONFIG']) return path.dirname(expandTilde(env['OPENCODE_CONFIG']));
       if (env['XDG_CONFIG_HOME']) return path.join(expandTilde(env['XDG_CONFIG_HOME']), 'opencode');
       return path.join(home, '.config', 'opencode');
     }
@@ -179,6 +187,7 @@ export function getGlobalConfigDir(runtime: string): string {
     // ── Kilo (XDG) ───────────────────────────────────────────────────────────
     case 'kilo': {
       if (env['KILO_CONFIG_DIR']) return expandTilde(env['KILO_CONFIG_DIR']);
+      if (env['KILO_CONFIG']) return path.dirname(expandTilde(env['KILO_CONFIG']));
       if (env['XDG_CONFIG_HOME']) return path.join(expandTilde(env['XDG_CONFIG_HOME']), 'kilo');
       return path.join(home, '.config', 'kilo');
     }
