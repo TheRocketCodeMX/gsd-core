@@ -7494,8 +7494,11 @@ function uninstall(isGlobal, runtime = 'claude') {
     }
 
     // Remove GSD hooks from settings — per-hook granularity to preserve
-    // user hooks that share an entry with a GSD hook (#1755 followup)
-    for (const eventName of ['SessionStart', 'PostToolUse', 'AfterTool', 'PreToolUse', 'BeforeTool']) {
+    // user hooks that share an entry with a GSD hook (#1755 followup).
+    // Includes the 3 Qwen-only events added in #788 (SubagentStop, Stop,
+    // PreCompact) — safe to iterate for all runtimes; non-Qwen installs
+    // simply find no entries and skip.
+    for (const eventName of ['SessionStart', 'PostToolUse', 'AfterTool', 'PreToolUse', 'BeforeTool', 'SubagentStop', 'Stop', 'PreCompact']) {
       if (settings.hooks && settings.hooks[eventName]) {
         const before = JSON.stringify(settings.hooks[eventName]);
         settings.hooks[eventName] = settings.hooks[eventName]
@@ -10303,6 +10306,52 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     } else if (!hasPhaseBoundaryHook && !phaseBoundaryCommand) {
       console.warn(`  ${yellow}⚠${reset}  Skipped phase boundary hook — Bash executable path unavailable (#3393)`);
     }
+
+    // ── Qwen-only extended hook events (#788) ────────────────────────────────
+    // Qwen Code exposes 15 hook events — a superset of Claude Code.  Three
+    // additional events are registered for Qwen installs:
+    //   SubagentStop  — subagent lifecycle completion (context headroom tracking)
+    //   Stop          — model stop / final-response moment (context headroom)
+    //   PreCompact    — fires before conversation compaction (most critical
+    //                   moment to surface context headroom warnings)
+    //
+    // Wire gsd-context-monitor to all three — the same hook already used for
+    // PostToolUse — so no new hook files are needed.
+    //
+    // Note: UserPromptSubmit is NOT wired here.  That event carries the raw
+    // user prompt text, not a tool invocation, so gsd-prompt-guard (which
+    // exits unless tool_name is Write/Edit) would be a silent no-op.  A
+    // dedicated handler for UserPromptSubmit is deferred to a follow-on issue.
+    //
+    // Guard: isQwen is defined at the top of install() (line ~8254).
+    if (isQwen) {
+      // SubagentStop, Stop, PreCompact — route through the context monitor so
+      // agents get context-headroom warnings at subagent completion, model stop,
+      // and pre-compaction (the most critical moment to surface headroom info).
+      for (const qwenEvent of ['SubagentStop', 'Stop', 'PreCompact']) {
+        if (!settings.hooks[qwenEvent]) {
+          settings.hooks[qwenEvent] = [];
+        }
+        const alreadyHasContextMonitor = settings.hooks[qwenEvent].some(entry =>
+          entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-context-monitor'))
+        );
+        if (!alreadyHasContextMonitor && fs.existsSync(contextMonitorFile) && contextMonitorCommand) {
+          settings.hooks[qwenEvent].push({
+            hooks: [
+              {
+                type: 'command',
+                command: contextMonitorCommand,
+                timeout: 10
+              }
+            ]
+          });
+          console.log(`  ${green}✓${reset} Configured ${qwenEvent} context monitor hook (Qwen Code)`);
+        } else if (!alreadyHasContextMonitor && !fs.existsSync(contextMonitorFile)) {
+          console.warn(`  ${yellow}⚠${reset}  Skipped ${qwenEvent} hook — gsd-context-monitor.js not found at target`);
+        }
+      }
+    }
+    // ── end Qwen-only extended hook events ────────────────────────────────────
   }
 
   // Compute the update-banner hook command alongside the others so
