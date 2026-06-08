@@ -471,7 +471,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 
 ---
 
-## Hooks (14 shipped)
+## Hooks (17 shipped)
 
 Full listing: `hooks/`.
 
@@ -482,11 +482,14 @@ Full listing: `hooks/`.
 | `gsd-check-update.js` | `SessionStart` | Background check for new GSD versions |
 | `gsd-check-update-worker.js` | (worker) | Background worker helper for check-update |
 | `gsd-update-banner.js` | `SessionStart` | Opt-in banner surfacing update availability when GSD statusline isn't used (PR #2795) |
+| `gsd-cursor-session-start.js` | Cursor `sessionStart` | Cursor-native context injection at session start (issue #777) |
+| `gsd-cursor-post-tool.js` | Cursor `postToolUse` | Cursor-native STATE.md update monitor after tool calls (issue #777) |
 | `gsd-prompt-guard.js` | `PreToolUse` | Scans `.planning/` writes for prompt-injection patterns (advisory) |
 | `gsd-workflow-guard.js` | `PreToolUse` | Detects file edits outside GSD workflow context (advisory, opt-in) |
 | `gsd-read-guard.js` | `PreToolUse` | Advisory guard preventing Edit/Write on unread files |
 | `gsd-read-injection-scanner.js` | `PostToolUse` | Scans tool Read results for prompt-injection patterns (v1.36+, PR #2201) |
 | `gsd-worktree-path-guard.js` | `PreToolUse` | Hard-blocks Edit/Write/MultiEdit with absolute paths outside the worktree root (PR #579, #260) |
+| `gsd-config-reload.js` | `FileChanged` | Hot-reloads GSD config context when `.planning/config.json` changes mid-session (#770) |
 | `gsd-session-state.sh` | `PostToolUse` | Session-state tracking for shell-based runtimes |
 | `gsd-validate-commit.sh` | `PostToolUse` | Commit validation for conventional-commit enforcement |
 | `gsd-phase-boundary.sh` | `PostToolUse` | Phase-boundary detection for workflow transitions |

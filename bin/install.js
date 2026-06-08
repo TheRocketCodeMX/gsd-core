@@ -191,6 +191,19 @@ const GSD_COPILOT_SESSION_HOOK_PWSH =
   `{ '{"additionalContext":"${GSD_COPILOT_SESSION_MSG_PRESENT}"}' } ` +
   `else { '{"additionalContext":"${GSD_COPILOT_SESSION_MSG_ABSENT}"}' }`;
 
+// #777 — Cursor CLI lifecycle hook constants.
+// Cursor reads hook configs from <project-root>/.cursor/hooks.json (local) or
+// ~/.cursor/hooks.json (global) with the shape { version: 1, hooks: { <event>: [...] } }.
+// Events use camelCase: sessionStart, postToolUse, preToolUse, etc.
+// A `command` hook entry runs an external script. GSD registers two managed hooks:
+//   sessionStart → gsd-cursor-session-start.js  (context injection)
+//   postToolUse  → gsd-cursor-post-tool.js       (STATE.md update monitor)
+// Cursor docs: https://cursor.com/docs/hooks
+const GSD_CURSOR_SESSION_HOOK_SCRIPT = 'gsd-cursor-session-start.js';
+const GSD_CURSOR_POST_TOOL_HOOK_SCRIPT = 'gsd-cursor-post-tool.js';
+// Marker comment embedded in managed hook entries so GSD can find+remove them.
+const GSD_CURSOR_HOOK_MARKER = 'gsd-managed';
+
 // GSD-managed files under hooks/lib/ (helpers required by gsd-*.sh hooks).
 // git-cmd.js does not start with "gsd-" (shared classifier for #3129), gsd-graphify-rebuild.sh does.
 const GSD_HOOK_LIB_FILES = ['git-cmd.js', 'gsd-graphify-rebuild.sh'];
@@ -6105,6 +6118,248 @@ function writeClineArtifacts(targetDir, isGlobalInstall) {
   return written;
 }
 
+// ── Cursor hooks.json reconciler (issue #777) ────────────────────────────────
+//
+// Cursor v2.4+ supports a hooks.json lifecycle hook system. GSD registers two
+// managed command hooks:
+//   sessionStart → gsd-cursor-session-start.js  (context injection)
+//   postToolUse  → gsd-cursor-post-tool.js       (STATE.md update monitor)
+//
+// hooks.json schema:
+//   { "version": 1, "hooks": { "<event>": [ { "type": "command", "command": "<path>" } ] } }
+//
+// Location:
+//   Global:  ~/.cursor/hooks.json
+//   Local:   <project-root>/.cursor/hooks.json
+//
+// GSD entries are identified by a top-level `"gsd-managed": true` field on
+// each hook entry. Non-GSD entries are preserved. The reconciler is idempotent
+// (safe to re-run) and preserves user-owned entries in the file.
+//
+// References: https://cursor.com/docs/hooks
+
+/**
+ * Build a managed Cursor hook entry for a given hook script path.
+ *
+ * @param {string} scriptPath - Absolute path to the hook script
+ * @returns {object} Cursor hook entry object
+ */
+function buildCursorHookEntry(scriptPath) {
+  return {
+    type: 'command',
+    command: scriptPath.replace(/\\/g, '/'),
+    [GSD_CURSOR_HOOK_MARKER]: true,
+  };
+}
+
+/**
+ * Return true if a Cursor hook entry is GSD-managed.
+ * Detection: presence of the GSD_CURSOR_HOOK_MARKER sentinel field.
+ *
+ * @param {object} entry - A hooks array element from hooks.json
+ * @returns {boolean}
+ */
+function isManagedCursorHookEntry(entry) {
+  return Boolean(entry && typeof entry === 'object' && entry[GSD_CURSOR_HOOK_MARKER]);
+}
+
+/**
+ * Reconcile the GSD-managed entries in a Cursor hooks.json file.
+ *
+ * Supports both known hooks.json shapes:
+ *   1) { "version": 1, "hooks": { "sessionStart": [...], "postToolUse": [...] } }
+ *   2) { "sessionStart": [...], "postToolUse": [...] }   (no wrapper object)
+ *
+ * Managed entries (those with GSD_CURSOR_HOOK_MARKER) are removed then
+ * re-added if managedEntries is non-null/non-empty. User-owned entries are
+ * preserved. File is written atomically only when content changes.
+ *
+ * @param {string} hooksJsonPath - Absolute path to the hooks.json file
+ * @param {{ sessionStart?: object|null, postToolUse?: object|null }|null} managedEntries
+ *   Map from event name to the new hook entry to register (or null to remove).
+ *   Pass null for the whole param to remove all managed entries.
+ * @returns {{ changed: boolean, wrote: boolean, path: string }}
+ */
+function reconcileCursorHooksJson(hooksJsonPath, managedEntries) {
+  let parsed = {};
+  let currentContent = null;
+
+  if (fs.existsSync(hooksJsonPath)) {
+    const raw = fs.readFileSync(hooksJsonPath, 'utf8');
+    currentContent = raw;
+    if (raw.trim()) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        throw new Error(`Cursor hooks.json parse failed: ${err && err.message ? err.message : String(err)}`);
+      }
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) parsed = {};
+
+  // Cursor's canonical hooks.json schema is { "version": 1, "hooks": { ... } }.
+  // GSD always writes (and migrates to) the nested shape so Cursor reads it correctly.
+  // The flat shape { "sessionStart": [...] } is accepted on read for backwards compat
+  // with manually-written files, but the output always uses the nested form.
+  const hasNestedHooksObject =
+    parsed.hooks && typeof parsed.hooks === 'object' && !Array.isArray(parsed.hooks);
+  if (!hasNestedHooksObject) {
+    // Migrate flat shape (or empty {}) to nested: lift event keys into hooks:{}.
+    const eventKeys = ['sessionStart', 'postToolUse'];
+    const lifted = {};
+    for (const k of eventKeys) {
+      if (Array.isArray(parsed[k])) {
+        lifted[k] = parsed[k];
+        delete parsed[k];
+      }
+    }
+    parsed.hooks = lifted;
+  }
+  if (!parsed.version) parsed.version = 1;
+  const hookTable = parsed.hooks;
+
+  // Events GSD manages.
+  const MANAGED_EVENTS = ['sessionStart', 'postToolUse'];
+  const entries = managedEntries || {};
+
+  for (const event of MANAGED_EVENTS) {
+    const existing = Array.isArray(hookTable[event]) ? hookTable[event] : [];
+    // Strip all prior GSD-managed entries for this event.
+    const userOwned = existing.filter((e) => !isManagedCursorHookEntry(e));
+    const newEntry = entries[event] || null;
+    if (newEntry) {
+      hookTable[event] = [...userOwned, newEntry];
+    } else {
+      // Remove-only: keep user entries, or delete the key if it would be empty.
+      if (userOwned.length > 0) {
+        hookTable[event] = userOwned;
+      } else {
+        delete hookTable[event];
+      }
+    }
+  }
+
+  // hookTable is parsed.hooks (always nested now); no reassignment needed.
+  // Write only if content changed or if we're creating the file for the first time.
+  const nextContent = `${JSON.stringify(parsed, null, 2)}\n`;
+  const changed = currentContent !== nextContent;
+  const shouldWrite = changed && (currentContent !== null || Object.keys(parsed).length > 0);
+  if (shouldWrite) {
+    atomicWriteFileSync(hooksJsonPath, nextContent, 'utf8');
+  }
+
+  return { changed: changed, wrote: shouldWrite, path: hooksJsonPath };
+}
+
+/**
+ * #777 — Write GSD-managed Cursor lifecycle hooks into <targetDir>/hooks.json.
+ *
+ * Both managed hook scripts (gsd-cursor-session-start.js, gsd-cursor-post-tool.js)
+ * are copied from the GSD hooks/ source to <targetDir>/hooks/ first, so the
+ * hooks.json entries never reference a script that wasn't installed.
+ *
+ * @param {string} targetDir - The Cursor config dir (global: ~/.cursor; local: .cursor)
+ * @param {string} src       - The GSD install source root (for copying hook scripts)
+ * @param {{ absoluteRunner?: string|null }} opts
+ * @returns {{ hooksJsonPath: string, changed: boolean }}
+ */
+function writeCursorHooksJson(targetDir, src, opts) {
+  opts = opts || {};
+  const hooksDir = path.join(targetDir, 'hooks');
+  fs.mkdirSync(hooksDir, { recursive: true });
+
+  // Copy the two GSD-managed hook scripts from the GSD source hooks/ directory.
+  // Apply the same /gsd:/gi → gsd- rewrite used by copyWithPathReplacement for Cursor
+  // JS files, so the installed hook scripts contain no /gsd: colon refs (bug-376 2b).
+  // Track which scripts were successfully installed so we never register a hook entry
+  // that references a script that wasn't copied (dangling command guard).
+  const hookScripts = [GSD_CURSOR_SESSION_HOOK_SCRIPT, GSD_CURSOR_POST_TOOL_HOOK_SCRIPT];
+  const srcHooksDir = path.join(src, 'hooks');
+  const installedScripts = new Set();
+  for (const script of hookScripts) {
+    const srcPath = path.join(srcHooksDir, script);
+    const destPath = path.join(hooksDir, script);
+    if (fs.existsSync(srcPath)) {
+      let content = fs.readFileSync(srcPath, 'utf8');
+      // Rewrite /gsd:<cmd> → gsd-<cmd> so installed hook scripts are consistent
+      // with the Cursor convention (no colon-form slash commands in agent context).
+      content = content.replace(/gsd:/gi, 'gsd-');
+      fs.writeFileSync(destPath, content);
+      try { fs.chmodSync(destPath, 0o755); } catch { /* Windows: ignore chmod */ }
+      installedScripts.add(script);
+    }
+  }
+
+  // Build command strings using the same buildHookCommand helper used by other runtimes.
+  // buildHookCommand resolves the node runner + emits "<runner>" "<targetDir>/hooks/<name>".
+  const hookOpts = { runtime: 'cursor', platform: opts.platform || process.platform };
+  // buildHookCommand('gsd-cursor-session-start.js', ...): sessionStart → context injection
+  // Only register the hook entry if the script was actually installed (dangling guard).
+  const sessionStartCmd = installedScripts.has('gsd-cursor-session-start.js')
+    ? buildHookCommand(targetDir, 'gsd-cursor-session-start.js', hookOpts)
+    : null;
+  // buildHookCommand('gsd-cursor-post-tool.js', ...): postToolUse → STATE.md update monitor
+  const postToolCmd = installedScripts.has('gsd-cursor-post-tool.js')
+    ? buildHookCommand(targetDir, 'gsd-cursor-post-tool.js', hookOpts)
+    : null;
+
+  // Build managed entries; skip events whose command couldn't be resolved (e.g. no node).
+  const managedEntries = {};
+  if (sessionStartCmd) {
+    managedEntries.sessionStart = {
+      type: 'command',
+      command: sessionStartCmd,
+      [GSD_CURSOR_HOOK_MARKER]: true,
+    };
+  }
+  if (postToolCmd) {
+    managedEntries.postToolUse = {
+      type: 'command',
+      command: postToolCmd,
+      [GSD_CURSOR_HOOK_MARKER]: true,
+    };
+  }
+
+  const hooksJsonPath = path.join(targetDir, 'hooks.json');
+  const result = reconcileCursorHooksJson(hooksJsonPath, managedEntries);
+  return { hooksJsonPath, changed: result.changed };
+}
+
+/**
+ * Remove all GSD-managed Cursor lifecycle hook entries from hooks.json.
+ * User-owned entries are preserved. If the file becomes empty, it is removed.
+ *
+ * @param {string} targetDir - The Cursor config dir
+ * @returns {{ changed: boolean }}
+ */
+function removeCursorHooksJson(targetDir) {
+  const hooksJsonPath = path.join(targetDir, 'hooks.json');
+  if (!fs.existsSync(hooksJsonPath)) return { changed: false };
+  const result = reconcileCursorHooksJson(hooksJsonPath, null);
+  // If the resulting file has no meaningful hook content, remove it.
+  // A file is "empty" if it contains only the scaffolding (version, empty hooks
+  // object, or a bare {}) with no user-authored hook entries.
+  if (result.changed) {
+    try {
+      const contentRaw = fs.readFileSync(hooksJsonPath, 'utf8');
+      const parsed = JSON.parse(contentRaw);
+      // reconcileCursorHooksJson always writes the nested { version, hooks:{} } shape.
+      // The file is "empty" when there are no remaining hook events with entries.
+      const hookTable = (parsed.hooks && typeof parsed.hooks === 'object' && !Array.isArray(parsed.hooks))
+        ? parsed.hooks
+        : {};
+      const hasAnyEvents = Object.keys(hookTable).some(
+        (k) => Array.isArray(hookTable[k]) && hookTable[k].length > 0,
+      );
+      if (!hasAnyEvents) {
+        fs.unlinkSync(hooksJsonPath);
+        return { changed: true };
+      }
+    } catch { /* best-effort: leave the file */ }
+  }
+  return { changed: result.changed };
+}
+
 /**
  * #786 — Build the GSD-managed GitHub Copilot lifecycle hook config object.
  *
@@ -8204,7 +8459,10 @@ const GSD_UNINSTALL_HOOKS = [
   'gsd-statusline.js',
   'gsd-check-update.js',
   'gsd-check-update.cmd',
+  'gsd-config-reload.js',
   'gsd-context-monitor.js',
+  'gsd-cursor-session-start.js',
+  'gsd-cursor-post-tool.js',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',
   'gsd-read-injection-scanner.js',
@@ -8441,6 +8699,33 @@ function uninstall(isGlobal, runtime = 'claude') {
     }
   }
 
+  // 1b-cursor. Non-layout Cursor side-effects (issue #777): remove GSD-managed
+  // hook entries from hooks.json and clean up the managed hook scripts.
+  if (isCursor) {
+    const hooksJsonCleanup = removeCursorHooksJson(targetDir);
+    if (hooksJsonCleanup.changed) {
+      removedCount++;
+      console.log(`  ${green}✓${reset} Removed GSD-managed Cursor hooks from hooks.json`);
+    }
+    // Remove the managed hook scripts (session-start + post-tool).
+    const hooksDir = path.join(targetDir, 'hooks');
+    for (const script of [GSD_CURSOR_SESSION_HOOK_SCRIPT, GSD_CURSOR_POST_TOOL_HOOK_SCRIPT]) {
+      const p = path.join(hooksDir, script);
+      try {
+        if (fs.existsSync(p)) {
+          fs.unlinkSync(p);
+          removedCount++;
+        }
+      } catch { /* best-effort */ }
+    }
+    // Prune hooks/ if empty.
+    try {
+      if (fs.existsSync(hooksDir) && fs.readdirSync(hooksDir).length === 0) {
+        fs.rmdirSync(hooksDir);
+      }
+    } catch { /* best-effort */ }
+  }
+
   // 1c. Claude local: remove commands/gsd/ (primary local install location).
   //     The layout's _removeGsdEntries uses the 'gsd-' prefix which applies to
   //     flat command dirs (OpenCode/Kilo). Claude local files use no prefix inside
@@ -8641,9 +8926,12 @@ function uninstall(isGlobal, runtime = 'claude') {
     // Remove GSD hooks from settings — per-hook granularity to preserve
     // user hooks that share an entry with a GSD hook (#1755 followup).
     // Includes the 3 Qwen-only events added in #788 (SubagentStop, Stop,
-    // PreCompact) — safe to iterate for all runtimes; non-Qwen installs
-    // simply find no entries and skip.
-    for (const eventName of ['SessionStart', 'PostToolUse', 'AfterTool', 'PreToolUse', 'BeforeTool', 'SubagentStop', 'Stop', 'PreCompact']) {
+    // PreCompact, also registered for Claude in #770), the 3 Gemini-only
+    // events added in #776 (BeforeAgent, AfterAgent, BeforeModel), and the
+    // Claude-only FileChanged event added in #770 — safe to iterate for all
+    // runtimes; installs that don't register these events simply find no
+    // entries and skip.
+    for (const eventName of ['SessionStart', 'PostToolUse', 'AfterTool', 'PreToolUse', 'BeforeTool', 'SubagentStop', 'Stop', 'PreCompact', 'BeforeAgent', 'AfterAgent', 'BeforeModel', 'FileChanged']) {
       if (settings.hooks && settings.hooks[eventName]) {
         const before = JSON.stringify(settings.hooks[eventName]);
         settings.hooks[eventName] = settings.hooks[eventName]
@@ -10592,8 +10880,10 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   }
 
   // Gate hooks/lib/ install on the same runtimes that receive hooks (see line ~8702).
-  // Codex/Copilot/Cursor/Windsurf/Trae/Cline skip hooks entirely, so they must not
-  // receive the hooks/lib/ helpers either — otherwise the Codex comment downstream
+  // Codex/Copilot/Cursor/Windsurf/Trae/Cline do not use the shared hooks/lib/ helpers
+  // (Cursor uses standalone .js hook scripts registered via hooks.json; Codex uses
+  // hooks.json directly; the others skip hooks entirely), so they must not receive
+  // the hooks/lib/ helpers — otherwise the Codex comment downstream
   // ("we deliberately do *not* copy hooks/lib/ for Codex") is contradicted in practice.
   const hooksLibSrc = path.join(src, 'hooks', 'lib');
   if (!isCodex && !isCopilot && !isCursor && !isWindsurf && !isTrae && !isCline && !isKimi && fs.existsSync(hooksLibSrc)) {
@@ -11108,8 +11398,23 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     return { settingsPath: null, settings: null, statuslineCommand: null, updateBannerCommand: null, runtime, configDir: targetDir };
   }
 
+  if (configIntent.installSurface === 'cursor-hooks-json') {
+    // #777: Cursor v2.4+ supports hooks.json. Register sessionStart + postToolUse.
+    // Hook scripts are copied to <targetDir>/hooks/ and referenced by hooks.json.
+    const cursorHookResult = writeCursorHooksJson(targetDir, src, {});
+    if (cursorHookResult.changed) {
+      console.log(`  ${green}✓${reset} Configured Cursor lifecycle hooks (sessionStart, postToolUse)`);
+    } else {
+      console.log(`  ${green}✓${reset} Cursor lifecycle hooks already up to date`);
+    }
+    // Re-run the manifest pass so the hook scripts + hooks.json are hash-tracked.
+    writeManifest(targetDir, runtime, { mode: _effectiveInstallMode });
+    persistActiveProfileMarker();
+    return { settingsPath: null, settings: null, statuslineCommand: null, updateBannerCommand: null, runtime, configDir: targetDir };
+  }
+
   if (configIntent.installSurface === 'profile-marker-only') {
-    // Cursor/Windsurf/Trae/Kimi use skills/agents — no config.toml, no settings.json hooks needed
+    // Windsurf/Trae/Kimi use artifact-only surfaces — no config.toml or settings.json hooks needed.
     persistActiveProfileMarker();
     return { settingsPath: null, settings: null, statuslineCommand: null, updateBannerCommand: null, runtime, configDir: targetDir };
   }
@@ -11272,6 +11577,9 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const readInjectionScannerCommand = isGlobal
     ? buildHookCommand(targetDir, 'gsd-read-injection-scanner.js', hookOpts)
     : localCmd('gsd-read-injection-scanner.js');
+  const configReloadCommand = isGlobal
+    ? buildHookCommand(targetDir, 'gsd-config-reload.js', hookOpts)
+    : localCmd('gsd-config-reload.js');
 
   // #3002 CR: when resolveNodeRunner() returns null, every dependent JS-hook
   // command is null too. Emit one warning here so the operator sees the cause
@@ -11626,36 +11934,33 @@ function install(isGlobal, runtime = 'claude', options = {}) {
       console.warn(`  ${yellow}⚠${reset}  Skipped phase boundary hook — Bash executable path unavailable (#3393)`);
     }
 
-    // ── Qwen-only extended hook events (#788) ────────────────────────────────
-    // Qwen Code exposes 15 hook events — a superset of Claude Code.  Three
-    // additional events are registered for Qwen installs:
+    // ── Extended hook events: SubagentStop / Stop / PreCompact (#788 + #770) ──
+    // Claude Code (since #770) and Qwen Code (since #788) both support these
+    // three lifecycle events.  Wire gsd-context-monitor so agents get context-
+    // headroom warnings at subagent completion, model stop, and pre-compaction
+    // (the most critical moment to surface headroom info).
+    //
     //   SubagentStop  — subagent lifecycle completion (context headroom tracking)
     //   Stop          — model stop / final-response moment (context headroom)
     //   PreCompact    — fires before conversation compaction (most critical
     //                   moment to surface context headroom warnings)
     //
-    // Wire gsd-context-monitor to all three — the same hook already used for
-    // PostToolUse — so no new hook files are needed.
-    //
     // Note: UserPromptSubmit is NOT wired here.  That event carries the raw
     // user prompt text, not a tool invocation, so gsd-prompt-guard (which
     // exits unless tool_name is Write/Edit) would be a silent no-op.  A
     // dedicated handler for UserPromptSubmit is deferred to a follow-on issue.
-    //
-    // Guard: isQwen is defined at the top of install() (line ~8254).
-    if (isQwen) {
-      // SubagentStop, Stop, PreCompact — route through the context monitor so
-      // agents get context-headroom warnings at subagent completion, model stop,
-      // and pre-compaction (the most critical moment to surface headroom info).
-      for (const qwenEvent of ['SubagentStop', 'Stop', 'PreCompact']) {
-        if (!settings.hooks[qwenEvent]) {
-          settings.hooks[qwenEvent] = [];
+    if (isQwen || runtime === 'claude') {
+      const runtimeLabel = isQwen ? 'Qwen Code' : 'Claude Code';
+      // SubagentStop, Stop, PreCompact — route through the context monitor.
+      for (const event of ['SubagentStop', 'Stop', 'PreCompact']) {
+        if (!settings.hooks[event]) {
+          settings.hooks[event] = [];
         }
-        const alreadyHasContextMonitor = settings.hooks[qwenEvent].some(entry =>
+        const alreadyHasContextMonitor = settings.hooks[event].some(entry =>
           entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-context-monitor'))
         );
         if (!alreadyHasContextMonitor && fs.existsSync(contextMonitorFile) && contextMonitorCommand) {
-          settings.hooks[qwenEvent].push({
+          settings.hooks[event].push({
             hooks: [
               {
                 type: 'command',
@@ -11664,14 +11969,119 @@ function install(isGlobal, runtime = 'claude', options = {}) {
               }
             ]
           });
-          console.log(`  ${green}✓${reset} Configured ${qwenEvent} context monitor hook (Qwen Code)`);
+          console.log(`  ${green}✓${reset} Configured ${event} context monitor hook (${runtimeLabel})`);
         } else if (!alreadyHasContextMonitor && !fs.existsSync(contextMonitorFile)) {
-          console.warn(`  ${yellow}⚠${reset}  Skipped ${qwenEvent} hook — gsd-context-monitor.js not found at target`);
+          console.warn(`  ${yellow}⚠${reset}  Skipped ${event} hook — gsd-context-monitor.js not found at target`);
         }
       }
     }
-    // ── end Qwen-only extended hook events ────────────────────────────────────
+    // ── end SubagentStop / Stop / PreCompact events ────────────────────────────
+
+    // ── Gemini-only extended hook events (#776) ───────────────────────────────
+    // Gemini CLI exposes several hook events beyond BeforeTool/AfterTool that
+    // gsd previously did not register.  Three high-value events are added here:
+    //
+    //   BeforeAgent  — fires after user submits a prompt, before the agent
+    //                  plans.  Wire gsd-context-monitor for context headroom
+    //                  awareness at prompt time.
+    //   AfterAgent   — fires once per turn after the model generates its final
+    //                  response.  Wire gsd-context-monitor to track headroom
+    //                  after each agent turn completes.
+    //   BeforeModel  — fires before each LLM call (per-turn, not per-session).
+    //                  Wire gsd-context-monitor for per-turn context injection
+    //                  — more precise than session-start-only injection.
+    //
+    // All three reuse gsd-context-monitor.js — no new hook files needed.
+    // The `decision:"deny"` retry capability of AfterAgent is intentionally
+    // left to the hook script to implement when triggered (gsd-context-monitor
+    // exits 0 / advisory-only today; an active quality gate is a follow-on).
+    //
+    // Note: BeforeToolSelection is NOT wired.  That event does not map to a
+    // gsd hook use case at this time; deferred to a follow-on issue.
+    //
+    // Guard: isGemini is defined at the top of install() (line ~8696).
+    if (isGemini) {
+      for (const geminiEvent of ['BeforeAgent', 'AfterAgent', 'BeforeModel']) {
+        if (!Array.isArray(settings.hooks[geminiEvent])) {
+          settings.hooks[geminiEvent] = [];
+        }
+        const alreadyHasContextMonitor = settings.hooks[geminiEvent].some(entry =>
+          entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-context-monitor'))
+        );
+        if (!alreadyHasContextMonitor && fs.existsSync(contextMonitorFile) && contextMonitorCommand) {
+          settings.hooks[geminiEvent].push({
+            hooks: [
+              {
+                type: 'command',
+                command: contextMonitorCommand,
+                timeout: 10
+              }
+            ]
+          });
+          console.log(`  ${green}✓${reset} Configured ${geminiEvent} context monitor hook (Gemini)`);
+        } else if (!alreadyHasContextMonitor && !fs.existsSync(contextMonitorFile)) {
+          console.warn(`  ${yellow}⚠${reset}  Skipped ${geminiEvent} hook — gsd-context-monitor.js not found at target`);
+        }
+      }
+    }
+    // ── end Gemini-only extended hook events ──────────────────────────────────
+
+    // ── FileChanged hook: hot-reload gsd config on .planning/config.json edits ─
+    // Claude Code fires FileChanged when a watched file changes on disk.  Wire
+    // gsd-config-reload.js to reload the gsd config context whenever the user
+    // edits .planning/config.json mid-session, eliminating the need to restart.
+    //
+    // The matcher "config.json" watches for changes to any file named config.json
+    // (Claude Code matches by filename, not full path).  The hook exits silently
+    // when the changed file is not the gsd config.
+    //
+    // Scoped to Claude Code only: Qwen Code's FileChanged support is not yet
+    // verified; extend in a follow-on if empirically confirmed.
+    if (runtime === 'claude') {
+      if (!settings.hooks.FileChanged) {
+        settings.hooks.FileChanged = [];
+      }
+      const configReloadFile = path.join(targetDir, 'hooks', 'gsd-config-reload.js');
+      const alreadyHasConfigReload = settings.hooks.FileChanged.some(entry =>
+        entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-config-reload'))
+      );
+      if (!alreadyHasConfigReload && fs.existsSync(configReloadFile) && configReloadCommand) {
+        settings.hooks.FileChanged.push({
+          matcher: 'config.json',
+          hooks: [
+            {
+              type: 'command',
+              command: configReloadCommand,
+              timeout: 8
+            }
+          ]
+        });
+        console.log(`  ${green}✓${reset} Configured FileChanged config-reload hook (Claude Code)`);
+      } else if (!alreadyHasConfigReload && !fs.existsSync(configReloadFile)) {
+        console.warn(`  ${yellow}⚠${reset}  Skipped FileChanged hook — gsd-config-reload.js not found at target`);
+      } else if (!alreadyHasConfigReload && !configReloadCommand) {
+        console.warn(`  ${yellow}⚠${reset}  Skipped FileChanged hook — Node executable path unavailable`);
+      }
+    }
+    // ── end FileChanged hook ────────────────────────────────────────────────────
   }
+
+  // ── Gemini hooksConfig.enabled check (#776) ───────────────────────────────
+  // Detect `hooksConfig.enabled: false` in the already-loaded settings object
+  // and emit a clear warning.  When this field is false the Gemini CLI silently
+  // disables ALL hook execution — gsd hooks are registered but will never run.
+  // The check is read-only (warning only; we do not mutate hooksConfig).
+  // Note: we use the in-memory `settings` object (already read from disk and
+  // cleaned up by validateHookFields/cleanupOrphanedHooks above) rather than
+  // re-reading settings.json, avoiding a TOCTOU window between the two reads.
+  if (isGemini && settings && settings.hooksConfig && settings.hooksConfig.enabled === false) {
+    console.warn(
+      `  ${yellow}⚠${reset}  Warning: hooksConfig.enabled is false in your Gemini settings.json.\n` +
+      `     gsd-core hooks are registered but will NOT run until you set\n` +
+      `     hooksConfig.enabled: true in ${path.join(targetDir, 'settings.json')}.`
+    );
+  }
+  // ── end hooksConfig.enabled check ────────────────────────────────────────
 
   // Compute the update-banner hook command alongside the others so
   // installAllRuntimes can register it at finalize time when the user opts
@@ -12672,6 +13082,14 @@ module.exports = {
     buildClinePreToolUseHook,
     writeClineArtifacts,
     mergeGsdAgentsMd,
+    GSD_CURSOR_SESSION_HOOK_SCRIPT,
+    GSD_CURSOR_POST_TOOL_HOOK_SCRIPT,
+    GSD_CURSOR_HOOK_MARKER,
+    buildCursorHookEntry,
+    isManagedCursorHookEntry,
+    reconcileCursorHooksJson,
+    writeCursorHooksJson,
+    removeCursorHooksJson,
     stripGsdFromAgentsMd,
     GSD_AGENTS_MD_MARKER,
     GSD_AGENTS_MD_CLOSE_MARKER,
