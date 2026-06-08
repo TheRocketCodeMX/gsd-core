@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-07",
+  "generated": "2026-06-08",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -301,6 +301,7 @@
       "installer-migration-report.cjs",
       "installer-migrations.cjs",
       "intel.cjs",
+      "io.cjs",
       "learnings.cjs",
       "legacy-cleanup.cjs",
       "milestone.cjs",
@@ -309,6 +310,7 @@
       "package-identity.cjs",
       "package-legitimacy.cjs",
       "phase-command-router.cjs",
+      "phase-id.cjs",
       "phase-lifecycle.cjs",
       "phase.cjs",
       "phases-command-router.cjs",
@@ -322,6 +324,7 @@
       "research-store.cjs",
       "review-reviewer-selection.cjs",
       "roadmap-command-router.cjs",
+      "roadmap-parser.cjs",
       "roadmap-upgrade.cjs",
       "roadmap.cjs",
       "runtime-artifact-layout.cjs",
