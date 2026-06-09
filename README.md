@@ -8,8 +8,8 @@
 
 **A light-weight meta-prompting, context engineering, and spec-driven development system for Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more.**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![npm version](https://img.shields.io/npm/v/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![npm downloads](https://img.shields.io/npm/dm/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TheRocketCodeMX/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/TheRocketCodeMX/gsd-core/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![GitHub stars](https://img.shields.io/github/stars/TheRocketCodeMX/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/TheRocketCodeMX/gsd-core)
@@ -22,6 +22,25 @@
 ## What is GSD Core
 
 GSD Core is a context-engineering and spec-driven development framework that drives AI coding agents (Claude Code, Codex, Gemini CLI, Copilot, Cursor, and more) through a disciplined phase loop. It solves [context rot](docs/explanation/context-engineering.md) — the quality degradation that accumulates as an AI fills its context window — by running all heavy research, planning, and execution work in fresh-context subagents while keeping your main session lean.
+
+> **This is a fork** of [`open-gsd/gsd-core`](https://github.com/open-gsd/gsd-core) (MIT), maintained by TheRocketCode and published as **`@therocketcode/gsd-core`**. It keeps everything upstream offers and adds the greenfield **discovery** spine and **testing methodology** described below.
+
+---
+
+## What this fork adds
+
+On top of gsd-core's phase loop, this fork adds a connected **product → domain → architecture → tests** discovery spine, plus concrete test-infrastructure know-how.
+
+**Greenfield discovery — each step feeds the next:**
+
+- **`/gsd:discover-product`** — define *what to build and why*: real demand vs. interest, the narrowest wedge, the four product risks, outcome-framed → `PRODUCT-BRIEF.md`
+- **`/gsd:model-domain`** — lightweight DDD: ubiquitous language + core/supporting/generic subdomain distillation → `DOMAIN-MODEL.md`
+- **`/gsd:recommend-architecture`** — a two-axis recommendation (domain-logic ladder × deployment topology) that avoids over- *and* under-engineering, captured as an ADR → `ADR-NNNN.md`
+- **`/gsd:testing-strategy`** — derives the **test shape from the architecture** (rich core → unit tests; CRUD-over-DB → integration tests), with coverage-as-floor + mutation testing → `TEST-STRATEGY.md`
+
+**Testing know-how** the agent consults while writing tests: Testcontainers, parallel-safe DB isolation, authenticate-once / multi-role auth, synthetic test data, E2E tiering, and flaky-test avoidance.
+
+The payoff: **one complexity assessment** made during discovery parameterizes both the architecture *and* the test strategy — a single thread from "what are we building" to "how do we test it."
 
 ---
 
