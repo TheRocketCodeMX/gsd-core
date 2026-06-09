@@ -370,7 +370,7 @@ The `gsd-planner` agent is decomposed into a core agent plus reference modules t
 
 ---
 
-## CLI Modules (96 shipped)
+## CLI Modules (99 shipped)
 
 Full listing: `gsd-core/bin/lib/*.cjs`.
 
@@ -381,6 +381,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `agent-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools agent` |
 | `artifacts.cjs` | Canonical artifact registry — known `.planning/` root file names; used by `gsd-health` W019 lint |
 | `audit.cjs` | Audit dispatch, audit open sessions, audit storage helpers |
+| `capability-registry.cjs` | Generated central Capability Registry — role-partitioned index of all co-located capability declarations (`capabilities/<id>/capability.json`); emitted by `scripts/gen-capability-registry.cjs --write` (ADR-894 §5) |
 | `check-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools check` |
 | `cli-exit.cjs` | `ExitError` class and `runMain()` helper — CLI entrypoints throw `ExitError` instead of calling `process.exit()`; `runMain()` translates the outcome into `process.exitCode` so output flushes cleanly |
 | `cjs-command-router-adapter.cjs` | Shared compatibility adapter for manifest-backed CJS command-family routers |
@@ -395,7 +396,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `config-schema.cjs` | Single source of truth for `VALID_CONFIG_KEYS` and dynamic key patterns; imported by both the validator and the config-schema-docs parity test |
 | `config-types.cjs` | TypeScript type definitions for the `model_policy` config block — `ModelPolicyConfig`, `TierEntry`, `RuntimeTiers`; compiled from `src/config-types.cts` at publish time (ADR-457) |
 | `config.cjs` | `config.json` read/write, section initialization; imports validator from `config-schema.cjs` |
-| `configuration.cjs` | Configuration Module — canonical config loading, legacy-key normalization, defaults merge, and explicit on-disk migration; source of truth for both SDK and CJS consumers |
+| `configuration.cjs` | Configuration Module — legacy-key normalization, defaults merge, and explicit on-disk migration; pure normalization primitives consumed by `config-loader.cjs` and `config-schema.cjs` (loadConfig extracted to config-loader per ADR-857 #885) |
 | `context-utilization.cjs` | Pure classifier for `gsd-health --context` — turns (tokensUsed, contextWindow) into a `{ percent, state }` triage result against the 60%/70% fracture-point thresholds (#2792) |
 | `core-utils.cjs` | Shared low-level utilities — POSIX path normalization, sub-repo/subdirectory scanning, phase file stats, slug/one-liner/plan-id helpers, time-ago (extracted from `core.cjs`, ADR-857) |
 | `core.cjs` | Shared utilities and runtime fallbacks; compatibility re-exports for planning-workspace and I/O (`io.cjs`) helpers |
@@ -417,9 +418,11 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `io.cjs` | CLI I/O primitives — `output`/`error` emission, JSON-error mode, and large-payload temp-file spillover (extracted from `core.cjs`, ADR-857) |
 | `learnings.cjs` | Cross-phase learnings extraction for `/gsd-extract-learnings` |
 | `legacy-cleanup.cjs` | Detect and remove leftover get-shit-done-cc artifacts; exports `planLegacyCleanup` (pure scan) and `applyLegacyCleanup` (thin IO applier) that root out stale files from the old package across every GSD-managed runtime config directory (#607) |
+| `loop-host-contract.cjs` | Generated Loop Host Contract — 12 loop points, per-step agent roles, and core artifacts for the five-step pipeline (discuss/plan/execute/verify/ship); emitted by `scripts/gen-loop-host-contract.cjs --write` (ADR-894 §3); consumed by `gen-capability-registry.cjs` |
 | `milestone.cjs` | Milestone archival, requirements marking |
 | `model-catalog.cjs` | CJS adapter over the shared model catalog JSON; exports canonical runtime tier defaults, agent profile maps, alias maps, and routing metadata for all CLI consumers |
 | `model-profiles.cjs` | Backward-compatible profile helpers derived from `model-catalog.cjs`; no longer owns its own model table |
+| `model-resolver.cjs` | Model/effort resolution policy — resolves model, tier, granularity, effort, and fast-mode for an agent from config + model profiles/catalog (extracted from `core.cjs`, ADR-857) |
 | `package-identity.cjs` | Generated single source for GSD's published-package coordinates (npm name, bin name, repo slug, changelog URL, manual-install command), derived from package.json; read by the update worker, `check-latest-version`, and installer (#498) |
 | `package-legitimacy.cjs` | Registry-API package legitimacy verdicts (OK/SUS/SLOP) from npm/PyPI/crates, slopcheck optional |
 | `phase-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools phase` |

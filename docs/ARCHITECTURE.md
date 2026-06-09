@@ -362,13 +362,16 @@ Node.js CLI utility (`gsd-tools.cjs`) with domain modules split across `gsd-core
 | `milestone.cjs`        | Milestone archival, requirements marking                                                            |
 | `commands.cjs`         | Misc commands (slug, timestamp, todos, scaffolding, stats)                                          |
 | `model-profiles.cjs`   | Model profile resolution table                                                                      |
+| `model-resolver.cjs`   | Model and effort resolution policy — resolves model, tier, granularity, effort, and fast-mode for a given agent from project config and model profiles/catalog (extracted from `core.cjs`, ADR-857) |
 | `security.cjs`         | Path traversal prevention, prompt injection detection, safe JSON parsing, shell argument validation |
 | `uat.cjs`              | UAT file parsing, verification debt tracking, audit-uat support                                     |
 | `docs.cjs`             | Docs-update workflow init, Markdown scanning, monorepo detection                                    |
 | `workstream.cjs`       | Workstream CRUD, migration, session-scoped active pointer                                           |
 | `schema-detect.cjs`    | Schema-drift detection for ORM patterns (Prisma, Drizzle, etc.)                                     |
 | `profile-pipeline.cjs` | User behavioral profiling data pipeline, session file scanning                                      |
-| `profile-output.cjs`   | Profile rendering, USER-PROFILE.md and dev-preferences.md generation                                |
+| `profile-output.cjs`       | Profile rendering, USER-PROFILE.md and dev-preferences.md generation                                |
+| `loop-host-contract.cjs`   | Generated Loop Host Contract — 12 loop points, per-step agent roles, and core artifacts; emitted by `scripts/gen-loop-host-contract.cjs` from workflow markers (ADR-894 §3); consumed by `gen-capability-registry.cjs` |
+| `capability-registry.cjs`  | Generated central Capability Registry — role-partitioned index of all co-located capability declarations; emitted by `scripts/gen-capability-registry.cjs` (ADR-894 §5) |
 
 
 ---
