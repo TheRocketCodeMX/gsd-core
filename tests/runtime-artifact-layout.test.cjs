@@ -24,6 +24,7 @@ const path = require('path');
 
 const { resolveRuntimeArtifactLayout } = require('../gsd-core/bin/lib/runtime-artifact-layout.cjs');
 const installProfiles = require('../gsd-core/bin/lib/install-profiles.cjs');
+const { cleanup } = require('./helpers.cjs');
 
 const FAKE_DIR = '/tmp/fake-config-dir';
 
@@ -551,7 +552,7 @@ describe('stage — skills kind (kimi global)', () => {
     } finally {
       fs.writeFileSync = originalWriteFileSync;
       for (const dir of added) {
-        fs.rmSync(dir, { recursive: true, force: true });
+        cleanup(dir);
         installProfiles.STAGED_DIRS.delete(dir);
       }
     }

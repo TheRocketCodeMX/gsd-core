@@ -2311,10 +2311,6 @@ function convertClaudeCommandToClaudeSkill(content, skillName, runtime = null, c
   return `${fm}\n${normalizedBody}`;
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function normalizeKimiSkillName(skillName) {
   let text = String(skillName || '').trim().toLowerCase();
   if (text.startsWith('/')) text = text.slice(1);
