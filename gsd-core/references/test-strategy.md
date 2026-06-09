@@ -56,6 +56,16 @@ Feeds `add-tests`, `execute-phase`, and `plan-phase`.
 
 `TESTING-STANDARDS.md` already enforces real-code-only, no-vacuous-assertions, the typed-surface mandate, `fast-check` property tests for bijective/invariant logic, and Stryker mutation ≥80% on critical modules. This skill adds the **strategic layer** on top — the shape, the what/what-not, the level-per-subdomain. Do not weaken any existing standard.
 
+## Test-infrastructure how-to references (read when writing the tests)
+
+When the strategy calls for real-dependency integration tests, auth, or e2e, load the focused how-to reference:
+- `@~/.claude/gsd-core/references/test-containers.md` — real DBs/services via Testcontainers (singleton pattern, pinned tags, CI/Ryuk).
+- `@~/.claude/gsd-core/references/db-test-isolation.md` — parallel-safe DB isolation (template DB, db/schema-per-worker, txn rollback).
+- `@~/.claude/gsd-core/references/auth-in-tests.md` — authenticate-once/storageState, token minting, multi-role, JWT vs cookie, one-account-per-worker.
+- `@~/.claude/gsd-core/references/realistic-test-data.md` — synthetic factories by default; anonymized/subset dumps only.
+- `@~/.claude/gsd-core/references/e2e-tiering.md` — persistent smoke vs transient e2e; keep e2e lean.
+- `@~/.claude/gsd-core/references/flaky-test-checklist.md` — fixed clock, seeded RNG, poll-don't-sleep, per-worker isolation.
+
 ## Anti-patterns
 
 - Picking a shape (pyramid/diamond/trophy) as an input instead of letting architecture determine it.

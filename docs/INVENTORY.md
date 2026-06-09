@@ -264,7 +264,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (71 shipped)
+## References (77 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
