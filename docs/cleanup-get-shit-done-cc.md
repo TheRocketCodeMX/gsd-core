@@ -1,14 +1,14 @@
 # Cleaning Up get-shit-done-cc
 
 Use this procedure when you see a persistent `⬆ /gsd:update` indicator in
-your statusline even though `@opengsd/gsd-core` is already up to date.  It
+your statusline even though `@therocketcode/gsd-core` is already up to date.  It
 removes leftover files from the old `get-shit-done-cc` package that was
-renamed to `@opengsd/gsd-core` in issue [#607](https://github.com/open-gsd/gsd-core/issues/607).
+renamed to `@therocketcode/gsd-core` in issue [#607](https://github.com/TheRocketCodeMX/gsd-core/issues/607).
 
 ## Why this happens
 
 When the package was renamed, its version counter reset — `get-shit-done-cc`
-reached `1.42.x` while `@opengsd/gsd-core` started at `1.2.0`.  If the old
+reached `1.42.x` while `@therocketcode/gsd-core` started at `1.2.0`.  If the old
 package is still installed in any runtime config directory (e.g. `~/.gemini`),
 its update checker writes a higher `latest` version into the shared update
 cache (`~/.cache/gsd/gsd-update-check.json`), and older versions of the new
@@ -26,7 +26,7 @@ Run the installer with `--dry-run` to see exactly what it would change without
 touching anything:
 
 ```bash
-npx -y --package=@opengsd/gsd-core@latest -- gsd-core --claude --global --dry-run
+npx -y --package=@therocketcode/gsd-core@latest -- gsd-core --claude --global --dry-run
 ```
 
 The command prints the removal plan — each file path and the reason it would
@@ -41,7 +41,7 @@ Swap `--claude` for the flag matching your runtime if you use a different one
 Run the same installer without `--dry-run`:
 
 ```bash
-npx -y --package=@opengsd/gsd-core@latest -- gsd-core --claude --global
+npx -y --package=@therocketcode/gsd-core@latest -- gsd-core --claude --global
 ```
 
 The installer:
@@ -94,5 +94,5 @@ indicator should no longer appear in the statusline.  You can confirm the
 installed version with:
 
 ```bash
-npx @opengsd/gsd-core@latest -- gsd-core --version
+npx @therocketcode/gsd-core@latest -- gsd-core --version
 ```

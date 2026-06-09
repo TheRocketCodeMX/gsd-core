@@ -251,7 +251,7 @@ torna o ataque mais difícil, não que qualquer camada isolada o torna impossív
 
 **Reportando vulnerabilidades.** Relate por meio de advisory de segurança
 privado do GitHub em
-`https://github.com/open-gsd/gsd-core/security/advisories/new`. Não abra
+`https://github.com/TheRocketCodeMX/gsd-core/security/advisories/new`. Não abra
 issues públicas. Consulte [SECURITY.md](../../../SECURITY.md) para o cronograma
 de resposta e a política de divulgação.
 

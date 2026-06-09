@@ -167,6 +167,6 @@ build artifact?** Three models:
 - Test-rigor policies (**accepted**): `456-test-rigor-architecture.md`
 - Single-runtime collapse (**accepted**): `0174-retire-gsd-sdk-package-boundary.md`
 - Superseded shared-module seam: `3524-cjs-sdk-hard-seam.md`
-- Tracking issue: [#457](https://github.com/open-gsd/gsd-core/issues/457)
+- Tracking issue: [#457](https://github.com/TheRocketCodeMX/gsd-core/issues/457)
 - Value-baking precedent (distinct technique): `scripts/generate-package-identity.cjs`,
   `tests/issue-498-package-identity.test.cjs`

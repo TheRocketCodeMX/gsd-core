@@ -54,9 +54,9 @@
  * The assertTightCeiling() call below enforces this automatically.
  *
  * See:
- *   - https://github.com/open-gsd/gsd-core/issues/717  (bytes re-base + rationale)
- *   - https://github.com/open-gsd/gsd-core/issues/2551 (this test)
- *   - https://github.com/open-gsd/gsd-core/issues/2361 (agent budget)
+ *   - https://github.com/TheRocketCodeMX/gsd-core/issues/717  (bytes re-base + rationale)
+ *   - https://github.com/TheRocketCodeMX/gsd-core/issues/2551 (this test)
+ *   - https://github.com/TheRocketCodeMX/gsd-core/issues/2361 (agent budget)
  *   - https://developers.openai.com/codex/guides/agents-md (Codex 32 KB cap)
  *   - https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
  */

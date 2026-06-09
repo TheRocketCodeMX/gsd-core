@@ -62,7 +62,7 @@ Registro completo em `commands/gsd/*.md`. Os agrupamentos abaixo espelham a orde
 
 ### Meta-Skills de Namespace
 
-Esses seis roteadores são entradas apenas descritivas que o modelo seleciona primeiro; o corpo de cada um contém uma tabela de roteamento que aponta para a sub-habilidade concreta correta. Eles existem para manter baixo o custo de tokens da listagem ansiosa de habilidades enquanto toda a superfície permanece acessível. Veja [#2792](https://github.com/open-gsd/gsd-core/issues/2792) para a justificativa; as tabelas de roteamento apontam para a superfície consolidada pós-[#2790](https://github.com/open-gsd/gsd-core/issues/2790).
+Esses seis roteadores são entradas apenas descritivas que o modelo seleciona primeiro; o corpo de cada um contém uma tabela de roteamento que aponta para a sub-habilidade concreta correta. Eles existem para manter baixo o custo de tokens da listagem ansiosa de habilidades enquanto toda a superfície permanece acessível. Veja [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792) para a justificativa; as tabelas de roteamento apontam para a superfície consolidada pós-[#2790](https://github.com/TheRocketCodeMX/gsd-core/issues/2790).
 
 | Comando | Função | Fonte |
 |---------|--------|-------|

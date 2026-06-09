@@ -13,7 +13,7 @@
 #   DRY_RUN=1 bash scripts/setup-branch-protection.sh   # show payloads, don't apply
 #
 # Requirements:
-#   - gh CLI authenticated against open-gsd/gsd-core with admin scope
+#   - gh CLI authenticated against TheRocketCodeMX/gsd-core with admin scope
 #   - jq installed
 #
 # What it sets:
@@ -49,7 +49,7 @@
 
 set -euo pipefail
 
-REPO="${REPO:-open-gsd/gsd-core}"
+REPO="${REPO:-TheRocketCodeMX/gsd-core}"
 DRY_RUN="${DRY_RUN:-0}"
 
 # Required status checks. Adjust as your CI suite evolves.

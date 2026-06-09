@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-open-gsd/gsd-core}"
+REPO="${REPO:-TheRocketCodeMX/gsd-core}"
 ENFORCEMENT="${ENFORCEMENT:-evaluate}"
 
 case "$ENFORCEMENT" in

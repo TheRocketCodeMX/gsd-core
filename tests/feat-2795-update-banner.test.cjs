@@ -52,7 +52,7 @@ describe('buildBannerOutput', () => {
 
   test('returns banner envelope when update_available is true', () => {
     const out = buildBannerOutput({
-      cache: { update_available: true, installed: '1.39.0', latest: '1.40.0', package_name: '@opengsd/gsd-core' },
+      cache: { update_available: true, installed: '1.39.0', latest: '1.40.0', package_name: '@therocketcode/gsd-core' },
       parseError: false,
       suppressFailureWarning: false,
     });
@@ -97,7 +97,7 @@ describe('buildBannerOutput', () => {
 
   test('falls back to "unknown" when installed/latest missing', () => {
     const out = buildBannerOutput({
-      cache: { update_available: true, package_name: '@opengsd/gsd-core' },
+      cache: { update_available: true, package_name: '@therocketcode/gsd-core' },
       parseError: false,
       suppressFailureWarning: false,
     });
@@ -207,7 +207,7 @@ describe('gsd-update-banner.js end-to-end', () => {
         update_available: true,
         installed: '1.39.0',
         latest: '1.40.0',
-        package_name: '@opengsd/gsd-core',
+        package_name: '@therocketcode/gsd-core',
       });
       const r = runHook(home);
       assert.equal(r.status, 0);

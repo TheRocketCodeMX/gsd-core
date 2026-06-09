@@ -44,7 +44,7 @@ Do not commit secrets, local config, or generated worktree artifacts. Before rel
 
 ### Issue tracker
 
-Issues live in GitHub Issues at `open-gsd/gsd-core` (via the `gh` CLI, always with `--repo open-gsd/gsd-core`). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues at `TheRocketCodeMX/gsd-core` (via the `gh` CLI, always with `--repo TheRocketCodeMX/gsd-core`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

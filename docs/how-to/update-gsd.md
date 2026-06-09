@@ -17,11 +17,11 @@ From inside your AI runtime, run:
 GSD will:
 
 1. Detect the installed version and install scope (global or local).
-2. Check npm for the latest release of `@opengsd/gsd-core`.
+2. Check npm for the latest release of `@therocketcode/gsd-core`.
 3. Fetch the changelog and show you what changed between your installed version and the latest.
 4. Ask for confirmation before touching anything.
 5. Back up any user-added files found inside GSD-managed directories to `gsd-user-files-backup/`.
-6. Run the installer (`npx @opengsd/gsd-core@latest --<runtime> --<scope>`).
+6. Run the installer (`npx @therocketcode/gsd-core@latest --<runtime> --<scope>`).
 7. Clear the update-check cache so the statusline indicator resets.
 8. Report whether locally modified GSD files were backed up to `gsd-local-patches/`.
 
@@ -55,7 +55,7 @@ GSD publishes release candidates on the `@next` npm dist-tag (established by ADR
 /gsd-update --rc
 ```
 
-The full update flow applies — scope/runtime detection, changelog preview, custom-file backup, and cache clearing all run normally. The only difference is that `check-latest-version.cjs` resolves the `@next` tag and npx installs from `@opengsd/gsd-core@next`.
+The full update flow applies — scope/runtime detection, changelog preview, custom-file backup, and cache clearing all run normally. The only difference is that `check-latest-version.cjs` resolves the `@next` tag and npx installs from `@therocketcode/gsd-core@next`.
 
 Only `latest` and `next` are supported channels; no arbitrary dist-tag can be passed (the script enforces an allowlist and exits with code 2 on an invalid tag).
 
@@ -115,7 +115,7 @@ It is safe to run `--reapply` on its own without triggering a new download — i
 
 ## When npm is unavailable
 
-If `npx @opengsd/gsd-core@latest` fails due to an npm outage, network restrictions, or because you are working from the source repository, use the manual update procedure in [docs/manual-update.md](../manual-update.md). That document covers pulling the latest commit, building the hooks dist, and running `node bin/install.js` directly.
+If `npx @therocketcode/gsd-core@latest` fails due to an npm outage, network restrictions, or because you are working from the source repository, use the manual update procedure in [docs/manual-update.md](../manual-update.md). That document covers pulling the latest commit, building the hooks dist, and running `node bin/install.js` directly.
 
 ---
 

@@ -16,7 +16,7 @@ As formas com hífen e com dois-pontos são *variações específicas do runtime
 
 ## Meta-Skills de Namespace
 
-Seis roteadores de namespace são incluídos como pontos de entrada de primeiro estágio na v1.40. Eles mantêm o custo de tokens da listagem antecipada de skills baixo (~120 tokens para 6 roteadores vs ~2.150 para uma listagem plana de 86 skills), enquanto toda a superfície permanece invocável diretamente. O modelo seleciona um namespace e então roteia para a sub-skill concreta. Consulte [#2792](https://github.com/open-gsd/gsd-core/issues/2792).
+Seis roteadores de namespace são incluídos como pontos de entrada de primeiro estágio na v1.40. Eles mantêm o custo de tokens da listagem antecipada de skills baixo (~120 tokens para 6 roteadores vs ~2.150 para uma listagem plana de 86 skills), enquanto toda a superfície permanece invocável diretamente. O modelo seleciona um namespace e então roteia para a sub-skill concreta. Consulte [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792).
 
 | Comando | Roteia para |
 |---------|-------------|
@@ -789,7 +789,7 @@ Gera um perfil comportamental do desenvolvedor a partir da análise de sessões 
 ### `/gsd-health`
 
 Valida a integridade do diretório `.planning/`. Com `--context`, verifica a guarda de utilização da janela de contexto em relação aos limiares de 60% / 70% (adicionado na
-v1.40.0, [#2792](https://github.com/open-gsd/gsd-core/issues/2792)).
+v1.40.0, [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792)).
 
 | Flag | Descrição |
 |------|-----------|

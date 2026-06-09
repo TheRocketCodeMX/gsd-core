@@ -1,6 +1,6 @@
 # How to install GSD Core on your runtime
 
-Install GSD Core (`@opengsd/gsd-core`) into the AI coding runtime you use every day. This guide gives you the standard installer path for each supported runtime, then covers the manual path for machines without Node.js.
+Install GSD Core (`@therocketcode/gsd-core`) into the AI coding runtime you use every day. This guide gives you the standard installer path for each supported runtime, then covers the manual path for machines without Node.js.
 
 **What you need:** Node.js 18+ and npm (or npx). If you do not have Node.js, jump to [Installing without Node.js](#installing-without-nodejs).
 
@@ -19,7 +19,7 @@ GSD Core ships agent and command files in Claude Code's native frontmatter forma
 Run the installer from any directory. It prompts for your runtime and whether to install globally (all projects) or locally (this project only).
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 That is the only command you need for a fresh install or to re-run the installer after switching runtimes.
@@ -31,7 +31,7 @@ That is the only command you need for a fresh install or to re-run the installer
 ### Claude Code
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --global
+npx @therocketcode/gsd-core@latest --claude --global
 ```
 
 Skills land in `~/.claude/`. Commands appear as `/gsd-*` slash commands in your next Claude Code session. Restart Claude Code to pick them up.
@@ -39,7 +39,7 @@ Skills land in `~/.claude/`. Commands appear as `/gsd-*` slash commands in your 
 **Override the install directory:**
 
 ```bash
-CLAUDE_CONFIG_DIR=~/.claude-alt npx @opengsd/gsd-core@latest --claude --global
+CLAUDE_CONFIG_DIR=~/.claude-alt npx @therocketcode/gsd-core@latest --claude --global
 ```
 
 **Hook coverage**
@@ -98,7 +98,7 @@ The plugin wires gsd-core's always-on guard and update hooks automatically via `
 
 **Prerequisites**
 
-The `gsd-tools` binary (installed as part of the `@opengsd/gsd-core` npm package) must be available on your `PATH` for gsd commands to execute their backing logic. The plugin delivers the command, agent, and hook surface; the npm package delivers the runtime CLI.
+The `gsd-tools` binary (installed as part of the `@therocketcode/gsd-core` npm package) must be available on your `PATH` for gsd commands to execute their backing logic. The plugin delivers the command, agent, and hook surface; the npm package delivers the runtime CLI.
 
 Node.js (`node`) must also be available on your `PATH`. The plugin's always-on guard hooks (wired in `hooks/hooks.json`) are invoked as `node "${CLAUDE_PLUGIN_ROOT}/hooks/<script>"`. Some Claude Code distributions ship as a standalone binary and do not expose a `node` executable on `PATH`; in those environments the plugin's hooks will not run. Verify with `node --version` before relying on the plugin hooks.
 
@@ -107,7 +107,7 @@ Node.js (`node`) must also be available on your `PATH`. The plugin's always-on g
 ### Gemini CLI
 
 ```bash
-npx @opengsd/gsd-core@latest --gemini --global
+npx @therocketcode/gsd-core@latest --gemini --global
 ```
 
 Skills land in `~/.gemini/`. The installer rewrites all command bodies to Gemini's colon namespace (`/gsd:update`, `/gsd:config`, etc.). Restart Gemini CLI after install.
@@ -120,7 +120,7 @@ The installer also enriches the generated TOML commands with two native Gemini c
 **Override the install directory:**
 
 ```bash
-GEMINI_CONFIG_DIR=~/.gemini-alt npx @opengsd/gsd-core@latest --gemini --global
+GEMINI_CONFIG_DIR=~/.gemini-alt npx @therocketcode/gsd-core@latest --gemini --global
 ```
 
 **Hook coverage**
@@ -145,20 +145,20 @@ GSD registers the following hook events automatically on install:
 GSD also ships a `gemini-extension.json` extension manifest, so you can manage GSD through Gemini's own extension lifecycle and see it in `gemini extensions list`:
 
 ```bash
-gemini extensions install https://github.com/open-gsd/gsd-core   # install
+gemini extensions install https://github.com/TheRocketCodeMX/gsd-core   # install
 gemini extensions update gsd-core                                # update
 gemini extensions uninstall gsd-core                             # remove
 gemini extensions link /path/to/gsd-core                         # dev: symlink a checkout
 ```
 
-The extension loads GSD's operating context (`GEMINI.md`) into every session and gives you the discoverable install/update/remove lifecycle. The `/gsd:*` slash commands, agents, and hooks are installed separately by `npx @opengsd/gsd-core --gemini --global` (above). The two paths are complementary and additive — neither replaces the other, and slash-command projection into the extension is a planned follow-up.
+The extension loads GSD's operating context (`GEMINI.md`) into every session and gives you the discoverable install/update/remove lifecycle. The `/gsd:*` slash commands, agents, and hooks are installed separately by `npx @therocketcode/gsd-core --gemini --global` (above). The two paths are complementary and additive — neither replaces the other, and slash-command projection into the extension is a planned follow-up.
 
 ---
 
 ### OpenCode
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 The installer writes three surfaces under `~/.config/opencode/` (XDG) or `~/.opencode/`: flat slash commands in `command/`, file-based subagents in `agents/`, and on-demand skills in `skills/<name>/SKILL.md`. It converts agent frontmatter to OpenCode's schema — removing the `tools:` field and converting colour values to hex — and emits each skill with spec-compliant frontmatter (`name` matching the skill directory plus a `description`). Skills are loaded on demand via OpenCode's native skill tool; commands remain invokable as `/gsd-*`. See [Installing without Node.js — OpenCode transformations](#opencode--required-transformations) if you need to understand what changes.
@@ -166,7 +166,7 @@ The installer writes three surfaces under `~/.config/opencode/` (XDG) or `~/.ope
 **Override the install directory:**
 
 ```bash
-OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @opengsd/gsd-core@latest --opencode --global
+OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ---
@@ -174,7 +174,7 @@ OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @opengsd/gsd-core@latest --openco
 ### Kilo
 
 ```bash
-npx @opengsd/gsd-core@latest --kilo --global
+npx @therocketcode/gsd-core@latest --kilo --global
 ```
 
 The installer writes the same three surfaces under `~/.config/kilo/` (XDG) or `~/.kilo/` as for OpenCode — flat commands in `command/`, subagents in `agents/`, and skills in `skills/<name>/SKILL.md` — since Kilo derives from OpenCode and shares its config schema and skill layout.
@@ -182,7 +182,7 @@ The installer writes the same three surfaces under `~/.config/kilo/` (XDG) or `~
 **Override the install directory:**
 
 ```bash
-KILO_CONFIG_DIR=~/.config/kilo-alt npx @opengsd/gsd-core@latest --kilo --global
+KILO_CONFIG_DIR=~/.config/kilo-alt npx @therocketcode/gsd-core@latest --kilo --global
 ```
 
 ---
@@ -190,7 +190,7 @@ KILO_CONFIG_DIR=~/.config/kilo-alt npx @opengsd/gsd-core@latest --kilo --global
 ### Codex
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global
+npx @therocketcode/gsd-core@latest --codex --global
 ```
 
 Skills land in `~/.codex/skills/gsd-*/SKILL.md`. Agents are written with per-agent TOML entries in `config.toml`. Restart Codex (or run `codex --reload`) after install.
@@ -215,7 +215,7 @@ All registered hooks are managed by GSD and are removed cleanly on `--uninstall`
 ### GitHub Copilot
 
 ```bash
-npx @opengsd/gsd-core@latest --copilot --global
+npx @therocketcode/gsd-core@latest --copilot --global
 ```
 
 Skills land in `~/.copilot/`. GSD installs as agent `.md` files and repository instruction files.
@@ -230,7 +230,7 @@ Both are removed (and any user-authored content preserved) on `--uninstall`.
 **Override the install directory:**
 
 ```bash
-COPILOT_CONFIG_DIR=~/.copilot-alt npx @opengsd/gsd-core@latest --copilot --global
+COPILOT_CONFIG_DIR=~/.copilot-alt npx @therocketcode/gsd-core@latest --copilot --global
 ```
 
 ---
@@ -238,7 +238,7 @@ COPILOT_CONFIG_DIR=~/.copilot-alt npx @opengsd/gsd-core@latest --copilot --globa
 ### Cursor
 
 ```bash
-npx @opengsd/gsd-core@latest --cursor --global
+npx @therocketcode/gsd-core@latest --cursor --global
 ```
 
 Skills land in `~/.cursor/`. GSD installs skills, agents, and rule references.
@@ -246,7 +246,7 @@ Skills land in `~/.cursor/`. GSD installs skills, agents, and rule references.
 **Override the install directory:**
 
 ```bash
-CURSOR_CONFIG_DIR=~/.cursor-alt npx @opengsd/gsd-core@latest --cursor --global
+CURSOR_CONFIG_DIR=~/.cursor-alt npx @therocketcode/gsd-core@latest --cursor --global
 ```
 
 ---
@@ -254,7 +254,7 @@ CURSOR_CONFIG_DIR=~/.cursor-alt npx @opengsd/gsd-core@latest --cursor --global
 ### Windsurf
 
 ```bash
-npx @opengsd/gsd-core@latest --windsurf --global
+npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 Skills land in `~/.codeium/windsurf/`. GSD installs skills, agents, and workspace rules.
@@ -262,7 +262,7 @@ Skills land in `~/.codeium/windsurf/`. GSD installs skills, agents, and workspac
 **Override the install directory:**
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-alt npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-alt npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 ---
@@ -273,10 +273,10 @@ GSD gives Cline both skills (≥ v3.48.0) and the `.clinerules/` directory integ
 
 ```bash
 # Global install (all projects — skills + rules directory)
-npx @opengsd/gsd-core@latest --cline --global
+npx @therocketcode/gsd-core@latest --cline --global
 
 # Local install (this project only — rules directory only)
-npx @opengsd/gsd-core@latest --cline --local
+npx @therocketcode/gsd-core@latest --cline --local
 ```
 
 GSD writes the [`.clinerules/` directory form](https://docs.cline.bot/customization/cline-rules):
@@ -309,7 +309,7 @@ directory is created for local scope.
 ### CodeBuddy
 
 ```bash
-npx @opengsd/gsd-core@latest --codebuddy --global
+npx @therocketcode/gsd-core@latest --codebuddy --global
 ```
 
 GSD installs four surfaces. Slash command definitions land in `~/.codebuddy/commands/gsd-*.md` and appear as `/gsd-help`, `/gsd-phase`, `/gsd-ship`, etc. in the `/` menu. Subagents land in `~/.codebuddy/agents/gsd-*.md`. Skills land in `~/.codebuddy/skills/gsd-*/SKILL.md` — emitted with `user-invocable: false` so they stay out of the `/` menu (the commands surface is the sole `/` entry point) and remain available for model invocation. CodeBuddy hooks are written to `settings.json`. No `mcp.json` is written: GSD ships no MCP server.
@@ -321,7 +321,7 @@ GSD installs four surfaces. Slash command definitions land in `~/.codebuddy/comm
 Qwen Code uses the same open skills standard as Claude Code 2.1.88+.
 
 ```bash
-npx @opengsd/gsd-core@latest --qwen --global
+npx @therocketcode/gsd-core@latest --qwen --global
 ```
 
 Skills land in `~/.qwen/skills/gsd-*/SKILL.md`.
@@ -331,7 +331,7 @@ GSD's main-loop skills are emitted with Qwen's optional numeric `priority` front
 **Override the install directory:**
 
 ```bash
-QWEN_CONFIG_DIR=~/.qwen-alt npx @opengsd/gsd-core@latest --qwen --global
+QWEN_CONFIG_DIR=~/.qwen-alt npx @therocketcode/gsd-core@latest --qwen --global
 ```
 
 **Hook coverage**
@@ -352,7 +352,7 @@ Qwen Code supports 15 hook events. GSD registers the following events automatica
 ### Augment Code
 
 ```bash
-npx @opengsd/gsd-core@latest --augment --global
+npx @therocketcode/gsd-core@latest --augment --global
 ```
 
 Skills land in `~/.augment/skills/` and slash command definitions land in `~/.augment/commands/`. GSD installs skills, agents, and commands (`/gsd-phase`, `/gsd-ship`, etc.). No hook or statusline ownership.
@@ -362,7 +362,7 @@ Skills land in `~/.augment/skills/` and slash command definitions land in `~/.au
 ### Antigravity
 
 ```bash
-npx @opengsd/gsd-core@latest --antigravity --global
+npx @therocketcode/gsd-core@latest --antigravity --global
 ```
 
 The installer auto-detects the Antigravity config directory (`~/.gemini/antigravity`, `~/.gemini/antigravity-ide`, or `~/.gemini/antigravity-cli`). Uses Gemini-compatible settings policy.
@@ -370,7 +370,7 @@ The installer auto-detects the Antigravity config directory (`~/.gemini/antigrav
 **Override the install directory:**
 
 ```bash
-ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @opengsd/gsd-core@latest --antigravity --global
+ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @therocketcode/gsd-core@latest --antigravity --global
 ```
 
 ---
@@ -378,7 +378,7 @@ ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @opengsd/gsd-core@latest --
 ### Trae
 
 ```bash
-npx @opengsd/gsd-core@latest --trae --global
+npx @therocketcode/gsd-core@latest --trae --global
 ```
 
 Skills land in `~/.trae/`. GSD installs skills, agents, and rule references.
@@ -390,7 +390,7 @@ Skills land in `~/.trae/`. GSD installs skills, agents, and rule references.
 All examples above use `--global`, which installs GSD once for your user account. To scope an install to a single project, replace `--global` with `--local`:
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --local
+npx @therocketcode/gsd-core@latest --claude --local
 ```
 
 A local install writes into the `.claude/` directory at your project root. Local install settings take precedence over global ones when both exist.
@@ -402,7 +402,7 @@ A local install writes into the `.claude/` directory at your project root. Local
 Prerelease editions of runtimes (Windsurf Next, Cursor Nightly, VS Code Insiders, Codex preview channels, etc.) read from a sibling config directory. Set the matching `*_CONFIG_DIR` env var before running the installer:
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 Select the corresponding stable runtime in the installer prompt. GSD does not enumerate prerelease editions as separate named runtimes — they are best-effort via this env-var mechanism and are not separately tested in release CI.
@@ -416,7 +416,7 @@ If you cannot run `npx` (for example, on a Windows machine without Node.js), you
 **Option A — Use a machine that has Node.js.** Any machine with Node.js will do: WSL, a Linux VM, a CI runner, or a Docker container. Run the installer there, then copy the output directory to your target machine. For OpenCode:
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 # Then copy ~/.config/opencode/agents/ to the Windows machine
 ```
 

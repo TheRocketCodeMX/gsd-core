@@ -23,7 +23,7 @@
 저장소 루트에서 실행합니다:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 프롬프트가 표시되면 **Claude Code**와 **local**을 선택합니다. 다음과 같이 표시됩니다:

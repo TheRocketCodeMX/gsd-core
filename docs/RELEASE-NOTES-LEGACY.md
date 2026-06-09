@@ -1,18 +1,18 @@
 # Legacy Release Notes
 
-> **Archived history — frozen.** These notes cover the project's first lifecycle under its earlier package names, **`get-shit-done-cc`** and later **`@opengsd/get-shit-done-redux`** (versions `1.0.0` → `1.42.x`, plus pre-release and canary builds up to `1.50.0-canary.1`). The project now ships as **`@opengsd/gsd-core`**, whose version numbering restarts at `1.0.0`. Current release notes live in [`CHANGELOG.md`](../CHANGELOG.md).
+> **Archived history — frozen.** These notes cover the project's first lifecycle under its earlier package names, **`get-shit-done-cc`** and later **`@opengsd/get-shit-done-redux`** (versions `1.0.0` → `1.42.x`, plus pre-release and canary builds up to `1.50.0-canary.1`). The project now ships as **`@therocketcode/gsd-core`**, whose version numbering restarts at `1.0.0`. Current release notes live in [`CHANGELOG.md`](../CHANGELOG.md).
 >
-> Because the `@opengsd/gsd-core` line reuses low version numbers (`1.0.0`, `1.1.0`, `1.2.0`, …), the legacy `1.x` numbers below **will collide** with current ones. Always read a legacy version number as belonging to the retired `get-shit-done-cc` / `get-shit-done-redux` lineage.
+> Because the `@therocketcode/gsd-core` line reuses low version numbers (`1.0.0`, `1.1.0`, `1.2.0`, …), the legacy `1.x` numbers below **will collide** with current ones. Always read a legacy version number as belonging to the retired `get-shit-done-cc` / `get-shit-done-redux` lineage.
 >
 > **Install commands have been removed.** The retired packages are no longer maintained; historical `npx @opengsd/get-shit-done-redux@…` instructions have been stripped so they cannot be copied by mistake. To install the current tool, see the project README.
 
 ## About this archive
 
-This document is a condensed, read-only record of every release published before the project was renamed to `@opengsd/gsd-core`. It exists so that the old version history is preserved without its `1.x` numbers colliding with the current package's release notes.
+This document is a condensed, read-only record of every release published before the project was renamed to `@therocketcode/gsd-core`. It exists so that the old version history is preserved without its `1.x` numbers colliding with the current package's release notes.
 
 It rolls up two previously separate sources: the per-version entries that lived in `CHANGELOG.md` under "Legacy Release History", and ten standalone `docs/RELEASE-v*.md` release-note files. Both sources have been removed in favour of this single archive.
 
-Entries are organised newest-first and condensed to their key points. Dates are shown as originally recorded; where a standalone release note carried no date, the date column shows "—". One historical heading appears as **`1.2.0 legacy`** — it was renamed to avoid colliding with the current `@opengsd/gsd-core@1.2.0`.
+Entries are organised newest-first and condensed to their key points. Dates are shown as originally recorded; where a standalone release note carried no date, the date column shows "—". One historical heading appears as **`1.2.0 legacy`** — it was renamed to avoid colliding with the current `@therocketcode/gsd-core@1.2.0`.
 
 ---
 
@@ -919,7 +919,7 @@ Stable and patch releases, newest first.
 - **Fixed:** AskUserQuestion restored for decision gate in questioning flow.
 
 ### 1.2.0 legacy — 2025-12-15
-- **Changed:** Research workflow implemented as Claude Code context injection. (Renamed from `1.2.0` to avoid colliding with `@opengsd/gsd-core@1.2.0`.)
+- **Changed:** Research workflow implemented as Claude Code context injection. (Renamed from `1.2.0` to avoid colliding with `@therocketcode/gsd-core@1.2.0`.)
 
 ### 1.1.2 — 2025-12-15
 - **Fixed:** YOLO mode skips confirmation gates in plan-phase.

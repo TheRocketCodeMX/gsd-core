@@ -23,7 +23,7 @@
  * within GRACE lines. Budgets may only decrease, never silently creep upward.
  * The assertTightCeiling() call below enforces this automatically.
  *
- * See: https://github.com/open-gsd/gsd-core/issues/2361
+ * See: https://github.com/TheRocketCodeMX/gsd-core/issues/2361
  */
 
 const { test, describe } = require('node:test');

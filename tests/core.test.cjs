@@ -1270,7 +1270,7 @@ describe('shared cache directory (#1421)', () => {
     // Per-package filename embeds the package identity — no generic fallback
     assert.strictEqual(
       updateCacheFileName,
-      'gsd-update-check-opengsd-gsd-core.json',
+      'gsd-update-check-therocketcode-gsd-core.json',
       'updateCacheFileName must be the per-package filename'
     );
 

@@ -31,7 +31,7 @@ function classifyTitle(bulletLine) {
  * @param {string} opts.generatedBody - The raw GitHub-generated release body.
  * @param {string} opts.version       - Version string (e.g. "1.3.0-rc.1"), no leading "v".
  * @param {boolean} opts.prerelease   - Whether this is a pre-release.
- * @param {string} opts.packageName   - npm package name (e.g. "@opengsd/gsd-core").
+ * @param {string} opts.packageName   - npm package name (e.g. "@therocketcode/gsd-core").
  * @returns {string} Formatted release body (no trailing newline).
  */
 function formatReleaseNotes({ generatedBody, version, prerelease, packageName }) {

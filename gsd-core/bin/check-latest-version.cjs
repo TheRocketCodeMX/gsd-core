@@ -46,7 +46,7 @@ const ALLOWED_TAGS = Object.freeze(['latest', 'next']);
  * Build the `npm view` args for a dist-tag. `latest` keeps the bare package
  * spec so the default invocation is byte-for-byte identical to before tag
  * support existed (#815); any other allowlisted tag appends `@<tag>` so
- * `npm view @opengsd/gsd-core@next version` resolves the RC channel (#660).
+ * `npm view @therocketcode/gsd-core@next version` resolves the RC channel (#660).
  */
 function buildViewArgs(tag = 'latest') {
   if (!ALLOWED_TAGS.includes(tag)) {

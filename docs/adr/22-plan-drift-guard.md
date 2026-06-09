@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-05-29
-- **Issue:** open-gsd/gsd-core#22
+- **Issue:** TheRocketCodeMX/gsd-core#22
 
 ## Context
 
@@ -74,7 +74,7 @@ Locked sub-decisions:
 - **Hard-block on any MISSING (as originally proposed).** Rejected for rung 0–1: false positives from dynamic/re-exported/generated symbols would block valid plans and get the default-on guard switched off. Retained only for rung >=3.
 
 ## References
-- Issue: open-gsd/gsd-core#22 (migrated from open-gsd/gsd-core#3813)
+- Issue: TheRocketCodeMX/gsd-core#22 (migrated from TheRocketCodeMX/gsd-core#3813)
 - Relates to #3802 (GitNexus first-class code intelligence) — rung 4 backend
 - arXiv:2409.20550 — hallucination taxonomy + RAG mitigation (modest gains)
 - arXiv:2502.05111 — grammar-constrained decoding (soft vs hard constraints)

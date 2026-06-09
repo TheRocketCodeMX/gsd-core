@@ -1,7 +1,7 @@
 # GSD Core — Gemini CLI context
 
 This context is loaded by the **gsd-core Gemini CLI extension**. It gives Gemini
-the operating context for [GSD Core](https://github.com/open-gsd/gsd-core), a
+the operating context for [GSD Core](https://github.com/TheRocketCodeMX/gsd-core), a
 meta-prompting, context-engineering, and spec-driven development system for AI
 coding agents.
 
@@ -50,4 +50,4 @@ colon form is canonical):
 - When unsure what to do next, and the gsd commands are installed, `/gsd:progress`
   is the situational entry point.
 
-Learn more: <https://github.com/open-gsd/gsd-core>
+Learn more: <https://github.com/TheRocketCodeMX/gsd-core>

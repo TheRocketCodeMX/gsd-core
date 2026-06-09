@@ -23,7 +23,7 @@
 リポジトリのルートで以下を実行します:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 プロンプトが表示されたら **Claude Code** と **local** を選択してください。以下が表示されます:

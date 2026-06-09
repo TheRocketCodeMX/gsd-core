@@ -2,7 +2,7 @@
 // Tests that every GSD workflow that spawns a subagent carries the liveness phrase
 // "runs in a subagent" on its spawn announcement lines.
 // Canonical phrase defined in gsd-core/references/ui-brand.md § Spawning Indicators.
-// Regression test for https://github.com/open-gsd/gsd-core/issues/558.
+// Regression test for https://github.com/TheRocketCodeMX/gsd-core/issues/558.
 //
 // TEST STRATEGY: Two complementary assertions.
 //
@@ -79,7 +79,7 @@ describe('spawn-liveness-banner', () => {
         '\n\nPer gsd-core/references/ui-brand.md § "Spawning Indicators":\n' +
         'every ◆ spawn announcement must carry "runs in a subagent" so users know\n' +
         'that silence during a subagent run is expected and do not kill a healthy agent.\n' +
-        'See https://github.com/open-gsd/gsd-core/issues/558'
+        'See https://github.com/TheRocketCodeMX/gsd-core/issues/558'
     );
   });
 
@@ -104,7 +104,7 @@ describe('spawn-liveness-banner', () => {
         '\n\nPer gsd-core/references/ui-brand.md § "Spawning Indicators":\n' +
         'every workflow that spawns a subagent must carry "runs in a subagent" so users know\n' +
         'that silence during a subagent run is expected and do not kill a healthy agent.\n' +
-        'See https://github.com/open-gsd/gsd-core/issues/558'
+        'See https://github.com/TheRocketCodeMX/gsd-core/issues/558'
     );
   });
 });

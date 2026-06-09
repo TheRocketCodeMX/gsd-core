@@ -15,63 +15,63 @@ const {
 describe('classifyTitle', () => {
   test('returns Feature for feat(#39): title', () => {
     assert.equal(
-      classifyTitle('* feat(#39): milestone-prefixed phase IDs by @trek-e in https://github.com/open-gsd/gsd-core/pull/565'),
+      classifyTitle('* feat(#39): milestone-prefixed phase IDs by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/565'),
       'Feature'
     );
   });
 
   test('returns Feature for feat: title', () => {
     assert.equal(
-      classifyTitle('* feat: some feature by @trek-e in https://github.com/open-gsd/gsd-core/pull/1'),
+      classifyTitle('* feat: some feature by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/1'),
       'Feature'
     );
   });
 
   test('returns Feature for feature(x): title', () => {
     assert.equal(
-      classifyTitle('* feature(x): something by @trek-e in https://github.com/open-gsd/gsd-core/pull/2'),
+      classifyTitle('* feature(x): something by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/2'),
       'Feature'
     );
   });
 
   test('returns Fix for fix(#1): title', () => {
     assert.equal(
-      classifyTitle('* fix(#1): some fix by @trek-e in https://github.com/open-gsd/gsd-core/pull/3'),
+      classifyTitle('* fix(#1): some fix by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/3'),
       'Fix'
     );
   });
 
   test('returns Fix for fix: title', () => {
     assert.equal(
-      classifyTitle('* fix: another fix by @trek-e in https://github.com/open-gsd/gsd-core/pull/4'),
+      classifyTitle('* fix: another fix by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/4'),
       'Fix'
     );
   });
 
   test('returns Enhancement for chore(#2): title', () => {
     assert.equal(
-      classifyTitle('* chore(#2): some chore by @trek-e in https://github.com/open-gsd/gsd-core/pull/5'),
+      classifyTitle('* chore(#2): some chore by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/5'),
       'Enhancement'
     );
   });
 
   test('returns Enhancement for docs: title', () => {
     assert.equal(
-      classifyTitle('* docs: documentation update by @trek-e in https://github.com/open-gsd/gsd-core/pull/6'),
+      classifyTitle('* docs: documentation update by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/6'),
       'Enhancement'
     );
   });
 
   test('returns Enhancement for [codex] Rebrand', () => {
     assert.equal(
-      classifyTitle('* [codex] Rebrand public docs as GSD Core by @jeremymcs in https://github.com/open-gsd/gsd-core/pull/524'),
+      classifyTitle('* [codex] Rebrand public docs as GSD Core by @jeremymcs in https://github.com/TheRocketCodeMX/gsd-core/pull/524'),
       'Enhancement'
     );
   });
 
   test('returns Enhancement for plain title with no conventional prefix', () => {
     assert.equal(
-      classifyTitle('* Main changes by @trek-e in https://github.com/open-gsd/gsd-core/pull/7'),
+      classifyTitle('* Main changes by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/7'),
       'Enhancement'
     );
   });
@@ -82,14 +82,14 @@ describe('classifyTitle', () => {
 // ---------------------------------------------------------------------------
 
 const SAMPLE_BODY = `## What's Changed
-* feat(#39): milestone-prefixed phase IDs by @trek-e in https://github.com/open-gsd/gsd-core/pull/565
-* fix(#557): milestone erased on update by @trek-e in https://github.com/open-gsd/gsd-core/pull/563
-* chore(#2): update dependencies by @trek-e in https://github.com/open-gsd/gsd-core/pull/560
+* feat(#39): milestone-prefixed phase IDs by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/565
+* fix(#557): milestone erased on update by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/563
+* chore(#2): update dependencies by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/560
 
 ## New Contributors
-* @someone made their first contribution in https://github.com/open-gsd/gsd-core/pull/123
+* @someone made their first contribution in https://github.com/TheRocketCodeMX/gsd-core/pull/123
 
-**Full Changelog**: https://github.com/open-gsd/gsd-core/compare/v1.2.0...v1.3.0-rc.1
+**Full Changelog**: https://github.com/TheRocketCodeMX/gsd-core/compare/v1.2.0...v1.3.0-rc.1
 `;
 
 describe('formatReleaseNotes', () => {
@@ -98,12 +98,12 @@ describe('formatReleaseNotes', () => {
       generatedBody: SAMPLE_BODY,
       version: '1.3.0-rc.1',
       prerelease: true,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     assert.ok(out.startsWith('## Install'), 'should start with ## Install');
     assert.ok(out.includes('This pre-release is published to npm under the `next` dist-tag.'), 'should mention next dist-tag');
-    assert.ok(out.includes('npm i @opengsd/gsd-core@1.3.0-rc.1'), 'should contain versioned install');
+    assert.ok(out.includes('npm i @therocketcode/gsd-core@1.3.0-rc.1'), 'should contain versioned install');
     assert.ok(out.includes('@next'), 'should contain @next tag');
   });
 
@@ -112,7 +112,7 @@ describe('formatReleaseNotes', () => {
       generatedBody: SAMPLE_BODY,
       version: '1.3.0-rc.1',
       prerelease: true,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     const installIdx = out.indexOf('## Install');
@@ -136,7 +136,7 @@ describe('formatReleaseNotes', () => {
       generatedBody: SAMPLE_BODY,
       version: '1.3.0-rc.1',
       prerelease: true,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     assert.ok(out.includes('## New Contributors'), 'should contain ## New Contributors');
@@ -151,11 +151,11 @@ describe('formatReleaseNotes', () => {
       generatedBody: SAMPLE_BODY,
       version: '1.3.0-rc.1',
       prerelease: true,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     assert.ok(
-      out.endsWith('**Full Changelog**: https://github.com/open-gsd/gsd-core/compare/v1.2.0...v1.3.0-rc.1'),
+      out.endsWith('**Full Changelog**: https://github.com/TheRocketCodeMX/gsd-core/compare/v1.2.0...v1.3.0-rc.1'),
       'should end with Full Changelog line'
     );
     assert.ok(!out.endsWith('\n'), 'should have no trailing newline');
@@ -166,7 +166,7 @@ describe('formatReleaseNotes', () => {
       generatedBody: SAMPLE_BODY,
       version: '1.3.0',
       prerelease: false,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     assert.ok(out.includes('@latest'), 'should contain @latest');
@@ -174,21 +174,21 @@ describe('formatReleaseNotes', () => {
       !out.includes('This pre-release is published'),
       'should not contain pre-release sentence'
     );
-    assert.ok(out.includes('npm i @opengsd/gsd-core@1.3.0'), 'should contain versioned install');
+    assert.ok(out.includes('npm i @therocketcode/gsd-core@1.3.0'), 'should contain versioned install');
   });
 
   test('empty-section omission: only fix bullets → no Feature or Enhancement headers', () => {
     const fixOnlyBody = `## What's Changed
-* fix(#1): only a fix by @trek-e in https://github.com/open-gsd/gsd-core/pull/1
+* fix(#1): only a fix by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/1
 
-**Full Changelog**: https://github.com/open-gsd/gsd-core/compare/v1.0.0...v1.0.1
+**Full Changelog**: https://github.com/TheRocketCodeMX/gsd-core/compare/v1.0.0...v1.0.1
 `;
 
     const out = formatReleaseNotes({
       generatedBody: fixOnlyBody,
       version: '1.0.1',
       prerelease: false,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     assert.ok(out.includes('### Fix'), 'should contain ### Fix');
@@ -198,17 +198,17 @@ describe('formatReleaseNotes', () => {
 
   test('ordering within a category is preserved', () => {
     const twoFeatBody = `## What's Changed
-* feat(#1): first feature by @trek-e in https://github.com/open-gsd/gsd-core/pull/1
-* feat(#2): second feature by @trek-e in https://github.com/open-gsd/gsd-core/pull/2
+* feat(#1): first feature by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/1
+* feat(#2): second feature by @trek-e in https://github.com/TheRocketCodeMX/gsd-core/pull/2
 
-**Full Changelog**: https://github.com/open-gsd/gsd-core/compare/v1.0.0...v1.1.0
+**Full Changelog**: https://github.com/TheRocketCodeMX/gsd-core/compare/v1.0.0...v1.1.0
 `;
 
     const out = formatReleaseNotes({
       generatedBody: twoFeatBody,
       version: '1.1.0',
       prerelease: false,
-      packageName: '@opengsd/gsd-core',
+      packageName: '@therocketcode/gsd-core',
     });
 
     const firstIdx = out.indexOf('feat(#1): first feature');

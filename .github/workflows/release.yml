@@ -96,7 +96,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          for pkg in @opengsd/gsd-core; do
+          for pkg in @therocketcode/gsd-core; do
             if npm view "$pkg@$VERSION" version >/dev/null 2>&1; then
               echo "::error::$pkg@$VERSION is already published on npm — bump to a new version"
               exit 1
@@ -461,7 +461,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           PRE_VERSION: ${{ steps.prerelease.outputs.pre_version }}
-        run: node scripts/verify-npm-publish.cjs --package @opengsd/gsd-core --version "$PRE_VERSION" --dist-tag next
+        run: node scripts/verify-npm-publish.cjs --package @therocketcode/gsd-core --version "$PRE_VERSION" --dist-tag next
 
       - name: Summary
         env:
@@ -473,7 +473,7 @@ jobs:
             echo "**DRY RUN** — npm publish, tagging, and push skipped" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- Published to npm as \`next\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Install: \`npx @opengsd/gsd-core@next\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Install: \`npx @therocketcode/gsd-core@next\`" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "To publish another pre-release: run \`rc\` again" >> "$GITHUB_STEP_SUMMARY"
@@ -649,14 +649,14 @@ jobs:
         run: |
           # Point next to the stable release so @next never returns something
           # older than @latest. This prevents stale pre-release installs.
-          npm dist-tag add "@opengsd/gsd-core@${VERSION}" next 2>/dev/null || true
+          npm dist-tag add "@therocketcode/gsd-core@${VERSION}" next 2>/dev/null || true
           echo "✓ next dist-tag updated to v${VERSION}"
 
       - name: Verify publish
         if: ${{ !inputs.dry_run }}
         env:
           VERSION: ${{ inputs.version }}
-        run: node scripts/verify-npm-publish.cjs --package @opengsd/gsd-core --version "$VERSION" --dist-tag latest
+        run: node scripts/verify-npm-publish.cjs --package @therocketcode/gsd-core --version "$VERSION" --dist-tag latest
 
       - name: Summary
         env:
@@ -670,5 +670,5 @@ jobs:
             echo "- Published to npm as \`latest\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- Tagged \`v${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- PR created to merge back to main" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Install: \`npx @opengsd/gsd-core@latest\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Install: \`npx @therocketcode/gsd-core@latest\`" >> "$GITHUB_STEP_SUMMARY"
           fi

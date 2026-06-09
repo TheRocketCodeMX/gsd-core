@@ -671,7 +671,7 @@ Para a auditoria completa, referência do harness e a nota de composição com `
 
 ### Usando runtimes não-Claude (Codex, OpenCode, Gemini CLI, Kilo)
 
-> **Versão mínima suportada do Codex CLI: `0.130.0`** (issue [#3562](https://github.com/open-gsd/gsd-core/issues/3562)).
+> **Versão mínima suportada do Codex CLI: `0.130.0`** (issue [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)).
 
 Se você instalou o GSD para um runtime não-Claude, o instalador já configurou a resolução de modelo. Nenhuma configuração manual é necessária — `resolve_model_ids: "omit"` é definido automaticamente, o que informa ao GSD para pular a resolução de ID de modelo Anthropic e deixar o runtime escolher seu próprio modelo padrão.
 
@@ -711,26 +711,26 @@ Se você não puder executar o instalador do GSD, não poderá usar os arquivos 
 **Alternativa:** execute o instalador em qualquer máquina com Node.js:
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ### Instalando para o Cline
 
 ```bash
-npx @opengsd/gsd-core --cline --global   # applies to all projects
-npx @opengsd/gsd-core --cline --local    # this project only
+npx @therocketcode/gsd-core --cline --global   # applies to all projects
+npx @therocketcode/gsd-core --cline --local    # this project only
 ```
 
 ### Instalando para o CodeBuddy
 
 ```bash
-npx @opengsd/gsd-core --codebuddy --global
+npx @therocketcode/gsd-core --codebuddy --global
 ```
 
 ### Instalando para o Qwen Code
 
 ```bash
-npx @opengsd/gsd-core --qwen --global
+npx @therocketcode/gsd-core --qwen --global
 ```
 
 ### Instalando para edições de pré-lançamento
@@ -738,7 +738,7 @@ npx @opengsd/gsd-core --qwen --global
 Defina a variável de ambiente `*_CONFIG_DIR` do runtime para o diretório de pré-lançamento antes de executar o instalador:
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 **Referência de variáveis de ambiente para runtimes suportados:**

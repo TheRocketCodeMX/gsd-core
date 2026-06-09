@@ -4,14 +4,14 @@
 // Regression guard for bug #3130.
 //
 // Two failure modes were observed with the pre-fix npx invocation form:
-//   1. Cache-stale: bare `npx -y @opengsd/gsd-core@<tag>` hits npx's local
+//   1. Cache-stale: bare `npx -y @therocketcode/gsd-core@<tag>` hits npx's local
 //      cache and may pull an older version instead of the target tag.
 //   2. Token-routing: Bash-tool wrappers misroute the `@` token in
-//      `@opengsd/gsd-core@<tag>`, causing npm to error with
-//      "Unknown command: @opengsd/gsd-core@<tag>".
+//      `@therocketcode/gsd-core@<tag>`, causing npm to error with
+//      "Unknown command: @therocketcode/gsd-core@<tag>".
 //
 // The robust form is:
-//   npx -y --package=@opengsd/gsd-core@"$TAG" -- gsd-core $ARGS
+//   npx -y --package=@therocketcode/gsd-core@"$TAG" -- gsd-core $ARGS
 //
 // `--package=` forces a fresh registry fetch, bypassing the npx cache.
 // `--` clearly delineates npx flags from the run-command, preventing
@@ -30,9 +30,9 @@ const UPDATE_WF = path.join(ROOT, 'gsd-core', 'workflows', 'update.md');
 const src = fs.readFileSync(UPDATE_WF, 'utf8');
 
 test('bug #3130: update.md contains no bare npx invocations (cache-stale form)', () => {
-  // Any occurrence of `npx -y @opengsd/gsd-core@<something>` without `--package=`
+  // Any occurrence of `npx -y @therocketcode/gsd-core@<something>` without `--package=`
   // is the stale form that triggers the two failure modes.
-  const stale = (src.match(/npx -y @opengsd\/gsd-core@\S+[^\n]*/g) || []);
+  const stale = (src.match(/npx -y @therocketcode\/gsd-core@\S+[^\n]*/g) || []);
   assert.deepEqual(
     stale,
     [],
@@ -43,7 +43,7 @@ test('bug #3130: update.md contains no bare npx invocations (cache-stale form)',
 test('bug #3130: update.md has >=3 robust npx invocations (--package= + -- separator)', () => {
   // Three sibling invocations: local, global, and unknown/fallback.
   // The tag is now a $TAG variable (latest by default, next under --next/--rc).
-  const robust = (src.match(/npx -y --package=@opengsd\/gsd-core@\S+ -- gsd-core/g) || []);
+  const robust = (src.match(/npx -y --package=@therocketcode\/gsd-core@\S+ -- gsd-core/g) || []);
   assert.ok(
     robust.length >= 3,
     `Expected >=3 robust npx invocations in update.md, found ${robust.length}`,

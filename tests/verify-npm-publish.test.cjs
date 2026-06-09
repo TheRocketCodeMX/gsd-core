@@ -30,7 +30,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion([null]);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       fetchVersion,
       fetchDistTag,
@@ -50,7 +50,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion([null]);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       fetchVersion,
       fetchDistTag,
@@ -69,7 +69,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion([null]);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       maxAttempts: 4,
       fetchVersion,
@@ -90,7 +90,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion(['1.3.0-rc.1']);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       distTag: 'next',
       fetchVersion,
@@ -114,7 +114,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion(['1.2.0']);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       distTag: 'latest',
       fetchVersion,
@@ -134,7 +134,7 @@ describe('verifyPublish', () => {
     const fetchDistTag = makeFetchVersion([null]);
 
     const result = await verifyPublish({
-      pkg: '@opengsd/gsd-core',
+      pkg: '@therocketcode/gsd-core',
       version: '1.3.0-rc.1',
       fetchVersion,
       fetchDistTag,

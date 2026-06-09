@@ -260,7 +260,7 @@ Restart your runtime. GSD installs slash commands into your runtime's command di
 If the problem persists, verify the install:
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --local
+npx @therocketcode/gsd-core@latest --claude --local
 ```
 
 For runtime-specific install paths and troubleshooting, see [Install on your runtime](install-on-your-runtime.md).
@@ -275,7 +275,7 @@ Since v1.17, the installer backs up locally modified files to `gsd-local-patches
 
 ### If you cannot update via npm
 
-If `npx @opengsd/gsd-core` fails due to npm outages or network restrictions, see `docs/manual-update.md` for a step-by-step manual update procedure that works without npm access.
+If `npx @therocketcode/gsd-core` fails due to npm outages or network restrictions, see `docs/manual-update.md` for a step-by-step manual update procedure that works without npm access.
 
 For routine updates, see [Update GSD](update-gsd.md).
 

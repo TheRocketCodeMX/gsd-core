@@ -36,7 +36,7 @@ will read it.
 
 ```bash
 # 1. Clone
-git clone https://github.com/open-gsd/gsd-core.git
+git clone https://github.com/TheRocketCodeMX/gsd-core.git
 cd gsd-core
 
 # 2. Activate the pinned Node version
@@ -67,7 +67,7 @@ See https://docs.npmjs.com/cli/v10/commands/npm-ci
 | `npm run test:integration` | Integration tests |
 | `npm run build:sdk` | Rebuild the SDK dist (required before first test run) |
 
-> `npm run check:integrity` — available once [#114](https://github.com/open-gsd/gsd-core/issues/114) merges.
+> `npm run check:integrity` — available once [#114](https://github.com/TheRocketCodeMX/gsd-core/issues/114) merges.
 
 ---
 

@@ -23,7 +23,7 @@
 在您的仓库根目录执行：
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 在提示时选择 **Claude Code** 和 **local**。您将看到：

@@ -18,7 +18,7 @@ Display the complete GSD Core command reference. Output ONLY the reference conte
 GSD evolves fast. Update periodically:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 ## Core Workflow
@@ -561,7 +561,7 @@ Update GSD to latest version with changelog preview.
 - Displays changelog entries for versions you've missed
 - Highlights breaking changes
 - Confirms before running install
-- Better than raw `npx @opengsd/gsd-core`
+- Better than raw `npx @therocketcode/gsd-core`
 
 Usage: `/gsd:update`
 

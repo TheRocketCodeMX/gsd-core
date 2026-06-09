@@ -45,6 +45,6 @@ Topics: `workflow` · `planning` · `execute` · `quick` · `debug` · `capture`
 ## Update GSD
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 </reference>

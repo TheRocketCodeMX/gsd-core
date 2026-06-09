@@ -671,7 +671,7 @@ For the full audit, harness reference, and the composition note with `model_prof
 
 ### Using Non-Claude Runtimes (Codex, OpenCode, Gemini CLI, Kilo)
 
-> **Codex CLI minimum supported version: `0.130.0`** (issue [#3562](https://github.com/open-gsd/gsd-core/issues/3562)).
+> **Codex CLI minimum supported version: `0.130.0`** (issue [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)).
 
 If you installed GSD for a non-Claude runtime, the installer already configured model resolution. No manual setup is needed — `resolve_model_ids: "omit"` is set automatically, which tells GSD to skip Anthropic model ID resolution and let the runtime choose its own default model.
 
@@ -730,20 +730,20 @@ If you cannot run the GSD installer, you cannot use the source files in `agents/
 **Alternative:** run the installer on any machine with Node.js:
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ### Installing for Cline
 
 ```bash
-npx @opengsd/gsd-core --cline --global   # applies to all projects
-npx @opengsd/gsd-core --cline --local    # this project only
+npx @therocketcode/gsd-core --cline --global   # applies to all projects
+npx @therocketcode/gsd-core --cline --local    # this project only
 ```
 
 ### Installing for CodeBuddy
 
 ```bash
-npx @opengsd/gsd-core --codebuddy --global
+npx @therocketcode/gsd-core --codebuddy --global
 ```
 
 GSD installs four surfaces for CodeBuddy: `/gsd-*` slash commands in `~/.codebuddy/commands/`, subagents in `~/.codebuddy/agents/`, model-invocable skills in `~/.codebuddy/skills/`, and `settings.json` hooks. The skills are emitted with `user-invocable: false` so the slash commands are the single `/` menu surface (no duplicate entries).
@@ -751,7 +751,7 @@ GSD installs four surfaces for CodeBuddy: `/gsd-*` slash commands in `~/.codebud
 ### Installing for Qwen Code
 
 ```bash
-npx @opengsd/gsd-core --qwen --global
+npx @therocketcode/gsd-core --qwen --global
 ```
 
 ### Installing as a Gemini CLI extension (#775)
@@ -762,7 +762,7 @@ extension lifecycle — and have it show up in `gemini extensions list`:
 
 ```bash
 # Install (Gemini clones the repo and copies the extension)
-gemini extensions install https://github.com/open-gsd/gsd-core
+gemini extensions install https://github.com/TheRocketCodeMX/gsd-core
 
 # Update to the latest released manifest version
 gemini extensions update gsd-core
@@ -783,7 +783,7 @@ discoverable install/update/remove lifecycle above. The `/gsd:*` slash commands,
 agents, and hooks are still installed via the dedicated installer:
 
 ```bash
-npx @opengsd/gsd-core --gemini --global
+npx @therocketcode/gsd-core --gemini --global
 ```
 
 The two paths are complementary and additive — installing the extension does not
@@ -796,7 +796,7 @@ is a planned follow-up.)
 Set the runtime's `*_CONFIG_DIR` env var to the prerelease directory before running the installer:
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 **Env-var reference for supported runtimes:**

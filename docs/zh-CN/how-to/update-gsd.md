@@ -17,11 +17,11 @@
 GSD 将执行以下操作：
 
 1. 检测已安装的版本和安装范围（全局或本地）。
-2. 通过 npm 检查 `@opengsd/gsd-core` 的最新版本。
+2. 通过 npm 检查 `@therocketcode/gsd-core` 的最新版本。
 3. 获取变更日志，并显示您已安装版本与最新版本之间的变更内容。
 4. 在执行任何操作前请求确认。
 5. 将 GSD 管理目录中发现的用户添加文件备份至 `gsd-user-files-backup/`。
-6. 运行安装程序（`npx @opengsd/gsd-core@latest --<runtime> --<scope>`）。
+6. 运行安装程序（`npx @therocketcode/gsd-core@latest --<runtime> --<scope>`）。
 7. 清除更新检查缓存，使状态栏指示器重置。
 8. 报告本地修改的 GSD 文件是否已备份至 `gsd-local-patches/`。
 
@@ -95,7 +95,7 @@ Proceed with update? [Yes, update now / No, cancel]
 
 ## 当 npm 不可用时
 
-如果 `npx @opengsd/gsd-core@latest` 因 npm 中断、网络限制，或因您正在使用源代码仓库而失败，请使用 [docs/manual-update.md](../../manual-update.md) 中的手动更新流程。该文档涵盖拉取最新提交、构建钩子分发包以及直接运行 `node bin/install.js` 的步骤。
+如果 `npx @therocketcode/gsd-core@latest` 因 npm 中断、网络限制，或因您正在使用源代码仓库而失败，请使用 [docs/manual-update.md](../../manual-update.md) 中的手动更新流程。该文档涵盖拉取最新提交、构建钩子分发包以及直接运行 `node bin/install.js` 的步骤。
 
 ---
 

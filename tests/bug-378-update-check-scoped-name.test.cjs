@@ -1,6 +1,6 @@
 /**
  * Regression test for #378 / #498: the SessionStart update worker must end up
- * querying the SCOPED package name (@opengsd/gsd-core) when it asks
+ * querying the SCOPED package name (@therocketcode/gsd-core) when it asks
  * npm for the latest version.
  *
  * Background (#378): the worker once hardcoded the unscoped 'gsd-core',
@@ -26,7 +26,7 @@
  *   3. Structural: worker delegates to check-latest-version's
  *      `checkLatestVersion` rather than calling `npm view` itself.
  *   4. Single-source: check-latest-version's PACKAGE_NAME === the seam's
- *      packageName === the scoped '@opengsd/gsd-core'.
+ *      packageName === the scoped '@therocketcode/gsd-core'.
  *
  * Source-grep policy: this test reads hook source via readFileSync. The repo's
  * lint-no-source-grep rule targets bin/lib/gsd-core — hooks/ is out of
@@ -63,9 +63,9 @@ describe('bug #378 / #498: update worker queries the scoped name via the seam', 
     assert.ok(fs.existsSync(WORKER_PATH), `worker not found at ${WORKER_PATH}`);
   });
 
-  test('package.json name is the scoped @opengsd/gsd-core', () => {
+  test('package.json name is the scoped @therocketcode/gsd-core', () => {
     const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
-    assert.equal(pkg.name, '@opengsd/gsd-core');
+    assert.equal(pkg.name, '@therocketcode/gsd-core');
   });
 
   test('worker does NOT hardcode the unscoped gsd-core as a string literal', () => {
@@ -100,6 +100,6 @@ describe('bug #378 / #498: update worker queries the scoped name via the seam', 
 
   test('check-latest-version PACKAGE_NAME is single-sourced from the seam', () => {
     assert.equal(PACKAGE_NAME, SEAM.packageName);
-    assert.equal(SEAM.packageName, '@opengsd/gsd-core');
+    assert.equal(SEAM.packageName, '@therocketcode/gsd-core');
   });
 });

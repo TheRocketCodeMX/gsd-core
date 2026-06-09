@@ -58,7 +58,7 @@
 **Codex와 OpenCode의 중요 사항:** 이러한 런타임은 설치 시 해결된 모델을 각 에이전트의 정적 설정에 임베드합니다. `model_overrides` 편집 후 변경 사항이 적용되도록 인스톨러를 다시 실행하세요:
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global   # 또는 --opencode, --kilo 등
+npx @therocketcode/gsd-core@latest --codex --global   # 또는 --opencode, --kilo 등
 ```
 
 ---

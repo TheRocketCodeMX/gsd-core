@@ -133,7 +133,7 @@ fi
 ```text
 Couldn't check for updates (reason: {LATEST_REASON}, exit: {LATEST_STATUS}).
 
-To update manually: `npx -y --package=@opengsd/gsd-core@{TAG} -- gsd-core --global`
+To update manually: `npx -y --package=@therocketcode/gsd-core@{TAG} -- gsd-core --global`
 ```
 
 Exit.
@@ -192,8 +192,8 @@ Exit.
 
 ```bash
 CHANGELOG_TMP="/tmp/gsd-changelog-$$.md"
-curl -fsSL "https://raw.githubusercontent.com/open-gsd/gsd-core/main/CHANGELOG.md" -o "$CHANGELOG_TMP" 2>/dev/null \
-  || wget -qO "$CHANGELOG_TMP" "https://raw.githubusercontent.com/open-gsd/gsd-core/main/CHANGELOG.md" 2>/dev/null
+curl -fsSL "https://raw.githubusercontent.com/TheRocketCodeMX/gsd-core/main/CHANGELOG.md" -o "$CHANGELOG_TMP" 2>/dev/null \
+  || wget -qO "$CHANGELOG_TMP" "https://raw.githubusercontent.com/TheRocketCodeMX/gsd-core/main/CHANGELOG.md" 2>/dev/null
 
 EXTRACT_JSON=$(node "$GSD_DIR/gsd-core/scripts/changeset/cli.cjs" extract \
   --from "$INSTALLED_VERSION" \
@@ -354,17 +354,17 @@ RUNTIME_FLAG="--$TARGET_RUNTIME"
 
 **If LOCAL install:**
 ```bash
-npx -y --package=@opengsd/gsd-core@"$TAG" -- gsd-core "$RUNTIME_FLAG" --local
+npx -y --package=@therocketcode/gsd-core@"$TAG" -- gsd-core "$RUNTIME_FLAG" --local
 ```
 
 **If GLOBAL install:**
 ```bash
-npx -y --package=@opengsd/gsd-core@"$TAG" -- gsd-core "$RUNTIME_FLAG" --global
+npx -y --package=@therocketcode/gsd-core@"$TAG" -- gsd-core "$RUNTIME_FLAG" --global
 ```
 
 **If UNKNOWN install:**
 ```bash
-npx -y --package=@opengsd/gsd-core@"$TAG" -- gsd-core --claude --global
+npx -y --package=@therocketcode/gsd-core@"$TAG" -- gsd-core --claude --global
 ```
 
 Capture output. If install fails, show error and exit.
@@ -445,7 +445,7 @@ done
 
 # Clear the shared tool-agnostic cache written by gsd-check-update.js hook (#2784).
 # The hook uses ~/.cache/gsd/gsd-update-check.json (legacy) or a per-package name
-# like gsd-update-check-opengsd-gsd-core.json; the glob clears all variants so the
+# like gsd-update-check-therocketcode-gsd-core.json; the glob clears all variants so the
 # statusline stops showing the stale "⬆ /gsd:update" indicator after update.
 rm -f "$HOME/.cache/gsd/gsd-update-check"*.json
 ```
@@ -463,7 +463,7 @@ Format completion message (changelog was already shown in confirmation step):
 
 ⚠️  Restart your runtime to pick up the new commands.
 
-[View full changelog](https://github.com/open-gsd/gsd-core/blob/main/CHANGELOG.md)
+[View full changelog](https://github.com/TheRocketCodeMX/gsd-core/blob/main/CHANGELOG.md)
 ```
 </step>
 

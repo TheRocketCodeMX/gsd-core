@@ -1,5 +1,5 @@
 {
-  "name": "@opengsd/gsd-core",
+  "name": "@therocketcode/gsd-core",
   "version": "1.4.0",
   "description": "GSD Core is a meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
   "bin": {
@@ -30,15 +30,15 @@
     "codex",
     "codex-cli"
   ],
-  "author": "OpenGSD",
+  "author": "TheRocketCode",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/open-gsd/gsd-core.git"
+    "url": "git+https://github.com/TheRocketCodeMX/gsd-core.git"
   },
-  "homepage": "https://github.com/open-gsd/gsd-core",
+  "homepage": "https://github.com/TheRocketCodeMX/gsd-core",
   "bugs": {
-    "url": "https://github.com/open-gsd/gsd-core/issues"
+    "url": "https://github.com/TheRocketCodeMX/gsd-core/issues"
   },
   "publishConfig": {
     "access": "public"

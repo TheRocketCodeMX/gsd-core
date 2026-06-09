@@ -40,7 +40,7 @@ const GSD_MANAGED_SUBTREES = ['hooks', 'commands'];
 /**
  * Extensions eligible for the content-reference scan.
  *
- * WHY: The current @opengsd/gsd-core package ships ZERO references to the old
+ * WHY: The current @therocketcode/gsd-core package ships ZERO references to the old
  * package name in any code file (.js/.cjs/.mjs/.sh). Therefore a code file
  * that still contains that string is genuinely a leftover from the old package
  * and is safe to flag.

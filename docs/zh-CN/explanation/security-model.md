@@ -105,7 +105,7 @@ GSD Core 在三个层面应对提示注入。
 
 **提示注入防御无法消除的风险：** 足够有创意的、与已知模式不匹配的注入，或通过钩子未覆盖渠道到来的注入（例如，注入到依赖项已发布 README 中、由子代理在浏览文档时读取的内容）。纵深防御意味着每一层使攻击更难——而非任何单一层使其不可能。
 
-**漏洞报告。** 请通过 GitHub 私有安全公告提交，地址为 `https://github.com/open-gsd/gsd-core/security/advisories/new`。请勿开启公开 issue。响应时间表和披露政策请参阅 [SECURITY.md](../../../SECURITY.md)。
+**漏洞报告。** 请通过 GitHub 私有安全公告提交，地址为 `https://github.com/TheRocketCodeMX/gsd-core/security/advisories/new`。请勿开启公开 issue。响应时间表和披露政策请参阅 [SECURITY.md](../../../SECURITY.md)。
 
 ---
 

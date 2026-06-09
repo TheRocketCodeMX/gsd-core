@@ -25,7 +25,7 @@
 프로젝트 디렉터리에서 터미널을 열고 실행합니다:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 설치 프로그램이 사용 중인 AI 코딩 런타임과 전역 설치 또는 현재 프로젝트 설치 여부를 묻습니다. 지금은 **Claude Code**와 **local**(이 프로젝트에만)을 선택합니다.
@@ -272,7 +272,7 @@ Title: feat(phase-1): core CLI — add / list / done commands
 
 ## 배운 내용
 
-- `npx @opengsd/gsd-core@latest`로 GSD Core를 설치하는 방법.
+- `npx @therocketcode/gsd-core@latest`로 GSD Core를 설치하는 방법.
 - `/gsd-new-project`가 대화를 통해 `.planning/` 산출물로 뒷받침되는 로드맵으로 전환하는 방법.
 - `/gsd-discuss-phase`가 계획 수립 전에 구현 결정사항을 기록하는 방법.
 - `/gsd-plan-phase`가 병렬 리서처를 생성하고 원자적 태스크 계획을 만드는 방법.

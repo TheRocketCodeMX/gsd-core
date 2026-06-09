@@ -8,11 +8,11 @@
 
 **Um sistema leve de meta-prompting, engenharia de contexto e desenvolvimento orientado a especificações para Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf e muito mais.**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
-[![Tests](https://img.shields.io/github/actions/workflow/status/open-gsd/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/open-gsd/gsd-core/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![Tests](https://img.shields.io/github/actions/workflow/status/TheRocketCodeMX/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/TheRocketCodeMX/gsd-core/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
-[![GitHub stars](https://img.shields.io/github/stars/open-gsd/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/open-gsd/gsd-core)
+[![GitHub stars](https://img.shields.io/github/stars/TheRocketCodeMX/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/TheRocketCodeMX/gsd-core)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 </div>
@@ -40,7 +40,7 @@ Cada marco repete o mesmo ciclo de cinco etapas, uma fase por vez:
 ## Início rápido
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 O instalador solicita seu ambiente de execução (Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf e mais) e se deseja instalar globalmente ou localmente. O instalador é necessário para compatibilidade entre runtimes — não copie arquivos diretamente de `agents/` ou `commands/`.
@@ -102,11 +102,11 @@ Problemas? Consulte [docs/pt-BR/how-to/recover-and-troubleshoot.md](docs/pt-BR/h
 
 ## Histórico de estrelas
 
-<a href="https://star-history.com/#open-gsd/gsd-core&Date">
+<a href="https://star-history.com/#TheRocketCodeMX/gsd-core&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=TheRocketCodeMX/gsd-core&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=TheRocketCodeMX/gsd-core&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=TheRocketCodeMX/gsd-core&type=Date" />
  </picture>
 </a>
 

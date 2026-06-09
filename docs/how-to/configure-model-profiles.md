@@ -58,7 +58,7 @@ Valid values: `opus`, `sonnet`, `haiku`, `inherit`, or any fully-qualified model
 **Important for Codex and OpenCode:** Those runtimes embed the resolved model into each agent's static config at install time. After editing `model_overrides`, re-run the installer for the change to take effect:
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global   # or --opencode, --kilo, etc.
+npx @therocketcode/gsd-core@latest --codex --global   # or --opencode, --kilo, etc.
 ```
 
 ---

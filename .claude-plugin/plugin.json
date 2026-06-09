@@ -4,11 +4,11 @@
   "version": "1.4.0",
   "description": "GSD Core is a meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
   "author": {
-    "name": "open-gsd",
-    "url": "https://github.com/open-gsd"
+    "name": "TheRocketCodeMX",
+    "url": "https://github.com/TheRocketCodeMX"
   },
-  "homepage": "https://github.com/open-gsd/gsd-core",
-  "repository": "https://github.com/open-gsd/gsd-core",
+  "homepage": "https://github.com/TheRocketCodeMX/gsd-core",
+  "repository": "https://github.com/TheRocketCodeMX/gsd-core",
   "license": "MIT",
   "keywords": [
     "spec-driven-development",

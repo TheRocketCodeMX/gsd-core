@@ -78,7 +78,7 @@ function listShippedSlashBaseNames() {
 function extractSlashReferences(contents) {
   const names = new Set();
   // Negative lookbehind: must not be preceded by a letter (avoids matching npm scope
-  // paths like @opengsd/gsd-core where `/gsd-` appears inside a package URL).
+  // paths like @therocketcode/gsd-core where `/gsd-` appears inside a package URL).
   // Negative lookahead (?![\w-]*\/): excludes filesystem path segments like
   // `/gsd-core/bin` where the captured name is followed by a `/`, which would
   // be a directory segment rather than a slash command name.

@@ -124,7 +124,7 @@ describe('changeset github release notes: tag-range renderer (#3382)', () => {
       fromRef: 'v1.0.0',
       toRef: 'v1.0.1',
       repoSlug: 'example/project',
-      installCommand: 'npx @opengsd/gsd-core@latest',
+      installCommand: 'npx @therocketcode/gsd-core@latest',
     });
     assert.equal(fs.readFileSync(output, 'utf8'), generated.body);
   });

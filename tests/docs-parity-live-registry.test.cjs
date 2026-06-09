@@ -160,9 +160,9 @@ const INTERNAL_COMPONENT_SLUGS = new Set([
   // an external tool repo, not a user-typable slash command in this product.
   'test-runner',
 
-  // gsd-core — GitHub repository name: "open-gsd/gsd-core".
+  // gsd-core — GitHub repository name: "TheRocketCodeMX/gsd-core".
   // docs/adr/22-plan-drift-guard.md references it as an issue tracker link:
-  //   open-gsd/gsd-core#22
+  //   TheRocketCodeMX/gsd-core#22
   // The regex captures "/gsd-core" from the org/repo path separator. This is
   // the canonical repo name, not a user-typable slash command in this product.
   'core',
@@ -216,7 +216,7 @@ function extractCommandTokens(content) {
 
   // Negative lookbehind: only match tokens NOT preceded by a letter, digit,
   // `/`, `_`, or `-`. This prevents matching the `/gsd-core` substring inside
-  // the org/repo path `open-gsd/gsd-core` (and similar path-embedded segments)
+  // the org/repo path `TheRocketCodeMX/gsd-core` (and similar path-embedded segments)
   // while still matching real invocations preceded by BOL, space, backtick, or
   // `(`. Fixes false-positive class identified in #489.
   const allSlash = (stripped.match(/(?<![A-Za-z0-9/_-])\/gsd-[a-z0-9][a-z0-9-]*/g) || []);
@@ -505,16 +505,16 @@ describe('adversarial: polarity inversion catches drift deny-list misses', () =>
 // ─── Tokenizer regression tests (#489) ───────────────────────────────────────
 
 describe('extractCommandTokens() — repo-path false-positive regression (#489)', () => {
-  test('open-gsd/gsd-core#22 repo path does NOT produce a /gsd-core token', () => {
-    // Before the lookbehind fix, /gsd-core inside `open-gsd/gsd-core#22`
+  test('TheRocketCodeMX/gsd-core#22 repo path does NOT produce a /gsd-core token', () => {
+    // Before the lookbehind fix, /gsd-core inside `TheRocketCodeMX/gsd-core#22`
     // would be matched by the slash regex — a false positive.
     const { slash, colon, dollar } = extractCommandTokens(
-      'see open-gsd/gsd-core#22 for details'
+      'see TheRocketCodeMX/gsd-core#22 for details'
     );
     const all = [...slash, ...colon, ...dollar];
     assert.ok(
       !all.includes('/gsd-core'),
-      'repo path open-gsd/gsd-core#22 must not produce a /gsd-core token; got: ' + all.join(', ')
+      'repo path TheRocketCodeMX/gsd-core#22 must not produce a /gsd-core token; got: ' + all.join(', ')
     );
     assert.strictEqual(all.length, 0, 'expected zero tokens from a bare repo-path string; got: ' + all.join(', '));
   });

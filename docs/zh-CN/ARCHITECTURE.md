@@ -120,7 +120,7 @@ GSD Core 是一个**元提示框架**，位于用户与 AI 编码 Agent（Claude
 
 **命令总数：** 请参阅 [`docs/INVENTORY.md`](INVENTORY.md#commands) 获取权威数量及完整列表。
 
-#### 两阶段层级路由（v1.40，[#2792](https://github.com/open-gsd/gsd-core/issues/2792)）
+#### 两阶段层级路由（v1.40，[#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792)）
 
 为控制急于列举技能的 token 开销，v1.40 引入了六个命名空间**元技能**（`gsd-workflow`、`gsd-project`、`gsd-quality`、`gsd-context`、`gsd-manage`、`gsd-ideate`——源自 `commands/gsd/ns-*.md`，但可调用的 `name:` 为此处显示的简短形式），位于具体子技能之上。模型看到的是 6 个命名空间路由器（约 120 个 token），而非扁平的 86 个技能列表（约 2,150 个 token），选择命名空间后通过嵌入在命名空间路由器主体中的路由表路由到具体子技能。命名空间技能是**可叠加的**——每个具体命令仍可直接调用。
 

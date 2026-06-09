@@ -120,7 +120,7 @@ GSD Core는 사용자와 AI 코딩 에이전트(Claude Code, Gemini CLI, OpenCod
 
 **전체 명령어 수:** 권위 있는 개수와 전체 목록은 [`docs/INVENTORY.md`](INVENTORY.md#commands)를 참조하라.
 
-#### 2단계 계층적 라우팅 (v1.40, [#2792](https://github.com/open-gsd/gsd-core/issues/2792))
+#### 2단계 계층적 라우팅 (v1.40, [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792))
 
 열망적 스킬 목록 토큰 비용을 낮게 유지하기 위해 v1.40은 구체적인 하위 스킬 위에 계층화된 여섯 개의 네임스페이스 **메타 스킬** (`gsd-workflow`, `gsd-project`, `gsd-quality`, `gsd-context`, `gsd-manage`, `gsd-ideate` — `commands/gsd/ns-*.md`에서 소싱되지만 호출 가능한 `name:`은 여기 표시된 간단한 형식)을 도입한다. 모델은 평평한 86개 스킬 목록(~2,150 토큰) 대신 6개의 네임스페이스 라우터(~120 토큰)를 보고, 네임스페이스를 선택한 다음 네임스페이스 라우터 본문에 내장된 라우팅 테이블을 통해 구체적인 하위 스킬로 라우팅한다. 네임스페이스 스킬은 **가산적**이다 — 모든 구체적인 명령어는 여전히 직접 호출 가능하다.
 

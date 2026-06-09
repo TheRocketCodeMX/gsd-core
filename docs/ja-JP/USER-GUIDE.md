@@ -671,7 +671,7 @@ budget プロファイルに切り替えてください: `/gsd-config --profile 
 
 ### 非 Claude ランタイムの使用（Codex、OpenCode、Gemini CLI、Kilo）
 
-> **Codex CLI の最小サポートバージョン: `0.130.0`**（イシュー [#3562](https://github.com/open-gsd/gsd-core/issues/3562)）。
+> **Codex CLI の最小サポートバージョン: `0.130.0`**（イシュー [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)）。
 
 非 Claude ランタイム向けに GSD をインストールした場合、インストーラーがすでにモデル解決を設定しています。手動設定は不要です — `resolve_model_ids: "omit"` が自動的に設定され、GSD に Anthropic モデル ID の解決をスキップしてランタイムが独自のデフォルトモデルを選ぶよう指示します。
 
@@ -711,26 +711,26 @@ GSD インストーラーを実行できない場合、`agents/` のソースフ
 **代替案:** Node.js がある任意のマシンでインストーラーを実行します:
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ### Cline へのインストール
 
 ```bash
-npx @opengsd/gsd-core --cline --global   # applies to all projects
-npx @opengsd/gsd-core --cline --local    # this project only
+npx @therocketcode/gsd-core --cline --global   # applies to all projects
+npx @therocketcode/gsd-core --cline --local    # this project only
 ```
 
 ### CodeBuddy へのインストール
 
 ```bash
-npx @opengsd/gsd-core --codebuddy --global
+npx @therocketcode/gsd-core --codebuddy --global
 ```
 
 ### Qwen Code へのインストール
 
 ```bash
-npx @opengsd/gsd-core --qwen --global
+npx @therocketcode/gsd-core --qwen --global
 ```
 
 ### プレリリースエディションへのインストール
@@ -738,7 +738,7 @@ npx @opengsd/gsd-core --qwen --global
 インストーラーを実行する前に、ランタイムの `*_CONFIG_DIR` 環境変数をプレリリースディレクトリに設定してください:
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 **サポートされているランタイムの環境変数リファレンス:**

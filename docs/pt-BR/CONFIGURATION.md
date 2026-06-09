@@ -138,17 +138,17 @@ O GSD armazena as configurações do projeto em `.planning/config.json`. Criado 
 |---------|------|---------|---------|-------------|
 | `mode` | enum | `interactive`, `yolo` | `interactive` | `yolo` aprova decisões automaticamente; `interactive` confirma em cada etapa |
 | `granularity` | enum | `coarse`, `standard`, `fine` | `standard` | Controla a quantidade de fases: `coarse` (3-5), `standard` (5-8), `fine` (8-12) |
-| `model_profile` | enum | `quality`, `balanced`, `budget`, `adaptive`, `inherit` | `balanced` | Nível de modelo para cada agente (consulte [Perfis de Modelo](#model-profiles)). `adaptive` foi adicionado conforme [#1713](https://github.com/open-gsd/gsd-core/issues/1713) / [#1806](https://github.com/open-gsd/gsd-core/issues/1806) e resolve da mesma forma que os outros níveis em perfis com reconhecimento de runtime. |
-| `runtime` | string | `claude`, `codex`, ou qualquer string | (nenhum) | Runtime ativo para [resolução de perfil com reconhecimento de runtime](#runtime-aware-profiles-2517). Quando definido, os níveis de perfil (opus/sonnet/haiku) resolvem para IDs de modelo nativos do runtime. Atualmente, apenas o caminho de instalação do Codex emite IDs de modelo por agente a partir deste resolvedor; outros runtimes (`opencode`, `gemini`, `qwen`, `copilot`, …) consomem o resolvedor no momento do spawn e ganham suporte a caminho de instalação dedicado em [#2612](https://github.com/open-gsd/gsd-core/issues/2612). Quando não definido (padrão), o comportamento não se altera em relação às versões anteriores. Adicionado na v1.39 |
+| `model_profile` | enum | `quality`, `balanced`, `budget`, `adaptive`, `inherit` | `balanced` | Nível de modelo para cada agente (consulte [Perfis de Modelo](#model-profiles)). `adaptive` foi adicionado conforme [#1713](https://github.com/TheRocketCodeMX/gsd-core/issues/1713) / [#1806](https://github.com/TheRocketCodeMX/gsd-core/issues/1806) e resolve da mesma forma que os outros níveis em perfis com reconhecimento de runtime. |
+| `runtime` | string | `claude`, `codex`, ou qualquer string | (nenhum) | Runtime ativo para [resolução de perfil com reconhecimento de runtime](#runtime-aware-profiles-2517). Quando definido, os níveis de perfil (opus/sonnet/haiku) resolvem para IDs de modelo nativos do runtime. Atualmente, apenas o caminho de instalação do Codex emite IDs de modelo por agente a partir deste resolvedor; outros runtimes (`opencode`, `gemini`, `qwen`, `copilot`, …) consomem o resolvedor no momento do spawn e ganham suporte a caminho de instalação dedicado em [#2612](https://github.com/TheRocketCodeMX/gsd-core/issues/2612). Quando não definido (padrão), o comportamento não se altera em relação às versões anteriores. Adicionado na v1.39 |
 | `model_profile_overrides.<runtime>.<tier>` | string \| object | substituição de nível por runtime | (nenhum) | Substitui o mapeamento de nível com reconhecimento de runtime para um `(runtime, tier)` específico. O nível é um de `opus`, `sonnet`, `haiku`. O valor é uma string de ID de modelo (por exemplo, `"gpt-5-pro"`) ou `{ model, reasoning_effort }`. Consulte [Perfis com Reconhecimento de Runtime](#runtime-aware-profiles-2517). Adicionado na v1.39 |
-| `model_policy.provider` | string | `openai`, `anthropic`, `google`, `qwen`, `generic` | (nenhum) | Declara o provedor de modelo. Provedores conhecidos (`openai`, `anthropic`, `google`, `qwen`) desbloqueiam predefinições baseadas em catálogo. `generic` trata todos os IDs de modelo como strings opacas — sem inferência de prefixo, sem padrões de esforço de raciocínio. `model_policy.runtime_tiers` resolve antes do legado `model_profile_overrides`. Consulte [Predefinições de Política de Modelo](#model-policy-presets-model_policy--added-in-v142). Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `model_policy.budget` | enum | `high`, `medium`, `low` | (nenhum) | Seleciona um nível de orçamento ao usar um provedor conhecido. O GSD materializa a predefinição de catálogo correspondente em mapeamentos de nível explícitos no momento da resolução. Ignorado quando `provider` é `generic` ou `custom`. Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `model_policy.high` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo alto para provedor `generic`/`custom`. Usado quando `provider: "generic"` ou `"custom"`. Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `model_policy.medium` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo médio para provedor `generic`/`custom`. Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `model_policy.low` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo baixo para provedor `generic`/`custom`. Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `model_policy.runtime_tiers.<runtime>.<tier>` | object | `{ model, reasoning_effort? }` | (nenhum) | Entrada de modelo explícita por runtime e por nível. `tier` é um de `opus`, `sonnet`, `haiku` (correspondendo aos nomes de nível de perfil existentes). `reasoning_effort` é encaminhado apenas para runtimes que o suportam; runtimes sem suporte nunca recebem o campo. Tem precedência sobre `model_profile_overrides`. Adicionado na v1.42 ([#49](https://github.com/open-gsd/gsd-core/issues/49)) |
-| `models.<phase_type>` | enum | `opus`, `sonnet`, `haiku`, `inherit` | (nenhum) | Nível de modelo por tipo de fase. Seis slots aceitos: `planning`, `discuss`, `research`, `execution`, `verification`, `completion`. Permite ajuste no nível de fase ("Opus para planejamento, Sonnet para o restante") sem precisar conhecer os nomes dos agentes. Resolve entre `model_overrides` (maior) e `model_profile` (menor); consulte [Modelos Por Tipo de Fase](#per-phase-type-models-models--added-in-v140). Adicionado na v1.40 ([#3023](https://github.com/open-gsd/gsd-core/pull/3030)) |
-| `dynamic_routing.enabled` | boolean | `true`, `false` | `false` | Chave mestra para [roteamento dinâmico com escalada por nível em falha](#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140). Quando `true`, os agentes resolvem para `tier_models[default_tier]` e escalam um nível acima em falha soft detectada pelo orquestrador. Adicionado na v1.40 ([#3024](https://github.com/open-gsd/gsd-core/pull/3031)) |
+| `model_policy.provider` | string | `openai`, `anthropic`, `google`, `qwen`, `generic` | (nenhum) | Declara o provedor de modelo. Provedores conhecidos (`openai`, `anthropic`, `google`, `qwen`) desbloqueiam predefinições baseadas em catálogo. `generic` trata todos os IDs de modelo como strings opacas — sem inferência de prefixo, sem padrões de esforço de raciocínio. `model_policy.runtime_tiers` resolve antes do legado `model_profile_overrides`. Consulte [Predefinições de Política de Modelo](#model-policy-presets-model_policy--added-in-v142). Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.budget` | enum | `high`, `medium`, `low` | (nenhum) | Seleciona um nível de orçamento ao usar um provedor conhecido. O GSD materializa a predefinição de catálogo correspondente em mapeamentos de nível explícitos no momento da resolução. Ignorado quando `provider` é `generic` ou `custom`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.high` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo alto para provedor `generic`/`custom`. Usado quando `provider: "generic"` ou `"custom"`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.medium` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo médio para provedor `generic`/`custom`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.low` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo baixo para provedor `generic`/`custom`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.runtime_tiers.<runtime>.<tier>` | object | `{ model, reasoning_effort? }` | (nenhum) | Entrada de modelo explícita por runtime e por nível. `tier` é um de `opus`, `sonnet`, `haiku` (correspondendo aos nomes de nível de perfil existentes). `reasoning_effort` é encaminhado apenas para runtimes que o suportam; runtimes sem suporte nunca recebem o campo. Tem precedência sobre `model_profile_overrides`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `models.<phase_type>` | enum | `opus`, `sonnet`, `haiku`, `inherit` | (nenhum) | Nível de modelo por tipo de fase. Seis slots aceitos: `planning`, `discuss`, `research`, `execution`, `verification`, `completion`. Permite ajuste no nível de fase ("Opus para planejamento, Sonnet para o restante") sem precisar conhecer os nomes dos agentes. Resolve entre `model_overrides` (maior) e `model_profile` (menor); consulte [Modelos Por Tipo de Fase](#per-phase-type-models-models--added-in-v140). Adicionado na v1.40 ([#3023](https://github.com/TheRocketCodeMX/gsd-core/pull/3030)) |
+| `dynamic_routing.enabled` | boolean | `true`, `false` | `false` | Chave mestra para [roteamento dinâmico com escalada por nível em falha](#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140). Quando `true`, os agentes resolvem para `tier_models[default_tier]` e escalam um nível acima em falha soft detectada pelo orquestrador. Adicionado na v1.40 ([#3024](https://github.com/TheRocketCodeMX/gsd-core/pull/3031)) |
 | `dynamic_routing.tier_models.<tier>` | enum | `opus`, `sonnet`, `haiku` | (nenhum) | Alias de nível para `light`, `standard` ou `heavy`. Usado quando `dynamic_routing.enabled: true`. Adicionado na v1.40 |
 | `dynamic_routing.escalate_on_failure` | boolean | `true`, `false` | `true` | Quando `false`, a escalada é desabilitada mesmo se `enabled: true` — cada tentativa usa o nível padrão. Adicionado na v1.40 |
 | `dynamic_routing.max_escalations` | integer | `0`, `1`, `2`, … | `1` | Limite máximo de tentativas por invocação de agente. Além do limite, o resolvedor retorna o modelo do nível-limite. Adicionado na v1.40 |
@@ -267,7 +267,7 @@ Todos os controles de fluxo de trabalho seguem o padrão **ausente = habilitado*
 | `executor.stall_detect_interval_minutes` | number | `5` | Minutos entre verificações de travamento do executor enquanto um agente executor está ativo. O orquestrador de fase de execução usa essa cadência para inspecionar commits recentes e evitar espera eterna por um agente silencioso. |
 | `executor.stall_threshold_minutes` | number | `10` | Minutos sem conclusão do executor ou atividade de commit no branch esperado antes que a fase de execução ofereça opções de recuperação para um possível executor travado. |
 | `workflow.inline_plan_threshold` | number | `3` | Número máximo de tasks em uma fase antes que o planejador gere um arquivo PLAN.md separado em vez de incorporar tasks no prompt |
-| `workflow.drift_threshold` | number | `3` | Número mínimo de novos elementos estruturais (novos diretórios, exportações barrel, migrações, módulos de rota) introduzidos durante uma fase antes que o gate de deriva pós-execução da base de código tome ação. Consulte [#2003](https://github.com/open-gsd/gsd-core/issues/2003). Adicionado na v1.39 |
+| `workflow.drift_threshold` | number | `3` | Número mínimo de novos elementos estruturais (novos diretórios, exportações barrel, migrações, módulos de rota) introduzidos durante uma fase antes que o gate de deriva pós-execução da base de código tome ação. Consulte [#2003](https://github.com/TheRocketCodeMX/gsd-core/issues/2003). Adicionado na v1.39 |
 | `workflow.drift_action` | string | `warn` | O que fazer quando `workflow.drift_threshold` é excedido após `/gsd-execute-phase`. `warn` imprime uma mensagem sugerindo `/gsd-map-codebase --paths …`; `auto-remap` gera `gsd-codebase-mapper` com escopo para os caminhos afetados. Adicionado na v1.39 |
 | `workflow.build_command` | string | (nenhum) | Comando shell para compilar o projeto no gate de build pós-merge (Passo A do passo 5.6 na fase de execução). Quando não definido, o gate detecta automaticamente: Xcode (`.xcodeproj` presente) → `xcodebuild build`, `Makefile` com alvo `build:` → `make build`, Justfile → `just build`, `Cargo.toml` → `cargo build`, `go.mod` → `go build ./...`, Python → `python -m py_compile`, `package.json` com script `build` → `npm run build`. Executa com timeout de 5 minutos; falha incrementa `WAVE_FAILURE_COUNT`. Adicionado na v1.39 |
 | `workflow.test_command` | string | (nenhum) | Comando shell para executar a suíte de testes do projeto no gate de teste pós-merge (Passo B do passo 5.6 na fase de execução) e no gate de regressão. Quando não definido, o gate detecta automaticamente: Xcode (`.xcodeproj` presente) → `xcodebuild test`, `Makefile` com alvo `test:` → `make test`, Justfile → `just test`, `package.json` → `npm test`, `Cargo.toml` → `cargo test`, `go.mod` → `go test ./...`, Python → `python -m pytest`. Executa com timeout de 5 minutos; falha incrementa `WAVE_FAILURE_COUNT`. Adicionado na v1.39 |
@@ -810,7 +810,7 @@ para que a alteração entre em vigor. Consulte a issue #2256.
 
 ### Modelos Por Tipo de Fase (`models`) — adicionado na v1.41
 
-> Expresse ajuste no nível de **fase** (planning, research, execution, verification) sem precisar conhecer a taxonomia de agentes. Adicionado em [#3023](https://github.com/open-gsd/gsd-core/pull/3030).
+> Expresse ajuste no nível de **fase** (planning, research, execution, verification) sem precisar conhecer a taxonomia de agentes. Adicionado em [#3023](https://github.com/TheRocketCodeMX/gsd-core/pull/3030).
 
 `model_overrides` é por **agente** (preciso mas verboso; você precisa saber que `gsd-codebase-mapper` é pesquisa e `gsd-doc-writer` é execução). O bloco `models` permite dizer "Opus para planejamento e execução, Sonnet para o restante" em duas linhas:
 
@@ -894,7 +894,7 @@ Edições diretas em `.planning/config.json` são mais permissivas — o resolve
 
 ### Roteamento Dinâmico com Escalada por Nível em Falha (`dynamic_routing`) — adicionado na v1.41
 
-> Comece barato, escale apenas quando o agente falhar no gate. Adicionado em [#3024](https://github.com/open-gsd/gsd-core/pull/3031).
+> Comece barato, escale apenas quando o agente falhar no gate. Adicionado em [#3024](https://github.com/TheRocketCodeMX/gsd-core/pull/3031).
 
 `dynamic_routing` permite pagar pelo nível barato por padrão e escalar para o nível mais caro apenas quando o orquestrador detecta uma falha soft (verificação inconclusiva, FLAG no plan-check, etc.).
 
@@ -975,7 +975,7 @@ O bloco `dynamic_routing` está **desabilitado por padrão** — `enabled: false
 
 ### Controle de Esforço (`effort`) — adicionado na v1.42
 
-> Controle de esforço unificado entre provedores. Adicionado em [#443](https://github.com/open-gsd/gsd-core/issues/443).
+> Controle de esforço unificado entre provedores. Adicionado em [#443](https://github.com/TheRocketCodeMX/gsd-core/issues/443).
 
 Controle o esforço de raciocínio das invocações de agente com uma única configuração. A escala universal é:
 
@@ -1028,7 +1028,7 @@ Valores de esforço válidos: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`
 
 ### Modo Rápido (`fast_mode`) — adicionado na v1.42
 
-> Controle de propagação de fast_mode por agente. Adicionado em [#443](https://github.com/open-gsd/gsd-core/issues/443).
+> Controle de propagação de fast_mode por agente. Adicionado em [#443](https://github.com/TheRocketCodeMX/gsd-core/issues/443).
 
 Controla se fast_mode é propagado para invocações de agente. Aceita apenas booleanos reais — string `"true"` é rejeitada.
 
@@ -1090,7 +1090,7 @@ Use `node gsd-tools.cjs resolve-execution <agent-type> [--effort <level>] [--fas
 
 ### Runtimes Não-Claude (Codex, OpenCode, Gemini CLI, Kilo)
 
-> **Versão mínima suportada do Codex CLI: `0.130.0`** (issue [#3562](https://github.com/open-gsd/gsd-core/issues/3562)).
+> **Versão mínima suportada do Codex CLI: `0.130.0`** (issue [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)).
 >
 > O [Codex CLI 0.130.0](https://github.com/openai/codex/releases/tag/rust-v0.130.0) (lançado em 2026-05-08) removeu a descoberta de extra-skills-roots via [openai/codex#21485](https://github.com/openai/codex/pull/21485). A partir desta versão, o Codex CLI só verifica `~/.codex/skills/<name>/SKILL.md`, `<project>/.codex/skills/` e raízes de plugin registradas para habilidades invocáveis. O GSD instala a superfície `$gsd-*` como `~/.codex/skills/gsd-<name>/SKILL.md` para que os comandos resolvam após uma reinicialização do Codex. Versões anteriores do Codex CLI podem mostrar uma listagem duplicada (a varredura legada de extra-roots mais as cópias da raiz do usuário) — reinicie o Codex e atualize para ≥ 0.130.0 ou aceite as duplicatas até fazê-lo.
 
@@ -1208,7 +1208,7 @@ Isso resolve `gsd-planner` → `gpt-5.5` (xhigh), `gsd-executor` → `gpt-5.3-co
 
 ## Predefinições de Política de Modelo (`model_policy`) — adicionado na v1.42
 
-> **[#49](https://github.com/open-gsd/gsd-core/issues/49)** — superfície de configuração de política de modelo neutra em relação ao provedor. Resolve antes do legado `model_profile_overrides`.
+> **[#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)** — superfície de configuração de política de modelo neutra em relação ao provedor. Resolve antes do legado `model_profile_overrides`.
 
 `model_policy` fornece uma maneira mais simples e neutra em relação ao provedor de configurar níveis de modelo entre runtimes. É a superfície preferida para runtimes não-Anthropic onde `model_profile_overrides` exigiria conhecer manualmente os IDs de modelo corretos. Configure via `/gsd:settings` → Seção 8 (Model Policy).
 

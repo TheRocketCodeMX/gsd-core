@@ -58,7 +58,7 @@
 **Codex と OpenCode に関する重要事項:** これらのランタイムはインストール時に解決済みのモデルを各エージェントの静的設定に埋め込みます。`model_overrides` を編集した後は、変更を反映させるためにインストーラーを再実行してください:
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global   # または --opencode、--kilo など
+npx @therocketcode/gsd-core@latest --codex --global   # または --opencode、--kilo など
 ```
 
 ---

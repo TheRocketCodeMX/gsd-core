@@ -28,7 +28,7 @@ Currently, Grok Build is only supported via its Claude compatibility layer. This
 ## 2. Current Multi-Runtime Setup (as of May 2026)
 
 ### Development Source (Single Source of Truth)
-- **Path:** `/home/cristian/bum/gsd-core` (this repo — your working fork of `open-gsd/gsd-core`)
+- **Path:** `/home/cristian/bum/gsd-core` (this repo — your working fork of `TheRocketCodeMX/gsd-core`)
 
 ### Installed Locations
 - `~/.agents/gsd-core/` — Core workflows, references, templates, `gsd-tools.cjs`, `bin/`

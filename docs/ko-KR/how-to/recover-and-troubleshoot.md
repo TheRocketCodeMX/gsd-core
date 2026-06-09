@@ -248,7 +248,7 @@ git log --oneline -10
 문제가 지속되면 설치를 확인합니다:
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --local
+npx @therocketcode/gsd-core@latest --claude --local
 ```
 
 런타임별 설치 경로와 문제 해결은 [런타임에 설치](install-on-your-runtime.md)를 참조하세요.
@@ -263,7 +263,7 @@ v1.17 이후 인스톨러는 로컬에서 수정된 파일을 `gsd-local-patches
 
 ### npm을 통한 업데이트가 불가능한 경우
 
-npm 중단이나 네트워크 제한으로 `npx @opengsd/gsd-core`가 실패하는 경우 npm 접근 없이도 작동하는 단계별 수동 업데이트 절차는 `docs/manual-update.md`를 참조하세요.
+npm 중단이나 네트워크 제한으로 `npx @therocketcode/gsd-core`가 실패하는 경우 npm 접근 없이도 작동하는 단계별 수동 업데이트 절차는 `docs/manual-update.md`를 참조하세요.
 
 일상적인 업데이트는 [GSD 업데이트](update-gsd.md)를 참조하세요.
 

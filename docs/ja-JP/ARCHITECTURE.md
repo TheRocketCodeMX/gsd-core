@@ -117,7 +117,7 @@ GSD Core は、ユーザーと AI コーディングエージェント（Claude 
 
 **コマンド総数:** 信頼できる数と完全なロスターについては [`docs/INVENTORY.md`](INVENTORY.md#commands) を参照。
 
-#### 2 段階の階層的ルーティング（v1.40、[#2792](https://github.com/open-gsd/gsd-core/issues/2792)）
+#### 2 段階の階層的ルーティング（v1.40、[#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792)）
 
 eager なスキルリストのトークンコストを低く保つため、v1.40 では 6 つの名前空間 **メタスキル**（`gsd-workflow`、`gsd-project`、`gsd-quality`、`gsd-context`、`gsd-manage`、`gsd-ideate` ——`commands/gsd/ns-*.md` から取得されるが、呼び出し可能な `name:` はここに示すベア形式）を具体的なサブスキルの上にレイヤーとして導入しています。モデルは平坦な 86 スキルリスト（約 2,150 トークン）の代わりに 6 つの名前空間ルーター（約 120 トークン）を見て名前空間を選択し、名前空間ルーターの本文に埋め込まれたルーティングテーブルを通じて具体的なサブスキルにルーティングします。名前空間スキルは **付加的** です——すべての具体的なコマンドは依然として直接呼び出し可能です。
 

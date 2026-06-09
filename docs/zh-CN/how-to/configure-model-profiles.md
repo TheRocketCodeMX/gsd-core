@@ -58,7 +58,7 @@
 **关于 Codex 和 OpenCode 的重要说明：** 这些运行时会在安装时将解析后的模型嵌入每个代理的静态配置中。编辑 `model_overrides` 后，需重新运行安装程序使更改生效：
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global   # or --opencode, --kilo, etc.
+npx @therocketcode/gsd-core@latest --codex --global   # or --opencode, --kilo, etc.
 ```
 
 ---

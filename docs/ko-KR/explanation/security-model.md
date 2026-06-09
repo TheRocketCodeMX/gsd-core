@@ -111,7 +111,7 @@ GSD의 런타임 동작 상류에서 `open-gsd` 조직은 저장소와 패키지
 
 **프롬프트 인젝션 방어가 제거하지 않는 것:** 알려진 패턴과 일치하지 않는 충분히 창의적인 인젝션, 또는 훅이 커버하지 않는 채널을 통해 도달하는 인젝션(예: 서브에이전트가 문서를 탐색하면서 읽는 의존성의 공개된 README에 주입된 콘텐츠). 심층 방어는 각 계층이 공격을 더 어렵게 만들지, 어떤 단일 계층이 불가능하게 만들지 않는다는 것을 의미한다.
 
-**취약점 신고.** `https://github.com/open-gsd/gsd-core/security/advisories/new`에서 비공개 GitHub 보안 보고서를 통해 신고하라. 공개 이슈를 열지 말라. 응답 일정과 공개 정책은 [SECURITY.md](../../../SECURITY.md)를 참조하라.
+**취약점 신고.** `https://github.com/TheRocketCodeMX/gsd-core/security/advisories/new`에서 비공개 GitHub 보안 보고서를 통해 신고하라. 공개 이슈를 열지 말라. 응답 일정과 공개 정책은 [SECURITY.md](../../../SECURITY.md)를 참조하라.
 
 ---
 

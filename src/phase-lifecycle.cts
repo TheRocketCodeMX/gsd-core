@@ -17,7 +17,7 @@
  *
  * References:
  *   - ADR-3524 (docs/adr/3524-cjs-sdk-hard-seam.md)
- *   - Issue #4 (open-gsd/gsd-core)
+ *   - Issue #4 (TheRocketCodeMX/gsd-core)
  */
 
 /** Result of deriveProgressFromRoadmap. */

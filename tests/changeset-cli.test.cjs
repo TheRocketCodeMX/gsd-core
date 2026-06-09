@@ -448,7 +448,7 @@ describe('changeset cli verify subcommand (not yet implemented — TDD red step)
   const FIXTURE_URL_HEADING = [
     '# Changelog',
     '',
-    '## [1.3.1](https://www.npmjs.com/package/@opengsd/gsd-core/v/1.3.1) - 2026-06-04',
+    '## [1.3.1](https://www.npmjs.com/package/@therocketcode/gsd-core/v/1.3.1) - 2026-06-04',
     '',
     '### Fixed',
     '',

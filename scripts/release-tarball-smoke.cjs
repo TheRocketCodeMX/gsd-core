@@ -119,7 +119,7 @@ function binInvocation(binPath, args = []) {
 // ---------------------------------------------------------------------------
 
 /**
- * Locate the lib/node_modules/@opengsd/gsd-core package root inside
+ * Locate the lib/node_modules/@therocketcode/gsd-core package root inside
  * an npm --prefix install directory.
  */
 function pkgRoot(installPrefix) {

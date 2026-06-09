@@ -670,7 +670,7 @@ GSD 子 Agent 在单独的上下文窗口中运行——其工作在进行中对
 
 ### 使用非 Claude 运行时（Codex、OpenCode、Gemini CLI、Kilo）
 
-> **Codex CLI 最低支持版本：`0.130.0`**（issue [#3562](https://github.com/open-gsd/gsd-core/issues/3562)）。
+> **Codex CLI 最低支持版本：`0.130.0`**（issue [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)）。
 
 如果您为非 Claude 运行时安装了 GSD，安装器已配置好模型解析。无需手动设置——`resolve_model_ids: "omit"` 会自动设置，告知 GSD 跳过 Anthropic 模型 ID 解析，让运行时选择其默认模型。
 
@@ -710,26 +710,26 @@ GSD 子 Agent 在单独的上下文窗口中运行——其工作在进行中对
 **替代方案：** 在任何有 Node.js 的机器上运行安装器：
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ### 为 Cline 安装
 
 ```bash
-npx @opengsd/gsd-core --cline --global   # applies to all projects
-npx @opengsd/gsd-core --cline --local    # this project only
+npx @therocketcode/gsd-core --cline --global   # applies to all projects
+npx @therocketcode/gsd-core --cline --local    # this project only
 ```
 
 ### 为 CodeBuddy 安装
 
 ```bash
-npx @opengsd/gsd-core --codebuddy --global
+npx @therocketcode/gsd-core --codebuddy --global
 ```
 
 ### 为 Qwen Code 安装
 
 ```bash
-npx @opengsd/gsd-core --qwen --global
+npx @therocketcode/gsd-core --qwen --global
 ```
 
 ### 为预发布版本安装
@@ -737,7 +737,7 @@ npx @opengsd/gsd-core --qwen --global
 在运行安装器前，将运行时的 `*_CONFIG_DIR` 环境变量设置为预发布目录：
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 **支持运行时的环境变量参考：**

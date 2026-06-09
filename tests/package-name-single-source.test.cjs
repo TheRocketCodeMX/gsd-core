@@ -4,7 +4,7 @@
  * Lint guard: the package name must be single-sourced from package-identity.cjs.
  *
  * Scans runtime files (bin/install.js, gsd-core/bin/**, scripts/*.cjs)
- * and FAILS if the literal `@opengsd/gsd-core` appears in a
+ * and FAILS if the literal `@therocketcode/gsd-core` appears in a
  * non-comment, non-identity-module line. This enforces that a future rename
  * is a one-file change in package.json (#516).
  *
@@ -23,7 +23,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
-const LITERAL = '@opengsd/gsd-core';
+const LITERAL = '@therocketcode/gsd-core';
 const IDENTITY_MODULE = path.join(ROOT, 'gsd-core', 'bin', 'lib', 'package-identity.cjs');
 
 // Files to scan: bin/install.js + everything under gsd-core/bin/ + touched scripts
@@ -74,7 +74,7 @@ function isCommentLine(trimmed) {
   );
 }
 
-test('no hardcoded @opengsd/gsd-core literals in runtime non-comment code lines (#516)', () => {
+test('no hardcoded @therocketcode/gsd-core literals in runtime non-comment code lines (#516)', () => {
   const files = getRuntimeFiles();
   const violations = [];
 
@@ -97,7 +97,7 @@ test('no hardcoded @opengsd/gsd-core literals in runtime non-comment code lines 
   assert.deepEqual(
     violations,
     [],
-    `Found ${violations.length} hardcoded @opengsd/gsd-core literal(s) in non-comment code lines:\n` +
+    `Found ${violations.length} hardcoded @therocketcode/gsd-core literal(s) in non-comment code lines:\n` +
     violations.map(v => `  ${v}`).join('\n') +
     '\n\nReplace each with the PACKAGE_NAME imported from gsd-core/bin/lib/package-identity.cjs'
   );

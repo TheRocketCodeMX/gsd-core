@@ -23,7 +23,7 @@ We will add a single `GET /health` endpoint to an existing Express application. 
 From your repo root:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 Choose **Claude Code** and **local** when prompted. You'll see:

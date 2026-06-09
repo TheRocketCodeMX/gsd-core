@@ -53,27 +53,27 @@ describe('Issue #498: deriveIdentity (pure, package.json -> coordinates)', () =>
   test('derives the real GSD coordinates from the repo package.json', () => {
     const real = require(path.join(ROOT, 'package.json'));
     const id = deriveIdentity(real);
-    assert.equal(id.packageName, '@opengsd/gsd-core');
+    assert.equal(id.packageName, '@therocketcode/gsd-core');
     assert.equal(id.binName, 'gsd-core');
-    assert.equal(id.repoSlug, 'open-gsd/gsd-core');
+    assert.equal(id.repoSlug, 'TheRocketCodeMX/gsd-core');
   });
 
-  test('deriveIdentity returns cacheSlug for @opengsd/gsd-core', () => {
+  test('deriveIdentity returns cacheSlug for @therocketcode/gsd-core', () => {
     const real = require(path.join(ROOT, 'package.json'));
     const id = deriveIdentity(real);
-    assert.equal(id.cacheSlug, 'opengsd-gsd-core');
+    assert.equal(id.cacheSlug, 'therocketcode-gsd-core');
   });
 
-  test('deriveIdentity returns updateCacheFileName for @opengsd/gsd-core', () => {
+  test('deriveIdentity returns updateCacheFileName for @therocketcode/gsd-core', () => {
     const real = require(path.join(ROOT, 'package.json'));
     const id = deriveIdentity(real);
-    assert.equal(id.updateCacheFileName, 'gsd-update-check-opengsd-gsd-core.json');
+    assert.equal(id.updateCacheFileName, 'gsd-update-check-therocketcode-gsd-core.json');
   });
 });
 
 describe('Issue #498: slugifyPackageName (pure helper for cache filename)', () => {
-  test('slugifyPackageName strips leading @, replaces / with -, for @opengsd/gsd-core', () => {
-    assert.equal(slugifyPackageName('@opengsd/gsd-core'), 'opengsd-gsd-core');
+  test('slugifyPackageName strips leading @, replaces / with -, for @therocketcode/gsd-core', () => {
+    assert.equal(slugifyPackageName('@therocketcode/gsd-core'), 'therocketcode-gsd-core');
   });
 
   test('slugifyPackageName returns empty string for empty input', () => {
@@ -100,7 +100,7 @@ describe('Issue #498: formatManualInstall (the npx fallback command)', () => {
     const id = deriveIdentity(require(path.join(ROOT, 'package.json')));
     assert.equal(
       formatManualInstall({ packageName: id.packageName, binName: id.binName, scope: 'global', runtime: 'claude' }),
-      'npx -y --package=@opengsd/gsd-core@latest -- gsd-core --claude --global',
+      'npx -y --package=@therocketcode/gsd-core@latest -- gsd-core --claude --global',
     );
   });
 });
@@ -121,26 +121,26 @@ describe('Issue #498: generated runtime module (baked, drift-checked)', () => {
 
   test('requiring the generated module exposes the real coordinates', () => {
     const id = require(GENERATED);
-    assert.equal(id.packageName, '@opengsd/gsd-core');
+    assert.equal(id.packageName, '@therocketcode/gsd-core');
     assert.equal(id.binName, 'gsd-core');
-    assert.equal(id.repoSlug, 'open-gsd/gsd-core');
+    assert.equal(id.repoSlug, 'TheRocketCodeMX/gsd-core');
   });
 
-  test('generated module exports cacheSlug matching @opengsd/gsd-core', () => {
+  test('generated module exports cacheSlug matching @therocketcode/gsd-core', () => {
     const id = require(GENERATED);
-    assert.equal(id.cacheSlug, 'opengsd-gsd-core');
+    assert.equal(id.cacheSlug, 'therocketcode-gsd-core');
   });
 
-  test('generated module exports updateCacheFileName matching @opengsd/gsd-core', () => {
+  test('generated module exports updateCacheFileName matching @therocketcode/gsd-core', () => {
     const id = require(GENERATED);
-    assert.equal(id.updateCacheFileName, 'gsd-update-check-opengsd-gsd-core.json');
+    assert.equal(id.updateCacheFileName, 'gsd-update-check-therocketcode-gsd-core.json');
   });
 
   test('generated manualInstallCommand closes over the baked coordinates', () => {
     const id = require(GENERATED);
     assert.equal(
       id.manualInstallCommand({ scope: 'global', runtime: 'claude' }),
-      'npx -y --package=@opengsd/gsd-core@latest -- gsd-core --claude --global',
+      'npx -y --package=@therocketcode/gsd-core@latest -- gsd-core --claude --global',
     );
   });
 });

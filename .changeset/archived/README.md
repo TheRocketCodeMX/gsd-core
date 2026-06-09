@@ -6,7 +6,7 @@ user-facing notes were already hand-curated into the dated `## [1.2.0]`,
 during the #690 backfill (PR #694) and the earlier 1.2.0 promotion.
 
 They were never consumed by a `render` run (CHANGELOG promotion was a manual
-operator step that was skipped — see [#690](https://github.com/open-gsd/gsd-core/issues/690)),
+operator step that was skipped — see [#690](https://github.com/TheRocketCodeMX/gsd-core/issues/690)),
 so they accumulated here. They are retained for provenance only.
 
 ## Do not render these

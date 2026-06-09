@@ -1,6 +1,6 @@
 # Como instalar o GSD Core no seu ambiente de execução
 
-Instale o GSD Core (`@opengsd/gsd-core`) no ambiente de codificação com IA que você usa no dia a dia. Este guia apresenta o caminho padrão de instalação para cada ambiente suportado e, em seguida, cobre o caminho manual para máquinas sem Node.js.
+Instale o GSD Core (`@therocketcode/gsd-core`) no ambiente de codificação com IA que você usa no dia a dia. Este guia apresenta o caminho padrão de instalação para cada ambiente suportado e, em seguida, cobre o caminho manual para máquinas sem Node.js.
 
 **O que você precisa:** Node.js 18+ e npm (ou npx). Se você não tem Node.js, vá para [Instalando sem Node.js](#instalando-sem-nodejs).
 
@@ -19,7 +19,7 @@ O GSD Core distribui arquivos de agente e comando no formato nativo de frontmatt
 Execute o instalador a partir de qualquer diretório. Ele solicita o seu ambiente e se a instalação deve ser global (todos os projetos) ou local (apenas este projeto).
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 Esse é o único comando necessário para uma instalação nova ou para executar o instalador novamente após trocar de ambiente.
@@ -31,7 +31,7 @@ Esse é o único comando necessário para uma instalação nova ou para executar
 ### Claude Code
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --global
+npx @therocketcode/gsd-core@latest --claude --global
 ```
 
 As habilidades são instaladas em `~/.claude/`. Os comandos aparecem como slash commands `/gsd-*` na sua próxima sessão do Claude Code. Reinicie o Claude Code para carregá-los.
@@ -39,7 +39,7 @@ As habilidades são instaladas em `~/.claude/`. Os comandos aparecem como slash 
 **Substituir o diretório de instalação:**
 
 ```bash
-CLAUDE_CONFIG_DIR=~/.claude-alt npx @opengsd/gsd-core@latest --claude --global
+CLAUDE_CONFIG_DIR=~/.claude-alt npx @therocketcode/gsd-core@latest --claude --global
 ```
 
 ---
@@ -47,7 +47,7 @@ CLAUDE_CONFIG_DIR=~/.claude-alt npx @opengsd/gsd-core@latest --claude --global
 ### Gemini CLI
 
 ```bash
-npx @opengsd/gsd-core@latest --gemini --global
+npx @therocketcode/gsd-core@latest --gemini --global
 ```
 
 As habilidades são instaladas em `~/.gemini/`. O instalador reescreve todos os corpos de comando para o namespace de dois-pontos do Gemini (`/gsd:update`, `/gsd:config`, etc.). Reinicie o Gemini CLI após a instalação.
@@ -55,7 +55,7 @@ As habilidades são instaladas em `~/.gemini/`. O instalador reescreve todos os 
 **Substituir o diretório de instalação:**
 
 ```bash
-GEMINI_CONFIG_DIR=~/.gemini-alt npx @opengsd/gsd-core@latest --gemini --global
+GEMINI_CONFIG_DIR=~/.gemini-alt npx @therocketcode/gsd-core@latest --gemini --global
 ```
 
 ---
@@ -63,7 +63,7 @@ GEMINI_CONFIG_DIR=~/.gemini-alt npx @opengsd/gsd-core@latest --gemini --global
 ### OpenCode
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 As habilidades são instaladas em `~/.config/opencode/` (XDG) ou `~/.opencode/`. O instalador converte o frontmatter dos agentes para o schema do OpenCode — removendo o campo `tools:` e convertendo valores de cor para hex. Consulte [Instalando sem Node.js — transformações do OpenCode](#opencode--transformações-necessárias) se você precisar entender o que muda.
@@ -71,7 +71,7 @@ As habilidades são instaladas em `~/.config/opencode/` (XDG) ou `~/.opencode/`.
 **Substituir o diretório de instalação:**
 
 ```bash
-OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @opengsd/gsd-core@latest --opencode --global
+OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @therocketcode/gsd-core@latest --opencode --global
 ```
 
 ---
@@ -79,7 +79,7 @@ OPENCODE_CONFIG_DIR=~/.config/opencode-alt npx @opengsd/gsd-core@latest --openco
 ### Kilo
 
 ```bash
-npx @opengsd/gsd-core@latest --kilo --global
+npx @therocketcode/gsd-core@latest --kilo --global
 ```
 
 As habilidades são instaladas em `~/.config/kilo/` (XDG) ou `~/.kilo/`. Usa o mesmo formato de comando markdown plano no estilo OpenCode.
@@ -87,7 +87,7 @@ As habilidades são instaladas em `~/.config/kilo/` (XDG) ou `~/.kilo/`. Usa o m
 **Substituir o diretório de instalação:**
 
 ```bash
-KILO_CONFIG_DIR=~/.config/kilo-alt npx @opengsd/gsd-core@latest --kilo --global
+KILO_CONFIG_DIR=~/.config/kilo-alt npx @therocketcode/gsd-core@latest --kilo --global
 ```
 
 ---
@@ -95,7 +95,7 @@ KILO_CONFIG_DIR=~/.config/kilo-alt npx @opengsd/gsd-core@latest --kilo --global
 ### Codex
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global
+npx @therocketcode/gsd-core@latest --codex --global
 ```
 
 As habilidades são instaladas em `~/.codex/skills/gsd-*/SKILL.md`. Os agentes são registrados com entradas TOML por agente em `config.toml`. Reinicie o Codex (ou execute `codex --reload`) após a instalação.
@@ -107,7 +107,7 @@ As habilidades são instaladas em `~/.codex/skills/gsd-*/SKILL.md`. Os agentes s
 ### GitHub Copilot
 
 ```bash
-npx @opengsd/gsd-core@latest --copilot --global
+npx @therocketcode/gsd-core@latest --copilot --global
 ```
 
 As habilidades são instaladas em `~/.copilot/`. O GSD é instalado como arquivos de agente `.md` e arquivos de instrução de repositório.
@@ -115,7 +115,7 @@ As habilidades são instaladas em `~/.copilot/`. O GSD é instalado como arquivo
 **Substituir o diretório de instalação:**
 
 ```bash
-COPILOT_CONFIG_DIR=~/.copilot-alt npx @opengsd/gsd-core@latest --copilot --global
+COPILOT_CONFIG_DIR=~/.copilot-alt npx @therocketcode/gsd-core@latest --copilot --global
 ```
 
 ---
@@ -123,7 +123,7 @@ COPILOT_CONFIG_DIR=~/.copilot-alt npx @opengsd/gsd-core@latest --copilot --globa
 ### Cursor
 
 ```bash
-npx @opengsd/gsd-core@latest --cursor --global
+npx @therocketcode/gsd-core@latest --cursor --global
 ```
 
 As habilidades são instaladas em `~/.cursor/`. O GSD instala habilidades, agentes e referências de regras.
@@ -131,7 +131,7 @@ As habilidades são instaladas em `~/.cursor/`. O GSD instala habilidades, agent
 **Substituir o diretório de instalação:**
 
 ```bash
-CURSOR_CONFIG_DIR=~/.cursor-alt npx @opengsd/gsd-core@latest --cursor --global
+CURSOR_CONFIG_DIR=~/.cursor-alt npx @therocketcode/gsd-core@latest --cursor --global
 ```
 
 ---
@@ -139,7 +139,7 @@ CURSOR_CONFIG_DIR=~/.cursor-alt npx @opengsd/gsd-core@latest --cursor --global
 ### Windsurf
 
 ```bash
-npx @opengsd/gsd-core@latest --windsurf --global
+npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 As habilidades são instaladas em `~/.codeium/windsurf/`. O GSD instala habilidades, agentes e regras de workspace.
@@ -147,7 +147,7 @@ As habilidades são instaladas em `~/.codeium/windsurf/`. O GSD instala habilida
 **Substituir o diretório de instalação:**
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-alt npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-alt npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 ---
@@ -158,10 +158,10 @@ O Cline usa uma integração baseada em regras — o GSD é instalado como `.cli
 
 ```bash
 # Instalação global (todos os projetos)
-npx @opengsd/gsd-core@latest --cline --global
+npx @therocketcode/gsd-core@latest --cline --global
 
 # Instalação local (apenas este projeto)
-npx @opengsd/gsd-core@latest --cline --local
+npx @therocketcode/gsd-core@latest --cline --local
 ```
 
 Instalações globais escrevem em `~/.cline/`. Instalações locais escrevem em `./.cline/`. As regras são carregadas automaticamente pelo Cline — nenhum slash command personalizado é registrado.
@@ -171,7 +171,7 @@ Instalações globais escrevem em `~/.cline/`. Instalações locais escrevem em 
 ### CodeBuddy
 
 ```bash
-npx @opengsd/gsd-core@latest --codebuddy --global
+npx @therocketcode/gsd-core@latest --codebuddy --global
 ```
 
 As habilidades são instaladas em `~/.codebuddy/skills/gsd-*/SKILL.md`.
@@ -183,7 +183,7 @@ As habilidades são instaladas em `~/.codebuddy/skills/gsd-*/SKILL.md`.
 O Qwen Code usa o mesmo padrão de habilidades abertas do Claude Code 2.1.88+.
 
 ```bash
-npx @opengsd/gsd-core@latest --qwen --global
+npx @therocketcode/gsd-core@latest --qwen --global
 ```
 
 As habilidades são instaladas em `~/.qwen/skills/gsd-*/SKILL.md`.
@@ -191,7 +191,7 @@ As habilidades são instaladas em `~/.qwen/skills/gsd-*/SKILL.md`.
 **Substituir o diretório de instalação:**
 
 ```bash
-QWEN_CONFIG_DIR=~/.qwen-alt npx @opengsd/gsd-core@latest --qwen --global
+QWEN_CONFIG_DIR=~/.qwen-alt npx @therocketcode/gsd-core@latest --qwen --global
 ```
 
 ---
@@ -199,7 +199,7 @@ QWEN_CONFIG_DIR=~/.qwen-alt npx @opengsd/gsd-core@latest --qwen --global
 ### Augment Code
 
 ```bash
-npx @opengsd/gsd-core@latest --augment --global
+npx @therocketcode/gsd-core@latest --augment --global
 ```
 
 As habilidades são instaladas em `~/.augment/`. O GSD instala habilidades e agentes. Sem posse de hook ou statusline.
@@ -209,7 +209,7 @@ As habilidades são instaladas em `~/.augment/`. O GSD instala habilidades e age
 ### Antigravity
 
 ```bash
-npx @opengsd/gsd-core@latest --antigravity --global
+npx @therocketcode/gsd-core@latest --antigravity --global
 ```
 
 O instalador detecta automaticamente o diretório de configuração do Antigravity (`~/.gemini/antigravity`, `~/.gemini/antigravity-ide` ou `~/.gemini/antigravity-cli`). Usa a política de configurações compatível com Gemini.
@@ -217,7 +217,7 @@ O instalador detecta automaticamente o diretório de configuração do Antigravi
 **Substituir o diretório de instalação:**
 
 ```bash
-ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @opengsd/gsd-core@latest --antigravity --global
+ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @therocketcode/gsd-core@latest --antigravity --global
 ```
 
 ---
@@ -225,7 +225,7 @@ ANTIGRAVITY_CONFIG_DIR=~/.gemini/antigravity-alt npx @opengsd/gsd-core@latest --
 ### Trae
 
 ```bash
-npx @opengsd/gsd-core@latest --trae --global
+npx @therocketcode/gsd-core@latest --trae --global
 ```
 
 As habilidades são instaladas em `~/.trae/`. O GSD instala habilidades, agentes e referências de regras.
@@ -237,7 +237,7 @@ As habilidades são instaladas em `~/.trae/`. O GSD instala habilidades, agentes
 Todos os exemplos acima usam `--global`, que instala o GSD uma vez para a sua conta de usuário. Para limitar uma instalação a um único projeto, substitua `--global` por `--local`:
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --local
+npx @therocketcode/gsd-core@latest --claude --local
 ```
 
 Uma instalação local escreve no diretório `.claude/` na raiz do seu projeto. As configurações de instalação local têm precedência sobre as globais quando ambas existem.
@@ -249,7 +249,7 @@ Uma instalação local escreve no diretório `.claude/` na raiz do seu projeto. 
 As edições de pré-lançamento dos ambientes (Windsurf Next, Cursor Nightly, VS Code Insiders, canais de preview do Codex, etc.) leem de um diretório de configuração irmão. Defina a variável de ambiente `*_CONFIG_DIR` correspondente antes de executar o instalador:
 
 ```bash
-WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global
+WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest --windsurf --global
 ```
 
 Selecione o ambiente estável correspondente no prompt do instalador. O GSD não enumera as edições de pré-lançamento como ambientes nomeados separados — elas são suportadas com melhor esforço por meio desse mecanismo de variável de ambiente e não são testadas separadamente no CI de lançamento.
@@ -263,7 +263,7 @@ Se você não pode executar `npx` (por exemplo, em uma máquina Windows sem Node
 **Opção A — Use uma máquina que tenha Node.js.** Qualquer máquina com Node.js serve: WSL, uma VM Linux, um runner de CI ou um contêiner Docker. Execute o instalador lá e, em seguida, copie o diretório de saída para a sua máquina de destino. Para o OpenCode:
 
 ```bash
-npx @opengsd/gsd-core@latest --opencode --global
+npx @therocketcode/gsd-core@latest --opencode --global
 # Depois copie ~/.config/opencode/agents/ para a máquina Windows
 ```
 

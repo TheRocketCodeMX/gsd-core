@@ -76,7 +76,7 @@ or a movable tag — as the RC surface.** Concretely:
    RC tags `v<version>-rc.N` remain — each N is unique and never moved, so they are already
    immutable and serve the GitHub prerelease.
 
-4. **RC = the `@next` dist-tag, full stop.** Testers run `npm i -g @opengsd/gsd-core@next`.
+4. **RC = the `@next` dist-tag, full stop.** Testers run `npm i -g @therocketcode/gsd-core@next`.
    Because each `rc` run is cut from `next` HEAD, every rc.N already includes all prior fixes.
    No long-lived branch, no tag movement. `finalize` promotes the released version to `@latest`
    (and keeps the existing `npm dist-tag add … next` so `@next` never trails `@latest`).

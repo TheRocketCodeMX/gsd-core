@@ -18,12 +18,12 @@ const { evaluateUpdateCache } = require('../hooks/gsd-statusline.js');
 // ─── Package identity constants ──────────────────────────────────────────────
 
 describe('package-identity exports', () => {
-  test('PACKAGE_NAME is @opengsd/gsd-core', () => {
-    assert.equal(PACKAGE_NAME, '@opengsd/gsd-core');
+  test('PACKAGE_NAME is @therocketcode/gsd-core', () => {
+    assert.equal(PACKAGE_NAME, '@therocketcode/gsd-core');
   });
 
   test('updateCacheFileName is per-package filename', () => {
-    assert.equal(updateCacheFileName, 'gsd-update-check-opengsd-gsd-core.json');
+    assert.equal(updateCacheFileName, 'gsd-update-check-therocketcode-gsd-core.json');
   });
 });
 
@@ -36,7 +36,7 @@ describe('worker result shape contract', () => {
   test('PACKAGE_NAME value matches the expected installed package', () => {
     // The worker adds package_name: PACKAGE_NAME to its result object.
     // This test asserts the value that will appear in the cache.
-    assert.equal(PACKAGE_NAME, '@opengsd/gsd-core');
+    assert.equal(PACKAGE_NAME, '@therocketcode/gsd-core');
   });
 });
 
@@ -63,7 +63,7 @@ describe('buildBannerOutput lineage guard', () => {
         update_available: true,
         installed: '1.2.0',
         latest: '1.3.0',
-        package_name: '@opengsd/gsd-core',
+        package_name: '@therocketcode/gsd-core',
       },
       parseError: false,
       suppressFailureWarning: false,
@@ -125,7 +125,7 @@ describe('evaluateUpdateCache lineage guard', () => {
       update_available: true,
       installed: '1.2.0',
       latest: '1.3.0',
-      package_name: '@opengsd/gsd-core',
+      package_name: '@therocketcode/gsd-core',
     });
     assert.equal(r.showUpdate, true);
     assert.equal(r.staleWarning, 'none');
@@ -136,7 +136,7 @@ describe('evaluateUpdateCache lineage guard', () => {
       update_available: false,
       installed: '1.3.0',
       latest: '1.3.0',
-      package_name: '@opengsd/gsd-core',
+      package_name: '@therocketcode/gsd-core',
     });
     assert.equal(r.showUpdate, false);
     assert.equal(r.staleWarning, 'none');
@@ -147,7 +147,7 @@ describe('evaluateUpdateCache lineage guard', () => {
       update_available: false,
       installed: '1.3.0',
       latest: '1.3.0',
-      package_name: '@opengsd/gsd-core',
+      package_name: '@therocketcode/gsd-core',
       stale_hooks: [{ file: 'gsd-statusline.js', hookVersion: '1.2.0', installedVersion: '1.3.0' }],
     });
     assert.equal(r.staleWarning, 'stale');
@@ -158,7 +158,7 @@ describe('evaluateUpdateCache lineage guard', () => {
       update_available: false,
       installed: '2.0.0',
       latest: '1.3.0',
-      package_name: '@opengsd/gsd-core',
+      package_name: '@therocketcode/gsd-core',
       stale_hooks: [{ file: 'gsd-statusline.js', hookVersion: '1.2.0', installedVersion: '2.0.0' }],
     });
     assert.equal(r.staleWarning, 'dev');

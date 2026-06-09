@@ -25,7 +25,7 @@
 在项目目录中打开终端并运行：
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 安装程序会询问你使用的 AI 编程运行时，以及是全局安装还是安装到当前项目。现在选择 **Claude Code** 和**本地安装**（仅此项目）。
@@ -272,7 +272,7 @@ Title: feat(phase-1): core CLI — add / list / done commands
 
 ## 你学到了什么
 
-- 如何使用 `npx @opengsd/gsd-core@latest` 安装 GSD Core。
+- 如何使用 `npx @therocketcode/gsd-core@latest` 安装 GSD Core。
 - `/gsd-new-project` 如何将一段对话转化为由 `.planning/` 产物支撑的路线图。
 - `/gsd-discuss-phase` 如何在任何规划开始之前捕获实现决策。
 - `/gsd-plan-phase` 如何生成并行调研器并产出原子任务计划。

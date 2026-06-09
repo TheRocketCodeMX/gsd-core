@@ -25,7 +25,7 @@ No other tools are required. GSD Core itself is installed in the next step.
 Open a terminal in your project directory and run:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 The installer asks which AI coding runtime you are using and whether to install globally or into the current project. Choose **Claude Code** and **local** (just this project) for now.
@@ -272,7 +272,7 @@ That is the full loop — from idea to merged PR — for one phase.
 
 ## What you've learned
 
-- How to install GSD Core with `npx @opengsd/gsd-core@latest`.
+- How to install GSD Core with `npx @therocketcode/gsd-core@latest`.
 - How `/gsd-new-project` turns a conversation into a roadmap backed by `.planning/` artefacts.
 - How `/gsd-discuss-phase` captures implementation decisions before any planning happens.
 - How `/gsd-plan-phase` spawns parallel researchers and produces atomic task plans.

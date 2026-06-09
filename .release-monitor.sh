@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Release monitor for open-gsd/gsd-core
+# Release monitor for TheRocketCodeMX/gsd-core
 # Checks every 15 minutes, writes new release info to a signal file
 
-REPO="open-gsd/gsd-core"
+REPO="TheRocketCodeMX/gsd-core"
 SIGNAL_FILE="/tmp/gsd-new-release.json"
 STATE_FILE="/tmp/gsd-monitor-last-tag"
 LOG_FILE="/tmp/gsd-monitor.log"

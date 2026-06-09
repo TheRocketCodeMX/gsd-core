@@ -25,7 +25,7 @@ Nenhuma outra ferramenta é necessária. O próprio GSD Core é instalado no pr�
 Abra um terminal no diretório do seu projeto e execute:
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx @therocketcode/gsd-core@latest
 ```
 
 O instalador pergunta qual ambiente de execução de IA você está usando e se deseja instalar globalmente ou no projeto atual. Escolha **Claude Code** e **local** (apenas este projeto) por enquanto.
@@ -272,7 +272,7 @@ Esse é o ciclo completo — da ideia ao PR mesclado — para uma fase.
 
 ## O que você aprendeu
 
-- Como instalar o GSD Core com `npx @opengsd/gsd-core@latest`.
+- Como instalar o GSD Core com `npx @therocketcode/gsd-core@latest`.
 - Como `/gsd-new-project` transforma uma conversa em um roadmap respaldado por artefatos em `.planning/`.
 - Como `/gsd-discuss-phase` captura decisões de implementação antes de qualquer planejamento acontecer.
 - Como `/gsd-plan-phase` spawna pesquisadores em paralelo e produz planos de tarefa atômicos.

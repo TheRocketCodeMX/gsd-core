@@ -28,6 +28,8 @@ export default tseslint.config(
   {
     ignores: [
       'node_modules/**',
+      // Rocket fork: local reference clones of other frameworks — not our code.
+      '_reference/**',
       '**/dist/**',
       '.worktrees/**',
       '.claude/**',

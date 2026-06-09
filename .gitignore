@@ -192,3 +192,6 @@ reports/mutation/
 # Local Crabbox machine configuration
 .crabbox.yaml
 .crabbox.local.yaml
+
+# ── Rocket fork: local reference clones (not part of the fork) ──
+_reference/

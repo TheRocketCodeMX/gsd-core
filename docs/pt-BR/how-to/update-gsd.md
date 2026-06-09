@@ -17,11 +17,11 @@ De dentro do seu ambiente de execução de IA, execute:
 O GSD irá:
 
 1. Detectar a versão instalada e o escopo da instalação (global ou local).
-2. Verificar no npm a versão mais recente do `@opengsd/gsd-core`.
+2. Verificar no npm a versão mais recente do `@therocketcode/gsd-core`.
 3. Buscar o changelog e exibir o que mudou entre sua versão instalada e a mais recente.
 4. Solicitar confirmação antes de alterar qualquer coisa.
 5. Fazer backup de quaisquer arquivos adicionados pelo usuário encontrados dentro de diretórios gerenciados pelo GSD para `gsd-user-files-backup/`.
-6. Executar o instalador (`npx @opengsd/gsd-core@latest --<runtime> --<scope>`).
+6. Executar o instalador (`npx @therocketcode/gsd-core@latest --<runtime> --<scope>`).
 7. Limpar o cache de verificação de atualização para que o indicador na barra de status seja redefinido.
 8. Informar se arquivos GSD modificados localmente foram copiados para `gsd-local-patches/`.
 
@@ -95,7 +95,7 @@ Se você pulou o `--reapply` após uma atualização anterior e deseja aplicar o
 
 ## Quando o npm está indisponível
 
-Se `npx @opengsd/gsd-core@latest` falhar devido a uma falha no npm, restrições de rede ou porque você está trabalhando a partir do repositório de código-fonte, use o procedimento de atualização manual em [docs/manual-update.md](../../manual-update.md). Esse documento aborda como fazer pull do commit mais recente, compilar o dist dos hooks e executar `node bin/install.js` diretamente.
+Se `npx @therocketcode/gsd-core@latest` falhar devido a uma falha no npm, restrições de rede ou porque você está trabalhando a partir do repositório de código-fonte, use o procedimento de atualização manual em [docs/manual-update.md](../../manual-update.md). Esse documento aborda como fazer pull do commit mais recente, compilar o dist dos hooks e executar `node bin/install.js` diretamente.
 
 ---
 

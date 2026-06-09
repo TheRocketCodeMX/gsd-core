@@ -234,7 +234,7 @@ documentation). Defence in depth means each layer makes the attack harder,
 not that any single layer makes it impossible.
 
 **Reporting vulnerabilities.** Report via private GitHub security advisory at
-`https://github.com/open-gsd/gsd-core/security/advisories/new`. Do not open
+`https://github.com/TheRocketCodeMX/gsd-core/security/advisories/new`. Do not open
 public issues. See [SECURITY.md](../../SECURITY.md) for the response timeline
 and disclosure policy.
 

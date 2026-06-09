@@ -76,7 +76,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
 
   test('does NOT flag a file whose content does not reference the old package', () => {
     const hookFile = path.join(configDir, 'hooks', 'gsd-check-update-worker.js');
-    writeFile(hookFile, '// installed via @opengsd/gsd-core\nconsole.log("ok");');
+    writeFile(hookFile, '// installed via @therocketcode/gsd-core\nconsole.log("ok");');
 
     const plan = planLegacyCleanup([configDir], { homeDir });
     const entry = plan.find((p) => p.path === hookFile);
@@ -123,7 +123,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
   test('regression #607: CHANGELOG.md containing old-package signal must NOT be flagged', () => {
     // Markdown docs legitimately cite the old package name in historical context.
     const changelogFile = path.join(configDir, 'gsd-core', 'CHANGELOG.md');
-    writeFile(changelogFile, '# Changelog\n\nMigrated from ' + OLD_PACKAGE_SIGNAL + ' to @opengsd/gsd-core.');
+    writeFile(changelogFile, '# Changelog\n\nMigrated from ' + OLD_PACKAGE_SIGNAL + ' to @therocketcode/gsd-core.');
 
     const plan = planLegacyCleanup([configDir], { homeDir });
 
@@ -287,7 +287,7 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
 
     // Managed hook with clean content — must NOT be in plan and must survive
     const managedHook = path.join(configDir, 'hooks', MANAGED_HOOKS[0]);
-    writeFile(managedHook, '// @opengsd/gsd-core only');
+    writeFile(managedHook, '// @therocketcode/gsd-core only');
 
     const plan = planLegacyCleanup([configDir], { homeDir });
     assert.ok(plan.length > 0, 'precondition: plan must be non-empty');

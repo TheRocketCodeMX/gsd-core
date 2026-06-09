@@ -16,8 +16,8 @@ const { checkLatestVersion, CHECK_REASON, PACKAGE_NAME } = require(
 // Tests use a pluggable spawn so no real npm process is invoked.
 
 describe('Bug #2992: deterministic latest-version check', () => {
-  test('PACKAGE_NAME is the constant @opengsd/gsd-core (no callers can override)', () => {
-    assert.equal(PACKAGE_NAME, '@opengsd/gsd-core');
+  test('PACKAGE_NAME is the constant @therocketcode/gsd-core (no callers can override)', () => {
+    assert.equal(PACKAGE_NAME, '@therocketcode/gsd-core');
   });
 
   test('CHECK_REASON enum exposes the documented codes', () => {
@@ -104,12 +104,12 @@ describe('Issue #815: --next dist-tag support', () => {
   });
 
   test('buildViewArgs() defaults to the bare latest spec (byte-for-byte unchanged)', () => {
-    assert.deepEqual(buildViewArgs(), ['view', '@opengsd/gsd-core', 'version']);
-    assert.deepEqual(buildViewArgs('latest'), ['view', '@opengsd/gsd-core', 'version']);
+    assert.deepEqual(buildViewArgs(), ['view', '@therocketcode/gsd-core', 'version']);
+    assert.deepEqual(buildViewArgs('latest'), ['view', '@therocketcode/gsd-core', 'version']);
   });
 
   test('buildViewArgs("next") targets the @next dist-tag', () => {
-    assert.deepEqual(buildViewArgs('next'), ['view', '@opengsd/gsd-core@next', 'version']);
+    assert.deepEqual(buildViewArgs('next'), ['view', '@therocketcode/gsd-core@next', 'version']);
   });
 
   test('resolveTag defaults to latest when no --tag flag', () => {

@@ -122,7 +122,7 @@ Pontos de entrada voltados ao usuário. Cada arquivo contém frontmatter YAML (n
 
 **Total de comandos:** consulte [`docs/INVENTORY.md`](INVENTORY.md#commands) para a contagem oficial e o roster completo.
 
-#### Roteamento hierárquico em dois estágios (v1.40, [#2792](https://github.com/open-gsd/gsd-core/issues/2792))
+#### Roteamento hierárquico em dois estágios (v1.40, [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792))
 
 Para manter baixo o custo em tokens da listagem de skills antecipada, a v1.40 introduz seis **meta-skills** de namespace (`gsd-workflow`, `gsd-project`, `gsd-quality`, `gsd-context`, `gsd-manage`, `gsd-ideate` — originados de `commands/gsd/ns-*.md`, mas o `name:` invocável é a forma básica mostrada aqui) dispostos acima das sub-skills concretas. O modelo vê 6 roteadores de namespace (~120 tokens) em vez de uma listagem plana de 86 skills (~2.150 tokens), seleciona um namespace e depois roteia para a sub-skill concreta via tabela de roteamento embutida no corpo do roteador de namespace. As skills de namespace são **aditivas** — cada comando concreto ainda é diretamente invocável.
 
