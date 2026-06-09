@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-09
+
+> TheRocketCode fork. Based on upstream `open-gsd/gsd-core` 1.4.0.
+
+### Added
+
+- **Greenfield discovery spine** — four connected commands that run before building, each feeding the next: `/gsd:discover-product` (demand vs. interest, the narrowest wedge, the four product risks → `PRODUCT-BRIEF.md`), `/gsd:model-domain` (lightweight DDD: ubiquitous language + core/supporting/generic subdomain distillation → `DOMAIN-MODEL.md`), `/gsd:recommend-architecture` (a two-axis recommendation — domain-logic ladder × deployment topology — captured as an ADR, with over/under-engineering guardrails → `ADR-NNNN.md`), and `/gsd:testing-strategy` (derives the test shape from the architecture → `TEST-STRATEGY.md`). The single complexity assessment made during discovery parameterizes both the architecture and the test strategy.
+- **Six test-infrastructure how-to references** the agent consults when writing tests: Testcontainers, parallel-safe DB isolation, authenticate-once / multi-role auth, synthetic test data, E2E tiering, and flaky-test avoidance.
+- Fork maintenance: `scripts/sync-upstream.sh` (one-command rebrand when cherry-picking upstream changes) and `docs/RELEASING.md` (documented release flow).
+
 ## [1.4.0] - 2026-06-08
 
 ### Added
