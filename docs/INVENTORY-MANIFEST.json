@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-07",
+  "generated": "2026-06-09",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -66,6 +66,7 @@
       "/gsd-manager",
       "/gsd-map-codebase",
       "/gsd-milestone-summary",
+      "/gsd-model-domain",
       "/gsd-mvp-phase",
       "/gsd-new-milestone",
       "/gsd-new-project",
@@ -149,6 +150,7 @@
       "manager.md",
       "map-codebase.md",
       "milestone-summary.md",
+      "model-domain.md",
       "mvp-phase.md",
       "new-milestone.md",
       "new-project.md",
@@ -208,6 +210,7 @@
       "debugger-philosophy.md",
       "decimal-phase-calculation.md",
       "doc-conflict-engine.md",
+      "domain-modeling.md",
       "domain-probes.md",
       "execute-mvp-tdd.md",
       "executor-examples.md",

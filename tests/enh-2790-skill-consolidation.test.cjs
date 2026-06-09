@@ -46,6 +46,7 @@ const KNOWN_SKILLS = new Set([
   'manager.md',
   'map-codebase.md',
   'milestone-summary.md',
+  'model-domain.md',
   'mvp-phase.md',
   'new-milestone.md',
   'new-project.md',

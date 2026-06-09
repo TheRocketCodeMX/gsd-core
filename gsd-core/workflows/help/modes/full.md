@@ -573,6 +573,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 - **`/gsd:explore`** — Socratic ideation and idea routing. Think through ideas before committing to plans.
 - **`/gsd:spec-phase <phase> [--auto] [--text]`** — Clarify WHAT a phase delivers with ambiguity scoring; produces a SPEC.md before discuss-phase.
+- **`/gsd:model-domain [--auto] [--text] [--event-storming]`** — Capture ubiquitous language and classify subdomains (core/supporting/generic) for greenfield projects; strategic DDD before architecture.
 - **`/gsd:ai-integration-phase [phase]`** — Generate an AI-SPEC.md design contract for phases that involve building AI systems.
 - **`/gsd:ui-phase [phase]`** — Generate UI design contract (UI-SPEC.md) for frontend phases.
 - **`/gsd:import --from <filepath> | --from-gsd2`** — Ingest external plans with conflict detection, or reverse-migrate a GSD-2 (`.gsd/`) project back to GSD v1 (`.planning/`) format.

@@ -126,6 +126,7 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'map-codebase',
     'profile-user',
     'spec-phase',
+    'model-domain',
     'ultraplan-phase',
     'mvp-phase',
     'execute-phase',
