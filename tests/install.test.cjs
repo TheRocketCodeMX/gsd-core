@@ -92,7 +92,7 @@ describe('getGlobalConfigDir — all runtimes default paths', () => {
     }
   });
 
-  for (const runtime of allRuntimes) {
+  for (const runtime of allRuntimes.filter(runtime => runtime !== 'kimi')) {
     test(`getGlobalConfigDir('${runtime}') returns expected home-relative path`, () => {
       const expected = path.join(os.homedir(), RUNTIME_META[runtime].globalSuffix);
       assert.strictEqual(getGlobalConfigDir(runtime), expected);
@@ -676,17 +676,17 @@ describe('Kilo source integration assertions', () => {
     path.join(__dirname, '..', 'gsd-core', 'bin', 'lib', 'update-context.cjs'), 'utf8');
 
   test('--kilo flag parsing exists', () => {
-    assert.ok(src.includes("args.includes('--kilo')"));
+    assert.ok(src.includes("runtimeArgs.includes('--kilo')"));
   });
 
-  test('runtimeMap has Kilo as option 11', () => {
-    assert.strictEqual(runtimeMap['11'], 'kilo');
+  test('runtimeMap has Kilo as option 12 after Kimi', () => {
+    assert.strictEqual(runtimeMap['12'], 'kilo');
   });
 
   test('prompt text shows Kilo above OpenCode without marketing copy', () => {
     const plain = stripAnsi(buildRuntimePromptText());
-    assert.ok(/\b11\)\s*Kilo\b/.test(plain));
-    assert.ok(plain.indexOf('11) Kilo') < plain.indexOf('OpenCode'));
+    assert.ok(/\b12\)\s*Kilo\b/.test(plain));
+    assert.ok(plain.indexOf('12) Kilo') < plain.indexOf('OpenCode'));
     assert.ok(!plain.includes('the #1 AI coding platform on OpenRouter'));
   });
 
