@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-06-09
+
+### Fixed
+
+- **`/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-autonomous` no longer carry `context: fork`** — these are spawning orchestrators; a forked subagent context has no `Agent` tool, preventing them from spawning the subagents they require. `effort: xhigh` is preserved. Fixes `/gsd:autonomous` halting with "running as a forked subagent" on 1.4.1 (#921). Also replaces the introspection-based Agent-availability check in `plan-phase`'s `<runtime_compatibility>` block with an attempt-based gate: the workflow now always attempts the `Agent()` call and only stops if a real tool-unavailable error is returned, eliminating false-negative aborts in top-level sessions (#922). (#921)
+- **`gsd-context-monitor.js` now echoes the actual invoking hook event name** — instead of hardcoding `hookEventName: "PostToolUse"` (or `"AfterTool"` for Gemini), the hook reads `data.hook_event_name` from the stdin payload and falls back to the runtime heuristic only when the field is absent or blank; this fixes Claude Code rejecting hook output with `"expected Stop but got PostToolUse"` when the monitor is invoked by the Stop, SubagentStop, or PreCompact hooks registered in PR #821. (#925) (#926)
+
 ## [1.4.1] - 2026-06-09
 
 ### Changed
