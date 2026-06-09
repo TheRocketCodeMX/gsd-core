@@ -8,8 +8,8 @@
 
 **Claude Code、OpenCode、Gemini CLI、Kilo、Codex、Copilot、Cursor、Windsurf などに対応した、軽量なメタプロンプティング・コンテキストエンジニアリング・仕様駆動開発システムです。**
 
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![npm version](https://img.shields.io/npm/v/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
+[![npm downloads](https://img.shields.io/npm/dm/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TheRocketCodeMX/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/TheRocketCodeMX/gsd-core/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
 [![GitHub stars](https://img.shields.io/github/stars/TheRocketCodeMX/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/TheRocketCodeMX/gsd-core)
