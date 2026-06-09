@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-09
+
+### Fixed
+
+- Fix `--reapply` verifier false-positives on post-#604-rename installs caused by two gaps in pristine-baseline handling:
+
+**Gap 1** (`verify-reapply-patches.cjs`): when `backup-meta.json` records a `pristine_hash` for a file but `gsd-pristine/` has no corresponding snapshot on disk, the verifier fell to over-broad mode (every upstream-changed line treated as a user-added requirement) and produced `FAIL_USER_LINES_MISSING` false positives. Fix: return advisory `OK_NO_BASELINE` reason (non-blocking, exit 0) when a recorded hash is present but the pristine file is absent — the verifier cannot reason correctly without a baseline and must not block.
+
+**Gap 2** (new migration `004-prune-stale-pristine-snapshots`): migration 003 removed legacy `get-shit-done/` runtime files but left `gsd-pristine/get-shit-done/` orphan snapshots in place. Those stale snapshots referenced `get-shit-done/...` key paths that no longer match the active `gsd-core/...` layout, contributing to `FAIL_INSTALLED_MISSING` false reports. Fix: add a new migration (not editing 003, to preserve its checksum) that removes all files under `gsd-pristine/get-shit-done/`. (#934) (#937)
+- **`/gsd-update` changelog preview no longer silently fails** — the installer now copies `scripts/changeset/` and `scripts/lib/` into the runtime config dir so `$GSD_DIR/scripts/changeset/cli.cjs` resolves at runtime; `update.md` was updated to use the correct installed path and to surface an explicit error if the CLI is missing rather than swallowing it. (#938)
+- **`plan-review-convergence` now runs `gsd-plan-phase` inline instead of inside `Agent()`** — both sites that previously wrapped `gsd-plan-phase` in `Agent()` (initial planning + replan loop) have been changed to bare `Skill()` calls at depth 0. On Claude Code, a depth-1 Agent has no Agent tool, so a wrapped `plan-phase` could never spawn `gsd-planner` or `gsd-plan-checker` — the replan loop silently failed to produce a revised plan whenever HIGH concerns were found. Running plan-phase inline from the depth-0 orchestrator (which retains the Agent tool) restores the full planner→checker sub-agent chain. A new structural guard test (`bug-936-no-nested-spawner-wrap.test.cjs`) statically scans all workflow files and fails if any workflow wraps a spawner orchestrator in `Agent()` without a `RUNTIME != claude` carve-out, preventing regression. (#936) (#939)
+
 ## [1.4.2] - 2026-06-09
 
 ### Fixed
