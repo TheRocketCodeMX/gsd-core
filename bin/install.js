@@ -310,6 +310,7 @@ function _getGsdEffortCatalog() {
 
 const {
   MINIMAL_SKILL_ALLOWLIST,
+  PROFILES,
   isMinimalMode,
   stageSkillsForMode,
   readActiveProfile,
@@ -579,7 +580,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx ${pkg.name} [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--kilo${reset}                    Install for Kilo only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--augment${reset}                 Install for Augment only\n    ${cyan}--trae${reset}                    Install for Trae only\n    ${cyan}--qwen${reset}                    Install for Qwen Code only\n    ${cyan}--hermes${reset}                  Install for Hermes Agent only\n    ${cyan}--cline${reset}                   Install for Cline only\n    ${cyan}--codebuddy${reset}              Install for CodeBuddy only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall GSD (remove all GSD files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also GSD_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — 7 main-loop skills incl. phase (~130 desc tokens)\n                              standard — ~13 skills incl. phase, review, config (~700)\n                              full     — all 66 skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`gsd update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx ${pkg.name}\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx ${pkg.name} --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx ${pkg.name} --gemini --global\n\n    ${dim}# Install for Kilo globally${reset}\n    npx ${pkg.name} --kilo --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx ${pkg.name} --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx ${pkg.name} --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx ${pkg.name} --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx ${pkg.name} --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx ${pkg.name} --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx ${pkg.name} --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx ${pkg.name} --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx ${pkg.name} --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx ${pkg.name} --windsurf --local\n\n    ${dim}# Install for Augment globally${reset}\n    npx ${pkg.name} --augment --global\n\n    ${dim}# Install for Augment locally${reset}\n    npx ${pkg.name} --augment --local\n\n    ${dim}# Install for Trae globally${reset}\n    npx ${pkg.name} --trae --global\n\n    ${dim}# Install for Trae locally${reset}\n    npx ${pkg.name} --trae --local\n\n    ${dim}# Install for Hermes Agent globally${reset}\n    npx ${pkg.name} --hermes --global\n\n    ${dim}# Install for Hermes Agent locally${reset}\n    npx ${pkg.name} --hermes --local\n\n    ${dim}# Install for Cline globally${reset}\n    npx ${pkg.name} --cline --global\n\n    ${dim}# Install for Cline locally${reset}\n    npx ${pkg.name} --cline --local\n\n    ${dim}# Install for CodeBuddy globally${reset}\n    npx ${pkg.name} --codebuddy --global\n\n    ${dim}# Install for CodeBuddy locally${reset}\n    npx ${pkg.name} --codebuddy --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx ${pkg.name} --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx ${pkg.name} --kilo --global --config-dir ~/.kilo-work\n\n    ${dim}# Install to current project only${reset}\n    npx ${pkg.name} --claude --local\n\n    ${dim}# Uninstall GSD from Cursor globally${reset}\n    npx ${pkg.name} --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / OPENCODE_CONFIG_DIR / GEMINI_CONFIG_DIR / KILO_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / COPILOT_HOME / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR / AUGMENT_CONFIG_DIR / TRAE_CONFIG_DIR / QWEN_CONFIG_DIR / HERMES_HOME / CLINE_CONFIG_DIR / CODEBUDDY_CONFIG_DIR environment variables.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx ${pkg.name} [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--kilo${reset}                    Install for Kilo only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--augment${reset}                 Install for Augment only\n    ${cyan}--trae${reset}                    Install for Trae only\n    ${cyan}--qwen${reset}                    Install for Qwen Code only\n    ${cyan}--hermes${reset}                  Install for Hermes Agent only\n    ${cyan}--cline${reset}                   Install for Cline only\n    ${cyan}--codebuddy${reset}              Install for CodeBuddy only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall GSD (remove all GSD files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also GSD_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — ${PROFILES.core.length} main-loop skills incl. phase (~130 desc tokens)\n                              standard — ${PROFILES.standard.length} skills incl. phase, review, config (~700)\n                              full     — all skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`gsd update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx ${pkg.name}\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx ${pkg.name} --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx ${pkg.name} --gemini --global\n\n    ${dim}# Install for Kilo globally${reset}\n    npx ${pkg.name} --kilo --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx ${pkg.name} --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx ${pkg.name} --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx ${pkg.name} --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx ${pkg.name} --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx ${pkg.name} --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx ${pkg.name} --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx ${pkg.name} --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx ${pkg.name} --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx ${pkg.name} --windsurf --local\n\n    ${dim}# Install for Augment globally${reset}\n    npx ${pkg.name} --augment --global\n\n    ${dim}# Install for Augment locally${reset}\n    npx ${pkg.name} --augment --local\n\n    ${dim}# Install for Trae globally${reset}\n    npx ${pkg.name} --trae --global\n\n    ${dim}# Install for Trae locally${reset}\n    npx ${pkg.name} --trae --local\n\n    ${dim}# Install for Hermes Agent globally${reset}\n    npx ${pkg.name} --hermes --global\n\n    ${dim}# Install for Hermes Agent locally${reset}\n    npx ${pkg.name} --hermes --local\n\n    ${dim}# Install for Cline globally${reset}\n    npx ${pkg.name} --cline --global\n\n    ${dim}# Install for Cline locally${reset}\n    npx ${pkg.name} --cline --local\n\n    ${dim}# Install for CodeBuddy globally${reset}\n    npx ${pkg.name} --codebuddy --global\n\n    ${dim}# Install for CodeBuddy locally${reset}\n    npx ${pkg.name} --codebuddy --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx ${pkg.name} --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx ${pkg.name} --kilo --global --config-dir ~/.kilo-work\n\n    ${dim}# Install to current project only${reset}\n    npx ${pkg.name} --claude --local\n\n    ${dim}# Uninstall GSD from Cursor globally${reset}\n    npx ${pkg.name} --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / OPENCODE_CONFIG_DIR / GEMINI_CONFIG_DIR / KILO_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / COPILOT_HOME / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR / AUGMENT_CONFIG_DIR / TRAE_CONFIG_DIR / QWEN_CONFIG_DIR / HERMES_HOME / CLINE_CONFIG_DIR / CODEBUDDY_CONFIG_DIR environment variables.\n`);
   process.exit(0);
 }
 
@@ -7567,59 +7568,67 @@ function installRuntimeArtifacts(runtime, configDir, scope, resolvedProfile) {
       // Returns a temp dir with rewritten content so source files are never mutated.
       stagedForCopy = applyRuntimeContentRewritesForCommandsInPlace(staged, runtime, pathPrefix);
     }
-    const dest = path.join(layout.configDir, kind.destSubpath);
-    fs.mkdirSync(dest, { recursive: true });
+    // applyRuntimeContentRewritesForCommandsInPlace() returns a fresh mkdtemp dir under
+    // os.tmpdir() (gsd-cmd-rewrites-*); remove it once copied so it does not accumulate (#856).
+    const tempToClean = stagedForCopy !== staged ? stagedForCopy : null;
+    try {
+      const dest = path.join(layout.configDir, kind.destSubpath);
+      fs.mkdirSync(dest, { recursive: true });
+      if (kind.kind === 'skills' && fs.existsSync(dest)) {
+        // Pre-prune: snapshot user-owned content before _removeGsdEntries wipes it,
+        // then restore after. This preserves user dirs across a wipe-and-replace
+        // install (#2973 / #3664).
+        //
+        // For prefix='' (Hermes): _removeGsdEntries wipes the entire dest dir (skills/gsd/).
+        // Preserve every subdir that is NOT in the staged set — those are user-added dirs
+        // (e.g. user-content/) that GSD does not manage.
+        //
+        // For prefix='gsd-' (others): _removeGsdEntries removes only gsd-* entries.
+        // Non-gsd-* user dirs (e.g. my-custom-skill/) are untouched. Only preserve the
+        // explicit user-owned GSD-prefixed skill gsd-dev-preferences, which GSD does not
+        // reinstall from source but must survive the prune (#2973).
+        const toPreserve = new Map(); // dirName -> Map<relPath, Buffer>
 
-    if (kind.kind === 'skills' && fs.existsSync(dest)) {
-      // Pre-prune: snapshot user-owned content before _removeGsdEntries wipes it,
-      // then restore after. This preserves user dirs across a wipe-and-replace
-      // install (#2973 / #3664).
-      //
-      // For prefix='' (Hermes): _removeGsdEntries wipes the entire dest dir (skills/gsd/).
-      // Preserve every subdir that is NOT in the staged set — those are user-added dirs
-      // (e.g. user-content/) that GSD does not manage.
-      //
-      // For prefix='gsd-' (others): _removeGsdEntries removes only gsd-* entries.
-      // Non-gsd-* user dirs (e.g. my-custom-skill/) are untouched. Only preserve the
-      // explicit user-owned GSD-prefixed skill gsd-dev-preferences, which GSD does not
-      // reinstall from source but must survive the prune (#2973).
-      const toPreserve = new Map(); // dirName -> Map<relPath, Buffer>
+        if (kind.prefix === '') {
+          // Hermes: wipes entire dest dir — preserve anything not in staged.
+          const stagedNames = fs.existsSync(stagedForCopy)
+            ? new Set(fs.readdirSync(stagedForCopy, { withFileTypes: true })
+                .filter(e => e.isDirectory()).map(e => e.name))
+            : new Set();
+          for (const entry of fs.readdirSync(dest, { withFileTypes: true })) {
+            if (!entry.isDirectory() || stagedNames.has(entry.name)) continue;
+            const snap = _snapshotDir(path.join(dest, entry.name));
+            if (snap.size > 0) toPreserve.set(entry.name, snap);
+          }
+        } else {
+          // Non-Hermes: only preserve explicitly user-owned GSD-prefixed skill dirs.
+          // gsd-dev-preferences is the sole user-customisable skill in this category.
+          const USER_OWNED_SKILL_DIRS = ['gsd-dev-preferences'];
+          for (const dirName of USER_OWNED_SKILL_DIRS) {
+            const skillDir = path.join(dest, dirName);
+            if (!fs.existsSync(skillDir)) continue;
+            const snap = _snapshotDir(skillDir);
+            if (snap.size > 0) toPreserve.set(dirName, snap);
+          }
+        }
 
-      if (kind.prefix === '') {
-        // Hermes: wipes entire dest dir — preserve anything not in staged.
-        const stagedNames = fs.existsSync(stagedForCopy)
-          ? new Set(fs.readdirSync(stagedForCopy, { withFileTypes: true })
-              .filter(e => e.isDirectory()).map(e => e.name))
-          : new Set();
-        for (const entry of fs.readdirSync(dest, { withFileTypes: true })) {
-          if (!entry.isDirectory() || stagedNames.has(entry.name)) continue;
-          const snap = _snapshotDir(path.join(dest, entry.name));
-          if (snap.size > 0) toPreserve.set(entry.name, snap);
+        _removeGsdEntries(dest, kind);
+        _copyStaged(stagedForCopy, dest, kind);
+
+        // Restore user-owned dirs after the prune+copy
+        for (const [dirName, snap] of toPreserve) {
+          _restoreDir(path.join(dest, dirName), snap);
         }
       } else {
-        // Non-Hermes: only preserve explicitly user-owned GSD-prefixed skill dirs.
-        // gsd-dev-preferences is the sole user-customisable skill in this category.
-        const USER_OWNED_SKILL_DIRS = ['gsd-dev-preferences'];
-        for (const dirName of USER_OWNED_SKILL_DIRS) {
-          const skillDir = path.join(dest, dirName);
-          if (!fs.existsSync(skillDir)) continue;
-          const snap = _snapshotDir(skillDir);
-          if (snap.size > 0) toPreserve.set(dirName, snap);
-        }
+        // For non-skills kinds (commands, agents): no user content to preserve;
+        // just prune stale gsd-* entries and copy new ones.
+        _removeGsdEntries(dest, kind);
+        _copyStaged(stagedForCopy, dest, kind);
       }
-
-      _removeGsdEntries(dest, kind);
-      _copyStaged(stagedForCopy, dest, kind);
-
-      // Restore user-owned dirs after the prune+copy
-      for (const [dirName, snap] of toPreserve) {
-        _restoreDir(path.join(dest, dirName), snap);
+    } finally {
+      if (tempToClean) {
+        try { fs.rmSync(tempToClean, { recursive: true, force: true }); } catch { /* best-effort */ }
       }
-    } else {
-      // For non-skills kinds (commands, agents): no user content to preserve;
-      // just prune stale gsd-* entries and copy new ones.
-      _removeGsdEntries(dest, kind);
-      _copyStaged(stagedForCopy, dest, kind);
     }
   }
 }

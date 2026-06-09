@@ -2251,6 +2251,7 @@ export = {
   findProjectRoot,
   detectSubRepos,
   reapStaleTempFiles,
+  ensureGsdTempDir,
   GSD_TEMP_DIR,
   MODEL_ALIAS_MAP,
   CONFIG_DEFAULTS,
