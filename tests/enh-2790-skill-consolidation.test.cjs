@@ -29,6 +29,7 @@ const KNOWN_SKILLS = new Set([
   'complete-milestone.md',
   'config.md',
   'debug.md',
+  'discover-product.md',
   'discuss-phase.md',
   'docs-update.md',
   'eval-review.md',
