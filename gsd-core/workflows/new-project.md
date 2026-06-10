@@ -335,6 +335,8 @@ If spike/sketch findings skills exist, read their SKILL.md files to inform the q
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+**If `.planning/PRODUCT-BRIEF.md` exists, read it first.** It is a validated product definition from `/gsd:discover-product` (outcome, target user, narrowest wedge, demand evidence, four-risks status, prioritized scope, explicit "not in scope"). Ground the questioning in it — **confirm and fill gaps rather than re-asking what it already answers** — and carry its outcome, wedge, and prioritized scope into PROJECT.md (Core Value / What This Is) and the requirements (Steps 4 and 7). Frame PROJECT.md around the brief's *outcome*, not a re-derived feature list.
+
 **Open the conversation:**
 
 Ask inline (freeform, NOT AskUserQuestion):

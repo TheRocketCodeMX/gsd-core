@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-06-09
+
+### Changed
+
+- **`new-project` now reads `PRODUCT-BRIEF.md` when present** — if `/gsd:discover-product` was run first, the questioning is grounded in the validated brief (confirm/fill-gaps instead of re-asking), and PROJECT.md + requirements are framed around its outcome and wedge. Completes the discovery → build spine at the front end.
+
 ## [1.6.1] - 2026-06-09
 
 ### Changed
