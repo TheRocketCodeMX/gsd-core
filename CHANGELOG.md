@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-06-09
+
+Smooths the path for users switching from the rug-pulled upstream, and documents the three install/update scenarios.
+
+### Added
+
+- **README "Installing & updating" section** — spells out the three cases: fresh install (one `npx` command), already-on-this-fork (just `/gsd-update`, self-updates via the baked package identity), and switching from the upstream `@opengsd/gsd-core` (a one-time install that re-points the identity and triggers legacy cleanup).
+
+### Fixed
+
+- **Legacy cleanup now also clears upstream `@opengsd` artifacts.** `legacy-cleanup.cjs` previously only detected the very-old `gsd-core-cc` package. It now also flags scanned code files (hooks/commands) referencing the upstream `@opengsd/gsd-core` npm coordinate or the `open-gsd/gsd-core` repo slug, and removes the upstream per-package update-check cache (`gsd-update-check-opengsd-gsd-core.json`) — so a switch from the upstream fork leaves no stale hooks or cache behind. The current package's own files and cache are explicitly never touched (guarded by test). Signals are assembled from parts so the module never carries a bare coordinate literal (identity-drift lint stays green).
+
 ## [1.7.0] - 2026-06-09
 
 Fidelity pass on the discovery + testing pillars — closes the research-gaps surfaced by the four parallel fidelity audits, plus a new contract-testing reference and a plan-checker enforcement gate. No breaking changes; existing artifacts stay valid.

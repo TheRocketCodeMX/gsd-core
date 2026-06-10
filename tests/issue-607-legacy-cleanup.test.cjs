@@ -83,6 +83,38 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     assert.equal(entry, undefined, 'clean hook must not appear in plan');
   });
 
+  // ── upstream (@opengsd) fork-source signals ────────────────────────────────
+
+  test('flags a hook file referencing the upstream @opengsd npm coordinate', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-check-update-worker.js');
+    // assembled so this test file itself never carries the bare literal
+    writeFile(hookFile, '// from ' + '@opengsd' + '/gsd-core\nconsole.log("x");');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.ok(entry, 'expected upstream-coordinate hook to appear in plan');
+    assert.equal(entry.reason, 'content-references-old-package');
+  });
+
+  test('flags a hook file referencing the upstream open-gsd repo slug', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-old-upstream.sh');
+    writeFile(hookFile, '# see https://github.com/' + 'open-gsd' + '/gsd-core');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.ok(entry, 'expected upstream repo-slug hook to appear in plan');
+    assert.equal(entry.reason, 'content-references-old-package');
+  });
+
+  test('does NOT flag a hook that only references the current @therocketcode package', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-current.js');
+    writeFile(hookFile, '// @therocketcode/gsd-core only — must survive');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.equal(entry, undefined, 'current-package hook must never be flagged');
+  });
+
   // ── data-loss regression: user custom hooks must be preserved ──────────────
 
   test('regression #607 (data-loss): user custom gsd-*.js with NO old-package content must NOT appear in plan', () => {
@@ -181,6 +213,25 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check.json');
     const entry = plan.find((p) => p.path === cachePath);
     assert.equal(entry, undefined, 'absent cache must not appear in plan');
+  });
+
+  test('flags the upstream @opengsd per-package update-check cache', () => {
+    const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-opengsd-gsd-core.json');
+    writeFile(cachePath, JSON.stringify({ update_available: false }));
+
+    const plan = planLegacyCleanup([], { homeDir });
+    const entry = plan.find((p) => p.path === cachePath);
+    assert.ok(entry, 'expected upstream per-package cache to appear in plan');
+    assert.equal(entry.reason, 'legacy-shared-cache');
+  });
+
+  test('NEVER flags the current @therocketcode per-package cache (data-loss guard)', () => {
+    const ourCache = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-therocketcode-gsd-core.json');
+    writeFile(ourCache, JSON.stringify({ update_available: true }));
+
+    const plan = planLegacyCleanup([], { homeDir });
+    const entry = plan.find((p) => p.path === ourCache);
+    assert.equal(entry, undefined, "current package's own cache must never be removed");
   });
 
   // ── deduplication and sort ─────────────────────────────────────────────────

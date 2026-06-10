@@ -21,12 +21,40 @@ const fs   = require('fs');
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /**
- * Substring that identifies a file as belonging to the old package.
- * Assembled from parts so this source file itself never contains the literal
+ * Substrings that identify a code file as belonging to a superseded GSD
+ * package — either the very-old pre-rename original or the rug-pulled upstream
+ * this project forked away from. A scanned code file (.js/.cjs/.mjs/.sh under
+ * hooks/ or commands/) containing ANY of these is a genuine leftover from a
+ * package this install replaces, and is safe to flag.
+ *
+ * Each is assembled from parts so THIS source file never contains the literal
  * as a plain substring (avoids self-flagging if the content scan were ever
- * widened back to include this subtree).
+ * widened to include the gsd-core/ subtree). Our own shipped code contains
+ * none of these — the package-identity drift lint guards that — so flagging
+ * them can never delete a freshly-installed @therocketcode file.
+ *
+ *   - 'gsd-core-cc'      — the pre-rename original package.
+ *   - '@opengsd/gsd-core' — the upstream npm coordinate (rug-pulled fork source).
+ *   - 'open-gsd/gsd-core' — the upstream GitHub repo slug.
  */
-const OLD_PACKAGE_SIGNAL = 'gsd-core' + '-cc';
+const OLD_PACKAGE_SIGNALS = [
+  'gsd-core' + '-cc',
+  '@opengsd' + '/gsd-core',
+  'open-gsd' + '/gsd-core',
+];
+
+/**
+ * Update-check cache files written by superseded packages, removed so a stale
+ * cache can't suppress or misreport update availability after switching.
+ * NEVER include the current package's own cache
+ * (`gsd-update-check-therocketcode-gsd-core.json`).
+ *   - 'gsd-update-check.json'                  — the old shared (pre-per-package) cache.
+ *   - 'gsd-update-check-opengsd-gsd-core.json' — the upstream @opengsd per-package cache.
+ */
+const LEGACY_CACHE_FILENAMES = [
+  'gsd-update-check.json',
+  'gsd-update-check-opengsd-gsd-core.json',
+];
 
 /**
  * Subtrees within a configDir that GSD actively scans for old-package content.
@@ -97,7 +125,7 @@ function collectFilesUnder(dir, fsMod) {
 }
 
 /**
- * Return true if the file at `absPath` contains the old-package substring.
+ * Return true if the file at `absPath` contains ANY superseded-package signal.
  * Skips unreadable files (returns false on any error).
  *
  * @param {string} absPath
@@ -107,7 +135,7 @@ function collectFilesUnder(dir, fsMod) {
 function fileContainsOldPackageSignal(absPath, fsMod) {
   try {
     const content = fsMod.readFileSync(absPath, 'utf8');
-    return content.includes(OLD_PACKAGE_SIGNAL);
+    return OLD_PACKAGE_SIGNALS.some((signal) => content.includes(signal));
   } catch {
     return false;
   }
@@ -166,15 +194,17 @@ function planLegacyCleanup(configDirs, opts = {}) {
     }
   }
 
-  // Legacy shared cache (fixed name from the old package)
-  const legacyCachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check.json');
-  try {
-    const stat = fsMod.statSync(legacyCachePath);
-    if (stat.isFile()) {
-      addCandidate(legacyCachePath, 'legacy-shared-cache');
+  // Update-check caches written by superseded packages (never the current one)
+  for (const cacheName of LEGACY_CACHE_FILENAMES) {
+    const legacyCachePath = path.join(homeDir, '.cache', 'gsd', cacheName);
+    try {
+      const stat = fsMod.statSync(legacyCachePath);
+      if (stat.isFile()) {
+        addCandidate(legacyCachePath, 'legacy-shared-cache');
+      }
+    } catch {
+      // absent — skip
     }
-  } catch {
-    // absent — skip
   }
 
   // Sort deterministically by path
