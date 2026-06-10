@@ -1,75 +1,42 @@
-# Context Window Monitor
+# Context Window Monitor — Disabled in this fork
 
-A post-tool hook (`PostToolUse` for Claude Code, `AfterTool` for Gemini CLI) that warns the agent when context window usage is high.
+> **This feature is intentionally disabled in `@therocketcode/gsd-core`.**
+> The `gsd-context-monitor.js` hook still ships and is still wired (so updates
+> cleanly overwrite any previously-installed active version), but it is an inert
+> **no-op**: it reads and discards its input, injects **nothing** into the agent,
+> and exits 0. Agents never receive context-limit warnings.
 
-## Problem
+## Why we removed it
 
-The statusline shows context usage to the **user**, but the **agent** has no awareness of context limits. When context runs low, the agent continues working until it hits the wall — potentially mid-task with no state saved.
+Upstream GSD shipped a `PostToolUse` / `Stop` / `SubagentStop` / `PreCompact`
+hook that injected "CONTEXT WARNING" / "CONTEXT CRITICAL" messages into the
+agent's own conversation as the context window filled. In practice this:
 
-## How It Works
+- **stresses the model** and derails it mid-task,
+- **overrides the user's judgment** about when to wrap up or pause, and
+- fires on a timer the agent can't see coming.
 
-1. The statusline hook writes context metrics to `/tmp/claude-ctx-{session_id}.json`
-2. After each tool use, the context monitor reads these metrics
-3. When remaining context drops below thresholds, it injects a warning as `additionalContext`
-4. The agent receives the warning in its conversation and can act accordingly
+This fork's position: context usage is the **user's** call. The statusline still
+shows context usage passively to the user (see `gsd-statusline.js`) — that is
+enough. The agent is not nagged.
 
-## Thresholds
+## What this means in practice
 
-| Level | Remaining | Agent Behavior |
-|-------|-----------|----------------|
-| Normal | > 35% | No warning |
-| WARNING | <= 35% | Wrap up current task, avoid starting new complex work |
-| CRITICAL | <= 25% | Stop immediately, save state (`/gsd-pause-work`) |
+- **Fresh installs:** the hook is present but inert — no warnings, ever.
+- **Existing installs (upgrading from an older GSD):** because the hook stays in
+  the managed-hooks set, the normal update **overwrites** the old active version
+  with this inert one — so the warning behavior is removed everywhere on update,
+  not just on fresh installs.
+- The statusline still writes its `/tmp/claude-ctx-{session_id}.json` bridge file
+  (harmless); nothing reads it anymore.
 
-## Debounce
+## Re-enabling (not recommended)
 
-To avoid spamming the agent with repeated warnings:
-- First warning always fires immediately
-- Subsequent warnings require 5 tool uses between them
-- Severity escalation (WARNING -> CRITICAL) bypasses debounce
-
-## Architecture
-
-```
-Statusline Hook (gsd-statusline.js)
-    | writes
-    v
-/tmp/claude-ctx-{session_id}.json
-    ^ reads
-    |
-Context Monitor (gsd-context-monitor.js, PostToolUse/AfterTool)
-    | injects
-    v
-additionalContext -> Agent sees warning
-```
-
-The bridge file is a simple JSON object:
-
-```json
-{
-  "session_id": "abc123",
-  "remaining_percentage": 28.5,
-  "used_pct": 71,
-  "timestamp": 1708200000
-}
-```
-
-## Integration with GSD
-
-GSD's `/gsd-pause-work` command saves execution state. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
-
-## Setup
-
-Both hooks are registered automatically during `npx @therocketcode/gsd-core` installation — no manual steps are needed under normal circumstances. For hook configuration details, threshold overrides, and manual registration examples, see [Configuration](CONFIGURATION.md).
-
-As a brief reference: the statusline hook registers as `statusLine` in `settings.json`; the context monitor (`gsd-context-monitor.js`) registers as a `PostToolUse` hook (or `AfterTool` for Gemini CLI). Both entries use the absolute Node executable path that ran the installer. On Windows PowerShell, prefix quoted executable paths with `&`.
-
-## Safety
-
-- The hook wraps everything in try/catch and exits silently on error
-- It never blocks tool execution — a broken monitor should not break the agent's workflow
-- Stale metrics (older than 60s) are ignored
-- Missing bridge files are handled gracefully (subagents, fresh sessions)
+There is no supported toggle to turn the warnings back on in this fork — the
+behavior was removed at the source. If you genuinely want it back, restore the
+upstream `hooks/gsd-context-monitor.js` implementation; the event wiring in
+`hooks/hooks.json` and the installer is unchanged, so a restored implementation
+would activate without further configuration.
 
 ---
 

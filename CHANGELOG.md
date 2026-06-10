@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-06-10
+
+### Removed
+
+- **Agent-facing context-limit warnings are gone.** The `gsd-context-monitor.js` hook used to inject "CONTEXT WARNING / CONTEXT CRITICAL" messages into the agent's own conversation as the context window filled — which stresses the model, derails work mid-task, and overrides the user's judgment about when to wrap up. This fork removes that behavior entirely. Context usage is the user's call; the statusline still shows it passively.
+  - The hook is now an inert **no-op** (reads and discards stdin, injects nothing, exits 0). It is deliberately **kept in the managed-hooks set and wiring** so that an update **overwrites** any previously-installed active version — meaning the behavior is removed on **existing** installs the moment they update, not just on fresh installs. (Deleting the file outright would have orphaned the active version on existing installs, leaving it firing.)
+  - Removed the now-obsolete behavior tests (auto-record-on-CRITICAL, used-pct over-report, fs-I/O behavior-lock); all install/wiring/safety tests remain green. `docs/context-monitor.md` rewritten to document the disabled state; INVENTORY/ARCHITECTURE hook rows updated.
+
 ## [1.7.1] - 2026-06-09
 
 Smooths the path for users switching from the rug-pulled upstream, and documents the three install/update scenarios.
