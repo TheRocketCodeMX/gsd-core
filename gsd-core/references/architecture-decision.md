@@ -30,9 +30,22 @@ Use the core subdomain's complexity from DOMAIN-MODEL. Apply per subdomain: the 
   1. **Multiple independent teams** needing independent deploy cadence (Conway / Team Topologies).
   2. **CD / monitoring / DevOps maturity** already in place.
   3. **Bounded contexts well-understood** already (not still being discovered).
-  If **any** is "no" → recommend **modular monolith and stop**, regardless of complexity. (The "microservice premium": below a complexity+org threshold the distributed tax is pure loss.)
+  If **any** is "no" → recommend **modular monolith and stop**, regardless of complexity (deferred, not forbidden — record the promotion trigger; see *Evolving the topology* below). (The "microservice premium": below a complexity+org threshold the distributed tax is pure loss.)
 - **Component-level split (Hard Parts):** for a specific component, score the **6 disintegrators** (low cohesion · divergent volatility · divergent scalability · fault isolation · differential security · independent extensibility) against the **4 integrators** (ACID across the data · tightly-coupled workflow · heavy shared code · tight data relationships). Net disintegrators ≫ integrators → candidate extraction; otherwise keep it in the monolith.
 - **Distributed monolith** (services that can't deploy independently) is the failure mode — you pay the premium and get none of the autonomy. Avoid.
+
+The "modular monolith and stop, regardless of complexity" rule is about *not splitting prematurely* — it is **not** "never split." It means the split is deferred until a gate flips, and the modular boundaries are built now so the split is cheap later (a **sacrificial / evolutionary** architecture). Record the **promotion trigger** — the concrete future signal (a second team forms, a component's scaling diverges, a bounded context stabilizes) that would justify revisiting Axis B.
+
+## Evolving the topology — decomposition & migration (when a gate later flips)
+
+When a promotion trigger fires and a component genuinely warrants extraction, the *data* is the hard part — splitting logic is easy, splitting a shared database is not. Recommend, in order:
+
+- **Strangler Fig** — route new behavior to the new component while the old path keeps serving, shrinking the monolith incrementally. Never a big-bang rewrite.
+- **Anti-Corruption Layer (ACL)** — a translation seam at the new boundary so the extracted component's model isn't polluted by the legacy/shared schema's vocabulary. The ACL is also the right tool when integrating a third-party/legacy system whose model differs from yours.
+- **Data decomposition** — pull the component's tables behind its own schema/owner first (enforce "no cross-module DB access" as a fitness function *before* extracting), then separate the datastore. Identify the data that must move vs. the data that stays shared (and gets an API/ACL instead).
+- **Sagas / outbox for cross-service consistency** — once a transaction spans two services you lose ACID; replace it with a **saga** (a sequence of local transactions + compensating actions) and the **transactional outbox** pattern for reliable event publishing. If a workflow genuinely needs one ACID transaction, that's an *integrator* — a reason to **keep it together**, not split it.
+
+The same tools run in reverse for a brownfield monolith you're decomposing — strangle, wrap legacy in an ACL, decompose the data behind module boundaries first.
 
 ## Non-functional drivers (quick matrix)
 

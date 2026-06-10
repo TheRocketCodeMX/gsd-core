@@ -1,11 +1,19 @@
 # Product Brief — [PROJECT_TITLE]
 
 **Created:** [DATE] via `/gsd:discover-product`
-**Scope:** Product definition (what/why) — feeds `PROJECT.md` and `/gsd:model-domain`. Outcome-framed so the domain and architecture stay open.
+**Scope:** Product definition (what/why) — feeds `PROJECT.md` and `/gsd:model-domain`. Outcome-framed so the domain and architecture stay open. **This brief is a hypothesis, not a verdict** — its open assumptions feed an ongoing discovery cadence (Torres), not a one-time gate.
 
 ## Outcome (not output)
 
 [The customer behavior or business metric we want to change — not a feature. e.g., "Shippers get a priced, matched carrier in seconds instead of days."]
+
+## Desired outcomes (measurable — Ulwick ODI)
+
+State 2–3 as *direction + metric + object* so "is it working?" is answerable. If the population is heterogeneous, list per-segment — don't average them away.
+
+| Desired outcome (direction + metric + object) | For which segment | Under-served? (importance × dissatisfaction) |
+|---|---|---|
+| [e.g., "minimize the time to reconcile an invoice"] | [segment] | [high / unknown] |
 
 ## Target user & job
 
@@ -49,7 +57,14 @@
 ## Handoff notes
 
 - **For `model-domain`:** [the job + journey steps and the key domain nouns/events to model]
-- **Open questions / assumptions to test next:** [...]
+
+## Assumptions to re-test (leap-of-faith)
+
+The brief is a hypothesis. List the assumptions that must hold for the wedge to work, riskiest first, each with the cheapest next test — revisit after a handful of customer conversations (continuous discovery, not a gate).
+
+| Leap-of-faith assumption | Riskiest? | Cheapest next test |
+|---|---|---|
+| [what must be true] | [yes / no] | [the test] |
 
 ---
 *Product brief. Next: `/gsd:new-project` (if not done) → `/gsd:model-domain` → `/gsd:recommend-architecture`.*

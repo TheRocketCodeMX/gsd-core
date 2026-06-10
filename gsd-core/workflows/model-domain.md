@@ -32,6 +32,7 @@ Exit.
 ## Step 2: Load context (internal grounding — do not show the user yet)
 
 ```bash
+cat .planning/PRODUCT-BRIEF.md 2>/dev/null || true
 cat .planning/PROJECT.md 2>/dev/null || true
 cat .planning/REQUIREMENTS.md 2>/dev/null || true
 cat .planning/ROADMAP.md 2>/dev/null || true
@@ -106,6 +107,10 @@ If set, run a **Big-Picture** pass (timeline of events, not aggregates):
 2. For each event ask: "Who triggers it? Who reacts? What decision follows?"
 3. Group events by actor/responsibility. Each cluster = a candidate bounded context. Boundaries fall where the **language changes** or the **rate of change** differs.
 4. If boundaries are unclear, say so and **defer** them. Do NOT drill into aggregates (that's tactical, out of scope here).
+
+**Context mapping (only if you end with ≥2 contexts):** for each boundary, name the *relationship* using the reference's vocabulary (Shared Kernel / Customer-Supplier / Conformist / **ACL** / Open Host Service / Published Language / Separate Ways) and record it as `Context A —[relationship]→ Context B`. Default to an **ACL** at any seam against a messy, legacy, or third-party upstream. Name the relationship only — do not design the translator (that's tactical/architecture).
+
+**Process-level pass (optional, only for one genuinely contested boundary):** walk a single flow's commands → policies ("whenever X, then Y") → read-models to sharpen that one boundary and its hand-offs. Don't drop to aggregates. Skip entirely if Big-Picture already settled the boundaries.
 
 ## Step 6: Write DOMAIN-MODEL.md
 

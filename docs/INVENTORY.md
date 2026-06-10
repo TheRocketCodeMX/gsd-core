@@ -264,7 +264,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (77 shipped)
+## References (78 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -332,6 +332,31 @@ References consumed by the `/gsd-sketch` workflow and its wrap-up companion.
 | `sketch-theme-system.md` | Shared CSS theme variable system for cross-sketch consistency. |
 | `sketch-tooling.md` | Floating toolbar utilities included in every sketch. |
 | `sketch-variant-patterns.md` | Multi-variant HTML patterns (tabs, side-by-side, overlays). |
+
+### Greenfield Discovery References
+
+References for the fork's discovery pillar — product definition, strategic DDD, and architecture decision. Consumed by `/gsd:discover-product`, `/gsd:model-domain`, and `/gsd:recommend-architecture`.
+
+| Reference | Role |
+|-----------|------|
+| `product-discovery.md` | Define WHAT/WHY before building — demand-vs-interest, narrowest wedge, four risks, measurable desired outcomes (ODI), continuous discovery (Torres). |
+| `domain-modeling.md` | Lightweight strategic DDD — ubiquitous language, subdomain distillation (core/supporting/generic), bounded contexts + context mapping, event storming. |
+| `architecture-decision.md` | Two-axis complexity-matched architecture — domain-logic ladder × deployment topology, "you must be this tall" gates, evolution/migration (strangler-fig, ACL, sagas). |
+
+### Testing-Strategy References
+
+References for the fork's testing pillar — strategic test shape plus focused how-to guides loaded when writing tests. Consumed by `/gsd:testing-strategy`, `add-tests`, `execute-phase`, and `plan-phase`.
+
+| Reference | Role |
+|-----------|------|
+| `test-strategy.md` | Strategic layer — behavior-over-implementation, shape-follows-architecture, coverage-as-floor + mutation, TDD honestly, persistent-vs-transient E2E. |
+| `test-containers.md` | Real DBs/services via Testcontainers — singleton pattern, pinned tags, CI/Ryuk. |
+| `db-test-isolation.md` | Parallel-safe DB isolation — template DB, db/schema-per-worker, txn rollback. |
+| `auth-in-tests.md` | Authenticate-once/storageState, token minting, multi-role, JWT vs cookie, one-account-per-worker. |
+| `realistic-test-data.md` | Synthetic factories by default; anonymized/subset dumps only. |
+| `e2e-tiering.md` | Persistent smoke vs transient E2E; keep the E2E suite lean. |
+| `contract-testing.md` | Consumer-driven contracts (Pact) + provider verification for an external dependency you can't run/seed in CI. |
+| `flaky-test-checklist.md` | Fixed clock, seeded RNG, poll-don't-sleep, per-worker isolation. |
 
 ### Thinking-Model References
 

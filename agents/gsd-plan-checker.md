@@ -71,11 +71,13 @@ This ensures verification checks that plans follow project-specific conventions.
 | `## Decisions` | LOCKED — plans MUST implement these exactly. Flag if contradicted. |
 | `## Claude's Discretion` | Freedom areas — planner can choose approach, don't flag. |
 | `## Deferred Ideas` | Out of scope — plans must NOT include these. Flag if present. |
+| `## Canonical References` | MUST-read docs (incl. any DOMAIN-MODEL.md / architecture ADR / TEST-STRATEGY.md). Read them; plans MUST follow them. |
 
 If CONTEXT.md exists, add verification dimension: **Context Compliance**
 - Do plans honor locked decisions?
 - Are deferred ideas excluded?
 - Are discretion areas handled appropriately?
+- **Do plans honor the canonical discovery artifacts?** Flag a HIGH concern if a task contradicts the architecture ADR's per-subdomain rung (e.g. CRUD where a Domain Model is mandated), the DOMAIN-MODEL classification, or the TEST-STRATEGY's test levels (e.g. unit-mocking the DB where integration via Testcontainers is required, or float money where integer minor units are mandated).
 </upstream_input>
 
 <core_principle>

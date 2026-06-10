@@ -40,9 +40,14 @@ Strategic classification — drives where to invest and (downstream) the archite
 |---------|----------------------|-------------------|----------|-------------------|
 | [Name] | [What it's responsible for] | [Events] | [Other contexts] | [Where its terms differ] |
 
-**Context map (optional):**
+**Context map (relationships — only with ≥2 contexts):** name each boundary's relationship (Shared Kernel / Customer-Supplier / Conformist / ACL / Open Host Service / Published Language / Separate Ways). Default to an ACL against a messy/legacy/3rd-party upstream. Relationship only — no translator design.
+
+| From | Relationship | To | Note |
+|------|-------------|----|------|
+| [Context A] | [ACL / OHS / Shared Kernel / …] | [Context B] | [why this relationship] |
+
 ```
-[ASCII sketch of context relationships, if useful]
+[Optional ASCII sketch of the context map]
 ```
 
 ## Notes for downstream phases

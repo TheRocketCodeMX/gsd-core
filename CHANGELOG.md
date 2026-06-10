@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-09
+
+Fidelity pass on the discovery + testing pillars — closes the research-gaps surfaced by the four parallel fidelity audits, plus a new contract-testing reference and a plan-checker enforcement gate. No breaking changes; existing artifacts stay valid.
+
+### Added
+
+- **`contract-testing.md` reference** — consumer-driven contracts (Pact-style), provider verification, broker/`can-i-deploy`, and the contract-vs-integration-vs-e2e decision, for an external dependency you can't run or seed in CI. Linked from `test-strategy.md` and rostered in the inventory (References 77 → 78).
+- **Plan-checker enforcement of the canonical discovery artifacts** — `gsd-plan-checker` now raises a HIGH concern when a plan contradicts the architecture ADR's per-subdomain rung, the DOMAIN-MODEL classification, or the TEST-STRATEGY's test levels (e.g. CRUD where a Domain Model is mandated, unit-mocking the DB where Testcontainers integration is required, or float money where integer minor units are mandated). The discovery → build spine is now *enforced*, not just propagated.
+
+### Changed
+
+- **Product discovery operationalizes Ulwick ODI + Torres continuous discovery.** `/gsd:discover-product` now captures 2–3 **measurable desired-outcome statements** (direction + metric + object, per segment when the population is heterogeneous), enumerates the **leap-of-faith assumptions** behind the wedge (riskiest-first, each with its cheapest next test), and frames the brief as a **hypothesis to keep testing** rather than a one-time gate. The `product-brief.md` template gains "Desired outcomes (measurable)" and "Assumptions to re-test" tables. Fixed a Patton/Torres attribution.
+- **Strategic DDD gains context mapping + process-level event storming.** `/gsd:model-domain` now names the **relationship at each boundary** (Shared Kernel / Customer-Supplier / Conformist / ACL / Open Host Service / Published Language / Separate Ways, defaulting to an ACL against messy/legacy/3rd-party upstreams), offers an optional **process-level** storming pass for a single contested boundary, and flags the anemic-vs-rich expectation for a complex core (deferred to architecture). `domain-modeling.md` and the `domain-model.md` template updated to match.
+- **Architecture decision gains an evolution/migration path.** `recommend-architecture.md` and `architecture-decision.md` now record an Axis-B **promotion trigger** when recommending the monolith, and document decomposition with **Strangler Fig + Anti-Corruption Layer + data-decomposition-behind-module-boundaries-first + sagas/outbox**. Softened the "modular monolith regardless of complexity" stance to *deferred, not forbidden* (the monolith is sacrificial/evolutionary) while keeping the strong default.
+
+*Based on upstream open-gsd; our own semver line.*
+
 ## [1.6.2] - 2026-06-09
 
 ### Changed

@@ -51,7 +51,25 @@ Only when the domain is non-trivial. A **Big-Picture event storming** pass surfa
 2. For each: *who triggers it? who reacts? what decision follows?*
 3. Group events by actor/responsibility → each cluster is a candidate **bounded context**.
 
-Boundaries often fall where the **language changes** (the same word means different things) or where the **rate of change** differs. If boundaries are unclear, **defer** them — say so explicitly and let planning refine them. Do not run design-level (aggregate-level) event storming here; that is tactical and belongs to a core subdomain you've already identified.
+Boundaries often fall where the **language changes** (the same word means different things) or where the **rate of change** differs. If boundaries are unclear, **defer** them — say so explicitly and let planning refine them.
+
+A **Process-level** pass is the optional middle gear between Big-Picture and Design-level storming: take one important event flow (e.g., "Order → Payment → Fulfillment") and walk its commands, policies ("whenever X, then Y"), and read-models. It sharpens *one* boundary and its hand-offs without dropping to aggregates. Use it only when a single flow's boundary is genuinely contested; otherwise stay Big-Picture. Do **not** run design-level (aggregate-level) event storming here — that is tactical and belongs to a core subdomain you've already identified.
+
+## 4. Context mapping (only when there are ≥2 bounded contexts)
+
+Once two contexts exist, name the **relationship** at each boundary — it dictates integration and team coupling downstream. The vocabulary (pick the one that fits; don't apply all):
+
+| Pattern | When it applies |
+|---|---|
+| **Shared Kernel** | two contexts share a small agreed model; changes need both teams' consent (high coupling — keep tiny) |
+| **Customer/Supplier** | downstream's needs are honored in the upstream's roadmap (upstream agrees to flex) |
+| **Conformist** | downstream just accepts the upstream model as-is (no leverage to negotiate) |
+| **Anticorruption Layer (ACL)** | downstream translates the upstream model at the seam to protect its own — the safe default against a messy/legacy/3rd-party upstream |
+| **Open Host Service (OHS)** | upstream publishes a well-defined protocol many consumers use |
+| **Published Language** | a shared, well-documented interchange format (e.g. a schema/spec) the integration speaks |
+| **Separate Ways** | the cheapest answer — don't integrate at all; duplicate the little that's needed |
+
+Capture each as `Context A —[relationship]→ Context B`. The **ACL** here is the same tool architecture uses when later extracting a service — naming it now tells planning where a translation seam belongs. Strategic only: name the relationship, don't design the translator.
 
 ## What this skill does NOT do
 
@@ -64,6 +82,8 @@ Boundaries often fall where the **language changes** (the same word means differ
 
 - → **`recommend-architecture`**: subdomain complexity drives the domain-logic axis (Transaction Script ↔ Domain Model ↔ Hexagonal). Core+complex ⇒ richer; supporting/generic ⇒ simple.
 - → **`testing-strategy`**: where the behavior lives drives test shape — a rich core wants more unit tests; CRUD-over-DB edges want integration tests.
+
+**Anemic vs rich is an architecture decision, deferred — but flag it.** Whether the core's logic lives *in* the domain objects (rich) or in services over data-bags (anemic) is decided by `recommend-architecture`, not here. But if distillation found a genuinely complex, differentiating core, note it for downstream: a thin/anemic model over that core is the classic under-engineering tell. Just flag the expectation ("core 'X' is rich → expect a Domain Model, not a service-over-DTOs"); don't design the aggregates.
 
 ## When to run / when to skip
 

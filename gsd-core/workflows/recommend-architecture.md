@@ -72,6 +72,8 @@ If **any** is "no" → **Modular Monolith. Say so and stop here on Axis B** (not
 
 If all three pass, OR a single component looks special, run the **Hard-Parts scan** on that component: score the 6 disintegrators (low cohesion · divergent volatility · divergent scaling · fault isolation · differential security · independent extensibility) vs the 4 integrators (ACID across data · tight workflow · shared code · tight data relationships). Net disintegrators ≫ integrators → extract it; otherwise keep it modular. Warn explicitly against a **distributed monolith** (services that can't deploy independently).
 
+When recommending the monolith (a gate failed), **record the promotion trigger** — the concrete future signal that would justify revisiting Axis B (a second team forms, a component's scaling diverges, a bounded context stabilizes). The monolith is **sacrificial/evolutionary**, not permanent: note that the eventual split, if it comes, uses **Strangler Fig + an Anti-Corruption Layer + data-decomposition-behind-module-boundaries-first (+ sagas/outbox for cross-service consistency)** — never a big-bang rewrite. Enforcing "no cross-module DB access" as a fitness function now is what makes that future split cheap. (See *Evolving the topology* in the reference.)
+
 ## Step 5: Over-/under-engineering check (the meta-tell)
 
 Run this check in **both directions** — it is a first-class gate, not a formality:

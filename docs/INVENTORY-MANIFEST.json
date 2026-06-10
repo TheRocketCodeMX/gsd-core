@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-09",
+  "generated": "2026-06-10",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -215,6 +215,7 @@
       "common-bug-patterns.md",
       "context-budget.md",
       "continuation-format.md",
+      "contract-testing.md",
       "db-test-isolation.md",
       "debugger-philosophy.md",
       "decimal-phase-calculation.md",
