@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-09
+
+### Changed
+
+- **Discovery artifacts now actually steer the build.** The planner and plan-checker now read `.planning/DOMAIN-MODEL.md`, the architecture `adr/*.md`, and `.planning/TEST-STRATEGY.md`, and plans must follow the subdomain classification, the per-subdomain architecture rung, and the per-subdomain test levels — pulling the linked test-infra references (`test-containers`, `db-test-isolation`, `auth-in-tests`, …) into the relevant test tasks. Wired through discuss-phase's `canonical_refs` accumulator (the existing "downstream agents MUST read these" contract) with a direct-read fallback in plan-phase, so it is path-independent. Also hardens canonical-refs handling for **all** canonical references (the planner is now explicitly instructed to open them, not just see them listed). This closes the gap where the discovery spine produced artifacts that the planner/executor never read.
+
 ## [1.5.0] - 2026-06-09
 
 > TheRocketCode fork. Based on upstream `open-gsd/gsd-core` 1.4.0.

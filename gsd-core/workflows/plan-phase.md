@@ -831,6 +831,7 @@ Pattern mapper prompt:
 
 <files_to_read>
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- **Every file listed under `## Canonical References` inside {context_path}** — these are MANDATORY ("Downstream agents MUST read these before planning"). When they include a DOMAIN-MODEL.md, an architecture ADR, or a TEST-STRATEGY.md, the plan MUST follow the domain model's subdomain classification, the architecture decision's per-subdomain rung, and the test strategy's per-subdomain test levels — and pull the test-infra references that TEST-STRATEGY links into the `@`-context of the relevant test tasks. Also read `.planning/DOMAIN-MODEL.md`, the latest `.planning/adr/*.md`, and `.planning/TEST-STRATEGY.md` directly if they exist — they are project-wide and always apply, even when not listed.
 - {research_path} (Technical Research)
 </files_to_read>
 
@@ -895,6 +896,7 @@ Planner prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- **Every file listed under `## Canonical References` inside {context_path}** — these are MANDATORY ("Downstream agents MUST read these before planning"). When they include a DOMAIN-MODEL.md, an architecture ADR, or a TEST-STRATEGY.md, the plan MUST follow the domain model's subdomain classification, the architecture decision's per-subdomain rung, and the test strategy's per-subdomain test levels — and pull the test-infra references that TEST-STRATEGY links into the `@`-context of the relevant test tasks. Also read `.planning/DOMAIN-MODEL.md`, the latest `.planning/adr/*.md`, and `.planning/TEST-STRATEGY.md` directly if they exist — they are project-wide and always apply, even when not listed.
 - {research_path} (Technical Research)
 - {PATTERNS_PATH} (Pattern Map — analog files and code excerpts, if exists)
 - {verification_path} (Verification Gaps - if --gaps)
