@@ -441,6 +441,10 @@ Orchestrator provides:
 - research/SUMMARY.md content (if exists - phase suggestions)
 - config.json (granularity setting)
 
+**Also read these project-level discovery artifacts if they exist** (e.g. on a new milestone, or when discovery was run before the roadmap):
+- `.planning/DOMAIN-MODEL.md` — group phases so each delivers a coherent subdomain capability; keep core-subdomain work cohesive rather than scattered across unrelated phases.
+- the latest `.planning/adr/*.md` — let the architecture topology inform phase dependencies (e.g. shared ports/adapters land before the features that use them).
+
 Parse and confirm understanding before proceeding.
 
 ## Step 2: Extract Requirements

@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-06-09
+
+### Changed
+
+- **`/gsd:add-tests` now follows `TEST-STRATEGY.md`** when present — it classifies changed files by the strategy's per-subdomain test levels (and pulls the linked test-infra references into integration/e2e setup) instead of generic heuristics. Closes the gap where retroactive test generation could contradict the strategy.
+- **The roadmapper reads `DOMAIN-MODEL.md` + the architecture ADR when present** (e.g. on a new milestone, or when discovery ran before the roadmap) so phases respect subdomain boundaries and the architecture topology informs phase dependencies. No forced resequencing of `new-project` — read-if-present only.
+
 ## [1.6.0] - 2026-06-09
 
 ### Changed
