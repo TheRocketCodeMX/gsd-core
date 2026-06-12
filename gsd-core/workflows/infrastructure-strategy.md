@@ -56,6 +56,8 @@ If constrained: take it — the ladder is cloud-portable; use the reference's eq
 
 ## Step 4: Compute rung (walk the ladder per component)
 
+**Shipped-software check first:** if the product is user-operated (CLI/library/desktop/self-hosted binary), do NOT walk the ladder for the product itself — the reference's "Shipped software, not a service" section governs: CI compute + distribution + docs hosting + spend guardrails; the service ladder becomes promotion-trigger material only.
+
 For each deployable component from the ADR topology, walk the reference's ladder. **Default = serverless containers** (Cloud Run / ECS+Fargate / Container Apps). Only place a component on another rung when a concrete trigger from the reference fires — and record the trigger next to the rung.
 
 - **Rung-down check (static/FaaS):** pre-renderable frontends → static/edge hosting; pure event-glue (webhooks, queue consumers, cron) → FaaS is fine *until* the FaaS→containers triggers: >15-min runs, WebSockets/streaming, connection pools / in-memory caches, or ~>15M invocations/month sub-second.

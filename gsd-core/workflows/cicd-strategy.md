@@ -80,6 +80,8 @@ Map the tiers from TEST-STRATEGY.md onto the three stages (this is Google's stat
 
 ## Step 6: Deployment ladder rung
 
+**Shipped-software route:** if the product ships as packages/binaries rather than an operated service, the ladder rung IS the publishing pipeline — walk the reference's "Publishing packages" section instead (tag-driven releases, PyPI Trusted Publishing, npm provenance, crates.io scoped+environment-protected tokens, attestations, fork-PR exclusion). The service ladder applies only to any future hosted tier, as promotion-trigger material.
+
 Pick the rung from **team size + blast radius** (from Step 2), using the reference's ladder. Build-once/promote-same-artifact and one-command rollback are invariants at every rung.
 
 - **Solo/small, low blast radius:** trunk-based + one automated deploy path + free platform PR previews (+ Neon-style DB branch per preview if Postgres) + one-command rollback. **No staging environment.**

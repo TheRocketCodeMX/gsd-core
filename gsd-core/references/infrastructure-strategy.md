@@ -8,6 +8,10 @@ The empirically safe prior, not a bias: real Kubernetes clusters average **8–1
 
 The three inputs every crossover keys off: **traffic shape** (idle %, burst ratio), **team size**, **monthly compute spend**. Get these before recommending anything.
 
+## Shipped software, not a service (check this FIRST)
+
+When the product is **user-operated** — a CLI, library, desktop app, self-hosted binary — the operated-infrastructure footprint may legitimately be ≈ zero, and walking the compute ladder for it is over-engineering by this reference's own rule. The decisions shift to: **CI compute** (often the only compute you pay for — API-bound workloads need spend guardrails, not bigger runners), **release & distribution channels** (registries, GitHub Releases, installers — see the publishing section of `cicd-strategy.md`), **docs/results hosting** (Pages-class static hosting), and **API-spend guardrails** (provider billing alerts + workload kill-switches). Record the operated-service ladder only as **promotion-trigger material** for a future hosted tier — triggered, never pre-provisioned.
+
 ## The compute decision ladder
 
 | Rung | Wins when | Move up when |

@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-06-12
+
+Dogfood round 4 (savoir: infrastructure-strategy) — closing a gap a strong executor papered over before a weaker one falls into it.
+
+### Added
+
+- **Shipped-software posture in `/gsd:infrastructure-strategy`.** For user-operated products (CLI, library, desktop, self-hosted binary) the operated-infra footprint is legitimately ≈ zero — the workflow now checks this FIRST and routes to what actually matters: CI compute (with API-spend guardrails + kill-switches), release/distribution channels, docs/results hosting; the service ladder is recorded as promotion-trigger material only, never pre-provisioned.
+- **"Publishing packages" section in `/gsd:cicd-strategy`** — the deploy ladder for shipped software: tag-driven release workflows, PyPI Trusted Publishing (OIDC, repo-pinned), `npm publish --provenance`, crates.io scoped tokens in environment-protected secrets with required reviewers, artifact attestations, and the fork-PR exclusion rule (spend guardrail + secrets safety in one mechanism). The workflow's ladder step routes here automatically for package-shipping products.
+
 ## [1.8.3] - 2026-06-12
 
 Second + third dogfood rounds (savoir: model-domain, recommend-architecture) folded back in.

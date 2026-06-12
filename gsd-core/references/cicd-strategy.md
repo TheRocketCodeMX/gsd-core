@@ -77,6 +77,17 @@ The invariant at every rung (DORA + SRE Workbook + Charity Majors converge): **s
 
 **Canary ANALYSIS prerequisites (SRE Workbook ch. 16 — all required):** ~**a dozen trustworthy, low-variance SLI-derived metrics**, real traffic volume that yields signal on a 1–5% slice, and deploy frequency exceeding human attention — on top of repeatable builds and automated deploys. Below that: rolling deploy + health checks + one-command rollback. Use "the simplest model that meets your technical and business objectives." Plain blue-green is a "before/after canary" — risky because time is the largest source of metric variance.
 
+## Publishing packages — the deploy ladder for shipped software
+
+When the product ships as packages/binaries (CLI, library, SDK), the "deployment ladder" IS the publishing pipeline:
+
+- **Tag-driven releases**: version tag → one release workflow builds, tests, publishes everything (never publish from a laptop; never build different artifacts per registry from different commits).
+- **PyPI: Trusted Publishing** (OIDC — the official PyPA standard): no long-lived API tokens; the workflow identity is the credential, with the repo/workflow pinned on the PyPI side (the publishing analog of the pinned `sub`).
+- **npm: `npm publish --provenance`** on CI — provenance attestation links the package to its source commit and workflow.
+- **crates.io: scoped tokens** (no OIDC support yet) — token scoped to the crate(s), stored in an **environment-protected secret** with required reviewers on the release environment; rotate on release-process changes.
+- **Signed/attested artifacts**: GitHub artifact attestations (free) or cargo-dist/goreleaser-class tooling for binaries + checksums; full cosign ceremony stays deferred until artifacts cross trust boundaries.
+- **Release environment protection + manual dispatch** for anything that spends money or publishes — doubles as the fork-PR secrets-safety rule (publish workflows never run on fork PRs).
+
 ## Supply-chain table stakes (small team — all free, each ≤ hours, each counters a real 2023–25 attack)
 
 1. **SHA-pin all third-party actions + Dependabot updating the pins.** tj-actions/changed-files (Mar 2025, **CVE-2025-30066**): attacker retroactively moved version tags to a malicious secrets-dumping commit, 23,000+ repos hit — tag pinning gave zero protection. Dependabot updates SHA pins with version comments, so "pins go stale" is solved.
