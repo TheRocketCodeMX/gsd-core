@@ -26,7 +26,7 @@ const { renderGithubReleaseNotes } = require('./github-release-notes.cjs');
 // Resolve gsd-core/bin/lib modules in BOTH layouts: in the repo this file lives
 // at scripts/changeset/ NEXT TO gsd-core/; in an installed runtime config dir the
 // installer ships it at gsd-core/scripts/changeset/ INSIDE gsd-core/ (so the
-// /gsd:update workflow's changelog preview can run it — see #3496 follow-up).
+// /gsd-update workflow's changelog preview can run it — see #3496 follow-up).
 function requireCoreLib(name) {
   try {
     return require(`../../gsd-core/bin/lib/${name}`); // repo layout
@@ -336,7 +336,7 @@ function resolveChangelogPath(opts) {
  *   1  — I/O error or missing required flags.
  *
  * Fix for #3496: provides a deterministic range-aware helper so the
- * `/gsd:update` show_changes_and_confirm step no longer relies on
+ * `/gsd-update` show_changes_and_confirm step no longer relies on
  * vague/manual extraction that can silently skip intermediate versions.
  */
 function cmdExtract(opts) {

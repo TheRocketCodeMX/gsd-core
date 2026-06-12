@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-06-10
+
+### Fixed
+
+- **Cursor leak-scan regression from 1.7.4.** The changeset tooling shipped in 1.7.4 (`gsd-core/scripts/changeset/cli.cjs`) carried two `/gsd:`-colon comment refs that bypass the Cursor `/gsd:` → `/gsd-` rewrite (the files are copied verbatim, not through the rewriter). Comments now use the hyphen form; the bug-376 Cursor leak scan is green again. Cosmetic on installed machines (comments only), but our own install invariant forbids it.
+
 ## [1.7.4] - 2026-06-10
 
 ### Fixed
