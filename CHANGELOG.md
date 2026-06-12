@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-06-12
+
+### Fixed
+
+- **The two new delivery commands are now covered by the skill-cluster surface.** 1.8.0's cluster fix was applied to the generated `clusters.cjs` instead of its source `src/clusters.cts`, so the build regenerated the file without `infrastructure-strategy`/`cicd-strategy` — leaving them outside every `/gsd-surface` cluster (and one drift-guard red). Fixed at the source; full suite green.
+
 ## [1.8.0] - 2026-06-12
 
 Quality wave: every discovery/testing command was realistically simulated against a trap-laden scenario, adversarially judged by expert panels, and fixed — plus a whole new research-backed **delivery pillar** (infrastructure + CI/CD).
