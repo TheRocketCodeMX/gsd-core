@@ -22,11 +22,23 @@ const { parseFragment } = require('./parse.cjs');
 const { renderChangelog } = require('./render.cjs');
 const { serializeChangelog, parseChangelog } = require('./serialize.cjs');
 const { renderGithubReleaseNotes } = require('./github-release-notes.cjs');
+
+// Resolve gsd-core/bin/lib modules in BOTH layouts: in the repo this file lives
+// at scripts/changeset/ NEXT TO gsd-core/; in an installed runtime config dir the
+// installer ships it at gsd-core/scripts/changeset/ INSIDE gsd-core/ (so the
+// /gsd:update workflow's changelog preview can run it — see #3496 follow-up).
+function requireCoreLib(name) {
+  try {
+    return require(`../../gsd-core/bin/lib/${name}`); // repo layout
+  } catch {
+    return require(`../../bin/lib/${name}`); // installed runtime layout
+  }
+}
 const {
   compareSemverCore,
   isStableTripletSemver,
-} = require('../../gsd-core/bin/lib/semver-compare.cjs');
-const { packageName, repoSlug: defaultRepoSlug } = require('../../gsd-core/bin/lib/package-identity.cjs');
+} = requireCoreLib('semver-compare.cjs');
+const { packageName, repoSlug: defaultRepoSlug } = requireCoreLib('package-identity.cjs');
 
 function parseArgs(argv) {
   const opts = {

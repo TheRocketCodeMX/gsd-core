@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-06-10
+
+### Fixed
+
+- **`/gsd:update`'s "What's New" changelog preview actually works now.** The update workflow calls `<configDir>/gsd-core/scripts/changeset/cli.cjs` to extract the changelog between the installed and latest versions — but the installer (upstream bug, inherited) never shipped those files, so the preview always silently fell back to "(Could not extract changelog)". The installer now ships the changeset tooling into the runtime payload (`gsd-core/scripts/changeset/` + `scripts/lib/cli-exit.cjs`), and its two cross-tree requires resolve both the repo layout and the installed layout. Verified end-to-end: a real install now extracts the version-range changelog with exit 0.
+
 ## [1.7.3] - 2026-06-10
 
 ### Fixed

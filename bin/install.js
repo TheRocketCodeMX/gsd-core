@@ -10167,6 +10167,35 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     }
   }
 
+  // Ship the changelog-extract tooling the /gsd:update workflow's "What's New"
+  // preview calls at <configDir>/gsd-core/scripts/changeset/cli.cjs. Upstream
+  // referenced this path but never installed the files, so the preview always
+  // silently degraded to "(Could not extract changelog)". The two cross-tree
+  // requires in cli.cjs/github-release-notes.cjs resolve both layouts.
+  const changesetPayload = [
+    'scripts/changeset/cli.cjs',
+    'scripts/changeset/parse.cjs',
+    'scripts/changeset/render.cjs',
+    'scripts/changeset/serialize.cjs',
+    'scripts/changeset/github-release-notes.cjs',
+    'scripts/lib/cli-exit.cjs',
+  ];
+  let changesetCopied = 0;
+  for (const relPath of changesetPayload) {
+    const csSrc = path.join(src, ...relPath.split('/'));
+    const csDest = path.join(skillDest, ...relPath.split('/'));
+    if (fs.existsSync(csSrc)) {
+      fs.mkdirSync(path.dirname(csDest), { recursive: true });
+      fs.copyFileSync(csSrc, csDest);
+      changesetCopied++;
+    } else {
+      failures.push(`gsd-core/${relPath} (source missing)`);
+    }
+  }
+  if (changesetCopied === changesetPayload.length) {
+    console.log(`  ${green}✓${reset} Installed gsd-core/scripts/changeset (update changelog preview)`);
+  }
+
   // Copy agents to agents directory.
   // Skipped under --minimal: gsd-* subagent descriptions are eagerly loaded
   // into the runtime's Agent tool schema, costing ~6k tokens per turn even
