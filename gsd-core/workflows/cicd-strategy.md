@@ -133,6 +133,12 @@ CICD-STRATEGY.md written — pipeline mapped to the test strategy.
 Next: /gsd:plan-phase   (CI/deploy phases will plan against this strategy)
 ```
 
+**Strategy-chain completion (this is the chain's last link — close the loop):**
+1. **Synthesis table** — if other strategy artifacts exist (`PRODUCT-BRIEF`, `DOMAIN-MODEL`, `adr/*`, `TEST-STRATEGY`, `INFRA-STRATEGY`), display a one-line-per-artifact decision summary so the user sees the whole strategized picture in one place.
+2. **Final roadmap reconciliation** — scan ROADMAP.md against ALL strategy artifacts (not just this one): phases straddling module seams, build-phases mooted by buy-decisions, missing walking skeleton, CI/release work unaccounted for. Surface every contradiction explicitly and offer `/gsd:phase --edit` or a roadmap refresh — never end the chain with a known contradiction unspoken.
+3. Remind the user the artifacts are now canonical references: the planner must read them and the plan-checker raises HIGH on contradiction.
+4. If the session is long, suggest a fresh session for the build loop (`/gsd:discuss-phase`) — the artifacts carry the full state.
+
 </process>
 
 <critical_rules>

@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-06-12
+
+Dogfood round 5 (savoir: cicd-strategy — full chain complete).
+
+### Added
+
+- **Strategy-chain completion step in `/gsd:cicd-strategy`** (the chain's last link): a one-line-per-artifact synthesis table of every strategy artifact present, a **final roadmap reconciliation** against ALL of them (phases straddling module seams, build-phases mooted by buy-decisions, missing walking skeleton, unaccounted CI/release work — surfaced explicitly, never silent), the canonical-references/plan-checker reminder, and a fresh-session suggestion for the build loop. Codifies what the first full-chain dogfood improvised.
+
 ## [1.8.4] - 2026-06-12
 
 Dogfood round 4 (savoir: infrastructure-strategy) — closing a gap a strong executor papered over before a weaker one falls into it.
