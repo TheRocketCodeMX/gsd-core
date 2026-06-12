@@ -57,6 +57,18 @@ const LEGACY_CACHE_FILENAMES = [
 ];
 
 /**
+ * Legacy runtime directory names left inside a runtime config dir by a
+ * superseded install. The current fork installs its runtime under `gsd-core/`;
+ * the pre-rename upstream used `get-shit-done/`. When a user migrates, the
+ * file-level migration deletes the OLD dir's files but leaves the emptied
+ * directory tree behind — harmless, but untidy. We prune such a dir ONLY when
+ * it contains zero files (a strict emptiness guard, re-checked at apply time),
+ * so we can never delete a directory that still holds user-authored content.
+ * NEVER list 'gsd-core' here — that is the CURRENT runtime dir.
+ */
+const LEGACY_RUNTIME_DIR_NAMES = ['get-shit-done'];
+
+/**
  * Subtrees within a configDir that GSD actively scans for old-package content.
  * Deliberately excludes 'gsd-core' — the current package's own infra and
  * docs live there (CHANGELOG.md, this file, etc.) and are overwritten by
@@ -151,6 +163,8 @@ function fileContainsOldPackageSignal(absPath, fsMod) {
  *   - 'content-references-old-package': a code file whose content contains
  *     the old package name signal (hooks/ and commands/ subtrees only).
  *   - 'legacy-shared-cache': the old package's shared update-check cache file.
+ *   - 'empty-legacy-runtime-dir': a superseded runtime dir (e.g. get-shit-done/)
+ *     left empty after a migration deleted its files.
  *
  * @param {string[]} configDirs - absolute paths to runtime config dirs to scan
  * @param {object}  [opts]
@@ -207,6 +221,25 @@ function planLegacyCleanup(configDirs, opts = {}) {
     }
   }
 
+  // Emptied legacy runtime directories left behind after a migration deleted
+  // their files. Flag ONLY when the dir exists and contains zero files — a
+  // dir that still holds any file is left untouched (its code files are caught
+  // by the content scan above instead).
+  for (const configDir of configDirs) {
+    for (const legacyDirName of LEGACY_RUNTIME_DIR_NAMES) {
+      const legacyDir = path.join(configDir, legacyDirName);
+      let stat;
+      try {
+        stat = fsMod.statSync(legacyDir);
+      } catch {
+        continue; // absent — skip
+      }
+      if (stat.isDirectory() && collectFilesUnder(legacyDir, fsMod).length === 0) {
+        addCandidate(legacyDir, 'empty-legacy-runtime-dir');
+      }
+    }
+  }
+
   // Sort deterministically by path
   const sorted = [...candidates.entries()]
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
@@ -246,6 +279,16 @@ function applyLegacyCleanup(plan, opts = {}) {
   const errors  = [];
 
   for (const item of plan) {
+    // Legacy runtime dirs are removed recursively, but ONLY after re-verifying
+    // they are still empty at apply time — a defensive guard so a file that
+    // appeared between scan and apply is never destroyed.
+    const isLegacyDir = item.reason === 'empty-legacy-runtime-dir';
+    if (isLegacyDir && collectFilesUnder(item.path, fsMod).length > 0) {
+      errors.push({ path: item.path, error: 'legacy runtime dir not empty at apply time; skipped' });
+      continue;
+    }
+    const rmOpts = isLegacyDir ? { recursive: true, force: true } : { force: true };
+
     let lastErr;
     const maxAttempts = process.platform === 'win32' ? 3 : 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -254,7 +297,7 @@ function applyLegacyCleanup(plan, opts = {}) {
           // Synchronous 100ms delay before retry (win32 EBUSY/EPERM from Defender)
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-        fsMod.rmSync(item.path, { force: true });
+        fsMod.rmSync(item.path, rmOpts);
         lastErr = undefined;
         break;
       } catch (err) {

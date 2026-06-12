@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-06-10
+
+### Fixed
+
+- **Migration now prunes the emptied legacy runtime directory.** When switching from the pre-rename upstream (whose runtime lived in `get-shit-done/`), the file-level migration deleted the old files but left the empty directory tree behind — harmless but untidy. The legacy-cleanup pass now also removes a superseded runtime dir (e.g. `get-shit-done/`) **only when it contains zero files** — a strict emptiness guard, re-verified at apply time so a file appearing between scan and apply is never destroyed. The current `gsd-core/` runtime dir is never touched. Runs on every install/update, so existing installs self-heal on their next update. Cross-platform (uses `path.join`/`fs.rmSync` and the existing Windows EBUSY/EPERM retry).
+
 ## [1.7.2] - 2026-06-10
 
 ### Removed

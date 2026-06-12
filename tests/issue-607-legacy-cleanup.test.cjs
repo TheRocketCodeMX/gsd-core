@@ -265,10 +265,39 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     writeFile(path.join(configDir, 'hooks', 'gsd-my-custom.js'), '// user hook, clean');
 
     const plan = planLegacyCleanup([configDir], { homeDir });
-    const validReasons = new Set(['content-references-old-package', 'legacy-shared-cache']);
+    const validReasons = new Set(['content-references-old-package', 'legacy-shared-cache', 'empty-legacy-runtime-dir']);
     for (const entry of plan) {
       assert.ok(validReasons.has(entry.reason), `unexpected reason: ${entry.reason}`);
     }
+  });
+
+  // ── empty-legacy-runtime-dir (#1.7.3) ──────────────────────────────────────
+
+  test('flags an EMPTY legacy get-shit-done runtime dir', () => {
+    // Empty directory tree left behind after a migration deleted its files.
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'workflows'), { recursive: true });
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'bin'), { recursive: true });
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done'));
+    assert.ok(entry, 'expected empty legacy runtime dir to appear in plan');
+    assert.equal(entry.reason, 'empty-legacy-runtime-dir');
+  });
+
+  test('does NOT flag a legacy get-shit-done dir that still contains a file', () => {
+    writeFile(path.join(configDir, 'get-shit-done', 'workflows', 'leftover.md'), '# still here');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done'));
+    assert.equal(entry, undefined, 'a non-empty legacy runtime dir must never be flagged');
+  });
+
+  test('does NOT flag the CURRENT gsd-core runtime dir even when empty', () => {
+    fs.mkdirSync(path.join(configDir, 'gsd-core', 'bin'), { recursive: true });
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'gsd-core'));
+    assert.equal(entry, undefined, "the current 'gsd-core' runtime dir must never be flagged");
   });
 });
 
@@ -374,5 +403,39 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
     // Since dev-prefs is not in the plan, applying the plan cannot remove it.
     applyLegacyCleanup(plan);
     assert.ok(fs.existsSync(devPrefs), 'dev-preferences.md must survive apply');
+  });
+
+  // ── empty-legacy-runtime-dir apply (#1.7.3) ────────────────────────────────
+
+  test('apply removes an EMPTY legacy runtime dir (recursively) and reports it removed', () => {
+    const legacyDir = path.join(configDir, 'get-shit-done');
+    fs.mkdirSync(path.join(legacyDir, 'workflows'), { recursive: true });
+    fs.mkdirSync(path.join(legacyDir, 'bin'), { recursive: true });
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === legacyDir);
+    assert.ok(entry, 'precondition: empty legacy dir must be in plan');
+
+    const result = applyLegacyCleanup(plan);
+    assert.equal(result.errors.length, 0, 'no errors expected');
+    assert.ok(result.removed.includes(legacyDir), 'legacy dir must be reported removed');
+    assert.equal(fs.existsSync(legacyDir), false, 'empty legacy runtime dir tree must be gone');
+  });
+
+  test('apply re-verify guard: a legacy dir that gained a file after planning is NOT deleted', () => {
+    // Hand-craft a plan entry pointing at a dir that is NOT empty, to exercise
+    // the apply-time re-verification guard directly (defends against TOCTOU).
+    const legacyDir = path.join(configDir, 'get-shit-done');
+    const survivor  = path.join(legacyDir, 'workflows', 'appeared-after-scan.md');
+    writeFile(survivor, '# created between scan and apply');
+
+    const forgedPlan = [{ path: legacyDir, reason: 'empty-legacy-runtime-dir' }];
+    const result = applyLegacyCleanup(forgedPlan);
+
+    assert.ok(fs.existsSync(legacyDir), 'non-empty legacy dir must survive');
+    assert.ok(fs.existsSync(survivor), 'file inside must survive');
+    assert.equal(result.removed.length, 0, 'nothing should be reported removed');
+    assert.equal(result.errors.length, 1, 'the skipped dir should be reported as an error');
+    assert.match(result.errors[0].error, /not empty at apply time/);
   });
 });
