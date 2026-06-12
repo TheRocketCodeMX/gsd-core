@@ -28,7 +28,27 @@
 - CD / monitoring / DevOps maturity in place: [yes/no]
 - Bounded contexts well-understood already: [yes/no]
 
-[If any "no" → Modular Monolith. If a specific component is extracted, record the Hard-Parts disintegrators that justified it.]
+[If any "no" → Modular Monolith. If a specific component is extracted, record the Hard-Parts disintegrators that justified it — extraction *now* requires current (not projected) pressure plus the CD/ops gate; otherwise it's a promotion trigger below.]
+
+**Tenancy (required when serving multiple customer orgs):** [single-tenant / shared schema + tenant-scoped RLS (default) / schema-per-tenant / DB-per-tenant] — [the contractual/regulatory isolation mandate that climbs above the default, or "none — default holds"]
+
+### Module map
+
+[Derived from DOMAIN-MODEL: modules = bounded contexts when mapped, else subdomain groupings. Polysemes resolved: each flagged term → one owning module per meaning, or "none flagged".]
+
+| Module | Owns (responsibility + schema) | Talks to | Via |
+|--------|--------------------------------|----------|-----|
+| [module] | [responsibility; its schema/tables] | [modules / 3rd-party behind ACL] | [sync call / event — mechanism: in-process / job queue / outbox] |
+
+[Pipeline-shaped modules: note the data shape (buffer/queue, backpressure, retention). Scheduled/recurring work: where it runs (cron / job queue / recompute-on-read).]
+
+### Promotion triggers
+
+The concrete, observable signals that would change a decision above — re-check at `/gsd:new-milestone`.
+
+| Component / axis | Observable condition | Response when it fires |
+|------------------|----------------------|------------------------|
+| [component, rung, or Axis B] | [e.g., sustained ingest > N/s today; a second team forms; an isolation mandate lands in a contract] | [e.g., extract via Strangler Fig + ACL; raise the rung; climb to schema-per-tenant] |
 
 ### Baseline note
 

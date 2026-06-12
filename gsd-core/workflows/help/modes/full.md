@@ -584,6 +584,8 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Planning & Execution
 
 - **`/gsd:testing-strategy [--auto] [--text]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md.
+- **`/gsd:infrastructure-strategy [--auto] [--text]`** — Recommend infrastructure matched to actual scale and team: compute rung, data layer per environment, observability + IaC floors; writes INFRA-STRATEGY.md.
+- **`/gsd:cicd-strategy [--auto] [--text]`** — Recommend a CI/CD strategy: platform, OIDC auth, secrets split, test-tier→stage mapping, deploy ladder; writes CICD-STRATEGY.md.
 - **`/gsd:mvp-phase <phase-number>`** — Plan a phase as a vertical MVP slice (user story + SPIDR splitting) before handing off to plan-phase. Same end-state as `/gsd:plan-phase --mvp`, with a guided MVP-shaping intro.
 - **`/gsd:ultraplan-phase [phase]`** — [BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back.
 - **`/gsd:plan-review-convergence <phase> [--codex] [--gemini] [--claude] [--opencode] [--ollama] [--lm-studio] [--llama-cpp] [--all] [--text] [--ws <name>] [--max-cycles N]`** — Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Supports both cloud reviewers (Codex/Gemini/Claude/OpenCode) and local model runtimes (Ollama, LM Studio, llama.cpp).

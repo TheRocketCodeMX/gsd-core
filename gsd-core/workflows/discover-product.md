@@ -42,22 +42,26 @@ Use `AskUserQuestion` (header "Discovery"):
   - "Requirements are clear & evidenced" (→ Step 2a)
   - "Clear, but help me prioritize" (→ Step 2a, prioritization only)
 
-**Step 2a (clear/evidenced path):** First **audit the evidence** — confirm it is *behavioral* (a paying client, a signed LOI, real usage data), not *interest* (waitlists, likes, "people say it's great"). If the cited evidence is only interest, say so and route to the full interview (Step 3) instead — never honor "evidenced" on the strength of waitlists/likes. If the evidence is genuinely behavioral, do NOT run the full interview. Either:
+**Step 2a (clear/evidenced path):** First **audit the evidence** — two tests, BOTH must pass:
+1. **Strength:** the evidence is behavioral with *money moved or real usage* (a paying client, a live pilot), not *interest* (waitlists, likes, "people say it's great"). Signed non-binding LOIs are **medium** — never skip-qualifying alone.
+2. **Coverage:** the evidence covers the *specific candidate list* to be prioritized. If it covers only a slice, run the full interview (Step 3) scoped to the unevidenced remainder.
+
+If either fails, say so and route to the full interview — never honor "evidenced" on waitlists/likes/LOIs alone. If both pass, do NOT run the full interview, but first ask three one-question checks: the **named specific user**, the **narrowest-slice statement**, and an **outcome (not output) metric** — each must get a real answer before the minimal brief. Then either:
 - Offer lightweight **RICE** prioritization on their known candidate list (Reach × Impact × Confidence ÷ Effort; note table-stakes/dependencies override the score), capture it, then
 - Point them onward: "Requirements are clear — run `/gsd:new-project` to capture them, then `/gsd:model-domain`."
-Write a minimal PRODUCT-BRIEF.md (outcome + the prioritized list + "discovery skipped: requirements pre-evidenced") and skip to Step 10. Exit early if they don't even want prioritization.
+Write a minimal PRODUCT-BRIEF.md (outcome + user + slice + the prioritized list + "discovery skipped: requirements pre-evidenced") and skip to Step 10. Exit early if they don't even want prioritization.
 
 ## Step 3–9: The forcing interview
 
-Run the ordered question set from the reference. **Posture: the first answer is polished — push 2–3 times for concrete specifics (the actual human, the actual consequence), reflect back, confirm. One thread at a time.** Ask about the PAST, never hypotheticals. Skip any block already evidenced.
+Run the ordered question set from the reference. **Posture: the first answer is polished — push 2–3 times for concrete specifics (the actual human, the actual consequence), reflect back, confirm. One thread at a time.** Ask about the PAST, never hypotheticals. Skip a block ONLY when its named outputs are already captured at **strong** evidence — Step 4: specific user + job story + measurable outcomes; Step 5: signals marked strong/medium/weak; Step 6: wedge + >1-solution check; Step 9: dated outcome metric — and reflect the skipped block's conclusion back for confirmation before moving on.
 
-- **Step 3 — Frame (outcome):** "What customer behavior or metric do we want to change — not a feature?" "If we skipped discovery, what assumption would we be betting the whole build on?"
+- **Step 3 — Frame (outcome):** "What customer behavior or metric do we want to change — not a feature?" (The betting-the-build assumption is covered in Step 7 — don't ask it here.)
 - **Step 4 — Job & user:** "Who *specifically* — and for whom is this most acute, frequent, expensive, unavoidable?" Capture the solution-free job and a job story ("When … I want to … so I can …"). Then capture **2–3 measurable desired outcomes** for the job as *direction + metric + object* ("reduce the time to find an open class slot") — these are what "better" is measured against later. If the job-population is heterogeneous, capture outcomes **per segment** (different segments want different things — don't average them away). If after 2–3 pushes the user still can't name a specific acute role (answers "everyone"/"all X"), do NOT record a generic user — record the target user as **UNRESOLVED** and make "identify the acute user" the first open question. A non-specific user is a discovery red flag, not a finding.
-- **Step 5 — Demand vs interest:** "Tell me about the *last time* you hit this." "What are you doing about it *today*, and what does it cost?" "What *real* evidence exists — pre-pay, LOI, pilot, converted signups?" Mark each signal strong (behavior/money) vs weak (interest). **Never** ask hypotheticals — neither "would you use X?" nor "would you pay $Y?"; redirect any "they'd pay $Y" answer to "tell me about the last time someone actually paid for a workaround."
+- **Step 5 — Demand vs interest:** "Tell me about the *last time* you hit this." "What are you doing about it *today*, and what does it cost?" "What do they use today instead — including spreadsheets or nothing — and why hasn't it won?" "What *real* evidence exists — pre-pay, pilot in use, converted signups, signed LOIs?" Mark each signal **strong** (money moved / real usage / panic-when-it-breaks), **medium** (signed LOIs/unpaid pilots — real but not yet demand; convert to strong or treat as open), or **weak** (interest — waitlists, likes, "great idea"). **Never** ask hypotheticals — neither "would you use X?" nor "would you pay $Y?"; redirect any "they'd pay $Y" answer to "tell me about the last time someone actually paid for a workaround."
 - **Step 6 — Wedge:** "Which single opportunity, solved, most moves the outcome? What's the narrowest version that fully solves it for one user this week?" Check: can we imagine >1 solution? (If no, we smuggled in a solution — re-frame.)
-- **Step 7 — Four risks** (only the unvalidated): value / usability / feasibility / viability. First **enumerate the leap-of-faith assumptions** behind the chosen wedge (what must be true for it to work), order them by risk, and run the *cheapest test on the riskiest* — not just one test on the least-validated risk. Do not rely on the user's self-rating — if a risk is dismissed without evidence ("it's fine," "AI can do it"), treat it as **open**. Independently name any obvious risk the user omitted (e.g., legal/consent, data privacy, platform dependency) and mark it open with a test. Record the surviving assumptions in the brief's "Assumptions to re-test" table — the brief is a hypothesis to keep testing, not a verdict.
+- **Step 7 — Four risks** (only the unvalidated): value / usability / feasibility / viability. First **enumerate the leap-of-faith assumptions** behind the chosen wedge (what must be true for it to work), order them by risk, and **specify** the cheapest test for the *riskiest* — record it in the brief with pass/fail threshold, kill criterion, owner, and by-when (tests run *after* this session, before building) — not just one test on the least-validated risk. Do not rely on the user's self-rating — if a risk is dismissed without evidence ("it's fine," "AI can do it"), treat it as **open**. **Value is never "validated" on founder testimony alone** — it requires customer-sourced evidence (a named customer's behavior, quote, or money). Independently name any obvious risk the user omitted (e.g., legal/consent, data privacy, platform dependency) and mark it open with a test. Record the surviving assumptions in the brief's "Assumptions to re-test" table — the brief is a hypothesis to keep testing, not a verdict.
 - **Step 8 — Scope & prioritization:** the end-to-end journey → the thin first slice; RICE the candidate list; record explicit "not in scope."
-- **Step 9 — Success:** the **outcome metric** (a change in customer behavior or business result) + by when; the PMF check (what would make ≥40% of core users "very disappointed"). **Reject vanity/output metrics — signups, waitlist size, downloads, page views, "launched" — and push to the behavior/result they proxy for (retained paying users, task completion, % of the target behavior achieved). A user-count is an output unless tied to retained value.**
+- **Step 9 — Success:** the **outcome metric** (a change in customer behavior or business result) + by when; the PMF check, **pre-registered**: define now the Sean Ellis criterion (≥40% "very disappointed") to survey once ≥N pilots have used the core (only users who used it) — a *planned measurement*, never a founder prediction. **Reject vanity/output metrics — signups, waitlist size, downloads, page views, "launched" — and push to the behavior/result they proxy for (retained paying users, task completion, % of the target behavior achieved). A user-count is an output unless tied to retained value.**
 
 ## Step 10: Write PRODUCT-BRIEF.md
 
@@ -83,7 +87,7 @@ PRODUCT-BRIEF.md written — product defined.
 
   Outcome: [one line]
   Wedge: [the narrowest paid slice]
-  Demand: [strong | weak — based on past-behavior evidence]
+  Demand: [strong | medium | weak — based on past-behavior evidence]
   Four risks: [N validated · M open]
 
 Next: /gsd:new-project (capture it) → /gsd:model-domain (the domain) → /gsd:recommend-architecture
@@ -105,7 +109,7 @@ Next: /gsd:new-project (capture it) → /gsd:model-domain (the domain) → /gsd:
 - Specific user + solution-free job + job story captured
 - Demand separated from interest via past-behavior evidence
 - Narrowest wedge identified; vision admits >1 solution
-- Four risks assessed (unvalidated ones flagged with a cheapest test)
+- Four risks assessed (unvalidated ones get a specified cheapest test — threshold, owner, by-when)
 - Scope prioritized (thin slice + RICE; explicit "not in scope")
 - PRODUCT-BRIEF.md written and committed (when commit_docs is true)
 - User directed to /gsd:new-project or /gsd:model-domain

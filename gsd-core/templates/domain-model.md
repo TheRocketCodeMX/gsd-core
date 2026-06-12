@@ -19,7 +19,9 @@ Strategic classification — drives where to invest and (downstream) the archite
 
 | Subdomain | Type | Description | Rationale (why this type) | Complexity |
 |-----------|------|-------------|---------------------------|------------|
-| [Name] | Core / Supporting / Generic | [What it does] | [Why core / supporting / generic] | low / medium / high |
+| [Name] | Core / Supporting / Generic | [What it does] | [Why this type + fired complexity signals] | low / medium / high (derived) |
+
+> Complexity is derived, not asked — rated against the 5-signal rubric (invariants, lifecycle/state, derivation/tradeoffs, temporal logic, policy variance); fired signals go in the rationale. Core+low is a contradiction.
 
 **Core** — differentiating *and* complex; build in-house, invest:
 - [Subdomain] — [why it's the competitive edge]
@@ -34,7 +36,7 @@ Strategic classification — drives where to invest and (downstream) the archite
 
 ## Bounded Contexts
 
-[Filled when event storming was run; otherwise: "Deferred — single context assumed; planning will refine if boundaries emerge."]
+[Filled when event storming was run; otherwise: "Deferred — single context assumed; planning will refine if boundaries emerge." Exception: a flagged polyseme or third-party/legacy upstream gets its candidate contexts and seam (default ACL) recorded here, marked "candidate — refine in planning" — never "single context assumed" beside a flagged boundary.]
 
 | Context | Owns (responsibility) | Key domain events | Talks to | Language boundary |
 |---------|----------------------|-------------------|----------|-------------------|

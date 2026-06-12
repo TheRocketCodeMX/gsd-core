@@ -40,7 +40,7 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 
 **If `NO_DOMAIN_MODEL`:** tell the user "No domain model found — I'll ask the complexity questions directly. (Consider `/gsd:model-domain` first for a sharper result.)" Then gather, per major area: is it core/supporting/generic, and how complex (rich rules vs CRUD)?
 
-From DOMAIN-MODEL.md (or the answers): extract each subdomain's type + complexity. The **core** subdomain's complexity is the primary driver of Axis A.
+From DOMAIN-MODEL.md (or the answers): extract each subdomain's type + complexity, **plus** the bounded contexts (owns / talks-to), the context-map relationships, and any flagged polysemes — Step 4.5 consumes them. The **core** subdomain's complexity is the primary driver of Axis A.
 
 ## Step 3: Axis A — domain-logic organization (per subdomain)
 
@@ -53,11 +53,13 @@ For the **core** subdomain, use `AskUserQuestion` (header "Core logic"):
 **Reconcile against DOMAIN-MODEL (do not skip).** If the user's answer contradicts the documented core complexity — e.g. they say "it's just CRUD" but DOMAIN-MODEL marks this a high-complexity *differentiating* core with rich invariants — the **documented complexity governs**. Present the discrepancy back ("the domain model flags rich pricing/scoring invariants here — that's a Domain Model, not CRUD") and default to the higher rung unless the user gives a concrete reason the model is wrong. Never let an understatement silently lower the core's rung — a scripted core over a documented rich domain is the exact under-engineering this skill exists to prevent.
 
 Then probe the orthogonal signals (only when relevant):
-- **Hexagonal wrapper?** "Will you swap or add adapters (DBs, queues, 3rd-party APIs), have multiple delivery mechanisms, or need high test isolation over a long lifespan?" Yes → wrap **the core only** in Hexagonal/Clean. No → skip (one-impl ports would be over-engineering). If the user asks for Clean/Hexagonal across the *whole app*, push back: scope it to the core; CRUD subdomains over one DB don't earn ports.
+- **Hexagonal wrapper?** "Is there a **current, concrete** second adapter or delivery mechanism (a real DB/queue/3rd-party swap, a second front-end), or a genuinely pure core worth isolating for test speed?" Yes → wrap **the core only** in Hexagonal/Clean. No → skip (one-impl ports would be over-engineering). Soft criteria — long lifespan, "testability" in the abstract — lean **no**: a framework-free domain layer enforced by fitness function gives the same isolation without one-impl ports. If the user asks for Clean/Hexagonal across the *whole app*, push back: scope it to the core; CRUD subdomains over one DB don't earn ports.
 - **CQRS?** only if reads structurally diverge from writes / reads ≫ writes.
 - **Event Sourcing?** First ask whether any financial/regulatory flow (payments, invoicing, tax) carries an audit / retention / temporal-reconstruction mandate. If there is an audit need, prefer a **scoped append-only audit log on that component** — reserve Event Sourcing for when full temporal reconstruction is the hard requirement. "Sounds robust" is never sufficient.
 
 For a **supporting** subdomain whose rules are *growing* (a state machine + multiplying invariants, e.g. an "emerging" subdomain), keep it at the floor (Transaction Script) but record a **promotion trigger** — the concrete signal that would later move it to a Domain Model.
+
+For an ingestion/pipeline-shaped subdomain, the rung describes its business logic only — also record the data shape (buffer/queue, backpressure, retention, hot/cold) as a module note, or the planner gets a rung but no shape for a firehose.
 
 Record each subdomain → rung + the **concrete signal** that justifies anything above Transaction Script. If no concrete signal exists, stay at the floor.
 
@@ -68,16 +70,26 @@ Default is **Modular Monolith**. Recommend microservices ONLY if all three gates
 2. "Is there CD / monitoring / DevOps maturity already in place?"
 3. "Are the bounded contexts well-understood already (not still being discovered)?"
 
-If **any** is "no" → **Modular Monolith. Say so and stop here on Axis B** (note: complexity alone never justifies microservices — the microservice premium). If the user argues for microservices from **scale** ("we'll have millions of X"), name it as axis confusion: scale is an Axis-B NFR met by horizontally replicating the monolith (and, if one component later scales divergently, a Hard-Parts extraction of *that component only*) — not by splitting into services. Say this explicitly.
+If **any** is "no" → **Modular Monolith. Say so and stop on the *microservices* question** (note: complexity alone never justifies microservices — the microservice premium). If the user argues for microservices from **scale** ("we'll have millions of X"), name it as axis confusion: scale is an Axis-B NFR met by horizontally replicating the monolith (and, if one component later scales divergently, a Hard-Parts extraction of *that component only*) — not by splitting into services. Say this explicitly.
 
-If all three pass, OR a single component looks special, run the **Hard-Parts scan** on that component: score the 6 disintegrators (low cohesion · divergent volatility · divergent scaling · fault isolation · differential security · independent extensibility) vs the 4 integrators (ACID across data · tight workflow · shared code · tight data relationships). Net disintegrators ≫ integrators → extract it; otherwise keep it modular. Warn explicitly against a **distributed monolith** (services that can't deploy independently).
+Then — **whether or not the gates passed** — if any single component shows divergent pressure (scaling, volatility, fault isolation), run the **Hard-Parts scan** on that component: score the 6 disintegrators (low cohesion · divergent volatility · divergent scaling · fault isolation · differential security · independent extensibility) vs the 4 integrators (ACID across data · tight workflow · shared code · tight data relationships). Net disintegrators ≫ integrators → extraction **candidate**: extract **now** only if the disintegrating pressure is **current (not projected)** AND the CD/ops gate passes — otherwise record it as that component's promotion trigger. Integrators dominate → keep it modular. Warn explicitly against a **distributed monolith** (services that can't deploy independently).
+
+**Tenancy probe (mandatory when the product serves multiple customer orgs):** ask "single-tenant or multi-tenant? If multi-tenant: does any customer segment carry a contractual/regulatory isolation requirement?" The ADR **must** decide the isolation rung: **shared schema + tenant-scoped RLS** (the default) → schema-per-tenant → DB-per-tenant. A *real* contractual/regulatory mandate climbs the rung; "enterprise customers will expect it" is the "sounds robust" of tenancy — name it as such, stay at the default, and record the mandate-lands condition as a promotion trigger.
 
 When recommending the monolith (a gate failed), **record the promotion trigger** — the concrete future signal that would justify revisiting Axis B (a second team forms, a component's scaling diverges, a bounded context stabilizes). The monolith is **sacrificial/evolutionary**, not permanent: note that the eventual split, if it comes, uses **Strangler Fig + an Anti-Corruption Layer + data-decomposition-behind-module-boundaries-first (+ sagas/outbox for cross-service consistency)** — never a big-bang rewrite. Enforcing "no cross-module DB access" as a fitness function now is what makes that future split cheap. (See *Evolving the topology* in the reference.)
+
+## Step 4.5: Module map (modular monolith)
+
+A modular monolith needs named modules — without a module list, "no cross-module DB access" is unenforceable. Derive it from DOMAIN-MODEL, don't invent it:
+- **Modules = bounded contexts** when the Bounded Contexts table is filled; **modules = subdomain groupings** when a single context was assumed.
+- **Resolve every flagged polyseme:** assign each meaning to one owning module — one word meaning two things across modules is exactly the rot the fitness functions exist to prevent.
+- Carry the **context-map relationships** into inter-module contracts — and apply an **ACL now** to any third-party/legacy integration whose model differs from yours, not only at a future split.
+- Record each module → what it **owns** (incl. its schema) → who it **talks to** and **via what** (sync call vs event). If any interaction is async, decide the mechanism in one line (in-process events / job queue / outbox); if the domain implies recurring/scheduled computation, decide where it runs (cron / job queue / recompute-on-read).
 
 ## Step 5: Over-/under-engineering check (the meta-tell)
 
 Run this check in **both directions** — it is a first-class gate, not a formality:
-- **Downward (over-engineering):** for every non-floor rung chosen in Steps 3–4, name the **current, concrete requirement** that justifies it (a real second adapter, a real divergent-scaling component, a real second team, a real audit mandate). No concrete requirement → **drop it to the floor**.
+- **Downward (over-engineering):** for every non-floor rung chosen in Steps 3–4, name the **current, concrete requirement** that justifies it (a real second adapter or delivery mechanism, a real divergent-scaling component, a real second team, a real audit mandate, a real tenant-isolation mandate, a genuinely pure core isolated for test speed). No concrete requirement → **drop it to the floor**.
 - **Upward (under-engineering):** for the core, re-check DOMAIN-MODEL. If the documented complexity (rich invariants, scoring, state machines, audit needs) is *not* captured by the chosen rung — including when a user understatement lowered it in Step 3 — **raise the rung**. A scripted core over a documented rich domain, or thin CRUD over a regulated/audited flow, must be raised.
 
 State the surviving justifications; you'll record them in the ADR.
@@ -88,7 +100,7 @@ State the surviving justifications; you'll record them in the ADR.
 - Your recommended option in one paragraph (the Axis-A rungs per subdomain + the Axis-B topology), how it compares to the default baseline (modular monolith + Domain Model in the complex core + Transaction Script elsewhere + ADRs + fitness functions), and 1–2 alternatives with trade-offs.
 - options: "Accept the recommendation", "Adjust (I'll tell you what)", "Show me the alternatives in detail"
 
-Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with the next number, `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md, Status = Accepted). Fill: Context (complexity + NFRs + team/ops), Decision (Axis A per-subdomain table + Axis B with the three gate answers), Consequences (incl. **fitness functions** to enforce boundaries), Alternatives rejected, and the over-/under-engineering check (each non-floor rung ↔ its concrete requirement).
+Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with the next number, `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md, Status = Accepted). Fill: Context (complexity + NFRs + team/ops), Decision (Axis A per-subdomain table + Axis B with the three gate answers + tenancy when multi-tenant + the Module map), Promotion triggers (component → observable condition → response), Consequences (incl. **fitness functions** to enforce boundaries), Alternatives rejected, and the over-/under-engineering check (each non-floor rung ↔ its concrete requirement).
 
 Write to `.planning/adr/NNNN-architecture.md`. Capture *why* and trade-offs, not implementation detail.
 
@@ -112,6 +124,7 @@ ADR-NNNN written — architecture decided.
   Axis A (domain logic): [core → rung]; [others → Transaction Script]
   Axis B (topology): [Modular Monolith | Microservices | component X extracted]
   Fitness functions: [N] to enforce boundaries
+  Promotion triggers: [N] recorded — re-check at /gsd:new-milestone
 
 Next: /gsd:plan-phase   (planning + test strategy will follow this shape)
 ```
@@ -120,7 +133,7 @@ Next: /gsd:plan-phase   (planning + test strategy will follow this shape)
 
 <critical_rules>
 - **Keep the two axes separate.** Domain-logic complexity drives Axis A; team structure + NFRs + ops maturity drive Axis B. Never let high scale imply a Domain Model, or rich logic imply microservices.
-- **Modular monolith is the default.** Microservices require ALL three "tall enough" gates; if any fails, recommend the monolith and stop — regardless of complexity.
+- **Modular monolith is the default.** Microservices require ALL three "tall enough" gates; if any fails, recommend the monolith — regardless of complexity. The stop applies to the *microservices* question only: the per-component Hard-Parts scan still runs whenever a single component shows divergent pressure.
 - **The meta-tell governs.** Every non-floor rung must map to a current, concrete requirement, or it drops to the floor.
 - **Recommend, don't dictate.** Present trade-offs and alternatives; the user approves. They have context you lack.
 - **Always emit an ADR** with explicit fitness functions, and respect `commit_docs` / `response_language`.
@@ -129,7 +142,8 @@ Next: /gsd:plan-phase   (planning + test strategy will follow this shape)
 <success_criteria>
 - Context loaded (PROJECT.md, REQUIREMENTS.md, DOMAIN-MODEL.md if present)
 - Axis A decided per subdomain, each non-floor rung tied to a concrete signal
-- Axis B decided via the three gates (+ Hard-Parts scan for any split); modular monolith unless all gates pass
+- Axis B decided via the three gates (+ Hard-Parts scan for any divergent component); modular monolith unless all gates pass
+- Module map derived from DOMAIN-MODEL (polysemes resolved); tenancy isolation decided when multi-tenant
 - Over-/under-engineering meta-tell applied
 - Recommendation presented with trade-offs/alternatives and user-approved
 - ADR written to `.planning/adr/NNNN-architecture.md` with fitness functions; committed when commit_docs is true

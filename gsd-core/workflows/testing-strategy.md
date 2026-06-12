@@ -48,17 +48,19 @@ cat TESTING-STANDARDS.md 2>/dev/null || true
 The shape is an **output**, never a target you pick. For each subdomain, map its architecture rung → primary test level (use the reference's table):
 - **Domain Model / rich core** → more **small (unit)** tests of the domain logic through its public API; **sociable** (real collaborators), mock only at ports.
 - **Transaction Script / CRUD-over-DB** → more **medium (integration)** tests against a real DB (see `test-containers` / `db-test-isolation`); few unit tests.
-- **Hexagonal core** → unit-test the pure domain; integration-test the adapters.
+- **Hexagonal core** → pure domain needs no doubles; test the application core with in-memory **fakes** at its ports (see `test-doubles.md`); integration-test the adapters real.
 - **Many external integrations** → medium integration tests at the ports; contract tests where a 3rd-party can't be seeded.
 - **Bought / off-the-shelf (Generic)** → do NOT test the vendor's internals; thin integration smoke at your own adapter seam only.
 
-Record subdomain → primary level + the rung that justifies it. Do NOT announce a chosen "pyramid/diamond" — let the distribution emerge. If the user asks to pick a shape, redirect: the architecture already determines where the behavior lives. If the user asks to mock the database or all collaborators, reject it: integration tests run against a **real** DB (see `test-containers` / `db-test-isolation`); mock ONLY at external ports — never the DB or in-process collaborators.
+Record subdomain → primary level + the rung that justifies it. Do NOT announce a chosen "pyramid/diamond" — let the distribution emerge. If the user asks to pick a shape, redirect: the architecture already determines where the behavior lives. If the user asks to mock the database or all collaborators, reject it: integration tests run against a **real** DB (see `test-containers` / `db-test-isolation`); mock ONLY at external ports — never the DB or in-process collaborators. If the user proposes mocking a 3rd-party API in integration tests and calling it covered, reject that too: a mock proves nothing about the real provider — use a verified contract, or, for vendors who won't run verification, the schema + recorded-fixtures + sandbox-smoke fallback (see `contract-testing.md`).
 
 ## Step 4: Gnarly bits + what NOT to test
 
 From DOMAIN-MODEL + REQUIREMENTS, identify the **pure, logic-dense** code that earns unit tests: money/currency (**integer minor units or exact decimal — never float**), complex conditionals/**state machines**, **parsers**, **algorithms**, pure functions. List them as unit-test targets.
 
 State what NOT to test: framework/library code, trivial getters/setters, mock behavior; and the rule — **each behavior tested once, at the cheapest level** (no duplicate unit+integration+e2e coverage of the same behavior).
+
+If existing code already violates a standard you are recording (e.g. money stored as floats), flag it in TEST-STRATEGY.md's Notes as a **pre-test remediation task** (refactor first) — never write tests that enshrine the violating representation.
 
 ## Step 5: Persistent critical-path e2e (the smoke list)
 
@@ -68,11 +70,11 @@ Ask (AskUserQuestion, header "E2E", or a text list): "Which flows are so essenti
 
 - **Coverage = floor, not a target.** Record that. If the user demands a coverage *target* (e.g. 100%), reframe it as a floor and warn that an excessively high floor forces low-value tests of trivial glue — the real quality signal is **mutation score** on the gnarly bits. **Mutation testing (Stryker)** applies to the critical modules (the gnarly bits from Step 4 + the core domain logic).
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
-- Confirm the existing `TESTING-STANDARDS.md` standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them.
+- **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them. **If it's absent (greenfield):** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline, write them into TEST-STRATEGY.md's Notes as the initial standards, and offer to generate `TESTING-STANDARDS.md` from them.
 
 ## Step 7: Write TEST-STRATEGY.md
 
-Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, and TDD stance (render `tdd_mode=false` as "off", `true` as "on").
+Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, the **CI execution map** (which tiers run at the PR gate vs merge-to-main vs nightly — it feeds `/gsd:cicd-strategy`), and TDD stance (render `tdd_mode=false` as "off", `true` as "on").
 
 Write to `.planning/TEST-STRATEGY.md`.
 

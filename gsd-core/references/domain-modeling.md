@@ -37,7 +37,19 @@ Classify each area of the system. This is the single highest-leverage output —
 
 1. **Core = differentiating AND complex — not just complex (and not merely *critical* or *regulated*).** A complex-, critical-, or regulated-but-*generic* subdomain (tax, identity/auth, encryption, compliance) is a **buy**, not a build. Difficulty, security-criticality, and regulatory burden do not make something core — only competitive differentiation does. Don't invest core-grade effort there.
 2. **Generic ≠ low quality.** "Generic" means *not differentiating*, not *low effort*. A battle-tested auth library is high-quality and generic.
-3. **Watch for CRUD that will grow business rules.** The dangerous case is an app that "starts as a UI over the database, then evolves into real domain logic." Before classifying something Generic/CRUD, probe future features: *will this accumulate invariants and rules?* If yes, treat it as (emerging) core/supporting, not generic.
+3. **Watch for CRUD that will grow business rules.** The dangerous case is an app that "starts as a UI over the database, then evolves into real domain logic." Whenever an area is *described* as simple/CRUD — whatever type is being claimed — probe future features: *will this accumulate invariants and rules?* If yes, treat it as (emerging) core/supporting, not generic. "Core but just CRUD" is self-contradictory — challenge which half is wrong.
+
+### What "complex" means — the complexity-signals rubric
+
+Complexity is **derived from observable signals, never asked as a free label** — domain experts understate their own domain; "honestly just CRUD" is how founders describe rule-rich cores. Elicit 2–3 signals per non-generic area, then rate:
+
+1. **Business invariants/rules** — non-trivial rules that must never be violated.
+2. **Lifecycle/state depth** — the central thing moves through states with restricted transitions.
+3. **Derivation/optimization logic** — outputs *computed* from competing factors (scoring, tradeoffs, allocation), not looked up.
+4. **Temporal/scheduling logic** — deadlines, windows, grace periods, retroactivity.
+5. **Policy/variant proliferation** — rules differ by customer, class, or configuration.
+
+**Rating:** 0–1 signals → low · 2–3 → medium · ≥3 with signal 3 present → high. Record fired signals in the rationale — the evidence *is* the rating. **Consistency tripwire:** Core+low is a contradiction (Core *means* differentiating and complex) — probe: "if it's your differentiator but has no complex rules, what makes it hard to copy?" Generic+high is a buy-harder signal.
 
 ### Anti-sprawl rule
 
@@ -51,7 +63,7 @@ Only when the domain is non-trivial. A **Big-Picture event storming** pass surfa
 2. For each: *who triggers it? who reacts? what decision follows?*
 3. Group events by actor/responsibility → each cluster is a candidate **bounded context**.
 
-Boundaries often fall where the **language changes** (the same word means different things) or where the **rate of change** differs. If boundaries are unclear, **defer** them — say so explicitly and let planning refine them.
+Boundaries often fall where the **language changes** (the same word means different things) or where the **rate of change** differs. If boundaries are unclear, **defer** them — say so explicitly and let planning refine them. Deferring a boundary your own glossary proved (polyseme, third-party vocabulary) is discarding findings — record it as a candidate.
 
 A **Process-level** pass is the optional middle gear between Big-Picture and Design-level storming: take one important event flow (e.g., "Order → Payment → Fulfillment") and walk its commands, policies ("whenever X, then Y"), and read-models. It sharpens *one* boundary and its hand-offs without dropping to aggregates. Use it only when a single flow's boundary is genuinely contested; otherwise stay Big-Picture. Do **not** run design-level (aggregate-level) event storming here — that is tactical and belongs to a core subdomain you've already identified.
 

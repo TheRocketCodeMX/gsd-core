@@ -50,7 +50,15 @@ Contract testing replaces the temptation to mock the 3rd party in an integration
 
 ## Schema/spec-based alternative
 
-When both sides share a spec (REST/gRPC/events) and you control them, schema-driven checks — OpenAPI/AsyncAPI validation, JSON Schema, protobuf backward-compat, Spring Cloud Contract — are a lighter alternative to full consumer-driven contracts.
+When both sides share a spec (REST/gRPC/events) — whether you control both, or the provider won't run your verification — schema-driven checks (OpenAPI/AsyncAPI validation, JSON Schema, protobuf backward-compat, Spring Cloud Contract) are a lighter alternative to full consumer-driven contracts.
+
+## When the provider won't verify (true 3rd parties — Stripe/Samsara-class)
+
+A paid vendor will never run your pacts — yet mocking them is still anti-pattern #1. Fall back to a pinned, observable contract:
+
+- **Pin the contract:** validate your client against the vendor's published OpenAPI/JSON Schema, or against **recorded real responses** replayed at your boundary (refreshed deliberately, never silently).
+- **One thin, contract-verified adapter:** all vendor knowledge behind a single adapter tested against the pinned contract; the rest of the codebase fakes the *port*, not the vendor (`test-doubles.md`).
+- **Scheduled live smoke** against a sandbox account — non-blocking, with drift alerting. Catches "the vendor changed" without flaking every PR.
 
 ## Anti-patterns
 

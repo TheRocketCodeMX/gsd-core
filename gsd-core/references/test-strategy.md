@@ -1,6 +1,6 @@
 # Testing Strategy — Shape Follows Architecture
 
-Reference for `/gsd:testing-strategy`. Decides WHAT to test, at WHICH level, and HOW MUCH — matched to the architecture (from the ADR / SKELETON). **Extends, not replaces,** the project's existing rigor in `TESTING-STANDARDS.md` (real-code-only, no-vacuous-assertions, typed surface, `fast-check` property tests, Stryker mutation ≥80%). Recommends; the user decides.
+Reference for `/gsd:testing-strategy`. Decides WHAT to test, at WHICH level, and HOW MUCH — matched to the architecture (from the ADR / SKELETON). Where `TESTING-STANDARDS.md` exists, **extends — never replaces —** its rigor; where it's absent (greenfield), the strategy **defines** the baseline rules itself (real-code-only, no vacuous assertions, typed surface, `fast-check` property tests, Stryker mutation ≥80% on critical modules) and creates the file from them. Recommends; the user decides.
 
 ## Core principles (the consensus)
 
@@ -17,7 +17,7 @@ Read the architecture decision (`.planning/adr/*.md` or SKELETON). Per subdomain
 |---|---|---|
 | **Domain Model / rich core** | more **small (unit)** tests of the domain logic, through its public API | lots of pure logic, few dependencies — cheap and high-value to unit-test |
 | **Transaction Script / CRUD-over-DB** | more **medium (integration)** tests against a real DB | thin logic, DB-bound — little pure logic to isolate; confidence lives at the DB boundary |
-| **Hexagonal core** | unit-test the domain in isolation (no mocks — it's pure); integration-test the **adapters** against real systems | the architecture literally separates the two |
+| **Hexagonal core** | pure domain functions need no doubles; the application core is tested with **in-memory fakes at its ports** (contract-verified against the real adapters — see `test-doubles.md`); the **adapters** are integration-tested against real systems | the architecture literally separates the two |
 | **Many integrations / external APIs** | medium integration tests at the ports; **contract tests** where a 3rd-party can't be seeded | confidence is in the integration, not mock existence |
 | **Bought / off-the-shelf (Generic)** | thin integration smoke at your adapter seam only | don't test the vendor's internals — test your seam |
 
@@ -39,7 +39,7 @@ The quality benefit is real, but the evidence favors **small, uniform increments
 
 ## Persistent vs transient E2E
 
-- **Persistent:** a small **smoke / critical-user-journey** suite (auth, payment, core nav) in CI on every PR (<5 min). Keep it lean (≈50–200 well-chosen e2e tests) — e2e is slow/flaky; push coverage down to integration.
+- **Persistent:** a small **smoke / critical-user-journey** suite (auth, payment, core nav) of **3–7 journeys** in CI on every PR (<5 min). ≈50–200 well-chosen e2e tests is the cap on the **total** e2e portfolio across all tiers (PR smoke + staging regression + release/scheduled) — never the size of the PR gate, which stays at 3–7 journeys. E2e is slow/flaky; push coverage down to integration.
 - **Transient:** throwaway e2e to validate a freshly-built flow during the dev loop; **not** kept in CI. Once the behavior is covered more cheaply (integration), delete or demote it.
 
 ## Output (`TEST-STRATEGY.md`)
@@ -52,13 +52,14 @@ The quality benefit is real, but the evidence favors **small, uniform increments
 
 Feeds `add-tests`, `execute-phase`, and `plan-phase`.
 
-## Extends existing rigor (keep it all)
+## Extends existing rigor — or instates it
 
-`TESTING-STANDARDS.md` already enforces real-code-only, no-vacuous-assertions, the typed-surface mandate, `fast-check` property tests for bijective/invariant logic, and Stryker mutation ≥80% on critical modules. This skill adds the **strategic layer** on top — the shape, the what/what-not, the level-per-subdomain. Do not weaken any existing standard.
+Where `TESTING-STANDARDS.md` is present, it enforces baseline rigor — real-code-only, no-vacuous-assertions, the typed-surface mandate, `fast-check` property tests for bijective/invariant logic, Stryker mutation ≥80% on critical modules — keep all of it; do not weaken any existing standard. Where the file is **absent** (greenfield), those same rules are the defaults to instate: the strategy records them as the project's baseline standards (in TEST-STRATEGY.md's Notes) and offers to generate `TESTING-STANDARDS.md` from them. Either way, this skill adds the **strategic layer** on top — the shape, the what/what-not, the level-per-subdomain.
 
 ## Test-infrastructure how-to references (read when writing the tests)
 
 When the strategy calls for real-dependency integration tests, auth, or e2e, load the focused how-to reference:
+- `@~/.claude/gsd-core/references/test-doubles.md` — dummy/stub/spy/mock/fake taxonomy; fake-at-ports; never assert on stubs; the mockable-seam allow-list.
 - `@~/.claude/gsd-core/references/test-containers.md` — real DBs/services via Testcontainers (singleton pattern, pinned tags, CI/Ryuk).
 - `@~/.claude/gsd-core/references/db-test-isolation.md` — parallel-safe DB isolation (template DB, db/schema-per-worker, txn rollback).
 - `@~/.claude/gsd-core/references/auth-in-tests.md` — authenticate-once/storageState, token minting, multi-role, JWT vs cookie, one-account-per-worker.

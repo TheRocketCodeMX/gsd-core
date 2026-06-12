@@ -5,12 +5,12 @@ Reference for `/gsd:discover-product`. An **optional** front-of-funnel step that
 ## When to run / when to skip
 
 - **Run** when value is **uncertain**: a new market/segment, no past-behavior evidence, a stakeholder asserting demand from a hypothetical, or a large/irreversible bet.
-- **Skip** (or jump straight to lightweight RICE prioritization) when a client/customer has explicit, evidenced requirements — then the open question is *sequence and cost*, not *whether*.
+- **Skip** (or jump straight to lightweight RICE prioritization) when a client/customer has explicit, evidenced requirements — money moved or real usage, *covering the candidate list*; LOIs alone don't qualify — then the open question is *sequence and cost*, not *whether*.
 
 ## Core principles
 
 - **Outcomes over outputs** (Perri): define the customer behavior/metric to change, not the feature to ship.
-- **Demand over interest** (YC): behavior, money, and "panic when it breaks" count; waitlists and "that's interesting" don't. Ask about the **past**, never hypotheticals.
+- **Demand over interest** (YC): **strong** = money moved / real usage / panic-when-it-breaks; **medium** = signed non-binding commitments (LOIs, unpaid pilots) — real but not yet demand, convert to strong or treat as open; **weak** = interest (waitlists, "that's interesting") — doesn't count. Ask about the **past**, never hypotheticals.
 - **Find the narrowest wedge:** the smallest version someone would pay for this week — the hair-on-fire segment.
 - **Frame the vision as an opportunity/outcome** (it must admit >1 solution) so it informs but doesn't over-constrain architecture.
 - **Cover the four risks** (Cagan): value, usability, feasibility, viability.
@@ -21,15 +21,15 @@ Reference for `/gsd:discover-product`. An **optional** front-of-funnel step that
 
 The first answer is polished — push 2–3 times with concrete specifics, not soft exploration. "Name the *actual* human, the *actual* consequence." Reflect the answer back; confirm before moving on. One thread at a time.
 
-## Distilled question set (ordered; skip any block already evidenced)
+## Distilled question set (ordered; skip a block only when its named outputs already exist at strong evidence — reflect the skipped conclusion back)
 
-0. **Frame:** what customer behavior/metric do we want to change (not a feature)? If we skipped discovery entirely, what assumption would we be betting the whole build on?
+0. **Frame:** what customer behavior/metric do we want to change (not a feature)? (The betting-the-build assumption is enumerated in block 4 — don't ask it twice.)
 1. **Job & user:** who *specifically* — and for whom is the problem most acute, frequent, expensive, unavoidable? State the job solution-free. Job story: *"When [situation], I want to [motivation], so I can [outcome]."* Capture 2–3 **measurable desired-outcome statements** for the job (direction + metric + object, e.g. "reduce the time to find an open class slot") — these are what "better" is measured against. Note if the job-population is heterogeneous (different segments → different outcomes; don't average them away).
-2. **Demand vs interest:** "Tell me about the *last time* you hit this." "What are you doing about it *today*?" "What does that workaround cost (time/money)?" "What *real* evidence exists — pre-pay, LOI, pilot, converted signups?" (Never "would you use X?")
+2. **Demand vs interest:** "Tell me about the *last time* you hit this." "What are you doing about it *today*?" "What does that workaround cost (time/money)?" "What do they use today instead — incl. spreadsheets or nothing — and why hasn't it won?" "What *real* evidence exists — pre-pay, pilot in use, converted signups, signed LOIs?" Mark strength: strong (money/usage) / medium (LOIs, unpaid pilots) / weak (interest). (Never "would you use X?")
 3. **Wedge & under-served outcome:** which single opportunity, solved, most moves the outcome? The narrowest version that fully solves it for one user? Can we imagine >1 solution? (If no — we smuggled in a solution; re-frame.)
-4. **Four risks** (only the unvalidated ones): **value** (evidence they'll choose this over the status quo), **usability** (where they'll get stuck), **feasibility** (riskiest technical unknown), **viability** (pricing/legal/sales/brand). First **enumerate the leap-of-faith assumptions** behind the chosen wedge (what must be true for it to work); then run the *cheapest test on the riskiest* one — not just a single test on the least-validated risk.
+4. **Four risks** (only the unvalidated ones): **value** (evidence they'll choose this over the status quo), **usability** (where they'll get stuck), **feasibility** (riskiest technical unknown), **viability** (pricing/legal/sales/brand). First **enumerate the leap-of-faith assumptions** behind the chosen wedge (what must be true for it to work); then **specify** the cheapest test for the *riskiest* one — pass/fail threshold, kill criterion, owner, by-when; tests execute *after* the session, before building — not just a single test on the least-validated risk. Value is never "validated" on founder testimony alone — it needs customer-sourced evidence (a named customer's behavior, quote, or money).
 5. **Scope & prioritization:** end-to-end journey → the thin first slice (walking skeleton). RICE on the candidate list — Reach × Impact × Confidence ÷ Effort; table-stakes/dependencies legitimately override the score.
-6. **Success:** how will we know it worked (the outcome metric, by when)? What would make ≥40% of target users "very disappointed" to lose it? (Sean Ellis PMF proxy — necessary, not sufficient; survey only users who used the core.)
+6. **Success:** how will we know it worked (the outcome metric, by when)? Pre-register the Sean Ellis PMF criterion — the ≥40%-"very disappointed" survey to run once ≥N pilots have used the core (necessary, not sufficient; survey only users who used the core) — a planned measurement, never a founder prediction.
 
 ## Feature prioritization: rigor vs lightweight
 

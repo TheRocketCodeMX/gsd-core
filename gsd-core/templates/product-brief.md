@@ -25,10 +25,12 @@ State 2–3 as *direction + metric + object* so "is it working?" is answerable. 
 
 | Signal | Evidence | Strength |
 |--------|----------|----------|
-| Current workaround | [what they do today + its cost in time/money] | strong / weak |
-| Behavioral / money | [pre-pay, LOI, pilot, converted signups, "calls when it breaks"] | strong / weak |
+| Workaround / alternatives | [what they use today instead — incl. spreadsheets/nothing — its cost, why it hasn't won] | strong / medium / weak |
+| Money / usage | [pre-pay, paying client, real usage, "calls when it breaks"] | strong |
+| Signed commitments | [non-binding LOIs, unpaid pilots] | medium — not yet demand |
+| Interest | [waitlists, likes, "sounds useful"] | weak |
 
-[If evidence is all "interest" (waitlists, "sounds useful"), flag it — demand is unproven.]
+[All-interest = demand unproven. Medium at best → convert to strong or treat demand as open.]
 
 ## The wedge
 
@@ -38,7 +40,7 @@ State 2–3 as *direction + metric + object* so "is it working?" is answerable. 
 
 | Risk | Status | Evidence / cheapest test before building |
 |------|--------|------------------------------------------|
-| Value (will they choose it over the status quo?) | validated / open | |
+| Value (will they choose it over the status quo?) | validated / open | [validated needs customer-sourced evidence (named behavior/quote/money) — never founder testimony alone] |
 | Usability (can they figure it out?) | validated / open | |
 | Feasibility (can we build it — riskiest unknown?) | validated / open | |
 | Viability (pricing/legal/sales/brand?) | validated / open | |
@@ -52,7 +54,7 @@ State 2–3 as *direction + metric + object* so "is it working?" is answerable. 
 ## Success
 
 - **Outcome metric + by when:** [the behavior/metric change and the date]
-- **PMF check:** [what would make ≥40% of core users "very disappointed" to lose this]
+- **PMF check (pre-registered):** [Sean Ellis criterion (≥40% "very disappointed") to survey once ≥N pilots used the core — planned measurement, not founder prediction]
 
 ## Handoff notes
 
@@ -62,9 +64,9 @@ State 2–3 as *direction + metric + object* so "is it working?" is answerable. 
 
 The brief is a hypothesis. List the assumptions that must hold for the wedge to work, riskiest first, each with the cheapest next test — revisit after a handful of customer conversations (continuous discovery, not a gate).
 
-| Leap-of-faith assumption | Riskiest? | Cheapest next test |
-|---|---|---|
-| [what must be true] | [yes / no] | [the test] |
+| Leap-of-faith assumption | Riskiest? | Cheapest next test (threshold · owner · by-when) | Kill criterion |
+|---|---|---|---|
+| [what must be true] | [yes / no] | [test + threshold, owner, by-when — runs before building] | [what result kills the wedge] |
 
 ---
 *Product brief. Next: `/gsd:new-project` (if not done) → `/gsd:model-domain` → `/gsd:recommend-architecture`.*

@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-06-12
+
+Quality wave: every discovery/testing command was realistically simulated against a trap-laden scenario, adversarially judged by expert panels, and fixed — plus a whole new research-backed **delivery pillar** (infrastructure + CI/CD).
+
+### Added
+
+- **`/gsd-infrastructure-strategy`** — compute decision ladder (serverless containers as the default: Cloud Run / ECS+Fargate / Container Apps; Kubernetes only past quantified utilization+team triggers; VM exception list), data layer per environment with the serverless-Postgres cost crossover, observability + IaC floors, cost guardrails. Produces `.planning/INFRA-STRATEGY.md`. Backed by official pricing, AWS's own Fargate study, and CAST AI's 2,000-org telemetry.
+- **`/gsd-cicd-strategy`** — CI platform decision (GitHub Actions default), OIDC keyless auth with the mandatory pinned `sub` condition, the CI-vs-application secrets split, test-tier→pipeline-stage mapping (PR gate ≤10 min) consuming TEST-STRATEGY.md, flaky-test canon, merge-queue trigger, deployment ladder, supply-chain table stakes. Produces `.planning/CICD-STRATEGY.md`.
+- **`references/test-doubles.md`** — the dummy/stub/spy/mock/fake taxonomy: fake-at-ports doctrine with contract-verified fakes, never-assert-on-stubs (CQS rule), the unmanaged-only mockable-seam allow-list.
+- **`references/ai-test-quality.md`** — the AI-test-writer contract: behavior-inventory-before-writing, greppable forbidden-pattern list, assertion-quality rules, the **falsifiability gate** (mutate-to-red replaces the old "tests may pass immediately — that's OK" waiver in `add-tests`), changed-files mutation gate, self-interrogation.
+- **`references/data-environments.md`** — serverless vs dedicated Postgres crossover (quantified), pooled-endpoint-always rule, DB-per-environment parity checklist, GDPR test-data rules (masked ≠ anonymous), expand–contract migrations, the secrets floor (secret manager + runtime refs + OIDC CI + CLI-injected local dev).
+
+### Changed (verified fixes from the simulation + judge evaluation)
+
+- **discover-product:** the "already evidenced" shortcut now audits evidence *strength AND coverage* (LOIs alone never skip-qualify); three-tier evidence taxonomy (strong/medium/weak) unified across workflow/reference/template; value risk is never "validated" on founder testimony alone (customer-sourced evidence required); assumption tests get threshold/kill-criterion/owner/by-when; alternatives probe added; PMF check pre-registered; stale DISCOVERY.md refs fixed.
+- **model-domain:** complexity is now **derived, never asked** — 5-signal rubric (invariants, lifecycle, derivation/optimization, temporal, policy variance) with the Core+low contradiction tripwire; CRUD-probe fires on any "it's simple" description regardless of claimed type; flagged polysemes/3rd-party seams are recorded as candidate contexts (default ACL) even without `--event-storming`; area list confirmed before classifying; batched classification cuts ~12 turns to ~5.
+- **recommend-architecture:** fixed the Step-4 contradiction — the Hard-Parts component scan now runs whenever a component shows divergent pressure, regardless of the microservices gates (extract-now additionally gated on *current* load + ops maturity); new **Module Map** step derives modules from bounded contexts/subdomains with polysemes resolved; **mandatory tenancy decision** (shared-schema+RLS default → schema-per-tenant → DB-per-tenant); promotion triggers get an ADR section; hexagonal criteria unified into one rule across workflow/reference/matrix; data-pipeline/async/scheduled-work decision prompts added.
+- **testing-strategy:** hexagonal row rewritten (pure core + in-memory fakes at ports, adapters integration-tested real); e2e numbers reconciled (3–7 smoke on PR; 50–200 is the total portfolio cap); greenfield branch — the strategy *defines* baseline standards when TESTING-STANDARDS.md doesn't exist; uncooperative-vendor contract fallback (Samsara-class: pinned schema + thin verified adapter + scheduled sandbox smoke) with an explicit reject-mock-the-vendor pushback; CI execution map added to the template (feeds `/gsd:cicd-strategy`); float-money-in-existing-code → refactor-first rule.
+- **Wiring:** INFRA-STRATEGY.md + CICD-STRATEGY.md registered in the canonical-refs spine (discuss-phase accumulator, planner/checker must-read lists) and enforced by the plan-checker (HIGH concern on contradiction, e.g. committed .env where the secret manager is mandated).
+
+*Methodology: 4 trap-laden simulations + 4 adversarial expert judges (37 verified findings, 0 fabricated) + 3 deep-research reports (~150 cited sources, tutorial-grade sources rejected).*
+
 ## [1.7.5] - 2026-06-10
 
 ### Fixed

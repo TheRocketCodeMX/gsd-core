@@ -56,7 +56,7 @@ Full roster at `agents/gsd-*.md`. The "Primary doc" column flags whether [`docs/
 
 ---
 
-## Commands (71 shipped)
+## Commands (73 shipped)
 
 Full roster at `commands/gsd/*.md`. The groupings below mirror `docs/COMMANDS.md` section order; each row carries the command name, a one-line role derived from the command's frontmatter `description:`, and a link to the source file. `tests/command-count-sync.test.cjs` locks the count against the filesystem.
 
@@ -97,6 +97,12 @@ These six routers are descriptor-only entries that the model picks first; the bo
 | `/gsd-ui-review` | Retroactive 6-pillar visual audit of implemented frontend code. | [commands/gsd/ui-review.md](../commands/gsd/ui-review.md) |
 | `/gsd-code-review` | Review source files changed during a phase for bugs, security, and code-quality problems; use `--fix` to auto-apply findings. | [commands/gsd/code-review.md](../commands/gsd/code-review.md) |
 | `/gsd-eval-review` | Retroactively audit an executed AI phase's evaluation coverage; produces EVAL-REVIEW.md. | [commands/gsd/eval-review.md](../commands/gsd/eval-review.md) |
+| `/gsd-discover-product` | Optional product discovery — demand vs interest, narrowest wedge, four risks, outcome-framed. | [commands/gsd/discover-product.md](../commands/gsd/discover-product.md) |
+| `/gsd-model-domain` | Greenfield DDD — ubiquitous language + subdomain distillation with derived complexity. | [commands/gsd/model-domain.md](../commands/gsd/model-domain.md) |
+| `/gsd-recommend-architecture` | Recommend an architecture matched to domain complexity and NFRs; produces an ADR. | [commands/gsd/recommend-architecture.md](../commands/gsd/recommend-architecture.md) |
+| `/gsd-testing-strategy` | Recommend a test strategy matched to the architecture — shape, levels, what to test. | [commands/gsd/testing-strategy.md](../commands/gsd/testing-strategy.md) |
+| `/gsd-infrastructure-strategy` | Recommend compute/data/environments infrastructure matched to actual scale and team. | [commands/gsd/infrastructure-strategy.md](../commands/gsd/infrastructure-strategy.md) |
+| `/gsd-cicd-strategy` | Recommend a CI/CD strategy — platform, OIDC auth, secrets split, pipeline stages, deploy ladder. | [commands/gsd/cicd-strategy.md](../commands/gsd/cicd-strategy.md) |
 
 ### Phase & Milestone Management
 
@@ -166,7 +172,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 
 ---
 
-## Workflows (92 shipped)
+## Workflows (94 shipped)
 
 Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that commands reference internally; most are not read directly by end users. Rows below map each workflow file to its role (derived from the `<purpose>` block) and, where applicable, to the command that invokes it.
 
@@ -192,6 +198,12 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `discuss-phase-assumptions.md` | Assumptions-mode discuss — extract implementation decisions via codebase-first analysis. | `/gsd-discuss-phase` (when `discuss_mode=assumptions`) |
 | `discuss-phase-power.md` | Power-user discuss — pre-generate all questions into a JSON state file + HTML UI. | `/gsd-discuss-phase --power` |
 | `discuss-phase.md` | Extract implementation decisions through iterative gray-area discussion. | `/gsd-discuss-phase` |
+| `discover-product.md` | Product discovery interview — demand evidence, wedge, four risks; produces PRODUCT-BRIEF.md. | `/gsd-discover-product` |
+| `model-domain.md` | Strategic DDD — ubiquitous language + subdomain distillation; produces DOMAIN-MODEL.md. | `/gsd-model-domain` |
+| `recommend-architecture.md` | Two-axis architecture recommendation; produces .planning/adr/NNNN-architecture.md. | `/gsd-recommend-architecture` |
+| `testing-strategy.md` | Architecture-matched test strategy; produces TEST-STRATEGY.md. | `/gsd-testing-strategy` |
+| `infrastructure-strategy.md` | Compute/data/environments recommendation; produces INFRA-STRATEGY.md. | `/gsd-infrastructure-strategy` |
+| `cicd-strategy.md` | CI/CD platform, secrets, pipeline-stage and deploy-ladder recommendation; produces CICD-STRATEGY.md. | `/gsd-cicd-strategy` |
 | `mvp-phase.md` | Plan a phase as a vertical MVP slice — user story, SPIDR splitting, then plan-phase. | `/gsd-mvp-phase` |
 | `do.md` | Route freeform text from the user to the best matching GSD command. | `/gsd-progress --do` |
 | `docs-update.md` | Generate, update, and verify canonical and hand-written project documentation. | `/gsd-docs-update` |
@@ -264,7 +276,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (78 shipped)
+## References (83 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -343,6 +355,16 @@ References for the fork's discovery pillar — product definition, strategic DDD
 | `domain-modeling.md` | Lightweight strategic DDD — ubiquitous language, subdomain distillation (core/supporting/generic), bounded contexts + context mapping, event storming. |
 | `architecture-decision.md` | Two-axis complexity-matched architecture — domain-logic ladder × deployment topology, "you must be this tall" gates, evolution/migration (strangler-fig, ACL, sagas). |
 
+### Delivery References
+
+References for the fork's delivery pillar — infrastructure, CI/CD, and data/environments. Consumed by `/gsd:infrastructure-strategy` and `/gsd:cicd-strategy`.
+
+| Reference | Role |
+|-----------|------|
+| `infrastructure-strategy.md` | Compute decision ladder (serverless containers default → K8s/VM triggers), cost crossovers, per-cloud equivalences, observability + IaC floors. |
+| `cicd-strategy.md` | CI platform decision (GHA default), OIDC keyless auth + pinned sub, secrets split, tier→stage mapping, flaky canon, deploy ladder, supply-chain table stakes. |
+| `data-environments.md` | Serverless vs dedicated Postgres crossover, DB-per-environment parity, GDPR test data, expand–contract migrations, secrets floor. |
+
 ### Testing-Strategy References
 
 References for the fork's testing pillar — strategic test shape plus focused how-to guides loaded when writing tests. Consumed by `/gsd:testing-strategy`, `add-tests`, `execute-phase`, and `plan-phase`.
@@ -357,6 +379,8 @@ References for the fork's testing pillar — strategic test shape plus focused h
 | `e2e-tiering.md` | Persistent smoke vs transient E2E; keep the E2E suite lean. |
 | `contract-testing.md` | Consumer-driven contracts (Pact) + provider verification for an external dependency you can't run/seed in CI. |
 | `flaky-test-checklist.md` | Fixed clock, seeded RNG, poll-don't-sleep, per-worker isolation. |
+| `test-doubles.md` | Dummy/stub/spy/mock/fake taxonomy — fake-at-ports doctrine, never-assert-on-stubs, mockable-seam allow-list. |
+| `ai-test-quality.md` | The AI-test-writer contract — behavior inventory, forbidden patterns, falsifiability gate, mutation gate. |
 
 ### Thinking-Model References
 

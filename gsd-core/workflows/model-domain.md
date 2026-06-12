@@ -82,25 +82,24 @@ Reply with a number, or just tell me the corrections.
 
 For each candidate area, classify it and **capture the rationale**. Apply the misclassification check from the reference.
 
-For each area, use `AskUserQuestion` (header = the area name):
-- question: "Is *[area]* where you compete and win, something you need but isn't your edge, or a commodity every product has?"
-- options:
-  - "Core — we differentiate here" (→ build in-house, invest)
-  - "Supporting — needed, not our edge" (→ build simply / buy-and-extend)
-  - "Generic — commodity" (→ buy / off-the-shelf / library)
+**Confirm the area list first** (AskUserQuestion, header "Areas"): "These are the areas I see: [list]. What's missing, and is anything really two areas?"
+
+**Then propose all classifications at once** (draft-then-refine, like Step 3): one table — area · proposed type ("Core — we differentiate here" / "Supporting — needed, not our edge" / "Generic — commodity") · one-line rationale — asking (header "Subdomains"): "Which of these are wrong?" Run the checks and complexity signals below on every contested area and the claimed core — batching cuts question count, not rigor.
 
 **Apply these checks before finalizing each classification (state them to the user when they apply):**
 1. **Differentiation — not difficulty — decides Core.** If the user justifies Core by *difficulty, criticality, security, risk, or regulatory burden* rather than by competitive differentiation, test it: "Is this actually your competitive advantage, or a hard/critical-but-standard problem (e.g., tax, auth, encryption, compliance) you could buy?" If standard → **Generic (buy)**, not core. Critical ≠ differentiating; regulated ≠ differentiating.
-2. **CRUD that will grow.** Before accepting Generic/CRUD, ask: "Will this accumulate real business rules and invariants over time, or stay simple data-in/data-out?" If it will grow → mark it **emerging Supporting** (the default for growing areas), not generic. It is Core only if it is itself the competitive differentiator — and there is normally exactly one of those.
+2. **CRUD that will grow.** Whenever an area is *described* as CRUD/simple/"just forms and dates" — regardless of the type being claimed — ask: "Will this accumulate real business rules and invariants over time, or stay simple data-in/data-out?" If it will grow → mark it **emerging Supporting** (the default for growing areas), not generic. It is Core only if it is itself the competitive differentiator — and there is normally exactly one of those. Claiming Core *while* describing it as trivial is a contradiction — Core means differentiating AND complex; probe which half is wrong.
 3. **Generic ≠ low quality.** Note to the user that "generic" means *not differentiating*, not *low effort*.
 
-Record each subdomain's name, type, one-line description, rationale, and a rough complexity (low/medium/high). You should end with exactly **one** clearly-named core domain in most cases — if the user names many "core" areas, push back (anti-sprawl): "Which ONE is the real competitive core?"
+**Complexity is derived, never asked.** For each non-generic area, elicit 2–3 of the reference rubric's five signals (invariants; lifecycle depth; derivation/optimization; temporal logic; policy variance) — usually one question: "What rules can never be broken here, and what's the hardest decision this area makes?" — then rate per the rubric, recording fired signals in the rationale cell. **Tripwire: Core+low is a contradiction** — probe: "If it's your differentiator but has no complex rules, what makes it hard to copy?" — it's either not core, or not low. Generic+high is a buy-harder signal.
+
+Record each subdomain's name, type, one-line description, rationale, and the derived complexity (low/medium/high). You should end with exactly **one** clearly-named core domain in most cases — if the user names many "core" areas, push back (anti-sprawl): "Which ONE is the real competitive core?"
 
 For the single core domain only, capture in one line **what "winning" means** — the decision dimensions the core optimizes (e.g., "best match = price × reliability × lane-fit") — NOT the algorithm or any implementation. This sharpens the core for the architecture and planning phases.
 
 ## Step 5: Bounded contexts (optional — only if `--event-storming`)
 
-If `--event-storming` is NOT set: write in DOMAIN-MODEL.md "Bounded Contexts: deferred — single context assumed; planning will refine if boundaries emerge." Skip to Step 6.
+If `--event-storming` is NOT set: write in DOMAIN-MODEL.md "Bounded Contexts: deferred — single context assumed; planning will refine if boundaries emerge" (unless Step 6's candidate-boundary rule fires — then record the candidates instead). Skip to Step 6.
 
 If set, run a **Big-Picture** pass (timeline of events, not aggregates):
 1. Ask (AskUserQuestion or text list) for the major domain events: "What significant things *happen* in this system? (e.g., 'Order Placed', 'Payment Captured', 'Shipment Dispatched')". Collect 5–10.
@@ -117,8 +116,8 @@ If set, run a **Big-Picture** pass (timeline of events, not aggregates):
 Render `@~/.claude/gsd-core/templates/domain-model.md` (fill `[DATE]` with today's date and `[PROJECT_TITLE]` from PROJECT.md), filling:
 - **Ubiquitous Language** table (term, definition, used-by, aliases/confusions)
 - **Subdomains** table + the Core/Supporting/Generic groupings, each with rationale; note the misclassification check was applied
-- **Bounded Contexts** (filled or explicitly deferred)
-- **Notes for downstream phases** — one line for architecture (e.g., "Core 'X' is high-complexity → expect a richer domain model; rest is CRUD") plus deferred boundaries. **Any polyseme / language conflict flagged in Step 3 MUST appear here**, even when bounded contexts are deferred — it is a candidate context boundary.
+- **Bounded Contexts** (filled, candidate-recorded, or explicitly deferred). **Candidate-boundary rule (even without `--event-storming`):** a flagged polyseme OR third-party/legacy upstream vocabulary in the glossary is a *proven* boundary — don't merely defer it. Name the candidate contexts (one line each) and the seam relationship (default **ACL** against a third-party upstream), marked "candidate — refine in planning", noting `--event-storming` would formalize them. Recording only — never "single context assumed" next to a flagged boundary.
+- **Notes for downstream phases** — one line for architecture (e.g., "Core 'X' is high-complexity → expect a richer domain model; rest is CRUD") plus deferred boundaries. **Any polyseme / language conflict flagged in Step 3 MUST appear here**, even when bounded contexts are deferred.
 
 Write to `.planning/DOMAIN-MODEL.md`. **Do not include any architecture recommendation** — only the domain.
 
@@ -151,8 +150,9 @@ Next: /gsd:plan-phase   (planning will use the subdomain complexity to shape arc
 - **Strategic only.** Capture language + subdomains (+ optional contexts). Never prescribe architecture, never design aggregates — that is a later phase.
 - **Buy-vs-build is allowed; stacks are not.** Classifying a subdomain as buy / off-the-shelf / library is strategic and encouraged. Choosing architecture patterns, frameworks, or deployment topology is forbidden here — that is `recommend-architecture`.
 - Every subdomain classification MUST carry an explicit rationale, and the misclassification check (complex≠core, CRUD-that-grows, generic≠low-quality) MUST be applied.
+- Complexity is derived from elicited signals (reference rubric), never a free label; Core+low is a contradiction — challenge it.
 - Capture the team's language, not textbook definitions.
-- Anti-sprawl: aim for one clearly-named core domain; defer unclear context boundaries rather than inventing them.
+- Anti-sprawl: aim for one clearly-named core domain; defer unclear context boundaries rather than inventing them — but record glossary-proven boundaries as candidates.
 - Respect `commit_docs` and `response_language`.
 </critical_rules>
 
@@ -160,7 +160,7 @@ Next: /gsd:plan-phase   (planning will use the subdomain complexity to shape arc
 - Project context loaded (PROJECT.md/REQUIREMENTS.md) before questioning
 - Ubiquitous language captured (~8–15 terms) with definitions, usage, and conflicts
 - Every subdomain classified with rationale + misclassification check applied
-- Bounded contexts surfaced (with `--event-storming`) or explicitly deferred
+- Bounded contexts surfaced (with `--event-storming`), candidate-recorded, or explicitly deferred
 - No architecture prescribed
 - DOMAIN-MODEL.md written from the template and committed (when commit_docs is true)
 - User directed to /gsd:plan-phase

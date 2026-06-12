@@ -37,6 +37,14 @@ The shape is an *output* of the architecture, not a chosen target. Sociable test
 - Coverage = **floor**, not a target.
 - Mutation testing (Stryker) on: [critical modules — e.g. the pricing engine, money math].
 
+## CI execution map (feeds `/gsd:cicd-strategy`)
+
+| Pipeline stage | Runs | Budget |
+|---|---|---|
+| PR gate (blocking) | small + fast medium + 3–7 e2e smoke [+ changed-files mutation if fast] | ≤10 min |
+| Merge to main | full medium + e2e portfolio subset | — |
+| Nightly / scheduled | full e2e portfolio + full mutation run [+ vendor sandbox smoke, non-blocking] | — |
+
 ## TDD stance
 
 - Behavior-level tests, **small uniform increments**, regression floor, real RED step.

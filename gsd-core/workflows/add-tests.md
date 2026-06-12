@@ -6,6 +6,8 @@ Users currently hand-craft `/gsd:quick` prompts for test generation after each p
 
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
+
+@~/.claude/gsd-core/references/ai-test-quality.md — the quality contract for AI-written tests (behavior inventory, forbidden patterns, assertion rules, falsifiability gate). Binding for every test generated here.
 </required_reading>
 
 <process>
@@ -176,8 +178,8 @@ For each approved file, create a detailed test plan.
 
 **For TDD files**, plan tests following RED-GREEN-REFACTOR:
 1. Identify testable functions/methods in the file
-2. For each function: list input scenarios, expected outputs, edge cases
-3. Note: since code already exists, tests may pass immediately — that's OK, but verify they test the RIGHT behavior
+2. For each function, build the **behavior inventory** (`ai-test-quality.md` §A): happy paths, boundary values, every error/rejection path, illegal states/transitions. Tests map 1:1 to inventory rows; rework any plan that is ≥80% happy-path rows before presenting it
+3. Note: since code already exists, tests may pass on first run — a first-run-green test is **unverified** until the falsifiability gate (`ai-test-quality.md` §D, applied at generation) proves it can fail
 
 **For E2E files**, plan tests following RED-GREEN gates:
 1. Identify user scenarios from CONTEXT.md/VERIFICATION.md
@@ -226,13 +228,15 @@ For each approved TDD test:
    // Assert — verify the output matches expectations
    ```
 
+   Before running, sweep for forbidden patterns (`ai-test-quality.md` §B/§C): no vacuous sole assertions (`toBeDefined`/`toBeTruthy`/`expect(true)`), no `jest.mock`/`vi.mock` off the strategy's seam allow-list, no `toHaveBeenCalled*` on queries, no `.skip`/`sleep(`; every test has ≥1 specific-value assertion.
+
 3. **Run the test**:
    ```bash
    {discovered test command}
    ```
 
 4. **Evaluate result:**
-   - **Test passes**: Good — the implementation satisfies the test. Verify the test checks meaningful behavior (not just that it compiles).
+   - **Test passes**: not done yet — apply the **falsifiability gate** (`ai-test-quality.md` §D): temporarily mutate the SUT (flip a branch condition, drop the write, return a constant), re-run and watch the test fail, then revert the mutation and watch it pass. A test that cannot be made to fail by breaking the implementation is testing nothing — rewrite or delete it. Where the strategy sets a mutation floor, run Stryker incrementally on the changed files and kill (or explicitly waive) surviving mutants (§E).
    - **Test fails with assertion error**: This may be a genuine bug discovered by the test. Flag it:
      ```
      ⚠️ Potential bug found: {test name}
@@ -350,6 +354,7 @@ Present next steps:
 - [ ] TDD tests generated with arrange/act/assert structure
 - [ ] E2E tests generated targeting user scenarios
 - [ ] All tests executed — no untested tests marked as passing
+- [ ] Falsifiability gate applied — every first-run-green test shown able to fail (mutate → red → revert → green)
 - [ ] Bugs discovered by tests flagged (not fixed)
 - [ ] Test files committed with proper message
 - [ ] Coverage gaps documented

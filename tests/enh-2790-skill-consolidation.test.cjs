@@ -72,6 +72,8 @@ const KNOWN_SKILLS = new Set([
   'stats.md',
   'surface.md',
   'testing-strategy.md',
+  'infrastructure-strategy.md',
+  'cicd-strategy.md',
   'thread.md',
   'ui-phase.md',
   'ui-review.md',

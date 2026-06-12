@@ -19,22 +19,22 @@ Use the core subdomain's complexity from DOMAIN-MODEL. Apply per subdomain: the 
 |------|--------------|-----------------------|
 | **Transaction Script / simple layered CRUD** (floor) | "validate → persist → return"; few rules; supporting/generic subdomains | — |
 | **Domain Model** | business rules multiply and tangle; the same invariant is duplicated across scripts; rich conditional behavior; long-lived core | rich aggregates wrapping what is really CRUD; anemic getter-bag "domain" objects |
-| **Hexagonal / Clean wrapper** (orthogonal — wraps either above) | real domain logic worth isolating; multiple/swappable adapters (DB, queue, 3rd-party APIs); high testability need; long lifespan | ports/interfaces with exactly one forever-implementation; DTO-mapping boilerplate around a CRUD endpoint |
+| **Hexagonal / Clean wrapper** (orthogonal — wraps either above) | a **current, concrete** second adapter or delivery mechanism (DB/queue/3rd-party swap, second front-end); or a genuinely pure core worth isolating for test speed | ports/interfaces with exactly one forever-implementation; DTO-mapping boilerplate around a CRUD endpoint; a wrapper claimed on lifespan or abstract "testability" alone |
 | **CQRS** | read and write models genuinely diverge; reads ≫ writes; write model under strain | separate read/write stacks where one model serves both fine |
 | **Event Sourcing** | audit/temporal history is a hard requirement (finance, compliance, "reconstruct past state") | ES on a simple entity with no audit/temporal need |
 
 ## Axis B — deployment topology
 
-- **Modular Monolith — the DEFAULT for greenfield.** One team; domain still being learned; few moving parts; fast to change. This is the recommended floor. Enforce internal module boundaries (separate schemas, dependency rules).
+- **Modular Monolith — the DEFAULT for greenfield.** One team; domain still being learned; few moving parts; fast to change. This is the recommended floor. Enforce internal module boundaries (separate schemas, dependency rules). Modules come from DOMAIN-MODEL: **modules = bounded contexts** when mapped, else subdomain groupings; flagged polysemes resolve to one owning module each; an **ACL applies now** to any third-party/legacy integration whose model differs from yours — not only at a future split.
 - **Microservices — only when ALL "you must be this tall" gates pass:**
   1. **Multiple independent teams** needing independent deploy cadence (Conway / Team Topologies).
   2. **CD / monitoring / DevOps maturity** already in place.
   3. **Bounded contexts well-understood** already (not still being discovered).
-  If **any** is "no" → recommend **modular monolith and stop**, regardless of complexity (deferred, not forbidden — record the promotion trigger; see *Evolving the topology* below). (The "microservice premium": below a complexity+org threshold the distributed tax is pure loss.)
-- **Component-level split (Hard Parts):** for a specific component, score the **6 disintegrators** (low cohesion · divergent volatility · divergent scalability · fault isolation · differential security · independent extensibility) against the **4 integrators** (ACID across the data · tightly-coupled workflow · heavy shared code · tight data relationships). Net disintegrators ≫ integrators → candidate extraction; otherwise keep it in the monolith.
+  If **any** is "no" → recommend **modular monolith and stop on the microservices question**, regardless of complexity — the per-component Hard-Parts scan below still runs when a single component shows divergent pressure (deferred, not forbidden — record the promotion trigger; see *Evolving the topology* below). (The "microservice premium": below a complexity+org threshold the distributed tax is pure loss.)
+- **Component-level split (Hard Parts):** for a specific component, score the **6 disintegrators** (low cohesion · divergent volatility · divergent scalability · fault isolation · differential security · independent extensibility) against the **4 integrators** (ACID across the data · tightly-coupled workflow · heavy shared code · tight data relationships). Net disintegrators ≫ integrators → extraction **candidate**: extract now only if the pressure is **current (not projected)** and the CD/ops gate passes — otherwise it becomes that component's promotion trigger. Integrators dominate → keep it in the monolith.
 - **Distributed monolith** (services that can't deploy independently) is the failure mode — you pay the premium and get none of the autonomy. Avoid.
 
-The "modular monolith and stop, regardless of complexity" rule is about *not splitting prematurely* — it is **not** "never split." It means the split is deferred until a gate flips, and the modular boundaries are built now so the split is cheap later (a **sacrificial / evolutionary** architecture). Record the **promotion trigger** — the concrete future signal (a second team forms, a component's scaling diverges, a bounded context stabilizes) that would justify revisiting Axis B.
+The "modular monolith — stop on the microservices question, regardless of complexity" rule is about *not splitting prematurely* — it is **not** "never split." It means the split is deferred until a gate flips, and the modular boundaries are built now so the split is cheap later (a **sacrificial / evolutionary** architecture). Record the **promotion trigger** — the concrete future signal (a second team forms, a component's scaling diverges, a bounded context stabilizes) that would justify revisiting Axis B.
 
 ## Evolving the topology — decomposition & migration (when a gate later flips)
 
@@ -59,8 +59,11 @@ The same tools run in reverse for a brownfield monolith you're decomposing — s
 | Availability / fault isolation | monolith | isolate failure-prone component |
 | Differential security | one trust boundary | separate the stricter-security component |
 | Integration count (adapters) | direct calls | Hexagonal ports & adapters |
-| Expected lifespan | short → keep simple (sacrificial) | long → Domain Model + Hexagonal + fitness functions |
+| Expected lifespan | short → keep simple (sacrificial) | long → Domain Model + fitness functions (Hexagonal only with a real second-adapter/delivery signal) |
 | Team count / ops maturity | 1 team / low → monolith | many independent teams / high → microservices viable |
+| Tenancy isolation (multi-tenant) | shared schema + tenant-scoped RLS (the default) | contractual/regulatory isolation mandate → schema-per-tenant → DB-per-tenant |
+| High-volume ingestion / pipeline | normal tables | decide the pipeline shape (buffer/queue, backpressure, retention) — the rung covers logic only |
+| Async work inside the monolith | direct in-process calls | in-process events / job queue (+ outbox once events must cross a process boundary) |
 
 ## Over- AND under-engineering
 
@@ -68,7 +71,7 @@ The same tools run in reverse for a brownfield monolith you're decomposing — s
 
 **Under-engineering tells:** the same invariant duplicated across many transaction scripts; a big-ball-of-mud monolith with no enforced module boundaries; a complex/regulated domain modeled as thin CRUD; no audit trail where compliance needs it; no ADRs / no fitness functions.
 
-**The meta-tell (use this to settle every rung):** if you cannot point to a **current, concrete** requirement — a real second adapter, a real divergent-scaling component, a real second team, a real audit mandate — that justifies a rung, you are **over-engineering**. If such a requirement exists and you ignored it, you are **under-engineering**.
+**The meta-tell (use this to settle every rung):** if you cannot point to a **current, concrete** requirement — a real second adapter or delivery mechanism, a real divergent-scaling component, a real second team, a real audit mandate, a real tenant-isolation mandate, a genuinely pure core isolated for test speed — that justifies a rung, you are **over-engineering**. If such a requirement exists and you ignored it, you are **under-engineering**.
 
 ## Default baseline (when in doubt)
 
