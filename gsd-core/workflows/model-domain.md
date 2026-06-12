@@ -45,6 +45,8 @@ From the project docs, build an internal draft:
 - Which nouns/verbs recur (candidate ubiquitous-language terms)?
 - Are there distinct business areas or user roles (candidate subdomains)?
 
+**Grounding maturity governs elicitation depth.** When the upstream docs are mature (a design spec, research corpus, or detailed brief already forged the vocabulary and areas), default every step to **draft-from-docs + confirm**: present complete drafts for correction, state which docs grounded them, and reserve actual questions for *genuine decision points* — contested classifications, the one-core call, complexity contradictions. The 2–3 probing rounds below are for thin grounding (a bare PROJECT.md), not a re-interview of what the docs already answer. Honor a posture stated in `$ARGUMENTS` without re-asking.
+
 **Check for an existing model:**
 ```bash
 ls .planning/DOMAIN-MODEL.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
@@ -77,6 +79,7 @@ Language — I drafted these terms: [list]. What needs fixing?
   3. Let me describe the vocabulary from scratch
 Reply with a number, or just tell me the corrections.
 ```
+**Text-mode batching:** when several questions are pending, present them as numbered *sections* in ONE message (each with its own option list) and accept combined replies ("1, 2" = first option of Q1, second of Q2) or free text per section — don't serialize one message per question.
 
 ## Step 4: Subdomain distillation (the pivotal step)
 
@@ -90,6 +93,7 @@ For each candidate area, classify it and **capture the rationale**. Apply the mi
 1. **Differentiation — not difficulty — decides Core.** If the user justifies Core by *difficulty, criticality, security, risk, or regulatory burden* rather than by competitive differentiation, test it: "Is this actually your competitive advantage, or a hard/critical-but-standard problem (e.g., tax, auth, encryption, compliance) you could buy?" If standard → **Generic (buy)**, not core. Critical ≠ differentiating; regulated ≠ differentiating.
 2. **CRUD that will grow.** Whenever an area is *described* as CRUD/simple/"just forms and dates" — regardless of the type being claimed — ask: "Will this accumulate real business rules and invariants over time, or stay simple data-in/data-out?" If it will grow → mark it **emerging Supporting** (the default for growing areas), not generic. It is Core only if it is itself the competitive differentiator — and there is normally exactly one of those. Claiming Core *while* describing it as trivial is a contradiction — Core means differentiating AND complex; probe which half is wrong.
 3. **Generic ≠ low quality.** Note to the user that "generic" means *not differentiating*, not *low effort*.
+4. **Strategic instrument.** A venture-critical area that is NOT product-differentiating (a benchmark/eval suite, an open standard, a public SDK ecosystem — value is positional, endgame may be neutrality/giveaway) doesn't fit the triad: record it as its **own candidate context** annotated *instrument — venture-critical*, rigor allocated by its derived complexity. **Core-grade rigor ≠ core** — you don't give away your core.
 
 **Complexity is derived, never asked.** For each non-generic area, elicit 2–3 of the reference rubric's five signals (invariants; lifecycle depth; derivation/optimization; temporal logic; policy variance) — usually one question: "What rules can never be broken here, and what's the hardest decision this area makes?" — then rate per the rubric, recording fired signals in the rationale cell. **Tripwire: Core+low is a contradiction** — probe: "If it's your differentiator but has no complex rules, what makes it hard to copy?" — it's either not core, or not low. Generic+high is a buy-harder signal.
 
@@ -141,8 +145,10 @@ DOMAIN-MODEL.md written — strategic domain foundation set.
   Subdomains: [N]  ([core] core · [supporting] supporting · [generic] generic)
   Bounded contexts: [N]  (or "deferred")
 
-Next: /gsd:plan-phase   (planning will use the subdomain complexity to shape architecture and tests)
+Next: /gsd:recommend-architecture   (uses the subdomain complexity) → testing → planning
 ```
+
+**Roadmap reconciliation:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
 
 </process>
 
@@ -163,5 +169,6 @@ Next: /gsd:plan-phase   (planning will use the subdomain complexity to shape arc
 - Bounded contexts surfaced (with `--event-storming`), candidate-recorded, or explicitly deferred
 - No architecture prescribed
 - DOMAIN-MODEL.md written from the template and committed (when commit_docs is true)
-- User directed to /gsd:plan-phase
+- Roadmap reconciliation: contradictions with ROADMAP.md surfaced explicitly (revision offered, never silent)
+- User directed to /gsd:recommend-architecture
 </success_criteria>

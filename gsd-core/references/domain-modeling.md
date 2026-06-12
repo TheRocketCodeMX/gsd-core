@@ -33,11 +33,12 @@ Classify each area of the system. This is the single highest-leverage output —
 | **Supporting** | Necessary, not differentiating. Tightly coupled to the core. | "Good enough," build simply or buy-and-extend. | Onboarding flows, internal admin, notifications |
 | **Generic** | Commodity every business needs; no edge. | Buy / off-the-shelf / library. | Auth, billing, email, logging, tax calculation |
 
-### Three nuances that prevent misclassification
+### Four nuances that prevent misclassification
 
 1. **Core = differentiating AND complex — not just complex (and not merely *critical* or *regulated*).** A complex-, critical-, or regulated-but-*generic* subdomain (tax, identity/auth, encryption, compliance) is a **buy**, not a build. Difficulty, security-criticality, and regulatory burden do not make something core — only competitive differentiation does. Don't invest core-grade effort there.
 2. **Generic ≠ low quality.** "Generic" means *not differentiating*, not *low effort*. A battle-tested auth library is high-quality and generic.
 3. **Watch for CRUD that will grow business rules.** The dangerous case is an app that "starts as a UI over the database, then evolves into real domain logic." Whenever an area is *described* as simple/CRUD — whatever type is being claimed — probe future features: *will this accumulate invariants and rules?* If yes, treat it as (emerging) core/supporting, not generic. "Core but just CRUD" is self-contradictory — challenge which half is wrong.
+4. **The strategic instrument — when the triad has no slot.** Some subdomains are venture-critical without being product-differentiating: a benchmark/eval suite, an open standard, a public SDK ecosystem, an internal framework — things whose value is *positional* (credibility, ecosystem, a standard you steward) and whose endgame may be neutrality or giveaway. Forcing these into the triad misallocates: "supporting" understates them, "core" steers tactical-DDD richness at the wrong place (you don't give away your core). Classify them as their **own candidate context** annotated *instrument — venture-critical*, allocate rigor by their derived complexity, and apply the rule: **core-grade rigor ≠ core**. The differentiation test stays structural: the core is what's hard to copy for *technical* reasons; an instrument's moat is usually *positional* (reputation, neutrality), and positions belong in their own context with their own destiny.
 
 ### What "complex" means — the complexity-signals rubric
 

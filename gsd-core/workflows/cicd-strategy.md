@@ -40,6 +40,9 @@ cat .planning/PROJECT.md 2>/dev/null || true
 
 **Read `@~/.claude/gsd-core/references/cicd-strategy.md` now** — it defines the GHA-default platform decision, OIDC-with-pinned-`sub`, the secrets split, the tier→stage mapping with the ≤10-min PR budget, the flaky canon, the merge-queue trigger, the deployment ladder, the free-six supply-chain table stakes, and the anti-pattern table.
 
+**Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
+
+
 **If `NO_TEST_STRATEGY`:** tell the user "No test strategy found — the pipeline mapping is much better with one. (Consider `/gsd:testing-strategy` first.)" If they decline, proceed with generic tiers (small/unit → PR; medium/integration → merge; large/e2e → nightly) and note the gap in the output. From TEST-STRATEGY.md, extract: the per-subdomain level emphasis, the persistent e2e smoke list (the 3–7 flows), and the mutation-testing targets. From INFRA-STRATEGY.md / ADR / PROJECT.md, extract: target cloud + deploy target, repo host, team size, and blast radius (payments/PII/data = high). Ask only what's missing (header "Context"): team size, blast radius, expected merge volume.
 
 ## Step 3: Platform choice

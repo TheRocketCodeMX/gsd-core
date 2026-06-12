@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-06-12
+
+Second + third dogfood rounds (savoir: model-domain, recommend-architecture) folded back in.
+
+### Added
+
+- **The strategic-instrument classification (4th misclassification nuance).** Core/supporting/generic has no slot for a venture-critical subdomain that is NOT product-differentiating — a benchmark/eval suite, an open standard, a public SDK ecosystem — whose value is *positional* and whose endgame may be neutrality or giveaway. It now classifies as its **own candidate context** annotated *instrument — venture-critical*, rigor allocated by derived complexity. The rule: **core-grade rigor ≠ core** — you don't give away your core (and "core" there would steer tactical-DDD richness at the wrong place). Reference + workflow check + template grouping.
+- **Roadmap reconciliation hooks.** ROADMAP.md is created before the strategy chain runs (it must be — the chain consumes REQUIREMENTS). `model-domain` and `recommend-architecture` now end by scanning the roadmap against their findings (a phase straddling module seams, a buy-decision mooting a build-phase, a missing walking skeleton) and MUST surface contradictions and offer `/gsd:phase --edit` / a roadmap refresh — never leave a known artifact↔roadmap contradiction unspoken.
+
+### Changed
+
+- **"Grounding maturity governs elicitation depth" — now in all six strategy workflows** (the `--from-docs` pattern, reported on three consecutive skills): when upstream artifacts already answer a step, draft-from-docs and present for confirmation, citing the source; reserve questions for genuine decision points and contradictions; honor a posture stated in `$ARGUMENTS` without re-asking. Hard checks (the reconcile rule, complexity derivation, misclassification checks) always run regardless of posture.
+- Text-mode batching format specified (numbered sections in one message; combined "1, 2"-style replies) — was operator judgment.
+- Glossary "Used by" column disambiguated for dev tools (maintainers vs developer-users).
+- `model-domain` / `recommend-architecture` wrap-ups now point to the next chain step (architecture → testing) instead of jumping to plan-phase.
+
 ## [1.8.2] - 2026-06-12
 
 First real-world dogfood feedback (savoir project) folded back into `/gsd:discover-product`.

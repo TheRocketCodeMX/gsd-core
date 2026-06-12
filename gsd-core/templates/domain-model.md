@@ -9,7 +9,7 @@ The shared vocabulary. Use these terms consistently in code, docs, and conversat
 
 | Term | Definition | Used by | Aliases / not to be confused with |
 |------|-----------|---------|-----------------------------------|
-| [Term] | [What it means in THIS domain] | [team / users / both] | [aliases, or the term it's often confused with] |
+| [Term] | [What it means in THIS domain] | [team / end-users / both — for dev tools: maintainers vs developer-users] | [aliases, or the term it's often confused with] |
 
 > Polysemes (one word, two meanings across areas) are flagged here — they usually mark a bounded-context boundary.
 
@@ -31,6 +31,9 @@ Strategic classification — drives where to invest and (downstream) the archite
 
 **Generic** — commodity; buy / off-the-shelf / library:
 - [Subdomain] — [why]
+
+**Instrument — venture-critical (own context; only when one exists)** — positional value (standard/benchmark/ecosystem), not product differentiation; core-grade rigor ≠ core:
+- [Subdomain] — [its own destiny, e.g. "community standard — planned neutrality"]
 
 > Misclassification check applied: each Generic/CRUD area was probed for future business rules. Areas expected to accumulate invariants are marked emerging-core/supporting, not generic.
 

@@ -41,6 +41,9 @@ cat .planning/TEST-STRATEGY.md 2>/dev/null || true
 
 **Read `@~/.claude/gsd-core/references/infrastructure-strategy.md` now** — it defines the compute ladder with quantified move-up triggers, the crossover numbers (Fargate-vs-EC2, the CAST AI utilization data, the <4-engineers floor), the per-cloud asymmetries and equivalences table, the observability floor, the when-you-actually-need triggers, the IaC floor, the anti-patterns, and the meta-tell.
 
+**Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
+
+
 From the artifacts, extract: **scale expectations + traffic shape** (PRODUCT-BRIEF), **deployment topology** — how many independently deployed components (the ADR; monolith → one service is the normal answer), and **CI environment needs** (TEST-STRATEGY: test containers, e2e environments). **If `NO_ADR`:** tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" then ask: how many deployables, and is anything stateful self-managed?
 
 Then gather the three inputs every crossover keys off (AskUserQuestion, header "Shape", or a text list): **traffic shape** (idle most of the day? bursty? steady?), **team size** (engineers who'd touch infra), and **expected monthly compute spend** (or "no idea" — fine, the default rung is the safe prior).

@@ -41,6 +41,9 @@ cat TESTING-STANDARDS.md 2>/dev/null || true
 
 **Read `@~/.claude/gsd-core/references/test-strategy.md` now** — it defines behavior-over-implementation, sociable-by-default, test-once-at-cheapest-level, shape-follows-architecture (size axis), the gnarly-bits list, persistent-vs-transient e2e, and coverage-as-floor + mutation.
 
+**Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
+
+
 **If `NO_ADR`:** tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" Then, per major subdomain, get its rung (Transaction Script / Domain Model / Hexagonal / CQRS / Event Sourcing) and whether it's DB/integration-bound. Otherwise extract each subdomain's rung from the ADR.
 
 ## Step 3: Derive the shape FROM the architecture (per subdomain)

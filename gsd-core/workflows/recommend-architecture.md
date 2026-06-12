@@ -38,6 +38,8 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 
 **Read `@~/.claude/gsd-core/references/architecture-decision.md` now** — it defines the two axes, the rung-signals, the "tall enough" gates, the Hard-Parts disintegrators/integrators, and the over-/under-engineering meta-tell.
 
+**Grounding maturity governs elicitation depth.** When upstream artifacts (DOMAIN-MODEL, a design spec, research) already answer a question below, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve `AskUserQuestion` for genuine decision points: contested rungs, gate answers the docs don't record, and contradictions (the reconcile rule still ALWAYS runs). Honor a posture stated in `$ARGUMENTS` without re-asking.
+
 **If `NO_DOMAIN_MODEL`:** tell the user "No domain model found — I'll ask the complexity questions directly. (Consider `/gsd:model-domain` first for a sharper result.)" Then gather, per major area: is it core/supporting/generic, and how complex (rich rules vs CRUD)?
 
 From DOMAIN-MODEL.md (or the answers): extract each subdomain's type + complexity, **plus** the bounded contexts (owns / talks-to), the context-map relationships, and any flagged polysemes — Step 4.5 consumes them. The **core** subdomain's complexity is the primary driver of Axis A.
@@ -126,8 +128,10 @@ ADR-NNNN written — architecture decided.
   Fitness functions: [N] to enforce boundaries
   Promotion triggers: [N] recorded — re-check at /gsd:new-milestone
 
-Next: /gsd:plan-phase   (planning + test strategy will follow this shape)
+Next: /gsd:testing-strategy   (test shape follows this architecture) → plan-phase
 ```
+
+**Roadmap reconciliation:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
 
 </process>
 
