@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-06-12
+
+First real-world dogfood feedback (savoir project) folded back into `/gsd:discover-product`.
+
+### Added
+
+- **`--challenge [@doc ...]` mode — discovery against existing specs/research.** Discovery now adapts to artifact maturity via a **gap map**: each block (outcome, user, demand, wedge, risks, scope, success) is classified ANSWERED / WEAK / SILENT from the upstream docs; answered blocks are confirmed (not re-asked), weak ones challenged, silent ones interviewed. Greenfield is just the all-SILENT case — one mechanism, no separate modes. Two blocks are **never doc-answerable**: demand evidence (specs hold intentions, not past behavior — the money-moved record lives in people's heads) and the user definition (specs smuggle the everyone-trap in writing). Contradictions flow back as a **"Proposed spec amendments"** table with explicit precedence ("brief governs on amended points until the spec is updated") — a challenge that wins the argument but loses the record is worthless.
+
+### Changed
+
+- The optionality gate honors a mode already stated in the invocation (`--challenge`, "value is uncertain…") instead of re-asking it.
+- The forcing posture explicitly sanctions **reflection-batching**: one contested thread at a time, but already-evidenced reflect-backs grouped and paired with the next probe (~10–15 turns for a context-rich session, not ~30) — batching cuts turns, not rigor.
+- **RICE override named**: when sequencing is strategy-driven (milestone ladder, credibility-before-product), the ladder IS the prioritization — record the named override, skip the fake arithmetic.
+
 ## [1.8.1] - 2026-06-12
 
 ### Fixed

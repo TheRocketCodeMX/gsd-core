@@ -1,7 +1,7 @@
 ---
 name: gsd:discover-product
 description: Optional product discovery — demand vs interest, the narrowest wedge, four risks, outcome-framed.
-argument-hint: "[--auto] [--text]"
+argument-hint: "[--auto] [--challenge [@doc ...]] [--text]"
 allowed-tools:
   - Read
   - Write
@@ -39,6 +39,7 @@ Define WHAT to build and WHY before building it — separating real demand from 
 <context>
 **Flags:**
 - `--auto` — Skip the forcing interview; synthesize PRODUCT-BRIEF.md from any existing PROJECT.md / REQUIREMENTS.md using recommended defaults.
+- `--challenge [@doc ...]` — Existing specs/research/notes are upstream inputs: build a gap map (ANSWERED/WEAK/SILENT per block), confirm what the docs answer, challenge what's weak, interview only the gaps. Demand evidence and the user definition are always force-tested. The brief complements the docs and records proposed spec amendments.
 - `--text` — Use plain-text numbered lists instead of TUI menus (required for `/rc` remote sessions).
 
 **When to run:** when product value is uncertain (new market, no past-behavior evidence, demand asserted from a hypothetical, or a large/irreversible bet). **Skip** when a client/customer has explicit, evidenced requirements — then go straight to `/gsd:new-project` or lightweight prioritization. Runs standalone — does not require an existing project.

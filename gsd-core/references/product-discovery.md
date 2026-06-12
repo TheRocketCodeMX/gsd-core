@@ -19,7 +19,17 @@ Reference for `/gsd:discover-product`. An **optional** front-of-funnel step that
 
 ## The forcing posture
 
-The first answer is polished — push 2–3 times with concrete specifics, not soft exploration. "Name the *actual* human, the *actual* consequence." Reflect the answer back; confirm before moving on. One thread at a time.
+The first answer is polished — push 2–3 times with concrete specifics, not soft exploration. "Name the *actual* human, the *actual* consequence." Reflect the answer back; confirm before moving on. One *contested* thread at a time — but batch the rest: group already-evidenced reflect-backs and pair a confirmation with the next probe in the same turn. Batching cuts turns (~10–15 for a context-rich session), not rigor.
+
+## Challenge mode — when specs/research already exist
+
+Discovery recurs at every artifact maturity: nothing yet (greenfield) → meeting/levantamiento notes → research corpus → full design spec. One mechanism serves all of it — the **gap map**: classify each block of the question set against its named outputs as ANSWERED / WEAK / SILENT from the docs, confirm the ANSWERED, challenge the WEAK, interview the SILENT. Greenfield is simply the all-SILENT case.
+
+Two blocks are **never doc-answerable** (cap at WEAK however mature the docs):
+- **Demand evidence** — documents hold intentions and theses, not past behavior; the money-moved/usage record lives in people's heads and inboxes. A deep design process can run for weeks without ever surfacing the one paid consultation that validates the thesis — only the past-tense interview finds it.
+- **User definition** — specs smuggle the everyone-trap in writing (multi-stakeholder framings, personas-as-demographics). Re-test the documented user with the same pushback as a spoken claim.
+
+Challenge mode's brief **complements, never replaces** the upstream docs — and contradictions found must flow back as *proposed spec amendments* with explicit precedence, or the spec stays silently wrong while downstream agents read both.
 
 ## Distilled question set (ordered; skip a block only when its named outputs already exist at strong evidence — reflect the skipped conclusion back)
 
@@ -36,6 +46,7 @@ The first answer is polished — push 2–3 times with concrete specifics, not s
 - **Value uncertain** → run value-questioning (four risks, assumption tests, PMF).
 - **Value established / clear** → Impact-Effort or RICE, then build. (A low RICE *confidence* is itself a flag to return to discovery.)
 - **Overrides:** dependencies, table-stakes, and strategic bets legitimately beat the score — scoring just makes the trade-off explicit.
+- **RICE fits feature-list products.** When sequencing is strategy-driven (a milestone ladder, credibility-before-product), the ladder IS the prioritization — record the named override; don't force fake arithmetic onto a systems roadmap.
 
 ## Handoff
 

@@ -572,7 +572,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Discovery & Specification
 
 - **`/gsd:explore`** — Socratic ideation and idea routing. Think through ideas before committing to plans.
-- **`/gsd:discover-product [--auto] [--text]`** — Optional product discovery: demand vs interest, the narrowest wedge, four risks, outcome-framed; writes PRODUCT-BRIEF.md.
+- **`/gsd:discover-product [--auto] [--challenge [@doc ...]] [--text]`** — Optional product discovery: demand vs interest, the narrowest wedge, four risks, outcome-framed; `--challenge` audits existing specs/research via a gap map instead of re-asking; writes PRODUCT-BRIEF.md.
 - **`/gsd:spec-phase <phase> [--auto] [--text]`** — Clarify WHAT a phase delivers with ambiguity scoring; produces a SPEC.md before discuss-phase.
 - **`/gsd:model-domain [--auto] [--text] [--event-storming]`** — Capture ubiquitous language and classify subdomains (core/supporting/generic) for greenfield projects; strategic DDD before architecture.
 - **`/gsd:recommend-architecture [--auto] [--text]`** — Recommend an architecture matched to domain complexity and NFRs (two-axis) and capture it as an ADR; avoids over/under-engineering.

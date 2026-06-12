@@ -2,6 +2,7 @@
 
 **Created:** [DATE] via `/gsd:discover-product`
 **Scope:** Product definition (what/why) — feeds `PROJECT.md` and `/gsd:model-domain`. Outcome-framed so the domain and architecture stay open. **This brief is a hypothesis, not a verdict** — its open assumptions feed an ongoing discovery cadence (Torres), not a one-time gate.
+[Challenge mode: **This brief complements — does not replace — [upstream spec/docs paths]**. Where this brief is silent, the spec governs; on the amended points below, this brief governs until the spec is updated.]
 
 ## Outcome (not output)
 
@@ -55,6 +56,14 @@ State 2–3 as *direction + metric + object* so "is it working?" is answerable. 
 
 - **Outcome metric + by when:** [the behavior/metric change and the date]
 - **PMF check (pre-registered):** [Sean Ellis criterion (≥40% "very disappointed") to survey once ≥N pilots used the core — planned measurement, not founder prediction]
+
+## Proposed spec amendments (challenge mode only — omit otherwise)
+
+Findings that contradict or materially extend the upstream docs. Apply them to the spec, or this brief governs on these points.
+
+| # | The spec says / omits | Discovery found | Recommended edit |
+|---|---|---|---|
+| 1 | [claim or silence] | [evidence-backed finding] | [the concrete spec change] |
 
 ## Handoff notes
 
