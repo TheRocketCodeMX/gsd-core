@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-06-14
+
+Evidence-grounded recalibration of the architecture default, from 3 deep-research reports (~140 primary sources: Cockburn/Evans/Vernon/Fowler/Ousterhout/Metz/Beck on the timeless debate; Anthropic/METR/DORA/GitClear on the AI-era shift) + adversarial judge. The question: is "always DDD + hexagonal + TDD, even for simple projects" true? **Verdict: the strong form is not supported — and the originators themselves reserve those patterns for the complex core — but a lighter floor IS defensible even for simple projects, and the AI era strengthens it.**
+
+### Changed
+
+- **Raised the architecture floor (kept the ceiling calibrated).** `recommend-architecture` now applies a universal baseline to *every* subdomain, even simple ones: **dependency inversion at true external boundaries only (DB/3rd-party/IO) + Functional-Core/Imperative-Shell + strong independent tests** — explicitly *not* full hexagonal (no internal port ceremony). A seamless, untestable CRUD app is now under-engineered even though it's simple. The higher rungs (Domain Model / hexagonal / CQRS / Event Sourcing) remain concrete-signal-gated and reserved for the complex core, exactly as before — only the floor moved.
+- **Encoded the AI-era reasoning in `architecture-decision.md`:** agent reliability collapses with codebase scale/files-touched and the bottleneck is legibility-not-context-size, so seams pay from the first agent session; AI is bad at adding architectural seams later but good at adding features later (build seams now, defer feature-speculation); AI maintains structure worse than it writes it (so the floor moves up *a notch, not a category* — deep modules, not shallow layering).
+- **Tests: independence over ordering.** `test-strategy.md` + `ai-test-quality.md` now make "always strong **independent** tests" the mandate (test-first is the default *for AI-written code on anti-gaming grounds* — agents reward-hack and "green ≠ correct" — not on the unsupported "test-first improves design" claim); skip list (UI/prototype/glue/trivial) reaffirmed; verify-beyond-green added.
+
+### Fixed (gates enforce the floor, not just prose — caught by the judge)
+
+- `gsd-plan-checker`, `gsd-code-reviewer`, and `gsd-verifier` now flag **floor-skip** (no seam at true external boundaries → untestable) as under-engineering, *even when the ADR correctly says Transaction Script* — the case the floor exists to catch. The verifier's floor check applies even with no ADR present.
+- **Plumbing (audit-verified):** the executor now reads the ADR/DOMAIN-MODEL/TEST-STRATEGY so autonomous deviations honor the chosen rung; `plan-phase` requires `engineering-standards.md`; `testing-strategy` + `infrastructure-strategy` gained the roadmap-reconciliation step the other strategy commands already had. (Two louder audit claims — "CICD orphaned", "researcher/mapper unwired" — were **refuted** by checking raw source, per the framework's own verify-don't-trust rule.)
+
 ## [1.9.0] - 2026-06-14
 
 The senior-quality + deep-scout wave — so agents stop needing per-session prompting for depth and long-term code quality. Research-grounded (3 deep-research reports, ~130 primary sources: Anthropic/OpenAI/DeepMind on agent prompting + reward-hacking + verification; Ousterhout/Metz/Beck/Fowler/Brooks on design) and adversarially judged before ship.

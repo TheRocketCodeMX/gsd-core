@@ -10,6 +10,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 @~/.claude/gsd-core/references/gate-prompts.md
 @~/.claude/gsd-core/references/agent-contracts.md
 @~/.claude/gsd-core/references/gates.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 <available_agent_types>

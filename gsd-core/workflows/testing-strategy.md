@@ -105,6 +105,8 @@ TEST-STRATEGY.md written — test shape set to follow the architecture.
 Next: /gsd:plan-phase   (plans + /gsd:add-tests will follow this strategy)
 ```
 
+**Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
+
 </process>
 
 <critical_rules>

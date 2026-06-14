@@ -35,7 +35,13 @@ Pure, dependency-light, logic-dense code: **money/currency (integer minor units 
 
 ## TDD — honestly
 
-The quality benefit is real, but the evidence favors **small, uniform increments** over *test-first specifically* (controlled studies found test-first vs test-after didn't differ; granularity did). So **mandate: behavior-level tests + small increments + a regression floor.** Keep the **RED step** (watch a test fail) so tests actually test something. Test-first vs test-after is a **knob** (`workflow.tdd_mode`), not dogma.
+The defensible mandate is **always strong, INDEPENDENT tests** — not "always TDD, even for simple." The evidence is clear that what drives the quality benefit is **granularity + test existence + independence**, not test-first *ordering* (controlled studies found test-first vs test-after didn't differ; granularity did; the design-improvement claim for ordering is contested, not established). So **mandate: behavior-level tests + small increments + a regression floor.** Keep the **RED step** (watch a test fail) so tests actually test something.
+
+**Default to test-first for AI-WRITTEN code — but on anti-gaming/independence grounds, not "test-first improves design."** When an agent authors the implementation, writing the spec/test first stops it from shaping tests to its own output: agents reward-hack tests, and a large share of "passing" agent patches diverge from ground truth (green ≠ correct). The lever is an *independent*, human-anchored check the agent did not write to its own convenience (see `ai-test-quality.md`) — not the ordering ritual. Test-first vs test-after stays a **knob** (`workflow.tdd_mode`); the independence requirement does not.
+
+**Skip TDD for** UI/visual components, prototypes/spikes, glue/wiring, and trivial CRUD — correctness there is visual, throwaway, or too thin to assert cheaply (both pro- and anti-TDD camps agree). Still cover them with the cheapest check that fits (visual/snapshot, integration smoke).
+
+**Green ≠ correct — verify beyond green.** A passing suite is a *lower bound* on correctness, not proof. For critical paths pair it with mutation/property/differential testing + human UAT.
 
 ## Persistent vs transient E2E
 

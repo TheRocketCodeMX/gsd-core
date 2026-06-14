@@ -649,6 +649,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
        ` : ''}
        - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
        - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
+       - ${PROJECT_ROOT}/.planning/adr/*.md, ${PROJECT_ROOT}/.planning/DOMAIN-MODEL.md, ${PROJECT_ROOT}/.planning/TEST-STRATEGY.md (if they exist — the chosen architecture rung and test levels; any autonomous deviation must honor them: build to the rung fully, neither under- nor over-engineering it, per @~/.claude/gsd-core/references/engineering-standards.md)
        </files_to_read>
 
        ${AGENT_SKILLS}

@@ -15,6 +15,12 @@ The common sweet spot is a **Domain Model inside a modular monolith**. High scal
 
 Use the core subdomain's complexity from DOMAIN-MODEL. Apply per subdomain: the complex core may warrant a Domain Model (± Hexagonal); supporting/generic subdomains stay Transaction Script.
 
+### The floor — the cheap baseline, even for simple projects
+
+Below the rungs sits a baseline that applies **even to simple/short-lived projects** and is explicitly **NOT full hexagonal**: **dependency inversion at *true external boundaries only* (DB, 3rd-party APIs, clock/IO) + a Functional Core / Imperative Shell shape (pure logic separated from side-effecting glue) + strong, independent tests.** This is the lighter discipline the senior voices on *both* sides of the "always hexagonal?" debate converge on — it delivers the pro-camp's real prize (day-one isolated testability) at a fraction of hexagonal's cost, with **no internal port ceremony**. Extract a real internal port only "when you feel the second adapter appearing."
+
+Transaction Script is the domain-logic *organization* at the floor — it still sits **behind** this seam discipline. **Do not read "Transaction Script floor" as "no seams":** a CRUD app that reaches straight into the DB/3rd-party from everywhere, untestable without the real services, is **under-engineered even though it is simple** — it skipped the floor. The floor is the cheap minimum; the rungs below are about how much *domain-logic structure* to add on top of it.
+
 | Rung | Move up when | Over-engineering tell |
 |------|--------------|-----------------------|
 | **Transaction Script / simple layered CRUD** (floor) | "validate → persist → return"; few rules; supporting/generic subdomains | — |
@@ -69,13 +75,23 @@ The same tools run in reverse for a brownfield monolith you're decomposing — s
 
 **Over-engineering tells:** one-implementation ports; rich aggregates over structural CRUD; CQRS/ES with no asymmetry or audit need; "microservice envy"; distributed monolith; elaborate config/abstraction "wanting all options all the time."
 
-**Under-engineering tells:** the same invariant duplicated across many transaction scripts; a big-ball-of-mud monolith with no enforced module boundaries; a complex/regulated domain modeled as thin CRUD; no audit trail where compliance needs it; no ADRs / no fitness functions.
+**Under-engineering tells:** the same invariant duplicated across many transaction scripts; a big-ball-of-mud monolith with no enforced module boundaries; a complex/regulated domain modeled as thin CRUD; **no seam at the true external boundaries (DB/3rd-party reached into from everywhere), so the code can't be tested without the real services — the Functional-Core/Imperative-Shell floor was skipped, even on a simple app**; no audit trail where compliance needs it; no ADRs / no fitness functions.
 
-**The meta-tell (use this to settle every rung):** if you cannot point to a **current, concrete** requirement — a real second adapter or delivery mechanism, a real divergent-scaling component, a real second team, a real audit mandate, a real tenant-isolation mandate, a genuinely pure core isolated for test speed — that justifies a rung, you are **over-engineering**. If such a requirement exists and you ignored it, you are **under-engineering**.
+## The AI-coding era moves the FLOOR up a notch (not the ceiling)
+
+The evidence (agent-reliability studies) shifts *where the floor sits*, not whether the higher rungs are universal:
+- **Seams pay from the first agent session.** Agent reliability collapses as codebase scale and files-touched-per-change rise, and the bottleneck is **architectural legibility, not context-window size** (bigger windows don't rescue large tangled repos). Clean boundaries help the *agent* navigate and verify — so the Functional-Core/Imperative-Shell floor + strong independent tests are worth more now, even on simple projects.
+- **Get the *seams* right early; defer *feature* speculation.** AI is **bad at adding architectural seams later** (agent success on compound/architectural refactors is low — well under half in the agent-reliability studies) but **good at adding features later** — so cheap-AI *weakens* YAGNI for core seams (build them now) and *strengthens* it for speculative features (defer them).
+- **Don't over-generate structure.** AI writes structure cheaply but **maintains it worse** (duplication rises, drift) — so this moves the floor *up a notch*, NOT toward always-hexagonal. Prefer **deep modules, not shallow many-file layering** (the "design for agents" consensus converges with classic good design on tests/interfaces/naming/deep-modules; it diverges only by penalizing indirection *depth*).
+- **Tests must be *independent*.** Because agents reward-hack tests, the lever is test *independence + quality* (human-owned/agent-non-editable assertions; verify beyond green), not test-*first ordering*. See `test-strategy.md` / `ai-test-quality.md`.
+
+Net: raise the floor (seams + independent tests earlier), keep the ceiling calibrated (Domain Model / full hexagonal / CQRS / ES still require their concrete signals — the originators themselves reserve them for the complex core).
+
+**The meta-tell (use this to settle every rung *above the floor*; the floor itself is always-on and exempt — it is the baseline, not a rung):** if you cannot point to a **current, concrete** requirement — a real second adapter or delivery mechanism, a real divergent-scaling component, a real second team, a real audit mandate, a real tenant-isolation mandate, a genuinely pure core isolated for test speed — that justifies a rung, you are **over-engineering**. If such a requirement exists and you ignored it, you are **under-engineering**.
 
 ## Default baseline (when in doubt)
 
-**Modular monolith + Domain Model only in the complex core bounded contexts + Transaction Script in the simple/CRUD ones + ADRs + boundary fitness functions.** This is the modern consensus starting point.
+**The floor (Functional-Core/Imperative-Shell + dependency inversion at true external boundaries + strong independent tests) everywhere — then modular monolith + Domain Model only in the complex core bounded contexts + Transaction Script in the simple/CRUD ones + ADRs + boundary fitness functions.** This is the modern consensus starting point: a cheap testable floor for all, rich structure only where complexity earns it.
 
 ## Always
 

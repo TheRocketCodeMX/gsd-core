@@ -46,7 +46,9 @@ From DOMAIN-MODEL.md (or the answers): extract each subdomain's type + complexit
 
 ## Step 3: Axis A — domain-logic organization (per subdomain)
 
-Decide a rung **per subdomain** (not one rung for the whole app). Supporting/generic subdomains almost always stay at Transaction Script; the complex core may climb.
+**First, the floor applies to ALL subdomains, even simple ones (state it in the ADR):** dependency inversion at *true external boundaries only* (DB, 3rd-party, clock/IO) + a Functional-Core/Imperative-Shell shape + strong independent tests. This is NOT hexagonal — no internal port ceremony — it's the cheap testability baseline both camps' senior voices converge on, and the AI era makes it pay from the first agent session (see the reference's floor + AI-era sections). "Transaction Script" is the domain-logic organization *on top of* this floor, never an excuse to skip it (a CRUD app that reaches into the DB from everywhere is under-engineered).
+
+Then decide a rung **per subdomain** (not one rung for the whole app). Supporting/generic subdomains almost always stay at Transaction Script *behind the floor seams*; the complex core may climb.
 
 For the **core** subdomain, use `AskUserQuestion` (header "Core logic"):
 - question: "For the core (*[core name]*): are operations mostly validate→persist→return, or are there rich invariants / state machines / tangled business rules?"

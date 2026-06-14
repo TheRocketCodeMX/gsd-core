@@ -124,6 +124,8 @@ INFRA-STRATEGY.md written — infrastructure matched to traffic shape and team s
 Next: /gsd:cicd-strategy   (pipelines + deploy targets will follow this strategy)
 ```
 
+**Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the compute rungs and data layer — if a phase assumes compute, a data store, or an environment this strategy invalidates or reshapes (e.g. a phase planning a self-managed cluster now dropped to serverless containers, or one missing the IaC/observability floor this strategy mandates), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
+
 </process>
 
 <critical_rules>

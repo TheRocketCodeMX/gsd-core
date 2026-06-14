@@ -1,6 +1,8 @@
 # AI-Written Tests — The Quality Contract
 
-How-to reference and enforcement contract for tests authored by a model (`add-tests`, TDD inside `execute-phase`). LLM test-writers have *known, named* failure modes: vacuous assertions, happy-path-only suites, mock-everything-then-assert-the-mock, change-detector tests (the implementation's current output copied back as the oracle), and weakening a failing assertion to go green. This contract converts test quality from judgment into mechanical checks — inventory-first, greppable forbidden patterns, a falsifiability gate, a mutation gate. Read before generating any test. Pairs with `test-strategy.md` and `test-doubles.md`.
+How-to reference and enforcement contract for tests authored by a model (`add-tests`, TDD inside `execute-phase`). LLM test-writers have *known, named* failure modes: vacuous assertions, happy-path-only suites, mock-everything-then-assert-the-mock, change-detector tests (the implementation's current output copied back as the oracle), and weakening a failing assertion to go green. The deepest of these is **lost independence**: when the same agent writes both the code and its tests, the tests rubber-stamp the implementation — "documentation with assertions" that confirm bugs as expected behavior. This contract converts test quality from judgment into mechanical checks — inventory-first, greppable forbidden patterns, a falsifiability gate, an **independence gate**, a mutation gate. Read before generating any test. Pairs with `test-strategy.md` and `test-doubles.md`.
+
+**The independence requirement (load-bearing).** Assertions must be anchored to the **spec / expected behavior**, NOT derived from reading the implementation. The agent must never edit a test to make its own code pass — that inverts the check. The test of independence: *would this assertion exist, in this form, if you hadn't seen the implementation? Is it checking the SPEC, or the code?* Green ≠ correct — a passing suite the implementer authored against its own output proves nothing.
 
 ## A. Behavior inventory BEFORE any test is written
 
@@ -53,6 +55,8 @@ A generated test that passes on its first run is **unverified**, not done. The s
 3. Revert the mutation; re-run; observe green.
 
 One extra run per test file; fully automatable. A test that cannot be made to fail by breaking the code under test is testing nothing — delete or rewrite it. **Never waive this step** because "the code already works"; that waiver is exactly where vacuous AI-written tests are born. (Where the mutation gate in E runs on the same files, a killed mutant covering the test's target behavior satisfies this gate.)
+
+**The independence dimension — "can it fail" is necessary but not sufficient.** A test can fail-on-mutation and still be a rubber stamp if its *oracle* came from the implementation rather than the spec. So for each assertion also ask: **would this assertion exist, in this form, if I hadn't read the implementation? Is it checking the SPEC or the code?** The expected value must trace to a requirement/acceptance criterion (cite it), not to "what the SUT currently returns" (that is the change-detector pattern, B). And when a test goes red, **never edit the test to make the agent's own code pass** — investigate which side is wrong; weakening the assertion to go green destroys the independence the gate exists to protect.
 
 ## E. Mutation gate on the diff
 
