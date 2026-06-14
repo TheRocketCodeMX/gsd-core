@@ -513,9 +513,13 @@ function cmdRoadmapUpdatePlanProgress(cwd: string, phaseNum: string | null | und
       return '|' + cells.join('|') + '|';
     });
 
-    // Update plan count in phase detail section
+    // Update plan count in phase detail section.
+    // Three recognised forms (all tolerated; canonical template uses the first):
+    //   `**Plans**: N plans`  — bold word + outer colon (gsd-core/templates/roadmap.md)
+    //   `**Plans:** N plans`  — bold "Plans:" (colon inside bold)
+    //   `Plans: N plans`      — plain text header
     const planCountPattern = new RegExp(
-      `(#{2,4}\\s*Phase\\s+${phasePattern}(?=[:\\s])[\\s\\S]*?\\*\\*Plans:\\*\\*\\s*)[^\\n]+`,
+      `(#{2,4}\\s*Phase\\s+${phasePattern}(?=[:\\s])[\\s\\S]*?(?:\\*\\*Plans\\*\\*:|\\*\\*Plans:\\*\\*|(?:^|\\n)Plans:)\\s*)[^\\n]+`,
       'i'
     );
     const planCountText = isComplete
@@ -542,6 +546,92 @@ function cmdRoadmapUpdatePlanProgress(cwd: string, phaseNum: string | null | und
         'i'
       );
       roadmapContent = roadmapContent.replace(planCheckboxPattern, '$1x$2');
+    }
+
+    // Compute the active (post-</details>) region offset ONCE.  Both the
+    // missing-plan DETECTION and the row INSERTION must use the same active
+    // region string so that a plan row that exists only in an archived <details>
+    // block is not counted as "already present" in the active milestone section.
+    // (Finding 1 code-review: detection was previously running against the full
+    //  roadmapContent, causing archived rows to suppress active-section inserts.)
+    const lastDetailsClose = roadmapContent.lastIndexOf('</details>');
+    const activeRegion = lastDetailsClose === -1
+      ? roadmapContent
+      : roadmapContent.slice(lastDetailsClose + '</details>'.length);
+
+    // Compute which plan files are MISSING a checkbox row in the ACTIVE region.
+    // This handles three cases:
+    //   (a) Fresh template — no rows at all: all plans are missing.
+    //   (b) Partial gap — some rows exist, others don't: only the absent ones.
+    //   (c) All rows present — nothing to insert (idempotent).
+    //
+    // Detection is scoped to the active region so a plan that appears in an
+    // archived <details> block is still correctly detected as missing from the
+    // active milestone section.
+    const missingPlans = phaseInfo!.plans.filter((planFile) => {
+      const planEscaped = escapeRegex(planFile);
+      return !new RegExp(`-\\s*\\[[x ]\\]\\s*(?:\\*\\*)?${planEscaped}`, 'i').test(activeRegion);
+    });
+
+    if (missingPlans.length > 0) {
+      // Insert missing plan checklist rows (#1163).  We prefer to anchor to the
+      // bare `Plans:` checklist header (canonical template form) and fall back to
+      // the bold `**Plans**:`/`**Plans:**` summary line only when no bare header
+      // is present.  Using two separate patterns avoids the lazy-quantifier trap
+      // where a single alternation would stop at the first matching alternative
+      // (the bold summary) before reaching the checklist header.
+      //
+      // Canonical template (gsd-core/templates/roadmap.md) uses BOTH lines:
+      //   **Plans**: N plans   ← summary (colon outside bold)
+      //   Plans:               ← checklist header (PREFERRED insertion anchor)
+      // Rows must land after `Plans:`, not between the summary and the header.
+      //
+      // Pattern A: anchor to bare `Plans:` header (preferred).
+      // Pattern B: fallback to bold summary when no bare header exists.
+      const insertRowsPatternA = new RegExp(
+        `(#{2,4}\\s*Phase\\s+${phasePattern}(?=[:\\s])[\\s\\S]*?(?:^|\\n)(?:Plans:)[^\\n]*)`,
+        'i'
+      );
+      const insertRowsPatternB = new RegExp(
+        `(#{2,4}\\s*Phase\\s+${phasePattern}(?=[:\\s])[\\s\\S]*?(?:\\*\\*Plans\\*\\*:|\\*\\*Plans:\\*\\*)[^\\n]*)`,
+        'i'
+      );
+
+      const sortedMissing = [...missingPlans].sort();
+      const newRows = sortedMissing.map(p => `- [ ] ${p}`).join('\n');
+      const inserter = (match: string) => `${match}\n${newRows}`;
+
+      // Scope insertion to the active (post-</details>) milestone region to
+      // prevent duplicate phase headings in archived sections from receiving rows.
+      // replaceInCurrentMilestone only accepts a string replacement, so we
+      // perform the scoped replace manually here (same strategy as that helper).
+      // Note: lastDetailsClose was computed above (shared with detection).
+      const scopedReplace = (src: string, pat: RegExp) => src.replace(pat, inserter);
+      let withRows: string;
+      if (lastDetailsClose === -1) {
+        // activeRegion === roadmapContent when there are no </details> blocks.
+        const regionA = scopedReplace(activeRegion, insertRowsPatternA);
+        withRows = regionA !== activeRegion ? regionA : scopedReplace(activeRegion, insertRowsPatternB);
+      } else {
+        const beforeDetails = roadmapContent.slice(0, lastDetailsClose + '</details>'.length);
+        const regionA = scopedReplace(activeRegion, insertRowsPatternA);
+        const afterWithRows = regionA !== activeRegion ? regionA : scopedReplace(activeRegion, insertRowsPatternB);
+        withRows = beforeDetails + afterWithRows;
+      }
+      if (withRows !== roadmapContent) {
+        roadmapContent = withRows;
+        // Mark any newly-inserted rows that already have summaries as complete
+        for (const summaryFile of phaseInfo!.summaries) {
+          const planId = summaryFile.replace('-SUMMARY.md', '').replace('SUMMARY.md', '');
+          if (!planId) continue;
+          const planEscaped = escapeRegex(planId);
+          const planCheckboxPattern = new RegExp(
+            `(-\\s*\\[) (\\]\\s*(?:\\*\\*)?${planEscaped}(?:\\*\\*)?)`,
+            'i'
+          );
+          roadmapContent = roadmapContent.replace(planCheckboxPattern, '$1x$2');
+        }
+      }
     }
 
     platformWriteSync(roadmapPath, roadmapContent);
