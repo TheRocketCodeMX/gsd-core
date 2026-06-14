@@ -7,9 +7,9 @@
  * #769 — context:fork + effort: frontmatter on heavy workflow skills.
  *
  * Verifies:
- *   1. Source commands/gsd/autonomous.md has context: fork and effort: xhigh
- *   2. Source commands/gsd/execute-phase.md has context: fork and effort: xhigh
- *   3. Source commands/gsd/plan-phase.md has context: fork and effort: xhigh
+ *   1. Source commands/gsd/autonomous.md has effort: xhigh and NO context: fork (fork breaks subagent spawning)
+ *   2. Source commands/gsd/execute-phase.md has effort: xhigh and NO context: fork
+ *   3. Source commands/gsd/plan-phase.md has effort: xhigh and NO context: fork
  *   4. Source commands/gsd/progress.md has effort: low
  *   5. Source commands/gsd/stats.md has effort: low
  *   6. Claude global install: SKILL.md for autonomous has context: fork and effort: xhigh
@@ -90,11 +90,11 @@ function runClaudeGlobalInstall(claudeHome) {
 
 // ─── describe 1: Source command files have correct frontmatter ────────────────
 
-describe('#769 source commands: heavy skills have context: fork and effort: xhigh', () => {
-  test('commands/gsd/autonomous.md has context: fork', () => {
+describe('#769 heavy skills keep effort: xhigh but must NOT have context: fork (it breaks subagent spawning)', () => {
+  test('commands/gsd/autonomous.md must NOT have context: fork (spawns subagents)', () => {
     const fm = readFrontmatter(path.join(SOURCE_COMMANDS_DIR, 'autonomous.md'));
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `autonomous.md frontmatter must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `autonomous.md spawns subagents — context: fork forks it into a context that cannot spawn, breaking the workflow (regression guard for plan/execute/autonomous spawn failure)\nActual:\n${fm}`);
   });
 
   test('commands/gsd/autonomous.md has effort: xhigh', () => {
@@ -103,10 +103,10 @@ describe('#769 source commands: heavy skills have context: fork and effort: xhig
       `autonomous.md frontmatter must have effort: xhigh\nActual:\n${fm}`);
   });
 
-  test('commands/gsd/execute-phase.md has context: fork', () => {
+  test('commands/gsd/execute-phase.md must NOT have context: fork (spawns subagents)', () => {
     const fm = readFrontmatter(path.join(SOURCE_COMMANDS_DIR, 'execute-phase.md'));
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `execute-phase.md frontmatter must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `execute-phase.md spawns subagents — context: fork would break spawning (regression guard)\nActual:\n${fm}`);
   });
 
   test('commands/gsd/execute-phase.md has effort: xhigh', () => {
@@ -115,10 +115,10 @@ describe('#769 source commands: heavy skills have context: fork and effort: xhig
       `execute-phase.md frontmatter must have effort: xhigh\nActual:\n${fm}`);
   });
 
-  test('commands/gsd/plan-phase.md has context: fork', () => {
+  test('commands/gsd/plan-phase.md must NOT have context: fork (spawns subagents)', () => {
     const fm = readFrontmatter(path.join(SOURCE_COMMANDS_DIR, 'plan-phase.md'));
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `plan-phase.md frontmatter must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `plan-phase.md spawns subagents — context: fork would break spawning (regression guard)\nActual:\n${fm}`);
   });
 
   test('commands/gsd/plan-phase.md has effort: xhigh', () => {
@@ -237,7 +237,7 @@ describe('#769 convertClaudeCommandToClaudeSkill: preserves context and effort f
 
 // ─── describe 3: Claude global install — SKILL.md files include new fields ────
 
-describe('#769 Claude global install: SKILL.md files preserve context: fork and effort:', () => {
+describe('#769 Claude global install: heavy SKILL.md files keep effort: but must NOT carry context: fork', () => {
   let tmpDir;
   let claudeHome;
 
@@ -251,12 +251,12 @@ describe('#769 Claude global install: SKILL.md files preserve context: fork and 
     cleanup(tmpDir);
   });
 
-  test('gsd-autonomous SKILL.md has context: fork after global install', () => {
+  test('gsd-autonomous SKILL.md must NOT have context: fork after global install', () => {
     runClaudeGlobalInstall(claudeHome);
     const skillPath = path.join(claudeHome, 'skills', 'gsd-autonomous', 'SKILL.md');
     const fm = readFrontmatter(skillPath);
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `gsd-autonomous SKILL.md must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `gsd-autonomous installed SKILL.md must NOT have context: fork (it must run inline to spawn subagents)\nActual:\n${fm}`);
   });
 
   test('gsd-autonomous SKILL.md has effort: xhigh after global install', () => {
@@ -267,12 +267,12 @@ describe('#769 Claude global install: SKILL.md files preserve context: fork and 
       `gsd-autonomous SKILL.md must have effort: xhigh\nActual:\n${fm}`);
   });
 
-  test('gsd-execute-phase SKILL.md has context: fork after global install', () => {
+  test('gsd-execute-phase SKILL.md must NOT have context: fork after global install', () => {
     runClaudeGlobalInstall(claudeHome);
     const skillPath = path.join(claudeHome, 'skills', 'gsd-execute-phase', 'SKILL.md');
     const fm = readFrontmatter(skillPath);
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `gsd-execute-phase SKILL.md must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `gsd-execute-phase installed SKILL.md must NOT have context: fork (must run inline to spawn)\nActual:\n${fm}`);
   });
 
   test('gsd-execute-phase SKILL.md has effort: xhigh after global install', () => {
@@ -283,12 +283,12 @@ describe('#769 Claude global install: SKILL.md files preserve context: fork and 
       `gsd-execute-phase SKILL.md must have effort: xhigh\nActual:\n${fm}`);
   });
 
-  test('gsd-plan-phase SKILL.md has context: fork after global install', () => {
+  test('gsd-plan-phase SKILL.md must NOT have context: fork after global install', () => {
     runClaudeGlobalInstall(claudeHome);
     const skillPath = path.join(claudeHome, 'skills', 'gsd-plan-phase', 'SKILL.md');
     const fm = readFrontmatter(skillPath);
-    assert.match(fm, /^context:[ \t]*fork$/m,
-      `gsd-plan-phase SKILL.md must have context: fork\nActual:\n${fm}`);
+    assert.doesNotMatch(fm, /^context:[ \t]*fork$/m,
+      `gsd-plan-phase installed SKILL.md must NOT have context: fork (must run inline to spawn)\nActual:\n${fm}`);
   });
 
   test('gsd-plan-phase SKILL.md has effort: xhigh after global install', () => {

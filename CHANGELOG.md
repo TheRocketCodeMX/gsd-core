@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-06-14
+
+### Fixed
+
+- **`/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-autonomous` could not spawn their subagents (planner, checker, executor, researcher) — the core mechanism of those workflows.** Root cause: `context: fork` in their frontmatter (an inherited upstream optimization, #769) runs the skill in an isolated forked context that **cannot spawn nested subagents** — fundamentally incompatible with workflows whose entire job is to dispatch `gsd-planner`/`gsd-plan-checker`/`gsd-executor`. The original `get-shit-done` never had `context: fork`, which is why it "worked perfectly"; we inherited it from upstream `gsd-core` and shipped it. **Removed `context: fork` from all three spawn-dependent commands** (kept `effort: xhigh`) so they run inline in the main thread and can spawn again. The `#769` test is flipped from asserting the bug to guarding against its return.
+- **Verified this was the *only* regression of its class.** A three-lens original-vs-fork deep comparison (subagent spawning, path/file resolution, allowed-tools & skill conversion — across all 74 shared commands, every workflow, and every agent file) plus a confirm-or-refute pass against raw files found: spawn tool unchanged (`Agent` everywhere, no `Task` rename), `allowed-tools` byte-identical to the original for every command, no agent renamed or stripped of a tool, all `@`-includes resolve, project-root/.planning/runtime-home resolution faithful. No patch-on-patch — the class is closed.
+
+*The forked version must never be flakier than the original. This closes a real inherited regression and proves (by exhaustive comparison) there are no siblings.*
+
 ## [1.11.0] - 2026-06-14
 
 Greenfield ⇄ brownfield adaptability, from 3 deep-research reports (Feathers/Fowler/Evans on legacy work; agent-grounding studies) + a live brownfield dogfood that exposed the scout rationalizing out of mandatory exploration. The framework was greenfield-first in its strategy chain and brownfield-first in its scout; this makes both modes first-class. Adversarially judged before ship.
