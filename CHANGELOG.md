@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-14
+
+The senior-quality + deep-scout wave — so agents stop needing per-session prompting for depth and long-term code quality. Research-grounded (3 deep-research reports, ~130 primary sources: Anthropic/OpenAI/DeepMind on agent prompting + reward-hacking + verification; Ousterhout/Metz/Beck/Fowler/Brooks on design) and adversarially judged before ship.
+
+### Added
+
+- **`references/engineering-standards.md` — the senior-quality contract**, injected into the producing agents (planner, phase-researcher, pattern-mapper, executor, discuss-phase) and enforced by the reviewing agents. A short *behavioral* contract (7 rules, not adjectives — the evidence is blunt that "write clean/senior code" is low-impact and `CRITICAL: YOU MUST` caps backfire). **Calibration is symmetric and explicit: the quality bar is invariant (correctness, edge-cases, no hacks — MVP or complex alike), but structural ceremony is set by `recommend-architecture`'s ADR per subdomain.** Both over-engineering (hexagonal for a script) AND under-engineering (thin CRUD / patching where the ADR mandates a Domain Model / ports / CQRS / event-driven) are defects — "simplicity operates within the chosen architecture, never against it."
+- **Deep-scout-with-verification in `discuss-phase`** (`scout-codebase.md` + workflow): scout depth now **auto-scales** by complexity × blast-radius × reversibility (trivial phases stay cheap; complex/core-touching phases get the deep path — multi-agent burns ~15× tokens, so it's gated). The deep path runs **read-only** parallel explorers on distinct lenses (by-layer/data-flow/dependency/failure-mode) then an **orchestrator confirm-or-refute gate**: load-bearing claims are cross-checked against *raw tool output*, not agent prose (research: ~20-30% of subagent reports contain a claim that doesn't match the tool output; self-verification is insufficient), contradictions reconciled, VERIFIED kept separate from INFERRED, with an explicit sufficiency-stop. Reuses existing parallel-dispatch machinery.
+
+### Changed (gates, not vibes — the durable lever against shortcuts)
+
+- **Reviewers now enforce the contract both ways.** `gsd-plan-checker` extends its canonical-artifact check to flag baked-in hacks, under-engineering (CRUD where a richer rung is mandated), and over-engineering (un-mandated ports/CQRS). `gsd-verifier` gains a **reward-hacking gate** (a weakened/skipped/trivially-passing test or hardcoded output = FAILED verification; test-file edits in a non-test task investigated) and an **architecture-fit gate** (a working-but-wrong-shape implementation that violates the ADR rung is a BLOCKER, not a passing phase). `gsd-code-reviewer` gains a both-directions Contract-Conformance dimension as the fresh-context adversary.
+- **`gsd-executor`** gains a test-integrity rule (no silent test edits/skips to pass outside an explicit test task or TDD RED step). Planner/researcher/pattern-mapper bound to the contract with the "build mandated structure fully; cut only un-mandated ceremony" guard.
+
+*Methodology: research → keystone authored by hand for salience → fan-out wiring (clean file ownership) → adversarial judge (caught a real verifier over-promise — fixed before ship) → full gate green.*
+
 ## [1.8.5] - 2026-06-12
 
 Dogfood round 5 (savoir: cicd-strategy — full chain complete).

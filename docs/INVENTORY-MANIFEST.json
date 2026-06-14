@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-12",
+  "generated": "2026-06-14",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -230,6 +230,7 @@
       "domain-modeling.md",
       "domain-probes.md",
       "e2e-tiering.md",
+      "engineering-standards.md",
       "execute-mvp-tdd.md",
       "executor-examples.md",
       "flaky-test-checklist.md",

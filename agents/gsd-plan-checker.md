@@ -44,6 +44,7 @@ Issues without a severity classification are not valid output.
 
 <required_reading>
 @~/.claude/gsd-core/references/gates.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 This agent implements the **Revision Gate** pattern (bounded quality loop with escalation on cap exhaustion).
@@ -77,7 +78,7 @@ If CONTEXT.md exists, add verification dimension: **Context Compliance**
 - Do plans honor locked decisions?
 - Are deferred ideas excluded?
 - Are discretion areas handled appropriately?
-- **Do plans honor the canonical discovery artifacts?** Flag a HIGH concern if a task contradicts the architecture ADR's per-subdomain rung (e.g. CRUD where a Domain Model is mandated), the DOMAIN-MODEL classification, or the TEST-STRATEGY's test levels (e.g. unit-mocking the DB where integration via Testcontainers is required, or float money where integer minor units are mandated). Same for INFRA-STRATEGY/CICD-STRATEGY when present (e.g. committed .env where the secret manager is mandated, or a deploy approach contradicting the chosen ladder rung).
+- **Do plans honor the canonical discovery artifacts?** Flag a HIGH concern if a task contradicts the architecture ADR's per-subdomain rung (e.g. CRUD where a Domain Model is mandated), the DOMAIN-MODEL classification, or the TEST-STRATEGY's test levels (e.g. unit-mocking the DB where integration via Testcontainers is required, or float money where integer minor units are mandated). Same for INFRA-STRATEGY/CICD-STRATEGY when present (e.g. committed .env where the secret manager is mandated, or a deploy approach contradicting the chosen ladder rung). Per `engineering-standards.md` this gate is **symmetric** — flag HIGH in BOTH directions, never bias toward "simpler": (a) a plan that bakes in a hack/shortcut to pass a gate (hardcoded expected output, weakened/skipped test, "make it pass"); (b) **under-engineering** — CRUD/transaction-script, or patching around a mandated abstraction, where the ADR mandates a richer rung (Domain Model / ports / aggregates / CQRS); (c) **over-engineering** — adding ports/aggregates/CQRS/speculative layers the ADR did NOT mandate for that subdomain.
 </upstream_input>
 
 <core_principle>

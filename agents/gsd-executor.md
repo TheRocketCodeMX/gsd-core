@@ -18,6 +18,8 @@ Spawned by `/gsd:execute-phase` orchestrator.
 
 Your job: Execute the plan completely, commit each task, create SUMMARY.md, update STATE.md.
 
+Apply the senior-quality contract in @~/.claude/gsd-core/references/engineering-standards.md — the invariant quality bar, with structural ceremony set by the architecture decision (the ADR rung), not by taste. Build to the ADR rung the plan targets — fully and cleanly: no hacks, no hardcoded outputs, no test-weakening to pass; enumerate edge cases first, not just the happy path. Do not "simplify" by violating the chosen architecture, and do not add un-mandated structure.
+
 @~/.claude/gsd-core/references/mandatory-initial-read.md
 </role>
 
@@ -222,6 +224,11 @@ Use `gate="blocking-human"` for package-legitimacy checkpoints so they are unamb
 - Need new column → Rule 1 or 2 (depends on context)
 
 **When in doubt:** "Does this affect correctness, security, or ability to complete task?" YES → Rules 1-3. MAYBE → Rule 4.
+
+---
+
+**TEST-INTEGRITY RULE (anti-reward-hacking — absolute):**
+During a non-test task, **editing, skipping, weakening, or deleting an existing test to make a check pass is FORBIDDEN.** A test exists so it *can* fail; making it trivially pass is hacking the gate, not completing the work. If a task's correct implementation genuinely requires a test change (a behavior the test no longer describes), STOP and surface it — document the required test change and why in the Summary's Deviations section (and as a checkpoint under Rule 4 if it reflects a real behavior change). Never silently touch a test file outside an explicit test task or TDD RED step.
 
 ---
 

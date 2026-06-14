@@ -41,6 +41,7 @@ Every truth must resolve to VERIFIED, FAILED (BLOCKER), or UNCERTAIN (WARNING wi
 <required_reading>
 @~/.claude/gsd-core/references/verification-overrides.md
 @~/.claude/gsd-core/references/gates.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 This agent implements the **Escalation Gate** pattern (surfaces unresolvable gaps to the developer for decision).
@@ -441,7 +442,18 @@ grep -n -B 2 -A 2 "console\.log" "$file" 2>/dev/null | grep -E "^\s*(const|funct
 
 **Debt marker gate:** Any `TBD`, `FIXME`, or `XXX` marker in a file modified by this phase is a 🛑 BLOCKER unless the same line references formal follow-up work (`issue #123`, `PR #123`, `#123`, or `DEF-*`). Unreferenced markers mean completion is not auditable; set `status: gaps_found` and list each marker under `gaps`.
 
-Categorize: 🛑 Blocker (prevents goal or unresolved debt marker) | ⚠️ Warning (incomplete) | ℹ️ Info (notable)
+**Reward-hacking gate (per `engineering-standards.md`):** A check that was made to pass by tampering, not by working code, is a FAILED verification — not a convenience. Treat each of these as a 🛑 BLOCKER (`status: gaps_found`):
+- A test that was **weakened, skipped, or made trivially-passing** (`.skip`/`xit`/`@pytest.mark.skip`/`#[ignore]`/`t.Skip`, an assertion deleted or loosened, a body replaced with `assert True`/`expect(true)`, an `expected` value rewritten to match wrong output).
+- A **hardcoded expected output** that makes a behavior or gate pass without real computation.
+- A **test-file edit accompanying a non-test task** — when the phase's stated work is not "add/change tests" yet `*-SUMMARY.md` key-files or the commits touch test files, flag it to INVESTIGATE: confirm the test still *can* fail and asserts real behavior; if it was loosened to pass the implementation, it is a BLOCKER.
+
+```bash
+git diff ${DIFF_BASE:-HEAD~1}..HEAD -- '*test*' '*spec*' 2>/dev/null | grep -nE '^\-.*(assert|expect|EXPECT)|\+.*(skip|xit|\.only|assert\s*\(?\s*[Tt]rue|return;?\s*//.*skip)'
+```
+
+**Architecture-fit gate (per `engineering-standards.md`; only when `.planning/adr/*.md` or `DOMAIN-MODEL.md` exists):** "wired and tamper-free" is not enough — the implementation must match the ADR's chosen rung for the subdomain it touches. Read the latest ADR + DOMAIN-MODEL and check **both directions**: (a) **under-engineering** — thin CRUD / transaction-script / a patch-around where the rung mandates a Domain Model / hexagonal ports / CQRS / event-driven flow (a working-but-wrong-shape implementation is a 🛑 BLOCKER, `status: gaps_found` — it's the under-build the contract forbids, not a passing phase); (b) **over-engineering** — ports/aggregates/CQRS/speculative layers on a subdomain the ADR marked Transaction Script (⚠️ Warning). Judge the shape, not just that it runs. If no ADR/DOMAIN-MODEL exists, skip this gate.
+
+Categorize: 🛑 Blocker (prevents goal, unresolved debt marker, reward-hacked check, or ADR-rung under-build) | ⚠️ Warning (incomplete, or over-built vs the rung) | ℹ️ Info (notable)
 
 ## Step 7b: Behavioral Spot-Checks
 

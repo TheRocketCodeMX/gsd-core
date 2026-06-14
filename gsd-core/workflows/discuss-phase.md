@@ -8,6 +8,7 @@ You are a thinking partner, not an interviewer. The user is the visionary — yo
 @~/.claude/gsd-core/references/domain-probes.md
 @~/.claude/gsd-core/references/gate-prompts.md
 @~/.claude/gsd-core/references/universal-anti-patterns.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 <progressive_disclosure>
@@ -278,16 +279,19 @@ Parse JSON for: `todo_count`, `matches[]` (each with `file`, `title`, `area`, `s
 </step>
 
 <step name="scout_codebase">
-Lightweight scan of existing code to inform gray area identification (~10% context).
+Scan existing code to inform gray area identification — depth SCALED to the phase, not always-max.
 
-Read `@~/.claude/gsd-core/references/scout-codebase.md` — it contains the phase-type→map selection table, single-read rule, no-maps fallback, and `<codebase_context>` output schema. Then execute:
-1. `ls .planning/codebase/*.md` to find existing maps
-2. Select 2–3 maps via the reference's table; or grep fallback if none exist
-3. Build internal `<codebase_context>` per the reference's output schema
+Read `@~/.claude/gsd-core/references/scout-codebase.md` — it contains the depth assessment, the shallow map-selection scan, the deep-path lens menu, the orchestrator confirm-or-refute gate, and the sufficiency stop. Then:
+
+1. **Assess depth first** (reference's "Depth assessment"). Score the phase on complexity × blast-radius × reversibility × decomposability. `--deep`/`--shallow` in $ARGUMENTS override; otherwise auto-route. Log the resolved path and the trigger.
+
+2. **Shallow path** (default — trivial/reversible phases, ~10% context): `ls .planning/codebase/*.md`, select 2–3 maps via the reference's table (or grep fallback if none exist), build internal `<codebase_context>`.
+
+3. **Deep path** (complex / high-blast-radius / hard-to-reverse / touches-the-core): spawn parallel READ-ONLY explorers on 2–4 distinct lenses, reusing the advisor-mode/`discuss-phase-assumptions` parallel `Agent()` dispatch + ORCHESTRATOR RULE (do not invent new machinery). Each returns `file:line`-cited claims, honest coverage, and a VERIFIED-vs-INFERRED split. Then run the reference's **confirm-or-refute gate** (spot-check highest-risk claims against RAW TOOL OUTPUT not prose; reconcile contradictions against ground truth; keep VERIFIED separate from INFERRED; never summarize-a-summary) and stop per its sufficiency criterion. Build `<codebase_context>` from the reconciled, evidence-backed understanding.
 </step>
 
 <step name="analyze_phase">
-Analyze the phase to identify gray areas. Use both `prior_decisions` and `codebase_context` to ground the analysis.
+Analyze the phase to identify gray areas. Use both `prior_decisions` and `codebase_context` to ground the analysis. When `scout_codebase` ran the deep path, ground gray areas in its **VERIFIED** facts; treat **INFERRED** facts and recorded open questions as things to confirm with the user, not as settled premises.
 
 1. **Domain boundary** — What capability is this phase delivering? State it clearly.
 
