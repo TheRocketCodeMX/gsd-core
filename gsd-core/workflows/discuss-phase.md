@@ -279,15 +279,13 @@ Parse JSON for: `todo_count`, `matches[]` (each with `file`, `title`, `area`, `s
 </step>
 
 <step name="scout_codebase">
-Scan existing code to inform gray area identification — depth SCALED to the phase, not always-max.
+Explore THIS phase before identifying gray areas, by spawning **dedicated parallel read-only explorer agents**. **This is MANDATORY and is NOT gated on how much context you already have** — you are exploring this phase specifically (to complement and verify what you think you know), not reusing global context. Reading maps/docs in your own context is NOT a substitute. (Trivial work routes to /gsd:fast or /gsd:quick; if you're in discuss-phase, the phase warrants exploration.)
 
-Read `@~/.claude/gsd-core/references/scout-codebase.md` — it contains the depth assessment, the shallow map-selection scan, the deep-path lens menu, the orchestrator confirm-or-refute gate, and the sufficiency stop. Then:
+**Read `@~/.claude/gsd-core/references/scout-codebase.md` now** — why-it's-mandatory, rationalization-killers, mode detection, lens menus, breadth scaling, confirm-or-refute gate, sufficiency stop. Then:
 
-1. **Assess depth first** (reference's "Depth assessment"). Score the phase on complexity × blast-radius × reversibility × decomposability. `--deep`/`--shallow` in $ARGUMENTS override; otherwise auto-route. Log the resolved path and the trigger.
-
-2. **Shallow path** (default — trivial/reversible phases, ~10% context): `ls .planning/codebase/*.md`, select 2–3 maps via the reference's table (or grep fallback if none exist), build internal `<codebase_context>`.
-
-3. **Deep path** (complex / high-blast-radius / hard-to-reverse / touches-the-core): spawn parallel READ-ONLY explorers on 2–4 distinct lenses, reusing the advisor-mode/`discuss-phase-assumptions` parallel `Agent()` dispatch + ORCHESTRATOR RULE (do not invent new machinery). Each returns `file:line`-cited claims, honest coverage, and a VERIFIED-vs-INFERRED split. Then run the reference's **confirm-or-refute gate** (spot-check highest-risk claims against RAW TOOL OUTPUT not prose; reconcile contradictions against ground truth; keep VERIFIED separate from INFERRED; never summarize-a-summary) and stop per its sufficiency criterion. Build `<codebase_context>` from the reconciled, evidence-backed understanding.
+1. **Detect mode** (brownfield / greenfield / greenfield-with-docs) — picks *which lenses*, never *whether*.
+2. **Spawn parallel read-only explorers** — count scales with breadth (2 focused → 4+ sprawling; `--shallow` = 2-lens floor, never zero; tightly-coupled = one dedicated explorer, never inline). Reuse the advisor / `discuss-phase-assumptions` `Agent()` dispatch + ORCHESTRATOR RULE; don't invent machinery. Existing maps/docs are grounding INPUT to verify, not the answer. Each returns cited (`file:line`/`url`) claims, honest coverage, VERIFIED-vs-INFERRED.
+3. **Confirm-or-refute gate** — spot-check highest-risk claims against RAW TOOL OUTPUT not prose; reconcile contradictions against ground truth; keep VERIFIED vs INFERRED; never summarize-a-summary. Stop per the sufficiency criterion; build `<codebase_context>` from the reconciled evidence.
 </step>
 
 <step name="analyze_phase">

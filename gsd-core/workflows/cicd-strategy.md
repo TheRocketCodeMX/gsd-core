@@ -4,6 +4,7 @@ Recommend a CI/CD strategy matched to the test strategy, the target infrastructu
 
 <required_reading>
 @~/.claude/gsd-core/references/cicd-strategy.md
+@~/.claude/gsd-core/references/brownfield-adaptation.md
 @~/.claude/gsd-core/templates/cicd-strategy.md
 </required_reading>
 
@@ -36,7 +37,11 @@ cat .planning/TEST-STRATEGY.md 2>/dev/null || true
 cat .planning/INFRA-STRATEGY.md 2>/dev/null || true
 cat .planning/adr/*.md 2>/dev/null || true
 cat .planning/PROJECT.md 2>/dev/null || true
+cat .planning/codebase/STACK.md 2>/dev/null || true
+ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "BROWNFIELD" || echo "GREENFIELD"
 ```
+
+**Brownfield mode (existing pipeline).** If `BROWNFIELD` (a `map-codebase` run produced `.planning/codebase/STACK.md`, or CI config already exists), **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend a **transition plan**, not a rip-and-replace: **audit the existing pipeline** (from STACK.md + the CI config) against the tier→stage map (Step 5), the **≤10-min PR budget**, and the **pinned-`sub` OIDC / secrets** standard (Step 4). Recommend incremental fixes via **decision cards** (current → target → gap cost → Follow / Improve / Refactor), e.g. "15-min gate → split to PR-smoke + nightly," "long-lived service-account key → OIDC federation," "moved-tag actions → SHA-pin." **Default-select Improve**; sequence the changes (don't enable everything at once). Greenfield (no map, no pipeline) keeps the from-scratch pipeline design below as the default.
 
 **Read `@~/.claude/gsd-core/references/cicd-strategy.md` now** — it defines the GHA-default platform decision, OIDC-with-pinned-`sub`, the secrets split, the tier→stage mapping with the ≤10-min PR budget, the flaky canon, the merge-queue trigger, the deployment ladder, the free-six supply-chain table stakes, and the anti-pattern table.
 

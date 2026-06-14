@@ -5,6 +5,7 @@ Recommend an infrastructure strategy matched to the project's actual traffic sha
 <required_reading>
 @~/.claude/gsd-core/references/infrastructure-strategy.md
 @~/.claude/gsd-core/references/data-environments.md
+@~/.claude/gsd-core/references/brownfield-adaptation.md
 @~/.claude/gsd-core/templates/infra-strategy.md
 </required_reading>
 
@@ -37,7 +38,11 @@ cat .planning/PRODUCT-BRIEF.md 2>/dev/null || true
 cat .planning/REQUIREMENTS.md 2>/dev/null || true
 cat .planning/adr/*.md 2>/dev/null || true
 cat .planning/TEST-STRATEGY.md 2>/dev/null || true
+cat .planning/codebase/STACK.md 2>/dev/null || true
+ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "BROWNFIELD" || echo "GREENFIELD"
 ```
+
+**Brownfield mode (existing infra).** If `BROWNFIELD` (a `map-codebase` run produced `.planning/codebase/STACK.md`, or infra/config already exists), **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend right-size-or-migrate, not a from-scratch build: assess the existing infra (from STACK.md + config — current compute rung, data layer, IaC, CI) **against the ladder**, e.g. "currently self-managed K8s at low utilization → the CAST-AI data says serverless-containers is cheaper → here's the decision card." Recommend evolution via **strangler** — route *new* workloads to the target rung and migrate existing ones incrementally — **never a big-bang re-platform**. Surface each gap as a **decision card** (current → target → gap cost: **cost · blast radius · reversibility** → Follow / Improve / Refactor-migrate) and **default-select Improve**. Walk Steps 4–7 below as the current-state→target reconciliation rather than a blank-slate walk. Greenfield (no map, no infra) keeps the from-scratch ladder walk as the default.
 
 **Read `@~/.claude/gsd-core/references/infrastructure-strategy.md` now** — it defines the compute ladder with quantified move-up triggers, the crossover numbers (Fargate-vs-EC2, the CAST AI utilization data, the <4-engineers floor), the per-cloud asymmetries and equivalences table, the observability floor, the when-you-actually-need triggers, the IaC floor, the anti-patterns, and the meta-tell.
 

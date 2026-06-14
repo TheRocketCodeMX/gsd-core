@@ -276,7 +276,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (84 shipped)
+## References (85 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -296,6 +296,7 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | `questioning.md` | Dream-extraction philosophy for project initialization. |
 | `tdd.md` | Test-driven development integration patterns. |
 | `engineering-standards.md` | Senior-quality contract — invariant quality bar + ceremony set by the ADR (both over- and under-engineering are failures); injected into producers, enforced by reviewers. |
+| `brownfield-adaptation.md` | Working an existing codebase — follow/improve/refactor matrix, Feathers safe-change sequence, decision-card pattern; the brownfield half of the strategy chain + scout. |
 | `ui-brand.md` | Visual output formatting patterns. |
 | `common-bug-patterns.md` | Common bug patterns for code review and verification. |
 | `debugger-philosophy.md` | Evergreen debugging disciplines loaded by `gsd-debugger`. |

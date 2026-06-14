@@ -1,53 +1,84 @@
-# Codebase scout — map selection + scaled deep-scout protocol
+# Codebase scout — mandatory phase exploration via parallel agents
 
 > Lazy-loaded reference for the `scout_codebase` step in
-> `workflows/discuss-phase.md` (extracted via #2551 progressive-disclosure
-> refactor). Read this when the workflow needs to scout the codebase before
-> identifying gray areas.
->
-> The scout has **two paths**. Assess depth FIRST (see "Depth assessment"),
-> then run exactly one:
-> - **Shallow path** (default for trivial/reversible phases) — the light
->   inline map-selection scan below. Cheap.
-> - **Deep path** (complex / high-blast-radius / hard-to-reverse / touches
->   the core) — parallel read-only explorers on distinct lenses, then an
->   orchestrator confirm-or-refute gate. ~15× the tokens; earned, not default.
->
-> Both feed the same internal `<codebase_context>`. The deep path adds a
-> VERIFIED-vs-INFERRED split and a reconciled, evidence-backed understanding.
+> `workflows/discuss-phase.md`. Read this before scouting a phase.
 
-## Depth assessment (run first — gates the cheap vs deep path)
+## Exploring the phase with parallel agents is MANDATORY — always
 
-Do NOT always-max. Multi-agent scouting burns ~15× the tokens of a single
-read; spend it only where blast-radius justifies it. Score the phase on four
-axes (from the phase title, ROADMAP entry, and prior context):
+**If you are in discuss-phase, you WILL spawn dedicated parallel read-only explorer agents to explore this phase. This is not optional, not gated on how much you already know, and not something you can satisfy by reading a few files in your own context.** What scales is the *number* of explorers and *which* lenses — never *whether* you explore.
 
-| Axis | Light end (→ shallow) | Heavy end (→ deep) |
+(Proportionality lives at the command boundary, not here: genuinely trivial work routes through `/gsd:fast` or `/gsd:quick`. The moment you are running discuss-phase, the phase is substantive enough to plan — so it is substantive enough to explore. There is no "too small to scout" case inside discuss-phase.)
+
+### Why — so you respect it instead of routing around it
+
+- **You are exploring THIS phase specifically — not reusing the global context you think you have.** Whatever you already know is about the project in general; the phase needs targeted grounding on the exact code paths, data flows, invariants, and failure modes it will touch. General context is not phase context.
+- **Exploration COMPLEMENTS and STRESS-TESTS what you know — it does not repeat it.** Its job is to surface what you *don't* know and to verify what you *think* you know against ground truth. The points you're most confident about are the ones most worth checking — confidence is where stale assumptions hide.
+- **The agent that "already has the context" is the highest-risk one.** ~20–30% of even careful single-context conclusions don't survive a check against raw tool output (stale memory, an assumed call path, a pattern that changed). Skipping exploration because you feel informed is exactly how a wrong premise gets locked into CONTEXT.md and propagated through plan → execute.
+- **This is the highest-leverage moment in the whole workflow.** Decisions locked here become canonical references the planner and executor must follow. A cheap, thorough exploration now prevents expensive rework later. Thoroughness beats tokens here, always.
+- **Parallel agents beat one big pass** because independent lenses see what a single sweep misses, and isolating each lens in its own context keeps each one sharp.
+
+### Rationalization-killers — every one of these is INVALID
+
+If you catch yourself thinking any of these, STOP — you are about to under-explore. Spawn the explorers anyway:
+
+| The rationalization | Why it's invalid |
+|---|---|
+| "I already have the context from committed docs / the maps." | Docs and maps are *grounding input you feed the explorers* — never a substitute for exploring the phase. They're also potentially stale; the explorers verify them. |
+| "It's mostly already mapped." | "Mostly" and "this phase, verified, right now" are different. Explore the delta and re-verify the rest. |
+| "I know this codebase well." | Then exploration is cheap and confirms it. If it doesn't confirm it, you needed it. |
+| "The angles are tightly coupled, so I'll just do it inline myself." | Tight coupling means *fewer explorers or one dedicated explorer* — never inline-in-your-own-context. A dedicated exploration pass is still mandatory. |
+| "It's a small/clear phase." | Then it routed to /gsd:fast or /gsd:quick. You're in discuss-phase, so it isn't. |
+| "I'll save tokens." | Re-work from a wrong premise costs far more than the exploration. Thoroughness over tokens — the user has said this repeatedly. |
+
+**Violating the letter of this (a couple of inline greps labelled "deep scout") is violating the spirit.** The deliverable is dedicated parallel explorers + the confirm-or-refute gate, every time.
+
+## Mode (detect FIRST — *what* to scout; never *whether*)
+
+Detect per change-site, not per repo (a brownfield repo can have a brand-new module; a greenfield repo can carry rich docs). Mode picks the lenses; it never licenses skipping exploration.
+
+- **Brownfield** — real source exists for this area → **code-comprehension** lenses (below). Depth-bounded: localize to spans + blast radius.
+- **Greenfield** — little/no code yet (new project / foundational phase) → **external pre-research** lenses: verify *current* library/API versions & signatures against the web (training memory is stale — ~1 in 5 generated packages is hallucinated; post-cutoff APIs run <50% without docs), find reference implementations, surface pitfalls, reconcile locked decisions against ground truth. Breadth-bounded: ~5 good sources optimal. **Never skip because "there's no code to read" — that conflation is the classic foundational-rework miss.**
+- **Greenfield-with-docs** — thin code but real specs/research exist → honor the docs the way brownfield honors tests; reconcile against them.
+
+Mixed phases run both disciplines.
+
+## Breadth assessment (how MANY explorers — not whether)
+
+Always spawn explorers; scale the count to the phase:
+- **Focused phase** (one subsystem, clear boundary) → 2 lenses.
+- **Sprawling / high-blast-radius / hard-to-reverse / touches-the-core** → 3–4+ lenses.
+- **Tightly-coupled / sequential** (angles can't be explored independently — Cognition: parallel workers drift on conflicting assumptions) → **one dedicated deep explorer** with continuous context, still read-only, still through the confirm-or-refute gate. This is "fewer explorers," NOT "do it inline."
+
+`--deep` forces the maximal fan-out; `--shallow` reduces to the 2-lens minimum (it does NOT mean "no agents"). Log the resolved breadth + the trigger (e.g. `[scout] 4 lenses — touches the core, low reversibility`).
+
+## Lens menus — pick the relevant ones (each explorer owns a DISTINCT angle)
+
+Give each explorer Anthropic's 4-part contract: objective, output format, tools/sources, boundaries ("don't cover X — another explorer owns it"). Feed each the grounding input (existing maps/docs) as starting context, with instructions to *verify and go deeper*, not restate.
+
+### Brownfield lenses (existing code)
+
+| Lens | Owns | Pick when |
 |---|---|---|
-| **Complexity** | one file, clear-cut, CRUD | cross-cutting, many moving parts |
-| **Blast radius** | isolated, leaf code | touches the core / shared infra / many call sites |
-| **Reversibility** | trivially revertable | hard to reverse (schema, public API, data migration, payments) |
-| **Decomposability** | n/a | understanding splits cleanly into independent angles |
+| **by-layer / structure & dependency** | architecture, modules, who-calls-whom, the real dependency graph | almost always (the spine) |
+| **by-data-flow** | how data enters/transforms/exits; invariants; persistence | data models, schema, state, pipelines |
+| **by-control-flow / call-path** | real execution paths, entry points (traced, not assumed) | behavior changes, request/handler flows |
+| **by-goals/intent + tests-as-spec** | what it should do; tests as the executable spec; conventions to imitate | any phase modifying established behavior |
+| **by-failure-mode** | error handling, edge cases, where it breaks, retry/timeout paths | high-blast-radius, low-reversibility, infra |
 
-**Routing rule:**
-- **All axes light** → **shallow path**. Run the map-selection scan only.
-- **Any of: high complexity, high blast-radius, low reversibility, or "touches
-  the core"** → **deep path** (parallel lenses + confirm-or-refute gate).
-- **Tightly-coupled / sequential understanding** (the angles can't be explored
-  independently) → prefer **one deep continuous-context pass** over many
-  parallel explorers (Cognition: parallel workers drift on conflicting
-  assumptions). Use the deep path's verification gate, but a single explorer.
+### Greenfield lenses (external pre-research — area has no code yet)
 
-**Overrides:** an explicit `--deep` forces the deep path; `--shallow` forces
-the light path. With no flag, the routing rule above decides. Log the resolved
-path and the axis that triggered it (e.g. `[scout] deep — schema change,
-low reversibility`).
+| Lens | Owns | Pick when |
+|---|---|---|
+| **by-ecosystem / version ground-truth** | current lib/framework versions, signatures, breaking changes vs stale memory; deps exist & maintained | always — the greenfield spine |
+| **by-reference-implementation** | how comparable real systems structure this — layout, seams, gotchas | foundational scaffolding; unfamiliar domain |
+| **by-canonical-doc reconciliation** | the project's locked decisions (spec/ADR/STACK) checked against current ground truth | a strategy chain produced artifacts |
+| **by-pitfalls / failure-modes** | footguns, deprecations, security advisories for the chosen stack | high-blast-radius foundational choices |
 
-## Shallow path — phase-type → recommended maps
+### Grounding input (feed it; don't let it replace exploration)
 
-The cheap, single-pass scan. Read 2–3 maps based on inferred phase type. Do
-NOT read all seven — that inflates context without improving discussion
-quality.
+Maps in `.planning/codebase/*.md` (if present) and design docs are *inputs* to the explorers. If no maps exist for a brownfield area, the explorers build understanding directly (glob/grep/read/git-history). Reading a map is never the exploration — it's the starting point the explorers verify and extend.
+
+When maps exist, select which to feed by phase type (don't dump all seven):
 
 | Phase type (infer from title + ROADMAP entry) | Read these maps |
 |---|---|
@@ -59,125 +90,28 @@ quality.
 | Documentation / content | CONVENTIONS.md, STRUCTURE.md |
 | Mixed / unclear | STACK.md, ARCHITECTURE.md, CONVENTIONS.md |
 
-Read CONCERNS.md only if the phase explicitly addresses known concerns or
-security issues.
-
-## Single-read rule
-
-Read each map file in a **single** Read call. Do not read the same file at
-two different offsets — split reads break prompt-cache reuse and cost more
-than a single full read.
-
-## No-maps fallback
-
-If `.planning/codebase/*.md` does not exist:
-1. Extract key terms from the phase goal (e.g., "feed" → "post", "card",
-   "list"; "auth" → "login", "session", "token")
-2. `grep -rlE "{term1}|{term2}" src/ app/ --include="*.ts" ...` (use `-E`
-   for extended regex so the `|` alternation works on both GNU grep and BSD
-   grep / macOS), and `ls` the conventional component/hook/util dirs
-3. Read the 3–5 most relevant files
-
-## Output (internal `<codebase_context>`)
-
-From the scan, identify:
-- **Reusable assets** — components, hooks, utilities usable in this phase
-- **Established patterns** — state management, styling, data fetching
-- **Integration points** — routes, nav, providers where new code connects
-- **Creative options** — approaches the architecture enables or constrains
-
-Used in `analyze_phase` and `present_gray_areas`. NOT written to a file —
-session-only.
-
-On the **deep path**, this same `<codebase_context>` additionally carries a
-`VERIFIED facts` / `INFERRED facts` split and the explicit open questions left
-at the stop (see below).
-
----
-
-## Deep path — parallel read-only explorers on distinct lenses
-
-Run this only when the depth assessment routed here. Reuses the exact
-parallel-dispatch machinery the advisor mode (`modes/advisor.md`
-`advisor_research`) and `discuss-phase-assumptions.md` already use: spawn
-`Agent()` calls simultaneously, then synthesize. Do NOT invent new machinery.
-
-**Read-only is a hard constraint.** Explorers answer questions; they never
-write code (Cognition: parallel writers amplify conflicting decisions; parallel
-read-only scouts are safe). They glob/grep/read/inspect git history only.
-
-### Lens menu — pick 2–4 relevant to the phase type
-
-Spawn one explorer per lens, each owning a DISTINCT angle (not N identical
-agents — that just duplicates work). Give each Anthropic's 4-part contract:
-objective, output format, tools/sources, and boundaries ("don't cover X —
-that's another explorer's job").
-
-| Lens | Owns | Pick when |
-|---|---|---|
-| **by-layer / structure & dependency** | architecture, modules, who-calls-whom, the real dependency graph | almost always (the spine) |
-| **by-data-flow** | how data enters / transforms / exits; invariants; persistence | data models, schema, state, pipelines |
-| **by-control-flow / call-path** | real execution paths, entry points (traced, not assumed) | behavior changes, request/handler flows |
-| **by-goals/intent + tests-as-spec** | what it's supposed to do; tests read as the executable spec; existing conventions to imitate | any phase modifying established behavior |
-| **by-failure-mode** | error handling, edge cases, where it breaks, retry/timeout paths | high-blast-radius, low-reversibility, infra |
-
-Default selection: **by-layer + by-goals/tests** for most phases; add
-**by-data-flow** for data/schema work, **by-control-flow** for behavior work,
-**by-failure-mode** for high-blast-radius/infra.
+Read each map in a **single** Read call — never split reads of the same file at two offsets (it breaks prompt-cache reuse and costs more than one full read).
 
 ### Explorer contract (required of every lens)
 
-Each explorer MUST return:
-- **Load-bearing claims with `file:line` citations** — and, for counts or
-  exhaustiveness claims, the command + its raw output. No bare assertions.
-- **An honest coverage statement** — "searched 2 of 5 dirs", not
-  "searched all locations". Partial is fine; lying-by-omission is not.
-- **A VERIFIED vs INFERRED split** — facts read from tool output vs
-  conclusions drawn from them.
+Each explorer MUST return: **load-bearing claims with `file:line` (or `url`+access-date) citations** — counts/exhaustiveness claims include the command + raw output; **an honest coverage statement** ("searched 2 of 5 dirs", not "searched all"); **a VERIFIED vs INFERRED split**.
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling all Agent() calls above
-> to spawn explorers, do NOT independently scout or analyze the codebase while
-> the subagents are active. Wait for all explorers to return before
-> synthesizing. This prevents duplicate work and wasted context.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After spawning the Agent() explorers, do NOT independently scout/analyze while they run. Wait for all to return, then synthesize. (Reuses the exact parallel-dispatch machinery in `modes/advisor.md` and `discuss-phase-assumptions.md` — do not invent new machinery.)
 
 ## Orchestrator confirm-or-refute gate (the load-bearing part)
 
-~20–30% of subagent reports contain at least one claim that doesn't match the
-underlying tool output, and self-verification is unreliable. So the
-orchestrator does NOT trust the explorers' prose. After all explorers return,
-before adopting anything into `<codebase_context>`:
+Self-verification is unreliable and ~20–30% of subagent reports contain a claim that doesn't match tool output — so do NOT trust explorer prose. Before adopting anything into `<codebase_context>`:
 
-1. **Spot-check the highest-risk / load-bearing claims against RAW TOOL
-   OUTPUT** — re-read the actual file at the cited `file:line`, re-run the
-   grep/count yourself. Check claims against the tool output, never against the
-   agent's summary. Prioritize: inflated/exhaustiveness claims ("found 15
-   files", "searched all", "applied successfully"), and any claim a gray area
-   or plan would hang on. You need not re-verify everything — re-derive the
-   pivotal facts.
-2. **Require citations for load-bearing claims.** A load-bearing claim with no
-   `file:line` (or no command+output) is treated as INFERRED, not VERIFIED,
-   until you ground it yourself.
-3. **Reconcile contradictions — mandatory, never silently pick.** When two
-   explorers disagree (e.g. "3 call sites" vs "5 call sites"), surface the
-   contradiction and resolve it against ground truth (re-grep), don't merge or
-   pick one quietly.
-4. **Separate VERIFIED from INFERRED** in the resulting `<codebase_context>`.
-   Carry both forward labelled — never collapse inference into fact.
-5. **Never summarize a summary.** On any disputed or load-bearing point,
-   re-ground at the source rather than paraphrasing an explorer's paraphrase.
+1. **Spot-check the highest-risk / load-bearing claims against RAW TOOL OUTPUT** — re-read the cited `file:line`, re-run the grep/count yourself. Check the tool output, never the summary. Prioritize inflated/exhaustiveness claims and anything a gray area or plan will hang on. Re-derive the pivotal facts; you needn't re-verify everything.
+2. **Require citations for load-bearing claims** — an uncited one is INFERRED, not VERIFIED, until you ground it.
+3. **Reconcile contradictions — mandatory, never silently pick.** Two explorers disagree → resolve against ground truth (re-grep), don't merge or pick quietly.
+4. **Separate VERIFIED from INFERRED** in `<codebase_context>` — carry both labelled; never collapse inference into fact.
+5. **Never summarize a summary** — on any disputed/load-bearing point, re-ground at the source.
 
 ## Sufficiency stop (avoid analysis paralysis)
 
-State the stop criterion explicitly. Stop scouting and proceed to
-`analyze_phase` when **all three** hold:
-- **Confidence threshold met** — the chosen lenses are covered and the real
-  call-path / data-flow for the change site was traced, not assumed. Satisfice
-  (~good enough to decide), don't optimize.
-- **Budget cap not exceeded** — within the tool-call/explorer budget for this
-  task class (cheap fact-finding gets few; complex/high-blast gets more).
-- **Saturation** — the last round surfaced **no new load-bearing facts AND all
-  contradictions are resolved.**
+Stop and proceed to `analyze_phase` when **all three** hold: **confidence threshold met** (lenses covered; the real call-path/data-flow for the change site traced, not assumed; satisfice, don't optimize); **budget cap not exceeded** (scaled to the phase class); **saturation** (last round surfaced no new load-bearing facts AND all contradictions resolved). Record remaining open questions explicitly (bounded, named) and carry them into `<codebase_context>`. Only then is the understanding "sufficient AND verified".
 
-Record any remaining open questions explicitly (bounded, named) and carry them
-into `<codebase_context>` — don't keep scouting to chase curiosity. Only once
-the gate passes is the understanding "sufficient AND verified".
+## Output (internal `<codebase_context>`)
+
+Reusable assets · established patterns · integration points · creative options the architecture enables/constrains — plus the **VERIFIED / INFERRED** split and the named open questions. Used in `analyze_phase` and `present_gray_areas`; session-only, not written to a file.

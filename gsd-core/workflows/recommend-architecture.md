@@ -4,6 +4,7 @@ Recommend an application architecture matched to the project's actual complexity
 
 <required_reading>
 @~/.claude/gsd-core/references/architecture-decision.md
+@~/.claude/gsd-core/references/brownfield-adaptation.md
 @~/.claude/gsd-core/templates/adr.md
 </required_reading>
 
@@ -39,6 +40,20 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 **Read `@~/.claude/gsd-core/references/architecture-decision.md` now** — it defines the two axes, the rung-signals, the "tall enough" gates, the Hard-Parts disintegrators/integrators, and the over-/under-engineering meta-tell.
 
 **Grounding maturity governs elicitation depth.** When upstream artifacts (DOMAIN-MODEL, a design spec, research) already answer a question below, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve `AskUserQuestion` for genuine decision points: contested rungs, gate answers the docs don't record, and contradictions (the reconcile rule still ALWAYS runs). Honor a posture stated in `$ARGUMENTS` without re-asking.
+
+**Brownfield mode (existing architecture).** Greenfield (recommend the target from scratch) is the default. But when existing code or `map-codebase` maps are present, **assess the current topology first and recommend an evolution path** — never impose a from-scratch ideal on the running system (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`):
+
+```bash
+ls .planning/codebase/ARCHITECTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+```
+
+If maps exist, `cat .planning/codebase/ARCHITECTURE.md` (consume STRUCTURE.md/CONCERNS.md as needed); if real source exists but no maps, suggest `/gsd:map-codebase` first. Then run Steps 3–5 in **assess-then-evolve** form:
+- **Score the current topology against the meta-tell** (Step 5) — where is the existing system already over- or under-engineered relative to the floor and the per-subdomain rungs?
+- **The target is unchanged — the floor (functional-core/imperative-shell + tests) and the rung ladder still apply.** Brownfield changes only *how you get there*: incrementally, not in one cut.
+- **Recommend via the decision card**, not a verdict: per affected area record `current state · target · gap cost (blast radius · churn/centrality · reversibility) · Follow | Improve | Refactor`. **Default-select Improve**; **gate Refactor behind characterization tests**; Follow is a deliberate, time-boxed choice for cold/uncovered code. Record the card in the ADR's Consequences/promotion-triggers, surfacing cost — the user owns the appetite.
+- **The evolution path uses Strangler Fig + ACL + bubble context** — exactly the *Evolving the topology* mechanics this skill already documents in Step 4. In brownfield, that section is the recommended path (new behavior to the clean core, old paths strangled), not just a future-split footnote. Don't duplicate it here — reference it.
+
+Greenfield behavior remains the default when no existing code is present.
 
 **If `NO_DOMAIN_MODEL`:** tell the user "No domain model found — I'll ask the complexity questions directly. (Consider `/gsd:model-domain` first for a sharper result.)" Then gather, per major area: is it core/supporting/generic, and how complex (rich rules vs CRUD)?
 

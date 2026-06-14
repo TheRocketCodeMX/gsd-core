@@ -4,6 +4,7 @@ Establish strategic Domain-Driven Design foundations for a greenfield project: a
 
 <required_reading>
 @~/.claude/gsd-core/references/domain-modeling.md
+@~/.claude/gsd-core/references/brownfield-adaptation.md
 @~/.claude/gsd-core/templates/domain-model.md
 </required_reading>
 
@@ -44,6 +45,20 @@ From the project docs, build an internal draft:
 - What problem domain is this? What are the candidate capabilities/areas (from REQUIREMENTS.md)?
 - Which nouns/verbs recur (candidate ubiquitous-language terms)?
 - Are there distinct business areas or user roles (candidate subdomains)?
+
+**Brownfield mode (existing code).** Greenfield (define from docs/vision) is the default below. But when `.planning/codebase/*.md` exists OR real source is present, **reverse-engineer the domain from the code first, then reconcile** — don't model from a blank slate (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`, "Reverse-engineer, don't re-invent"):
+
+```bash
+ls .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+```
+
+If maps exist, `cat .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md` (and STACK.md if useful). If real source exists but no maps, suggest `/gsd:map-codebase` first, or skim the source tree directly. Then, *before* drafting from vision:
+- **Extract ubiquitous-language terms** from module/type/table names and call paths (the words the code already speaks) — these seed Step 3's draft.
+- **Derive candidate subdomains** from the structure (modules, packages, service boundaries in ARCHITECTURE.md/STRUCTURE.md) — these seed Step 4's area list.
+- **Reconcile against the user's vision** and flag mismatches, mirroring discover-product's gap map — here **KEEP** (code and vision agree), **REFINE** (present but vague, partial, or drifting from vision), **CONTESTED** (code and vision disagree, or vision wants something the code lacks). Present the reconciliation in one message; carry CONTESTED items into the Step 6 notes.
+- **Don't DDD the monolith.** When the existing system is a tangle, do NOT model the whole legacy estate as clean subdomains. Carve a **bubble context** around the core subdomain and mark an **ACL at its edge** (record it as a candidate boundary in Step 5/6) — model the core cleanly, wrap the mess. Recording only; the translator is tactical.
+
+Greenfield behavior (draft from docs/vision) remains the default when no code exists.
 
 **Grounding maturity governs elicitation depth.** When the upstream docs are mature (a design spec, research corpus, or detailed brief already forged the vocabulary and areas), default every step to **draft-from-docs + confirm**: present complete drafts for correction, state which docs grounded them, and reserve actual questions for *genuine decision points* — contested classifications, the one-core call, complexity contradictions. The 2–3 probing rounds below are for thin grounding (a bare PROJECT.md), not a re-interview of what the docs already answer. Honor a posture stated in `$ARGUMENTS` without re-asking.
 

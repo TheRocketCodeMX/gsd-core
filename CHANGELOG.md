@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-06-14
+
+Greenfield ⇄ brownfield adaptability, from 3 deep-research reports (Feathers/Fowler/Evans on legacy work; agent-grounding studies) + a live brownfield dogfood that exposed the scout rationalizing out of mandatory exploration. The framework was greenfield-first in its strategy chain and brownfield-first in its scout; this makes both modes first-class. Adversarially judged before ship.
+
+### Added
+
+- **`references/brownfield-adaptation.md`** — the keystone for working an existing codebase: the **follow / improve / refactor decision matrix** (default *improve* scoped to what you touch; *refactor* reserved for hotspots and gated on characterization tests; *follow* a bad pattern only as a deliberate, locally-consistent tactic — never a silent default), the Feathers safe-change sequence (change point → seam → characterization tests → change), "don't DDD the monolith → bubble context + ACL + strangler fig," incremental-not-big-bang, and the **decision-card** pattern (surface current/target/gap-cost/options, default Improve, never impose).
+- **Brownfield "assess → recommend evolution" mode in every strategy skill** — `model-domain` reverse-engineers the domain from code + reconciles with the vision; `recommend-architecture` assesses the current topology and recommends an evolution path (not a from-scratch ideal); `testing-strategy` audits the existing suite and starts characterization tests at churn×risk hotspots; `infrastructure-strategy` and `cicd-strategy` assess existing infra/pipeline against the ladder and recommend incremental transitions. Each consumes `map-codebase` output and **defaults to greenfield when no code exists.**
+- **Scout: three modes** — greenfield (external pre-research: verify current versions/APIs/reference-impls against the web — training memory is stale), brownfield (code comprehension), greenfield-with-docs (honor docs like tests) — **detected per-area, not per-repo.** Fixes the live failure where a foundational greenfield phase had "no code to grep."
+
+### Changed
+
+- **Phase exploration via parallel agents is now MANDATORY and non-rationalizable in discuss-phase.** A live run showed an agent with rich context rationalizing out of the required parallel deep-scout ("I already have the context"; abusing the tightly-coupled exception to go inline). The scout reference now leads with *why* exploration is non-substitutable (you explore THIS phase to complement and verify what you think you know; the agent that "already knows" is the highest-risk one) and a **rationalization-killers table** that invalidates every escape hatch by name. Recast depth→**breadth**: you always spawn dedicated explorers; only the *count* of lenses scales (2 focused → 4+ sprawling; `--shallow` = a 2-lens floor, **never zero**; tightly-coupled = one dedicated explorer, **never inline**). Proportionality is preserved at the **command boundary** — genuinely trivial work routes through `/gsd:fast` or `/gsd:quick`, so by the time you're in discuss-phase the phase warrants real exploration.
+
+*Methodology: research → keystone references authored by hand → fan-out wiring (clean file ownership) → adversarial judge (confirmed loopholes closed, no regressions, the one flagged risk verified clean) → full gate green.*
+
 ## [1.10.0] - 2026-06-14
 
 Evidence-grounded recalibration of the architecture default, from 3 deep-research reports (~140 primary sources: Cockburn/Evans/Vernon/Fowler/Ousterhout/Metz/Beck on the timeless debate; Anthropic/METR/DORA/GitClear on the AI-era shift) + adversarial judge. The question: is "always DDD + hexagonal + TDD, even for simple projects" true? **Verdict: the strong form is not supported — and the originators themselves reserve those patterns for the complex core — but a lighter floor IS defensible even for simple projects, and the AI era strengthens it.**

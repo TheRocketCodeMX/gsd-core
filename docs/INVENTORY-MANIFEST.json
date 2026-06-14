@@ -216,6 +216,7 @@
       "artifact-types.md",
       "auth-in-tests.md",
       "autonomous-smart-discuss.md",
+      "brownfield-adaptation.md",
       "checkpoints.md",
       "cicd-strategy.md",
       "common-bug-patterns.md",
