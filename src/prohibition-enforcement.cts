@@ -105,9 +105,11 @@ export function buildNodeTestArgs(check: CheckDescriptor): string[] {
 }
 
 /** eslint argv (the args AFTER `npx`). Runs the project flat config so plugin rules (e.g. `local/*`)
- * load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and filter by rule id. */
+ * load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and filter by rule id.
+ * `--no-warn-ignored` makes an eslint-IGNORED target return `[]` (not a length-1 "File ignored"
+ * warning result) so an ignored path fails closed via the vacuity guard instead of falsely greening. */
 export function buildLintArgs(check: CheckDescriptor): string[] {
-  return ['eslint', '--format', 'json', check.target];
+  return ['eslint', '--no-warn-ignored', '--format', 'json', check.target];
 }
 
 /**
@@ -145,6 +147,11 @@ export function tapTestNames(out: string): string[] {
  * with ZERO `test()` calls as one passing "test" named after the file, so the counts alone cannot
  * tell an empty/deleted negative test from a real one (the #1259 BL-01 false-green). Requiring a
  * named test distinct from the file closes that hole.
+ *
+ * KNOWN CONSTRAINT (fail-closed, not a hole): a real test whose `test('...')` name is EXACTLY the
+ * target file's basename emits TAP indistinguishable from an empty file and is conservatively
+ * rejected (non-green). A wired negative test must carry a descriptive name, not be named after its
+ * own file — a benign authoring constraint, and the safe direction if violated.
  */
 export function isNonVacuousNodeTestPass(out: string, target: string): boolean {
   const s = parseNodeTestSummary(out);
@@ -296,7 +303,14 @@ export function runProhibitionEnforcement(
   // fail-first (that needs a violation fixture — tracked follow-up, ADR-550 D5d). A non-attested or
   // non-passing check hard-gates (never green) in BOTH modes.
   const attestedFailFirst = c.failFirst === true;
-  const run = runCheck(c);
+  // No-throw contract end-to-end: even a (test-injected) runCheck that throws must fail closed,
+  // never propagate. The default real runner already never throws.
+  let run: CheckRunResult;
+  try {
+    run = runCheck(c);
+  } catch {
+    run = { passed: false };
+  }
   const passed = attestedFailFirst && run.passed === true;
 
   if (!passed) {

@@ -103,6 +103,8 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const fmtIdx = argv.indexOf('--format');
     assert.ok(fmtIdx !== -1 && argv[fmtIdx + 1] === 'json',
       'emits --format json so the report can be filtered by ruleId');
+    assert.ok(argv.includes('--no-warn-ignored'),
+      'must pass --no-warn-ignored so an eslint-ignored target returns [] (fails closed), not a length-1 warning result');
     assert.ok(!argv.includes('--rule'),
       'must NOT use --rule — it cannot load a plugin rule like local/no-source-grep (the SF-01 bug)');
     assert.equal(argv[argv.length - 1], 'tests/', 'the LAST arg is the lint target path');
@@ -144,6 +146,18 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     );
     assert.notEqual(result.status, 'green', 'a non-attested check is not a valid regression proof');
     assert.equal(result.flagged, true);
+  });
+
+  test('a runCheck that THROWS fails closed, never propagates (no-throw contract, NEW-WR-01)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
+      { runCheck: () => { throw new Error('runner blew up'); } },
+    );
+    assert.notEqual(result.status, 'green', 'a throwing runner must never green');
+    assert.equal(result.flagged, true);
+    assert.equal(result.located, true);
   });
 
   test('hard-gates in BOTH modes on a failing check (ADR-550 D4)', () => {
@@ -302,5 +316,18 @@ describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
     assert.equal(result.status, 'green', 'a clean target with no no-source-grep violation must green via real eslint');
     assert.equal(result.kind, 'lint-rule');
     assert.equal(result.evidence[0].rule, 'local/no-source-grep');
+  });
+
+  test('an eslint-IGNORED target does NOT green the lint-rule kind (vacuous-green guard, NEW-BL-01)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The generated bin/lib artifact is eslint-ignored. Without --no-warn-ignored, eslint returns a
+    // length-1 "File ignored" result that would falsely pass the vacuity guard. It must fail closed.
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'gsd-core/bin/lib/prohibition-enforcement.cjs', failFirst: true },
+      { cwd: process.cwd() },
+    );
+    assert.notEqual(result.status, 'green', 'an ignored path lints nothing — must NEVER green');
+    assert.equal(result.located, true, 'the descriptor was well-formed; it just did not genuinely pass');
   });
 });
