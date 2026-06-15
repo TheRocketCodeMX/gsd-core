@@ -245,6 +245,10 @@ describe('prohibition-enforcement real-runner helpers (#1259)', () => {
     const emptyAbs = 'ok 1 - /tmp/x/empty.test.cjs\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
     assert.equal(enforce.isNonVacuousNodeTestPass(emptyAbs, 'empty.test.cjs'), false,
       'an absolute-path file-test name must still be recognized as vacuous (basename compare, WR-02)');
+    // Mirror case (pins the TARGET-side basename): relative TAP name vs ABSOLUTE descriptor target.
+    const emptyRelName = 'ok 1 - neg.test.cjs\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(emptyRelName, '/abs/path/neg.test.cjs'), false,
+      'a relative file-test name vs an absolute target must still be vacuous — both sides basename-normalized (WR-R4-01)');
     const real = 'ok 1 - guards the must-NOT\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
     assert.equal(enforce.isNonVacuousNodeTestPass(real, '/abs/path/neg.test.cjs'), true,
       'a real named test distinct from the file is a genuine pass (even vs an absolute target)');
