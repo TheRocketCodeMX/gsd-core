@@ -104,7 +104,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
     const enforce = require(ENFORCEMENT_LIB);
     const result = enforce.runProhibitionEnforcement(
       testTierProhibition,
-      { kind: 'lint-rule', target: 'no-source-grep', failFirst: true },
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'tests/', failFirst: true },
       { runCheck: () => ({ failFirst: true, passed: true }) },
     );
     assert.equal(result.status, 'green', 'a passing wired lint-rule check must dispose green');

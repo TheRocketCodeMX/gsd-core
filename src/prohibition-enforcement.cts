@@ -40,12 +40,15 @@ export type CheckKind = 'node-test' | 'lint-rule';
 
 /**
  * A descriptor of the wired mechanical check that asserts the must-NOT. `kind` selects the
- * runner family; `target` is the negative-test file path (node-test) or the rule id (lint-rule);
+ * runner family; `target` is the negative-test file path (node-test) or the PATH to lint
+ * (lint-rule); `rule` is the eslint rule id (lint-rule only — e.g. `local/no-source-grep`) and is
+ * REQUIRED for the lint-rule kind (a lint-rule descriptor without it is not a valid wired check);
  * `failFirst` records whether the check is a genuine `regression-must-fail-first` proof.
  */
 export interface CheckDescriptor {
   kind: CheckKind;
   target: string;
+  rule?: string;
   failFirst?: boolean;
 }
 
@@ -59,6 +62,7 @@ export interface CheckRunResult {
 export interface EnforcementEvidence {
   kind: CheckKind;
   target: string;
+  rule?: string;
   failFirst: boolean;
   passed: boolean;
 }
@@ -87,8 +91,19 @@ export interface EnforcementResult extends ProhibitionDisposition {
  * (the no-throw contract). A real run is fail-first by construction here — the descriptor's
  * `failFirst` marker is the authoritative regression-must-fail-first signal the producer confirms.
  *   - node-test: runs `node --test <target>`; exit 0 = passed.
- *   - lint-rule: runs `eslint --rule '<rule>: error' <target?>` (or the repo's lint), exit 0 = passed.
+ *   - lint-rule: runs `eslint --rule '<rule>: error' <target>`, exit 0 = passed.
  */
+
+/**
+ * Pure mapper from a lint-rule descriptor to the eslint argv (the args AFTER `npx`). The rule id
+ * (`check.rule`, forced to `error`) and the lint TARGET path (`check.target`) are DISTINCT tokens —
+ * reusing `target` as both (the #1259 pre-fix bug) makes eslint try to lint a file named after the
+ * rule, which can never pass. Exported so the mapping is unit-testable without spawning eslint.
+ */
+export function buildLintArgs(check: CheckDescriptor): string[] {
+  return ['eslint', '--rule', `${check.rule}: error`, check.target];
+}
+
 function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
   const failFirst = check.failFirst === true;
   try {
@@ -101,8 +116,9 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
       });
       return { failFirst, passed: true };
     }
-    // lint-rule: run the rule via eslint. A clean exit (0) means no violation -> the must-NOT holds.
-    execFileSync('npx', ['eslint', '--rule', `${check.target}: error`, check.target], {
+    // lint-rule: force the rule to error and lint the TARGET path (distinct from the rule id). A
+    // clean exit (0) means no violation surfaced -> the must-NOT holds across the target.
+    execFileSync('npx', buildLintArgs(check), {
       cwd,
       encoding: 'utf-8',
       stdio: 'ignore',
@@ -135,8 +151,16 @@ export function runProhibitionEnforcement(
 ): EnforcementResult {
   const mode = options.mode;
 
-  // (1) LOCATE — no locatable wired check -> fail-closed, located: false.
-  if (!check || typeof check !== 'object' || typeof check.kind !== 'string' || typeof check.target !== 'string') {
+  // (1) LOCATE — no locatable wired check -> fail-closed, located: false. A lint-rule descriptor
+  // MUST also carry a string `rule` id (its target is the lint PATH, not the rule) — an
+  // under-specified lint-rule is not a valid wired check, so it is not locatable.
+  if (
+    !check ||
+    typeof check !== 'object' ||
+    typeof check.kind !== 'string' ||
+    typeof check.target !== 'string' ||
+    (check.kind === 'lint-rule' && typeof check.rule !== 'string')
+  ) {
     const disposition = dispositionForProhibition(prohibition, { enforcementEvidence: [] });
     return { ...disposition, located: false, kind: null, evidence: [], ...(mode ? { mode } : {}) };
   }
@@ -166,6 +190,7 @@ export function runProhibitionEnforcement(
   const evidence: EnforcementEvidence[] = [{
     kind: check.kind,
     target: check.target,
+    ...(typeof check.rule === 'string' ? { rule: check.rule } : {}),
     failFirst: true,
     passed: true,
   }];
