@@ -3180,6 +3180,6 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 - REQ-PROHIB-04: `--auto` MUST never auto-dismiss.
 - REQ-PROHIB-05: `plan-phase` MUST lift resolved prohibitions into `must_haves.prohibitions` (never `truths`).
 - REQ-PROHIB-06: A well-formed but unwired `test`-tier prohibition MUST fail closed at verify time — never a silent pass.
-- REQ-PROHIB-07: A `test`-tier prohibition with a caller-attested, genuinely-passing (non-vacuous) wired mechanical check (a `node --test` negative test OR a lint/AST rule) MUST dispose green and be satisfiable; a missing, non-attested, or non-passing check MUST hard-gate (flagged, non-green) in both interactive and autonomous modes (#1259, ADR-550 D5d — the enforcement half; machine-proven fail-first is a tracked follow-up).
+- REQ-PROHIB-07: A `test`-tier prohibition with a caller-attested, genuinely-passing (non-vacuous) wired mechanical check (a `node --test` negative test OR a lint/AST rule) MUST dispose green and be satisfiable; a missing, non-attested, or non-passing check MUST hard-gate (flagged, non-green) in both interactive and autonomous modes (#1259, ADR-550 D5d — the enforcement half; machine-proven fail-first is tracked in #1279, deterministic descriptor auto-locate in #1278).
 
 **Reference:** [Prohibition Probe](../gsd-core/references/prohibition-probe.md)

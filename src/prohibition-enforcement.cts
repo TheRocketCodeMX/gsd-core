@@ -29,10 +29,13 @@
  * `tsc -p tsconfig.build.json` (`npm run build:lib`) to the gitignored runtime artifact
  * `gsd-core/bin/lib/prohibition-enforcement.cjs`. Do NOT hand-write the `.cjs`; it is emitted.
  *
- * The function is PURE/deterministic (same input -> same output, no LLM, mutation-survivable): the
- * actual check execution is delegated to an injectable `runCheck` (defaults to a real runner) so
- * the contract is unit-testable without spawning a process — mirroring the injectable I/O pattern
- * in `runProbeCli` / `ProbeCliOptions`.
+ * DETERMINISM SCOPE: the DECISION layer is pure/deterministic and no-LLM — given a `runCheck` result
+ * the disposition is same-input-same-output and mutation-survivable, and the parse/filter helpers
+ * (`parseNodeTestSummary`, `tapTestNames`, `eslintJsonHasRule`, `eslintHasFatalError`, …) are pure.
+ * The DEFAULT REAL runner is NOT pure — it spawns `node --test` / eslint, so its result depends on the
+ * environment (eslint version + flat config, node version, the target file). That is why the runner is
+ * an injectable seam (`runCheck`): the contract is unit-tested against injected results, mirroring the
+ * injectable I/O pattern in `runProbeCli` / `ProbeCliOptions`.
  */
 
 import fs from 'node:fs';
@@ -90,6 +93,9 @@ export interface EnforcementOptions {
   mode?: string;
   /** Project root for the default real runner (defaults to process.cwd()). */
   cwd?: string;
+  /** Override the per-kind subprocess timeout (ms); defaults to 30s (node-test) / 60s (eslint).
+   * Injected in tests to prove the fail-closed-on-timeout bound without a 30s wait. */
+  timeoutMs?: number;
 }
 
 /** The producer's verdict: the disposition PLUS the located/kind/evidence provenance. */
@@ -100,17 +106,19 @@ export interface EnforcementResult extends ProhibitionDisposition {
   mode?: string;
 }
 
-/** node --test argv. Forces the TAP reporter so the summary counts are parseable + version-stable. */
+/** node --test argv. Forces the TAP reporter so the summary counts are parseable + version-stable;
+ * `--` before the target so a target starting with `-` is not parsed as a flag (option-injection). */
 export function buildNodeTestArgs(check: CheckDescriptor): string[] {
-  return ['--test', '--test-reporter=tap', check.target];
+  return ['--test', '--test-reporter=tap', '--', check.target];
 }
 
 /** eslint argv (the args AFTER the eslint CLI path). Runs the project flat config so plugin rules
  * (e.g. `local/*`) load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and
  * filter by rule id. `--no-warn-ignored` makes an eslint-IGNORED target return `[]` (not a length-1
- * "File ignored" result) so an ignored path fails closed via the vacuity guard, not a false green. */
+ * "File ignored" result) so an ignored path fails closed via the vacuity guard, not a false green.
+ * `--` before the target so a target starting with `-` is not parsed as a flag (option-injection). */
 export function buildLintArgs(check: CheckDescriptor): string[] {
-  return ['--no-warn-ignored', '--format', 'json', check.target];
+  return ['--no-warn-ignored', '--format', 'json', '--', check.target];
 }
 
 /**
@@ -140,7 +148,7 @@ function baseOf(p: string): string {
  * (an empty / all-skipped / deleted-negative-test file exits 0 with `# tests 0`). Mutation-pinned by
  * unit tests so a threshold flip is caught.
  */
-export function parseNodeTestSummary(out: string): { tests: number; pass: number; fail: number } {
+export function parseNodeTestSummary(out: string): { tests: number; pass: number; fail: number; cancelled: number } {
   const num = (re: RegExp): number => {
     const m = typeof out === 'string' ? out.match(re) : null;
     return m ? Number(m[1]) : 0;
@@ -149,17 +157,22 @@ export function parseNodeTestSummary(out: string): { tests: number; pass: number
     tests: num(/^# tests (\d+)/m),
     pass: num(/^# pass (\d+)/m),
     fail: num(/^# fail (\d+)/m),
+    cancelled: num(/^# cancelled (\d+)/m),
   };
 }
 
-/** The names from TAP `ok N - <name>` / `not ok N - <name>` lines (directives like `# SKIP` stripped). */
+/** The names of REAL (run) tests from TAP `ok N - <name>` / `not ok N - <name>` lines. A line with a
+ * `# SKIP` / `# TODO` directive is EXCLUDED — a skipped/todo negative test never executed, so it must
+ * not count toward non-vacuity (#1259 m1). */
 export function tapTestNames(out: string): string[] {
   if (typeof out !== 'string') return [];
   const names: string[] = [];
   const re = /^(?:not )?ok \d+ - (.+)$/gm;
   let m: RegExpExecArray | null;
   while ((m = re.exec(out)) !== null) {
-    names.push(m[1].replace(/\s+#\s.*$/, '').trim());
+    const rest = m[1];
+    if (/\s#\s*(?:SKIP|TODO)\b/i.test(rest)) continue; // skipped/todo did not run
+    names.push(rest.replace(/\s+#\s.*$/, '').trim());
   }
   return names;
 }
@@ -178,7 +191,8 @@ export function tapTestNames(out: string): string[] {
  */
 export function isNonVacuousNodeTestPass(out: string, target: string): boolean {
   const s = parseNodeTestSummary(out);
-  if (!(s.tests >= 1 && s.pass >= 1 && s.fail === 0)) return false;
+  // >=1 test, >=1 pass, ZERO failures AND ZERO cancelled (a cancelled run is not a clean pass, m1).
+  if (!(s.tests >= 1 && s.pass >= 1 && s.fail === 0 && s.cancelled === 0)) return false;
   // Compare BASENAMES: node reports the file-test by varying path forms across OS / node version
   // (absolute, relative, normalized), so an exact-string compare misfires. A real test name (e.g.
   // "guards the must-NOT") has no separators, so its basename never equals the target file's.
@@ -196,8 +210,37 @@ export function eslintFileResultCount(jsonText: string): number {
   }
 }
 
-/** True if the eslint `--format json` report has ANY message for `rule`. Unparseable -> true
- * (fail-closed: treat an unreadable report as a violation rather than a silent pass). */
+/** Messages array of a single eslint file-result (empty if absent / wrong shape). */
+function eslintMessages(file: unknown, key: 'messages' | 'suppressedMessages'): Array<{ ruleId?: unknown; fatal?: unknown }> {
+  return file && typeof file === 'object' && Array.isArray((file as Record<string, unknown>)[key])
+    ? ((file as Record<string, unknown>)[key] as Array<{ ruleId?: unknown; fatal?: unknown }>)
+    : [];
+}
+
+/**
+ * True if the eslint `--format json` report has a FATAL / parse error — meaning the rule never got
+ * to run on the target. A prohibition gate must fail closed on "the rule didn't execute" (#1259 B1),
+ * NOT treat a length-1 fatal result as "clean". Unparseable report -> true (fail-closed).
+ */
+export function eslintHasFatalError(jsonText: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return true;
+  }
+  if (!Array.isArray(parsed)) return true;
+  for (const file of parsed) {
+    const fec = file && typeof file === 'object' ? (file as { fatalErrorCount?: unknown }).fatalErrorCount : undefined;
+    if (typeof fec === 'number' && fec > 0) return true;
+    if (eslintMessages(file, 'messages').some((m) => m && m.fatal === true)) return true;
+  }
+  return false;
+}
+
+/** True if the eslint `--format json` report has ANY message for `rule` — in EITHER `messages` or
+ * `suppressedMessages` (an inline `// eslint-disable` of the rule is still a violation, #1259 B1).
+ * Unparseable -> true (fail-closed: treat an unreadable report as a violation, not a silent pass). */
 export function eslintJsonHasRule(jsonText: string, rule: string): boolean {
   let parsed: unknown;
   try {
@@ -207,11 +250,10 @@ export function eslintJsonHasRule(jsonText: string, rule: string): boolean {
   }
   if (!Array.isArray(parsed)) return true;
   for (const file of parsed) {
-    const messages = file && typeof file === 'object' && Array.isArray((file as { messages?: unknown }).messages)
-      ? (file as { messages: Array<{ ruleId?: unknown }> }).messages
-      : [];
-    for (const msg of messages) {
-      if (msg && typeof msg === 'object' && msg.ruleId === rule) return true;
+    for (const key of ['messages', 'suppressedMessages'] as const) {
+      for (const msg of eslintMessages(file, key)) {
+        if (msg && typeof msg === 'object' && msg.ruleId === rule) return true;
+      }
     }
   }
   return false;
@@ -246,7 +288,21 @@ function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
+// Bounded subprocess limits (DEFECT.UNBOUNDED-SUBPROCESS): a stuck wired test / eslint must not hang
+// verify forever. On timeout `execFileSync` throws -> caught -> fail-closed (degraded, non-passing).
+// `maxBuffer` caps output so a runaway producer throws (safe direction) rather than OOMs the verifier.
+const NODE_TEST_TIMEOUT_MS = 30_000;
+const ESLINT_TIMEOUT_MS = 60_000;
+const CHECK_MAX_BUFFER = 16 * 1024 * 1024;
+
+/** Resolve the effective timeout: only a POSITIVE override is honored — `0` (which Node treats as
+ * "no timeout") or a negative value falls back to the bounded default, so the subprocess is ALWAYS
+ * bounded (a `timeoutMs: 0` injection can never disable the bound). */
+function posTimeout(timeoutMs: number | undefined, def: number): number {
+  return typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : def;
+}
+
+function defaultRunCheck(check: CheckDescriptor, cwd: string, timeoutMs?: number): CheckRunResult {
   try {
     if (check.kind === 'node-test') {
       let out = '';
@@ -257,10 +313,12 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
           env: childEnv(),
+          timeout: posTimeout(timeoutMs, NODE_TEST_TIMEOUT_MS),
+          maxBuffer: CHECK_MAX_BUFFER,
         });
       } catch (e) {
-        // A failing test run exits non-zero (TAP still on stdout). Parse it: a real failure has
-        // `# fail >= 1` -> non-vacuous check returns false. Missing node -> no stdout -> false.
+        // A failing/timed-out run exits non-zero or is killed (partial TAP on stdout, no `# pass`
+        // summary). Parse what we have: a real failure or timeout -> not a non-vacuous pass -> false.
         const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
         out = typeof stdout === 'string' ? stdout : '';
       }
@@ -277,14 +335,21 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
           env: childEnv(),
+          timeout: posTimeout(timeoutMs, ESLINT_TIMEOUT_MS),
+          maxBuffer: CHECK_MAX_BUFFER,
         });
       } catch (e) {
         // eslint exits non-zero when ANY error is present; the JSON report is still on stdout.
+        // A timeout/kill leaves no parseable JSON -> eslintHasFatalError(unparseable) -> fail-closed.
         const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
         json = typeof stdout === 'string' ? stdout : '';
       }
+      // PASS requires: the target actually linted (>=1 file result), NO fatal/parse error (the rule
+      // must have RUN — #1259 B1), and ZERO messages for the rule (in messages OR suppressedMessages).
       const lintedSomething = eslintFileResultCount(json) >= 1;
-      return { passed: lintedSomething && !eslintJsonHasRule(json, check.rule as string) };
+      return {
+        passed: lintedSomething && !eslintHasFatalError(json) && !eslintJsonHasRule(json, check.rule as string),
+      };
     }
     // Unknown kind — defensive; the LOCATE guard already rejects it.
     return { passed: false };
@@ -327,7 +392,7 @@ export function runProhibitionEnforcement(
     return { ...disposition, located: false, kind: null, evidence: [], ...(mode ? { mode } : {}) };
   }
 
-  const runCheck = options.runCheck ?? ((toRun: CheckDescriptor) => defaultRunCheck(toRun, options.cwd ?? process.cwd()));
+  const runCheck = options.runCheck ?? ((toRun: CheckDescriptor) => defaultRunCheck(toRun, options.cwd ?? process.cwd(), options.timeoutMs));
 
   // (2) ATTEST fail-first (CALLER-DECLARED) + RUN. The caller must attest `failFirst: true` AND the
   // runner must observe a genuine NON-VACUOUS pass. The producer does NOT independently prove

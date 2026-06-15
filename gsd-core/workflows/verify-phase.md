@@ -80,6 +80,8 @@ Aggregate all must_haves across plans for phase-level verification.
   - **`status: 'green'`, `flagged: false`** (a genuinely-passing wired negative test / lint rule, `located: true`, non-empty `evidence`) → the item is satisfiable → it can reach **passed**.
   - **missing, non-attested, or genuinely-non-passing check** (`located: false` OR `status: 'unverified'`, `flagged: true`) → **hard-gate**: disposes flagged-unverified, NEVER green, routing to `gaps_found` in BOTH interactive and autonomous modes (a failing mechanical check blocks even AFK; ADR-550 D4 / D3). The deterministic fail-closed default backing every miss/fail is `dispositionForProhibition()` in probe-core (`status: 'unverified'`, `flagged: true` on empty `enforcementEvidence`).
 
+  > **Descriptor authoring — current scope (#1259).** The `check` descriptor is **supplied by the phase author / verifier**; there is no projection field yet that deterministically derives `{ kind, target, rule, failFirst }` from a prohibition in `must_haves.prohibitions` (which carries only `{ statement, status, verification }`). So #1259 lands the **deterministic run+verdict half** (locate→run→evidence→disposition, all CI-testable) while the **locate→descriptor half is author-provided** for now. Deterministic auto-locate — so a wired passing test closes the gap with zero manual descriptor authoring — is a **tracked follow-up: #1278**. Until then, the green path requires the author to wire the descriptor explicitly.
+
 **Option B: Use Success Criteria from ROADMAP.md**
 
 If no must_haves in frontmatter (MUST_HAVES returns error or empty), check for Success Criteria:

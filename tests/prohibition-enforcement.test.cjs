@@ -1,7 +1,3 @@
-// allow-test-rule: runtime-contract-is-the-product (#1259) — the test-tier enforcement PRODUCER is
-// the deployed verify-time gate; these assertions pin its deterministic locate/fail-first/run/
-// evidence-construction contract to the code (ADR-550 D5d).
-//
 // Behavioral tests for the deterministic prohibition-enforcement producer (#1259, ADR-550 D5d
 // "heavy half"). Requires the BUILT gsd-core/bin/lib/prohibition-enforcement.cjs — authored as
 // src/prohibition-enforcement.cts and compiled by `npm run build:lib` (mirrors how the verify-tier
@@ -221,16 +217,32 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
 // weakens "non-vacuous pass" or the ruleId filter is caught — the contract the injected-runner tests
 // above deliberately bypass.
 describe('prohibition-enforcement real-runner helpers (#1259)', () => {
-  test('parseNodeTestSummary extracts the TAP tests/pass/fail counts', () => {
+  test('parseNodeTestSummary extracts the TAP tests/pass/fail/cancelled counts', () => {
     const enforce = require(ENFORCEMENT_LIB);
-    assert.deepEqual(enforce.parseNodeTestSummary('# tests 3\n# pass 2\n# fail 1\n'), { tests: 3, pass: 2, fail: 1 });
-    assert.deepEqual(enforce.parseNodeTestSummary('no summary here'), { tests: 0, pass: 0, fail: 0 });
+    assert.deepEqual(enforce.parseNodeTestSummary('# tests 3\n# pass 2\n# fail 1\n# cancelled 1\n'),
+      { tests: 3, pass: 2, fail: 1, cancelled: 1 });
+    assert.deepEqual(enforce.parseNodeTestSummary('no summary here'), { tests: 0, pass: 0, fail: 0, cancelled: 0 });
   });
 
-  test('tapTestNames extracts ok/not-ok names, stripping directives', () => {
+  test('tapTestNames EXCLUDES skipped/todo tests (they never ran, m1)', () => {
     const enforce = require(ENFORCEMENT_LIB);
-    assert.deepEqual(enforce.tapTestNames('ok 1 - guards the must-NOT\nnot ok 2 - other # SKIP\n'),
-      ['guards the must-NOT', 'other']);
+    assert.deepEqual(enforce.tapTestNames('ok 1 - guards the must-NOT\nok 2 - other # SKIP\nok 3 - later # TODO\n'),
+      ['guards the must-NOT'], 'a # SKIP / # TODO test is not a real run and must not count');
+  });
+
+  test('isNonVacuousNodeTestPass: a SKIPPED negative test (file wrapper passes) is NOT a pass (m1)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // file wrapper + a skipped negative test: pass>=1 but the only named test is skipped -> vacuous.
+    const skipped = 'ok 1 - empty.test.cjs\nok 2 - the negative test # SKIP\n# tests 2\n# pass 2\n# fail 0\n# cancelled 0\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(skipped, 'empty.test.cjs'), false,
+      'a skipped negative test never executed -> must not green');
+  });
+
+  test('isNonVacuousNodeTestPass: a CANCELLED run is not a pass (m1)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const cancelled = 'ok 1 - guards\n# tests 1\n# pass 1\n# fail 0\n# cancelled 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(cancelled, 'neg.test.cjs'), false,
+      'a cancelled run is not a clean pass');
   });
 
   test('isNonVacuousNodeTestPass: an empty file (node names the test after the file) is NOT a pass (BL-01)', () => {
@@ -271,6 +283,22 @@ describe('prohibition-enforcement real-runner helpers (#1259)', () => {
     assert.equal(enforce.eslintFileResultCount('[]'), 0);
     assert.equal(enforce.eslintFileResultCount('garbage'), 0);
   });
+
+  test('eslintHasFatalError: a parse/fatal error must fail closed (B1)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const fatal = JSON.stringify([{ messages: [{ ruleId: null, fatal: true, severity: 2, message: 'Parsing error' }], fatalErrorCount: 1 }]);
+    assert.equal(enforce.eslintHasFatalError(fatal), true, 'a fatal/parse error means the rule never ran -> fail closed');
+    const clean = JSON.stringify([{ messages: [], fatalErrorCount: 0 }]);
+    assert.equal(enforce.eslintHasFatalError(clean), false, 'a clean lint has no fatal error');
+    assert.equal(enforce.eslintHasFatalError('not json'), true, 'an unreadable report is treated as fatal (fail closed)');
+  });
+
+  test('eslintJsonHasRule also reads suppressedMessages — an inline-disabled violation still counts (B1)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const suppressed = JSON.stringify([{ messages: [], suppressedMessages: [{ ruleId: 'local/no-source-grep' }] }]);
+    assert.equal(enforce.eslintJsonHasRule(suppressed, 'local/no-source-grep'), true,
+      'a violation suppressed via // eslint-disable must NOT be treated as clean');
+  });
 });
 
 // ─── Real runner end-to-end (NO injected runCheck; #1259 SF-02 / BL-01 / SF-01) ──
@@ -294,6 +322,23 @@ describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
     assert.equal(result.status, 'green', 'a real, passing, non-vacuous negative test must green');
     assert.equal(result.located, true);
     assert.equal(result.evidence.length, 1);
+  });
+
+  test('a HANGING node-test fails closed via the bounded timeout (B2: no unbounded subprocess)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-hang-');
+    t.after(() => cleanup(dir));
+    const tf = path.join(dir, 'hang.test.cjs');
+    // A test that never returns; the bounded timeout must kill it and dispose non-green.
+    fs.writeFileSync(tf,
+      "const { test } = require('node:test');\ntest('hangs forever', () => { while (true) {} });\n");
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: tf, failFirst: true },
+      { cwd: dir, timeoutMs: 1500 },
+    );
+    assert.notEqual(result.status, 'green', 'a hung check must be killed and fail closed — never hang verify or green');
+    assert.equal(result.located, true);
   });
 
   test('an EMPTY node-test file (exit 0, zero tests) does NOT green via the real runner (BL-01)', (t) => {
