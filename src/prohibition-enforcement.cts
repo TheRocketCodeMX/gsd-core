@@ -8,14 +8,22 @@
  * branch at probe-core 420-427); with empty evidence it fails closed to flagged-unverified. But
  * NOTHING in the live pipeline ever produced `enforcementEvidence`, so the green branch was
  * unreachable. This module is the missing producer: it LOCATES the wired mechanical check from a
- * check descriptor, CONFIRMS it is fail-first (regression-must-fail-first), RUNS it, builds a typed
+ * check descriptor, RUNS it and requires a genuine NON-VACUOUS pass, builds a typed
  * `enforcementEvidence` array on PASS, and emits the `dispositionForProhibition` verdict as JSON.
  * The green/fail-closed policy itself is untouched (no src/probe-core.cts edit).
  *
- * Accepts BOTH wired-check kinds (ADR-550 D2): a `node --test` negative test OR an existing
- * lint/AST rule (e.g. the in-tree `no-source-grep` rule — the D4 dogfood anchor). A missing OR
- * failing OR non-fail-first check hard-gates (flagged, non-green) in BOTH interactive and
- * autonomous modes (ADR-550 D4 / D3) — never a silent green.
+ * Accepts BOTH wired-check kinds (ADR-550 D2): a `node --test` negative test OR a lint/AST rule
+ * (e.g. the in-tree `local/no-source-grep` rule — the D4 dogfood anchor, run via the project flat
+ * config so the plugin loads). A missing, non-attested, or genuinely-non-passing check hard-gates
+ * (flagged, non-green) in BOTH interactive and autonomous modes (ADR-550 D4 / D3) — never a silent
+ * green.
+ *
+ * FAIL-FIRST IS CALLER-ATTESTED (honest scope, #1259): the producer requires the caller to ATTEST
+ * `failFirst: true` AND requires the runner to observe a real non-vacuous pass — but it does NOT
+ * independently prove the check fails-on-violation. Genuine fail-first confirmation needs running
+ * the check against a known violation fixture and is a tracked follow-up (recorded in ADR-550's D5d
+ * note). What ships here closes the permanent-`gaps_found` dead-end with a genuinely-executed gate;
+ * it does not yet replace caller attestation with machine proof of the red-first property.
  *
  * Authored as strict TypeScript (`src/prohibition-enforcement.cts`) and compiled by
  * `tsc -p tsconfig.build.json` (`npm run build:lib`) to the gitignored runtime artifact
@@ -43,7 +51,8 @@ export type CheckKind = 'node-test' | 'lint-rule';
  * runner family; `target` is the negative-test file path (node-test) or the PATH to lint
  * (lint-rule); `rule` is the eslint rule id (lint-rule only — e.g. `local/no-source-grep`) and is
  * REQUIRED for the lint-rule kind (a lint-rule descriptor without it is not a valid wired check);
- * `failFirst` records whether the check is a genuine `regression-must-fail-first` proof.
+ * `failFirst` is the caller's ATTESTATION that the check is a genuine `regression-must-fail-first`
+ * proof (caller-declared — see the module docstring; not independently confirmed at verify time).
  */
 export interface CheckDescriptor {
   kind: CheckKind;
@@ -52,9 +61,14 @@ export interface CheckDescriptor {
   failFirst?: boolean;
 }
 
-/** The result a check-runner returns: whether the check is fail-first and whether it passed. */
+/**
+ * The result a check-runner returns: whether the check genuinely, non-vacuously PASSED. The runner
+ * reports only what it can OBSERVE (a real pass) — it does NOT determine fail-first. Whether the
+ * check is a `regression-must-fail-first` proof is a CALLER-ATTESTED property of the descriptor
+ * (`CheckDescriptor.failFirst`); the producer cannot independently confirm it at verify time without
+ * a violation fixture (a tracked follow-up — see the module docstring).
+ */
 export interface CheckRunResult {
-  failFirst: boolean;
   passed: boolean;
 }
 
@@ -85,60 +99,171 @@ export interface EnforcementResult extends ProhibitionDisposition {
   mode?: string;
 }
 
-/**
- * The default REAL check runner (used when no `runCheck` is injected). Deterministic per
- * environment and guarded so a missing tool yields a non-passing result, NEVER an uncaught throw
- * (the no-throw contract). A real run is fail-first by construction here — the descriptor's
- * `failFirst` marker is the authoritative regression-must-fail-first signal the producer confirms.
- *   - node-test: runs `node --test <target>`; exit 0 = passed.
- *   - lint-rule: runs `eslint --rule '<rule>: error' <target>`, exit 0 = passed.
- */
+/** node --test argv. Forces the TAP reporter so the summary counts are parseable + version-stable. */
+export function buildNodeTestArgs(check: CheckDescriptor): string[] {
+  return ['--test', '--test-reporter=tap', check.target];
+}
+
+/** eslint argv (the args AFTER `npx`). Runs the project flat config so plugin rules (e.g. `local/*`)
+ * load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and filter by rule id. */
+export function buildLintArgs(check: CheckDescriptor): string[] {
+  return ['eslint', '--format', 'json', check.target];
+}
 
 /**
- * Pure mapper from a lint-rule descriptor to the eslint argv (the args AFTER `npx`). The rule id
- * (`check.rule`, forced to `error`) and the lint TARGET path (`check.target`) are DISTINCT tokens —
- * reusing `target` as both (the #1259 pre-fix bug) makes eslint try to lint a file named after the
- * rule, which can never pass. Exported so the mapping is unit-testable without spawning eslint.
+ * Pure parser for the `node --test` TAP summary. A genuine pass is NON-VACUOUS: exit 0 is NOT enough
+ * (an empty / all-skipped / deleted-negative-test file exits 0 with `# tests 0`). Mutation-pinned by
+ * unit tests so a threshold flip is caught.
  */
-export function buildLintArgs(check: CheckDescriptor): string[] {
-  return ['eslint', '--rule', `${check.rule}: error`, check.target];
+export function parseNodeTestSummary(out: string): { tests: number; pass: number; fail: number } {
+  const num = (re: RegExp): number => {
+    const m = typeof out === 'string' ? out.match(re) : null;
+    return m ? Number(m[1]) : 0;
+  };
+  return {
+    tests: num(/^# tests (\d+)/m),
+    pass: num(/^# pass (\d+)/m),
+    fail: num(/^# fail (\d+)/m),
+  };
+}
+
+/** The names from TAP `ok N - <name>` / `not ok N - <name>` lines (directives like `# SKIP` stripped). */
+export function tapTestNames(out: string): string[] {
+  if (typeof out !== 'string') return [];
+  const names: string[] = [];
+  const re = /^(?:not )?ok \d+ - (.+)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(out)) !== null) {
+    names.push(m[1].replace(/\s+#\s.*$/, '').trim());
+  }
+  return names;
+}
+
+/**
+ * A non-vacuous node-test pass: at least one test, at least one pass, zero failures — AND at least
+ * one reported test whose name is NOT merely the target file. `node --test <file>` counts a file
+ * with ZERO `test()` calls as one passing "test" named after the file, so the counts alone cannot
+ * tell an empty/deleted negative test from a real one (the #1259 BL-01 false-green). Requiring a
+ * named test distinct from the file closes that hole.
+ */
+export function isNonVacuousNodeTestPass(out: string, target: string): boolean {
+  const s = parseNodeTestSummary(out);
+  if (!(s.tests >= 1 && s.pass >= 1 && s.fail === 0)) return false;
+  const base = typeof target === 'string' ? (target.split(/[\\/]/).pop() ?? target) : '';
+  return tapTestNames(out).some((n) => n !== base && n !== target);
+}
+
+/** Number of file results in an eslint `--format json` report (0 if unparseable / not an array). */
+export function eslintFileResultCount(jsonText: string): number {
+  try {
+    const parsed: unknown = JSON.parse(jsonText);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** True if the eslint `--format json` report has ANY message for `rule`. Unparseable -> true
+ * (fail-closed: treat an unreadable report as a violation rather than a silent pass). */
+export function eslintJsonHasRule(jsonText: string, rule: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return true;
+  }
+  if (!Array.isArray(parsed)) return true;
+  for (const file of parsed) {
+    const messages = file && typeof file === 'object' && Array.isArray((file as { messages?: unknown }).messages)
+      ? (file as { messages: Array<{ ruleId?: unknown }> }).messages
+      : [];
+    for (const msg of messages) {
+      if (msg && typeof msg === 'object' && msg.ruleId === rule) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The default REAL check runner (used when no `runCheck` is injected). Reports only an OBSERVED,
+ * genuinely-non-vacuous pass; guarded so a missing tool / non-zero exit yields a non-passing result,
+ * NEVER an uncaught throw (the no-throw contract). It does NOT determine fail-first (caller-attested).
+ *   - node-test: runs `node --test` (TAP) and requires a NON-VACUOUS pass (>=1 test, >=1 pass, 0 fail
+ *     AND a reported test named distinctly from the file). A bare exit 0 for an empty/zero-test file
+ *     — which `node --test` counts as one passing "test" named after the file — is NOT a pass (the
+ *     #1259 BL-01 false-green fix).
+ *   - lint-rule: runs the project `eslint --format json <target>` (flat config loads `local/*`
+ *     plugins) and requires the target to actually lint (>=1 file result) AND ZERO messages for the
+ *     specific rule id. `--rule` cannot load a plugin rule, so we filter the structured report by
+ *     `ruleId` instead (the #1259 SF-01 fix).
+ */
+/**
+ * Env for spawned checks: strip `NODE_TEST_CONTEXT` and `NODE_OPTIONS` so an AMBIENT test-runner
+ * context (e.g. running verify under `node --test`, which sets `NODE_TEST_CONTEXT=child-v8`) cannot
+ * turn the child `node --test` into a silent v8-reporter worker that emits no parseable TAP — which
+ * would otherwise corrupt the verdict. Deterministic, environment-independent execution.
+ */
+function childEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  delete env.NODE_OPTIONS;
+  return env;
 }
 
 function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
-  const failFirst = check.failFirst === true;
   try {
     if (check.kind === 'node-test') {
-      execFileSync('node', ['--test', check.target], {
-        cwd,
-        encoding: 'utf-8',
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-      return { failFirst, passed: true };
+      let out = '';
+      try {
+        out = execFileSync('node', buildNodeTestArgs(check), {
+          cwd,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: childEnv(),
+        });
+      } catch (e) {
+        // A failing test run exits non-zero (TAP still on stdout). Parse it: a real failure has
+        // `# fail >= 1` -> non-vacuous check returns false. Missing `node` -> no stdout -> false.
+        const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
+        out = typeof stdout === 'string' ? stdout : '';
+      }
+      return { passed: isNonVacuousNodeTestPass(out, check.target) };
     }
-    // lint-rule: force the rule to error and lint the TARGET path (distinct from the rule id). A
-    // clean exit (0) means no violation surfaced -> the must-NOT holds across the target.
-    execFileSync('npx', buildLintArgs(check), {
-      cwd,
-      encoding: 'utf-8',
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    return { failFirst, passed: true };
+    if (check.kind === 'lint-rule') {
+      let json = '';
+      try {
+        json = execFileSync('npx', buildLintArgs(check), {
+          cwd,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: childEnv(),
+        });
+      } catch (e) {
+        // eslint exits non-zero when ANY error is present; the JSON report is still on stdout.
+        const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
+        json = typeof stdout === 'string' ? stdout : '';
+      }
+      const lintedSomething = eslintFileResultCount(json) >= 1;
+      return { passed: lintedSomething && !eslintJsonHasRule(json, check.rule as string) };
+    }
+    // Unknown kind — defensive; the LOCATE guard already rejects it.
+    return { passed: false };
   } catch {
-    // Non-zero exit (violation surfaced) OR missing tool -> not passing. Never throw.
-    return { failFirst, passed: false };
+    return { passed: false };
   }
 }
 
 /**
  * LOCATE -> CONFIRM fail-first -> RUN -> build enforcementEvidence -> dispositionForProhibition.
  *
- * (1) LOCATE: if no check descriptor is locatable -> fail-closed (`dispositionForProhibition` with
- *     empty evidence) plus `{ located: false, kind: null, evidence: [] }`.
- * (2) CONFIRM + RUN: confirm the descriptor is fail-first and run it via `runCheck`. A check that
- *     is not fail-first, that the runner reports not fail-first, or that FAILS -> fail-closed
- *     disposition with `located: true` (a real located miss, non-green, flagged) in BOTH modes.
+ * (1) LOCATE: if no well-formed check descriptor is locatable -> fail-closed
+ *     (`dispositionForProhibition` with empty evidence) plus `{ located: false, kind: null, evidence: [] }`.
+ * (2) ATTEST + RUN: require the caller to attest `failFirst: true` and run it via `runCheck`. A check
+ *     the caller does not attest as fail-first, or that does not genuinely (non-vacuously) PASS ->
+ *     fail-closed disposition with `located: true` (a real located miss, non-green, flagged) in BOTH
+ *     modes. Fail-first is caller-attested, not independently proven (see module docstring).
  * (3) PASS: build a typed `enforcementEvidence` array and call `dispositionForProhibition` — the
  *     non-empty array flips a test-tier item to green (the previously-unreachable branch).
  *
@@ -151,46 +276,48 @@ export function runProhibitionEnforcement(
 ): EnforcementResult {
   const mode = options.mode;
 
-  // (1) LOCATE — no locatable wired check -> fail-closed, located: false. A lint-rule descriptor
-  // MUST also carry a string `rule` id (its target is the lint PATH, not the rule) — an
-  // under-specified lint-rule is not a valid wired check, so it is not locatable.
-  if (
-    !check ||
-    typeof check !== 'object' ||
-    typeof check.kind !== 'string' ||
-    typeof check.target !== 'string' ||
-    (check.kind === 'lint-rule' && typeof check.rule !== 'string')
-  ) {
+  // (1) LOCATE — no locatable, well-formed wired check -> fail-closed, located: false. The kind must
+  // be one of the two known kinds; the target must be a non-empty string; a lint-rule descriptor MUST
+  // also carry a non-empty `rule` id (its target is the lint PATH, not the rule). An under-specified
+  // descriptor is not a valid wired check, so it is not locatable (does not rely on the runner failing).
+  const c = check && typeof check === 'object' ? check : null;
+  const validKind = !!c && (c.kind === 'node-test' || c.kind === 'lint-rule');
+  const validTarget = !!c && typeof c.target === 'string' && c.target.trim().length > 0;
+  const validRule = !!c && (c.kind !== 'lint-rule' || (typeof c.rule === 'string' && c.rule.trim().length > 0));
+  if (!c || !validKind || !validTarget || !validRule) {
     const disposition = dispositionForProhibition(prohibition, { enforcementEvidence: [] });
     return { ...disposition, located: false, kind: null, evidence: [], ...(mode ? { mode } : {}) };
   }
 
-  const runCheck = options.runCheck ?? ((c: CheckDescriptor) => defaultRunCheck(c, options.cwd ?? process.cwd()));
+  const runCheck = options.runCheck ?? ((toRun: CheckDescriptor) => defaultRunCheck(toRun, options.cwd ?? process.cwd()));
 
-  // (2) CONFIRM fail-first + RUN. Descriptor must declare fail-first AND the runner must agree.
-  const descriptorFailFirst = check.failFirst === true;
-  const run = runCheck(check);
-  const failFirstConfirmed = descriptorFailFirst && run.failFirst === true;
-  const passed = failFirstConfirmed && run.passed === true;
+  // (2) ATTEST fail-first (CALLER-DECLARED) + RUN. The caller must attest `failFirst: true` AND the
+  // runner must observe a genuine NON-VACUOUS pass. The producer does NOT independently prove
+  // fail-first (that needs a violation fixture — tracked follow-up, ADR-550 D5d). A non-attested or
+  // non-passing check hard-gates (never green) in BOTH modes.
+  const attestedFailFirst = c.failFirst === true;
+  const run = runCheck(c);
+  const passed = attestedFailFirst && run.passed === true;
 
   if (!passed) {
-    // FAIL / not-fail-first -> fail-closed, located: true (an actual located miss/fail). Hard-gate
-    // applies in BOTH modes; the disposition stays non-green / flagged.
+    // NOT attested fail-first OR did not genuinely pass -> fail-closed, located: true (an actual
+    // located miss/fail). Hard-gate applies in BOTH modes; the disposition stays non-green / flagged.
     const disposition = dispositionForProhibition(prohibition, { enforcementEvidence: [] });
     return {
       ...disposition,
       located: true,
-      kind: check.kind,
+      kind: c.kind,
       evidence: [],
       ...(mode ? { mode } : {}),
     };
   }
 
   // (3) PASS -> build typed enforcementEvidence and let the policy flip a test-tier item green.
+  // `failFirst` here is the caller's attestation (recorded for provenance), not a machine proof.
   const evidence: EnforcementEvidence[] = [{
-    kind: check.kind,
-    target: check.target,
-    ...(typeof check.rule === 'string' ? { rule: check.rule } : {}),
+    kind: c.kind,
+    target: c.target,
+    ...(typeof c.rule === 'string' ? { rule: c.rule } : {}),
     failFirst: true,
     passed: true,
   }];
@@ -198,7 +325,7 @@ export function runProhibitionEnforcement(
   return {
     ...disposition,
     located: true,
-    kind: check.kind,
+    kind: c.kind,
     evidence,
     ...(mode ? { mode } : {}),
   };

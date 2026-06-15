@@ -88,7 +88,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
     const result = enforce.runProhibitionEnforcement(
       testTierProhibition,
       { kind: 'node-test', target: 'tests/some-negative.test.cjs', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.ok(result && typeof result === 'object', 'result must be a structured object');
     assert.equal(result.status, 'green', 'a passing wired node-test check must dispose green');
@@ -105,7 +105,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
     const result = enforce.runProhibitionEnforcement(
       testTierProhibition,
       { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'tests/', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.equal(result.status, 'green', 'a passing wired lint-rule check must dispose green');
     assert.equal(result.flagged, false, 'a green disposition must not be flagged');
@@ -120,7 +120,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
     const result = enforce.runProhibitionEnforcement(
       testTierProhibition,
       null,
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.notEqual(result.status, 'green', 'a missing wired check must NEVER be green (fail-closed)');
     assert.equal(result.flagged, true, 'a missing wired check must be flagged unverified');
@@ -136,7 +136,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
       const result = enforce.runProhibitionEnforcement(
         testTierProhibition,
         { kind: 'node-test', target: 'tests/some-negative.test.cjs', failFirst: true },
-        { runCheck: () => ({ failFirst: true, passed: false }), mode },
+        { runCheck: () => ({ passed: false }), mode },
       );
       assert.notEqual(result.status, 'green',
         `a failing wired check must NEVER be green (mode=${mode})`);
@@ -152,7 +152,7 @@ describe('prohibition-probe verify-tier: test-tier ENFORCEMENT (REQ-PROHIB-07 / 
     const result = enforce.runProhibitionEnforcement(
       testTierProhibition,
       { kind: 'node-test', target: 'tests/some-negative.test.cjs', failFirst: false },
-      { runCheck: () => ({ failFirst: false, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.notEqual(result.status, 'green',
       'a check that is not fail-first is not a valid regression-must-fail-first proof — never green');

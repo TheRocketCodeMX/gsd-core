@@ -39,7 +39,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
   test('locate-miss (no check descriptor) -> fail-closed, located:false, no evidence', () => {
     const enforce = require(ENFORCEMENT_LIB);
     const result = enforce.runProhibitionEnforcement(TEST_TIER, null, {
-      runCheck: () => ({ failFirst: true, passed: true }),
+      runCheck: () => ({ passed: true }),
     });
     assert.equal(result.located, false, 'no locatable check');
     assert.notEqual(result.status, 'green', 'locate-miss must never be green');
@@ -51,7 +51,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
   test('malformed check descriptor (missing target) -> treated as locate-miss', () => {
     const enforce = require(ENFORCEMENT_LIB);
     const result = enforce.runProhibitionEnforcement(TEST_TIER, { kind: 'node-test' }, {
-      runCheck: () => ({ failFirst: true, passed: true }),
+      runCheck: () => ({ passed: true }),
     });
     assert.equal(result.located, false, 'a descriptor without a target is not locatable');
     assert.notEqual(result.status, 'green');
@@ -63,7 +63,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.equal(result.status, 'green');
     assert.equal(result.flagged, false);
@@ -83,7 +83,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'tests/', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.equal(result.status, 'green');
     assert.equal(result.flagged, false);
@@ -93,18 +93,19 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     assert.equal(result.evidence[0].target, 'tests/', 'evidence records the linted target path, not the rule id');
   });
 
-  test('buildLintArgs maps the rule id and lint target to DISTINCT eslint args (#1259 runner fix)', () => {
+  test('buildLintArgs runs the project eslint as JSON over the target (plugins load via flat config; #1259 SF-01)', () => {
     const enforce = require(ENFORCEMENT_LIB);
     assert.equal(typeof enforce.buildLintArgs, 'function',
-      'must export buildLintArgs — the pure argv mapper for the lint-rule real runner');
+      'must export buildLintArgs — the eslint argv builder for the lint-rule real runner');
     const argv = enforce.buildLintArgs({ kind: 'lint-rule', rule: 'local/no-source-grep', target: 'tests/' });
     assert.ok(Array.isArray(argv), 'argv is an array');
-    const ruleIdx = argv.indexOf('--rule');
-    assert.ok(ruleIdx !== -1, 'forces a specific rule via --rule');
-    assert.equal(argv[ruleIdx + 1], 'local/no-source-grep: error', 'the rule id is forced to error');
+    assert.equal(argv[0], 'eslint');
+    const fmtIdx = argv.indexOf('--format');
+    assert.ok(fmtIdx !== -1 && argv[fmtIdx + 1] === 'json',
+      'emits --format json so the report can be filtered by ruleId');
+    assert.ok(!argv.includes('--rule'),
+      'must NOT use --rule — it cannot load a plugin rule like local/no-source-grep (the SF-01 bug)');
     assert.equal(argv[argv.length - 1], 'tests/', 'the LAST arg is the lint target path');
-    assert.notEqual(argv[ruleIdx + 1], argv[argv.length - 1],
-      'the rule id must NOT be reused as the lint target (the bug this guards)');
   });
 
   test('lint-rule descriptor missing its rule id -> locate-miss, never green', () => {
@@ -112,7 +113,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'lint-rule', target: 'tests/', failFirst: true }, // no `rule`
-      { runCheck: () => ({ failFirst: true, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
     assert.notEqual(result.status, 'green', 'a lint-rule with no rule id is not a valid wired check');
     assert.equal(result.flagged, true);
@@ -124,7 +125,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: false }) },
+      { runCheck: () => ({ passed: false }) },
     );
     assert.notEqual(result.status, 'green');
     assert.equal(result.flagged, true);
@@ -132,24 +133,17 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     assert.equal(result.evidence.length, 0, 'a failing check builds no evidence');
   });
 
-  test('fail-first NOT satisfied (descriptor or runner) -> hard-gate, never green', () => {
+  test('caller does NOT attest fail-first (descriptor failFirst:false) -> hard-gate, never green', () => {
     const enforce = require(ENFORCEMENT_LIB);
-    // descriptor declares failFirst:false
-    const a = enforce.runProhibitionEnforcement(
+    // fail-first is caller-attested (#1259 BL-02): a check the caller does not attest as fail-first
+    // is not a valid regression proof and must never green, even if the run passes.
+    const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: false },
-      { runCheck: () => ({ failFirst: false, passed: true }) },
+      { runCheck: () => ({ passed: true }) },
     );
-    assert.notEqual(a.status, 'green', 'not-fail-first is not a valid regression proof');
-    assert.equal(a.flagged, true);
-    // descriptor says failFirst:true but runner reports failFirst:false -> still hard-gate
-    const b = enforce.runProhibitionEnforcement(
-      TEST_TIER,
-      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
-      { runCheck: () => ({ failFirst: false, passed: true }) },
-    );
-    assert.notEqual(b.status, 'green', 'runner-reported not-fail-first must also hard-gate');
-    assert.equal(b.flagged, true);
+    assert.notEqual(result.status, 'green', 'a non-attested check is not a valid regression proof');
+    assert.equal(result.flagged, true);
   });
 
   test('hard-gates in BOTH modes on a failing check (ADR-550 D4)', () => {
@@ -158,7 +152,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
       const result = enforce.runProhibitionEnforcement(
         TEST_TIER,
         { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
-        { runCheck: () => ({ failFirst: true, passed: false }), mode },
+        { runCheck: () => ({ passed: false }), mode },
       );
       assert.notEqual(result.status, 'green', `non-green in ${mode}`);
       assert.equal(result.flagged, true, `flagged in ${mode}`);
@@ -171,7 +165,7 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     const result = enforce.runProhibitionEnforcement(
       TEST_TIER,
       { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
-      { runCheck: () => ({ failFirst: true, passed: true }), mode: 'autonomous' },
+      { runCheck: () => ({ passed: true }), mode: 'autonomous' },
     );
     assert.equal(result.status, 'green', 'a passing wired check is green in autonomous mode too');
     assert.equal(result.mode, 'autonomous');
@@ -206,5 +200,107 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     assert.equal(parsed.mode, 'autonomous', 'mode flows through the CLI surface');
     assert.equal(typeof parsed.flagged, 'boolean', 'flagged is a typed boolean');
     assert.ok(Array.isArray(parsed.evidence), 'evidence is an array');
+  });
+});
+
+// ─── Real-runner helpers (mutation-pinned; #1259 BL-01 / SF-01) ─────────────────
+// These pin the deterministic parsing/threshold logic of the REAL runner so a Stryker mutant that
+// weakens "non-vacuous pass" or the ruleId filter is caught — the contract the injected-runner tests
+// above deliberately bypass.
+describe('prohibition-enforcement real-runner helpers (#1259)', () => {
+  test('parseNodeTestSummary extracts the TAP tests/pass/fail counts', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.deepEqual(enforce.parseNodeTestSummary('# tests 3\n# pass 2\n# fail 1\n'), { tests: 3, pass: 2, fail: 1 });
+    assert.deepEqual(enforce.parseNodeTestSummary('no summary here'), { tests: 0, pass: 0, fail: 0 });
+  });
+
+  test('tapTestNames extracts ok/not-ok names, stripping directives', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.deepEqual(enforce.tapTestNames('ok 1 - guards the must-NOT\nnot ok 2 - other # SKIP\n'),
+      ['guards the must-NOT', 'other']);
+  });
+
+  test('isNonVacuousNodeTestPass: an empty file (node names the test after the file) is NOT a pass (BL-01)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // node --test of a zero-test file: `ok 1 - empty.test.cjs`, `# tests 1 # pass 1` — counts alone
+    // cannot distinguish it from a real test, so the file-named result must NOT count as a pass.
+    const empty = 'ok 1 - empty.test.cjs\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(empty, 'empty.test.cjs'), false,
+      'a file-named-only result is vacuous — the BL-01 false-green guard');
+    const real = 'ok 1 - guards the must-NOT\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(real, 'neg.test.cjs'), true,
+      'a real named test distinct from the file is a genuine pass');
+    const failing = 'not ok 1 - guards\n# tests 1\n# pass 0\n# fail 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(failing, 'neg.test.cjs'), false,
+      'any failure means not a pass');
+  });
+
+  test('eslintJsonHasRule detects a ruleId; unparseable report -> true (fail-closed)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.equal(enforce.eslintJsonHasRule(JSON.stringify([{ messages: [{ ruleId: 'local/no-source-grep' }] }]), 'local/no-source-grep'), true);
+    assert.equal(enforce.eslintJsonHasRule(JSON.stringify([{ messages: [{ ruleId: 'other' }] }]), 'local/no-source-grep'), false);
+    assert.equal(enforce.eslintJsonHasRule('not json', 'local/no-source-grep'), true,
+      'an unreadable report must be treated as a violation, never a silent pass');
+  });
+
+  test('eslintFileResultCount: 0 when nothing linted (vacuity guard)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.equal(enforce.eslintFileResultCount(JSON.stringify([{}, {}])), 2);
+    assert.equal(enforce.eslintFileResultCount('[]'), 0);
+    assert.equal(enforce.eslintFileResultCount('garbage'), 0);
+  });
+});
+
+// ─── Real runner end-to-end (NO injected runCheck; #1259 SF-02 / BL-01 / SF-01) ──
+// Spawns real subprocesses so the SHIPPING default runner is exercised — the gap that let BL-01 and
+// SF-01 slip past the injected-double tests. Typed-field assertions only.
+describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
+  const fs = require('node:fs');
+
+  test('a genuine non-vacuous passing node-test greens via the real runner', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-real-pass-');
+    t.after(() => cleanup(dir));
+    const tf = path.join(dir, 'neg.test.cjs');
+    fs.writeFileSync(tf,
+      "const { test } = require('node:test');\nconst assert = require('node:assert');\ntest('guards the must-NOT', () => { assert.ok(true); });\n");
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: tf, failFirst: true },
+      { cwd: dir },
+    );
+    assert.equal(result.status, 'green', 'a real, passing, non-vacuous negative test must green');
+    assert.equal(result.located, true);
+    assert.equal(result.evidence.length, 1);
+  });
+
+  test('an EMPTY node-test file (exit 0, zero tests) does NOT green via the real runner (BL-01)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-real-empty-');
+    t.after(() => cleanup(dir));
+    const tf = path.join(dir, 'empty.test.cjs');
+    fs.writeFileSync(tf, '// intentionally empty — no test cases\n');
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: tf, failFirst: true },
+      { cwd: dir },
+    );
+    assert.notEqual(result.status, 'green', 'an empty (zero-test) file must NEVER green — fail-closed');
+    assert.equal(result.located, true, 'the check was located; it just did not genuinely pass');
+    assert.equal(result.evidence.length, 0);
+  });
+
+  test('a clean in-tree target greens the lint-rule kind via the real eslint runner (SF-01: plugin loads)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // Runs real `npx eslint --format json src/clock.cts` under the project flat config (so the
+    // `local` plugin loads). src/clock.cts is a clean source with no no-source-grep violation.
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'src/clock.cts', failFirst: true },
+      { cwd: process.cwd() },
+    );
+    assert.equal(result.status, 'green', 'a clean target with no no-source-grep violation must green via real eslint');
+    assert.equal(result.kind, 'lint-rule');
+    assert.equal(result.evidence[0].rule, 'local/no-source-grep');
   });
 });

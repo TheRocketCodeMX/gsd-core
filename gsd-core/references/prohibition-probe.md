@@ -113,11 +113,14 @@ lifecycle is identical to the edge-probe, the verification tiers differ):
   At verify time these tiers are routed differently (ADR-550 D4):
   - A **test**-tier prohibition is enforced + hard-gates via the deterministic
     `check prohibition-enforcement` sub-command (#1259, ADR-550 D5d): it locates the wired
-    mechanical check (a `node --test` negative test OR a lint/AST rule), confirms it is
-    fail-first, runs it, and emits the `dispositionForProhibition()` verdict. A passing wired
-    check disposes **green** (satisfiable → can reach `passed`); a missing, failing, or
-    non-fail-first check **hard-gates** (flagged, never green → `gaps_found`) in BOTH
-    interactive and autonomous modes — never a silent pass.
+    mechanical check (a `node --test` negative test OR a lint/AST rule run as
+    `eslint --format json` and filtered by `ruleId`), requires the caller-attested `failFirst`
+    marker, runs it for a genuine **non-vacuous** pass, and emits the
+    `dispositionForProhibition()` verdict. A passing wired check disposes **green** (satisfiable
+    → can reach `passed`); a missing, non-attested, or genuinely-non-passing check **hard-gates**
+    (flagged, never green → `gaps_found`) in BOTH interactive and autonomous modes — never a
+    silent pass. (`failFirst` is caller-attested, not yet machine-proven against a violation
+    fixture — a tracked follow-up; see ADR-550 D5d.)
   - A **judgment**-tier prohibition routes to a never-silent / never-hard-halt soft gate
     (autonomous emits an `unverified-prohibition — human review recommended` flag).
 
