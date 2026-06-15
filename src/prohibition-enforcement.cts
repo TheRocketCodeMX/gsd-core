@@ -36,6 +36,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import core = require('./core.cjs');
@@ -104,12 +105,34 @@ export function buildNodeTestArgs(check: CheckDescriptor): string[] {
   return ['--test', '--test-reporter=tap', check.target];
 }
 
-/** eslint argv (the args AFTER `npx`). Runs the project flat config so plugin rules (e.g. `local/*`)
- * load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and filter by rule id.
- * `--no-warn-ignored` makes an eslint-IGNORED target return `[]` (not a length-1 "File ignored"
- * warning result) so an ignored path fails closed via the vacuity guard instead of falsely greening. */
+/** eslint argv (the args AFTER the eslint CLI path). Runs the project flat config so plugin rules
+ * (e.g. `local/*`) load — `--rule` CANNOT load a plugin, so we lint the TARGET path as JSON and
+ * filter by rule id. `--no-warn-ignored` makes an eslint-IGNORED target return `[]` (not a length-1
+ * "File ignored" result) so an ignored path fails closed via the vacuity guard, not a false green. */
 export function buildLintArgs(check: CheckDescriptor): string[] {
-  return ['eslint', '--no-warn-ignored', '--format', 'json', check.target];
+  return ['--no-warn-ignored', '--format', 'json', check.target];
+}
+
+/**
+ * Resolve the project's eslint CLI entry portably (no `npx` — not spawnable via `execFileSync` on
+ * Windows). Resolves eslint's package.json from the target project's `node_modules` and derives
+ * `bin/eslint.js`, so it is run as `node <cli>` (portable). Returns null if eslint is not installed
+ * (→ the lint-rule check fails closed, never throws).
+ */
+function resolveEslintCli(cwd: string): string | null {
+  try {
+    const pkg = require.resolve('eslint/package.json', { paths: [cwd] });
+    const cli = path.join(path.dirname(pkg), 'bin', 'eslint.js');
+    return fs.existsSync(cli) ? cli : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Basename of a path, separator-agnostic (handles `\` and `/` so node-test names compare stably
+ * across OSes / node versions that report the file-test by differing path forms). */
+function baseOf(p: string): string {
+  return typeof p === 'string' ? (p.split(/[\\/]/).pop() ?? p) : '';
 }
 
 /**
@@ -156,8 +179,11 @@ export function tapTestNames(out: string): string[] {
 export function isNonVacuousNodeTestPass(out: string, target: string): boolean {
   const s = parseNodeTestSummary(out);
   if (!(s.tests >= 1 && s.pass >= 1 && s.fail === 0)) return false;
-  const base = typeof target === 'string' ? (target.split(/[\\/]/).pop() ?? target) : '';
-  return tapTestNames(out).some((n) => n !== base && n !== target);
+  // Compare BASENAMES: node reports the file-test by varying path forms across OS / node version
+  // (absolute, relative, normalized), so an exact-string compare misfires. A real test name (e.g.
+  // "guards the must-NOT") has no separators, so its basename never equals the target file's.
+  const tgtBase = baseOf(target);
+  return tapTestNames(out).some((n) => baseOf(n) !== tgtBase);
 }
 
 /** Number of file results in an eslint `--format json` report (0 if unparseable / not an array). */
@@ -199,10 +225,13 @@ export function eslintJsonHasRule(jsonText: string, rule: string): boolean {
  *     AND a reported test named distinctly from the file). A bare exit 0 for an empty/zero-test file
  *     — which `node --test` counts as one passing "test" named after the file — is NOT a pass (the
  *     #1259 BL-01 false-green fix).
- *   - lint-rule: runs the project `eslint --format json <target>` (flat config loads `local/*`
- *     plugins) and requires the target to actually lint (>=1 file result) AND ZERO messages for the
- *     specific rule id. `--rule` cannot load a plugin rule, so we filter the structured report by
- *     `ruleId` instead (the #1259 SF-01 fix).
+ *   - lint-rule: runs the project eslint as `node <eslint-cli> --format json <target>` (flat config
+ *     loads `local/*` plugins) and requires the target to actually lint (>=1 file result) AND ZERO
+ *     messages for the specific rule id. `--rule` cannot load a plugin rule, so we filter the
+ *     structured report by `ruleId` instead (the #1259 SF-01 fix).
+ *
+ * Both kinds spawn via `process.execPath` (never bare `node`/`npx` — not portably spawnable via
+ * `execFileSync` on Windows) with arg arrays (no shell → no injection from a caller-supplied target).
  */
 /**
  * Env for spawned checks: strip `NODE_TEST_CONTEXT` and `NODE_OPTIONS` so an AMBIENT test-runner
@@ -222,7 +251,7 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
     if (check.kind === 'node-test') {
       let out = '';
       try {
-        out = execFileSync('node', buildNodeTestArgs(check), {
+        out = execFileSync(process.execPath, buildNodeTestArgs(check), {
           cwd,
           encoding: 'utf-8',
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -231,16 +260,18 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string): CheckRunResult {
         });
       } catch (e) {
         // A failing test run exits non-zero (TAP still on stdout). Parse it: a real failure has
-        // `# fail >= 1` -> non-vacuous check returns false. Missing `node` -> no stdout -> false.
+        // `# fail >= 1` -> non-vacuous check returns false. Missing node -> no stdout -> false.
         const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
         out = typeof stdout === 'string' ? stdout : '';
       }
       return { passed: isNonVacuousNodeTestPass(out, check.target) };
     }
     if (check.kind === 'lint-rule') {
+      const eslintCli = resolveEslintCli(cwd);
+      if (!eslintCli) return { passed: false }; // eslint not installed -> fail closed, never throw
       let json = '';
       try {
-        json = execFileSync('npx', buildLintArgs(check), {
+        json = execFileSync(process.execPath, [eslintCli, ...buildLintArgs(check)], {
           cwd,
           encoding: 'utf-8',
           stdio: ['ignore', 'pipe', 'pipe'],

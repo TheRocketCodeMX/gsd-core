@@ -99,7 +99,6 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
       'must export buildLintArgs — the eslint argv builder for the lint-rule real runner');
     const argv = enforce.buildLintArgs({ kind: 'lint-rule', rule: 'local/no-source-grep', target: 'tests/' });
     assert.ok(Array.isArray(argv), 'argv is an array');
-    assert.equal(argv[0], 'eslint');
     const fmtIdx = argv.indexOf('--format');
     assert.ok(fmtIdx !== -1 && argv[fmtIdx + 1] === 'json',
       'emits --format json so the report can be filtered by ruleId');
@@ -241,9 +240,14 @@ describe('prohibition-enforcement real-runner helpers (#1259)', () => {
     const empty = 'ok 1 - empty.test.cjs\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
     assert.equal(enforce.isNonVacuousNodeTestPass(empty, 'empty.test.cjs'), false,
       'a file-named-only result is vacuous — the BL-01 false-green guard');
+    // BASENAME-NORMALIZED: node may report the file-test by an ABSOLUTE/normalized path while the
+    // descriptor target is relative (cross-OS / node-version). The basenames must still match → vacuous.
+    const emptyAbs = 'ok 1 - /tmp/x/empty.test.cjs\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
+    assert.equal(enforce.isNonVacuousNodeTestPass(emptyAbs, 'empty.test.cjs'), false,
+      'an absolute-path file-test name must still be recognized as vacuous (basename compare, WR-02)');
     const real = 'ok 1 - guards the must-NOT\n1..1\n# tests 1\n# pass 1\n# fail 0\n';
-    assert.equal(enforce.isNonVacuousNodeTestPass(real, 'neg.test.cjs'), true,
-      'a real named test distinct from the file is a genuine pass');
+    assert.equal(enforce.isNonVacuousNodeTestPass(real, '/abs/path/neg.test.cjs'), true,
+      'a real named test distinct from the file is a genuine pass (even vs an absolute target)');
     const failing = 'not ok 1 - guards\n# tests 1\n# pass 0\n# fail 1\n';
     assert.equal(enforce.isNonVacuousNodeTestPass(failing, 'neg.test.cjs'), false,
       'any failure means not a pass');

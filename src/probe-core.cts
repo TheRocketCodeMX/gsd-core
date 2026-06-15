@@ -397,9 +397,9 @@ export function dispositionForProhibition(
   const hasEnforcement = evidence.length > 0;
 
   // FAIL CLOSED: no wired enforcement evidence -> flagged unverified, never green. This holds for
-  // every tier today (the real enforcement mechanism that could flip a test-tier item to green is
-  // deferred to a follow-up PR). The guard the safety assertion proves: an unwired item can never
-  // be silently skipped.
+  // every tier (the producer that builds enforcement evidence for a test-tier item — the
+  // `prohibition-enforcement` module — landed in #1259). The guard the safety assertion proves: an
+  // unwired item can never be silently skipped.
   if (!hasEnforcement) {
     return {
       status: 'unverified',
@@ -414,8 +414,8 @@ export function dispositionForProhibition(
 
   // D4 GUARD: a judgment-tier (or unknown-tier) prohibition is NEVER a silent green from this
   // deterministic helper — it always routes to human/LLM judgment review (ADR-550 D4; verify-phase.md).
-  // Only a test-tier item with wired enforcement evidence may go green, and even that is the deferred
-  // heavy half until the real negative-test enforcement mechanism lands (no #644 caller passes evidence).
+  // Only a test-tier item with wired enforcement evidence may go green; the producer that supplies
+  // that evidence (`prohibition-enforcement`, #1259) runs the wired check and requires a genuine pass.
   if (tier === 'test') {
     return {
       status: 'green',
