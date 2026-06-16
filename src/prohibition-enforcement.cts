@@ -64,6 +64,15 @@ export interface CheckDescriptor {
   target: string;
   rule?: string;
   failFirst?: boolean;
+  /**
+   * Author-supplied path to a KNOWN-BAD subject the prover runs the check against to machine-prove
+   * the check is fail-first (#1279). For `lint-rule`: a file whose content violates `rule` (the
+   * prover lints it and requires the rule id to appear). For `node-test`: a subject the negative
+   * test exercises via the `GSD_PROHIB_SUBJECT` env convention, expected to drive the test RED.
+   * A generic producer cannot synthesize a violation for an arbitrary check, so this is required to
+   * prove fail-first; ABSENT for node-test → the default prover fails closed (never attestation).
+   */
+  violationFixture?: string;
 }
 
 /**
@@ -160,6 +169,17 @@ export function parseNodeTestSummary(out: string): { tests: number; pass: number
     fail: num(/^# fail (\d+)/m),
     cancelled: num(/^# cancelled (\d+)/m),
   };
+}
+
+/**
+ * Pure: did a `node --test` run go RED on the violation fixture? True iff the TAP summary reports at
+ * least one failure (`# fail >= 1`). The default node-test prover requires this — a negative test
+ * that does NOT go red against a known-bad subject is toothless and must not prove fail-first.
+ * Mutation-pinned (`>= 1` boundary): a mutant flipping `>=`→`>` (or the threshold) is caught by the
+ * `# fail 1` unit case. An unparseable summary yields `fail: 0` → false (fail-closed for the prover).
+ */
+export function isNodeTestRed(out: string): boolean {
+  return parseNodeTestSummary(out).fail >= 1;
 }
 
 /** The names of REAL (run) tests from TAP `ok N - <name>` / `not ok N - <name>` lines. A line with a
