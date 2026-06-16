@@ -180,6 +180,85 @@ describe('prohibition-enforcement: deterministic test-tier producer (#1259 / ADR
     assert.equal(result.mode, 'autonomous');
   });
 
+  // ─── #1279 RED-first adversarial guards (FF-01 / FF-04 / FF-05) ───────────────
+  // These pin MACHINE-PROVEN fail-first BEFORE the producer change. They inject a NEW
+  // `proveFailFirst` option that the current producer does not read, so they FAIL against the
+  // attestation-greens code (src/prohibition-enforcement.cts:411). Their failure IS the FF-01 RED
+  // signal; Plans 02-03 wire the prover and turn them green. No source is edited in this plan.
+
+  test('attestation alone no longer greens: a clean pass with no proving prover hard-gates (FF-01)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The single most important guard: caller attests failFirst:true AND the run passes cleanly,
+    // but the prover could NOT prove the check fails-on-violation (provenFailFirst:false). Without a
+    // machine proof, attestation alone must NEVER green — it must hard-gate, flagged, located.
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
+      {
+        runCheck: () => ({ passed: true }),
+        proveFailFirst: () => ({ provenFailFirst: false }),
+      },
+    );
+    assert.notEqual(result.status, 'green',
+      'attestation + a clean pass but no machine proof of fail-first must NEVER green (FF-01)');
+    assert.equal(result.flagged, true, 'an un-proven check is flagged');
+    assert.equal(result.located, true, 'the descriptor was located; it just was not proven fail-first');
+  });
+
+  test('a machine-proven fail-first check with a clean pass greens (FF-01 positive)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
+      {
+        runCheck: () => ({ passed: true }),
+        proveFailFirst: () => ({ provenFailFirst: true, method: 'violation-fixture' }),
+      },
+    );
+    assert.equal(result.status, 'green',
+      'a check proven to fail-on-violation AND pass-on-clean must green');
+    assert.equal(result.located, true);
+    assert.equal(result.evidence.length, 1, 'one evidence record built on a proven green');
+  });
+
+  test('passes-on-violation (prover could not prove red) hard-gates, never green (FF-04 both-directions)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The wired check passes on a clean run, but the prover ran it against a known violation and the
+    // check did NOT go red (provenFailFirst:false). A check that passes-on-violation is not a
+    // regression guard -> hard-gate.
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
+      {
+        runCheck: () => ({ passed: true }),
+        proveFailFirst: () => ({ provenFailFirst: false }),
+      },
+    );
+    assert.notEqual(result.status, 'green',
+      'a check that does not go red on a known violation is not a regression guard (FF-04)');
+    assert.equal(result.flagged, true);
+    assert.equal(result.located, true);
+  });
+
+  test('fails-on-clean (clean run did not pass) hard-gates even when fail-first is proven (FF-04 both-directions)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The prover proved the check goes red on a violation, but the clean run FAILED — both directions
+    // must hold (fail-on-violation AND non-vacuous pass-on-clean) for green. A failing clean run
+    // hard-gates regardless of the proof.
+    const result = enforce.runProhibitionEnforcement(
+      TEST_TIER,
+      { kind: 'node-test', target: 'tests/neg.test.cjs', failFirst: true },
+      {
+        runCheck: () => ({ passed: false }),
+        proveFailFirst: () => ({ provenFailFirst: true, method: 'violation-fixture' }),
+      },
+    );
+    assert.notEqual(result.status, 'green',
+      'a proven-fail-first check whose clean run failed must still hard-gate (FF-04)');
+    assert.equal(result.flagged, true);
+    assert.equal(result.located, true);
+  });
+
   test('routeProhibitionEnforcement parses a JSON request file and emits a structured result', (t) => {
     const fs = require('node:fs');
     const { execFileSync } = require('node:child_process');
