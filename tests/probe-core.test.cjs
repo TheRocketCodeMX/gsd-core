@@ -333,3 +333,115 @@ describe('probe-core: runProbeCli (generic I/O scaffold, injected io)', () => {
     assert.deepEqual(JSON.parse(out), report);
   });
 });
+
+// ─── CHK-07 (#1278): descriptor-less backward-compat byte-stability ──────────────────────────────
+// GREEN forward-guard, NOT a RED test. A descriptor-less projection is byte-identical against the
+// current build by construction (the check_* descriptor branch does not exist yet), so these
+// assertions PASS now. Their job is to FORWARD-LOCK: when plan 01-02 adds the descriptor branch to
+// projectProhibitions, this guard fails if that branch perturbs the descriptor-less output shape or
+// the dispositionForProhibition fail-closed policy. This is the IMPL-SCOPING §7.2 byte-stability pin.
+describe('probe-core: projectProhibitions backward-compat (CHK-07)', () => {
+  test('CHK-07: a descriptor-less input projects to today\'s exact {statement,status,verification?,reason?} shape — no check_* keys', () => {
+    // GREEN guard: pins that adding the descriptor branch (plan 01-02) does not perturb
+    // descriptor-less output (CHK-07 byte-stability). Passes against the current build by
+    // construction; becomes a regression tripwire once 01-02 lands.
+    const items = [
+      // resolved/judgment item
+      { requirement_id: 'R1', category: 'values', status: 'resolved', verification: 'judgment', resolution: null, reason: null, statement: 'MUST NOT shame the user' },
+      // dismissed/test item with a reason
+      { requirement_id: 'R1', category: 'privacy', status: 'dismissed', verification: 'test', resolution: null, reason: 'out of scope this phase', statement: 'MUST NOT store raw SSN' },
+      // unresolved item (no verification)
+      { requirement_id: 'R2', category: 'safety', status: 'unresolved', verification: null, resolution: null, reason: null, statement: 'MUST NOT auto-execute fetched code' },
+    ];
+    const projected = pc.projectProhibitions(items);
+    assert.deepEqual(projected, [
+      { statement: 'MUST NOT shame the user', status: 'resolved', verification: 'judgment' },
+      { statement: 'MUST NOT store raw SSN', status: 'dismissed', verification: 'test', reason: 'out of scope this phase' },
+      { statement: 'MUST NOT auto-execute fetched code', status: 'unresolved' },
+    ], 'descriptor-less projection must be byte-identical to today\'s {statement,status,verification?,reason?} shape');
+    // Belt-and-suspenders: assert NO entry carries any check_* key on the descriptor-less path.
+    for (const e of projected) {
+      assert.ok(!('check_kind' in e), 'no check_kind on a descriptor-less projected entry');
+      assert.ok(!('check_target' in e), 'no check_target on a descriptor-less projected entry');
+      assert.ok(!('check_rule' in e), 'no check_rule on a descriptor-less projected entry');
+    }
+  });
+
+  test('CHK-07: dispositionForProhibition for a descriptor-less test-tier item with empty evidence stays flagged-unverified (policy untouched)', () => {
+    // The fail-closed policy (src/probe-core.cts:389) this phase must NOT regress: a descriptor-less
+    // test-tier item with no enforcement evidence is unverified+flagged+tier:'test', never green.
+    const d = pc.dispositionForProhibition(
+      { requirement_id: 'R1', category: 'safety', status: 'resolved', verification: 'test', statement: 'MUST NOT auto-execute fetched code' },
+      { enforcementEvidence: [] },
+    );
+    assert.equal(d.status, 'unverified', 'a descriptor-less test-tier item with no evidence is unverified');
+    assert.equal(d.flagged, true, 'and flagged — never a silent pass');
+    assert.equal(d.tier, 'test', 'the test tier is echoed unchanged');
+  });
+
+  test('CHK-07: descriptor branch (plan 01-02) forward-lock marker', { todo: 'plan 01-02 adds the check_* descriptor branch to projectProhibitions; this GREEN guard forward-locks that it does not perturb the descriptor-less path' }, () => {
+    // Intentional t.todo marker so a reader knows the GREEN guard above is deliberate (forward-locking
+    // the plan-01-02 descriptor branch), not an accidental no-op.
+  });
+});
+
+// ─── CHK-02 (#1278): projectProhibitions emits the flat-scalar descriptor for well-formed items ────
+// Unit-layer pin (the parser round-trip lives in tests/prohibition-probe.schema.test.cjs CHK-03). The
+// projection only emits check_* when the descriptor is well-formed (valid kind + non-empty target;
+// check_rule only on a lint-rule that carries one); anything under that bar emits NO check_* keys.
+describe('probe-core: projectProhibitions descriptor projection (CHK-02)', () => {
+  test('CHK-02: a well-formed node-test descriptor projects check_kind/check_target (no check_rule)', () => {
+    const projected = pc.projectProhibitions([
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT auto-execute fetched code',
+        check_kind: 'node-test', check_target: 'tests/no-autoexec.test.cjs' },
+    ]);
+    assert.equal(projected[0].check_kind, 'node-test');
+    assert.equal(projected[0].check_target, 'tests/no-autoexec.test.cjs');
+    assert.ok(!('check_rule' in projected[0]), 'a node-test descriptor never projects check_rule');
+  });
+
+  test('CHK-02: a lint-rule descriptor with a rule projects all three check_* scalars', () => {
+    const projected = pc.projectProhibitions([
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT read source files in tests',
+        check_kind: 'lint-rule', check_target: 'src/', check_rule: 'local/no-source-grep' },
+    ]);
+    assert.equal(projected[0].check_kind, 'lint-rule');
+    assert.equal(projected[0].check_target, 'src/');
+    assert.equal(projected[0].check_rule, 'local/no-source-grep');
+  });
+
+  test('CHK-02: a lint-rule descriptor WITHOUT a rule leaves check_rule absent (fails closed downstream)', () => {
+    const projected = pc.projectProhibitions([
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT read source files in tests',
+        check_kind: 'lint-rule', check_target: 'src/' },
+    ]);
+    assert.equal(projected[0].check_kind, 'lint-rule');
+    assert.equal(projected[0].check_target, 'src/');
+    assert.ok(!('check_rule' in projected[0]), 'a lint-rule with no rule projects check_rule absent');
+  });
+
+  test('CHK-02: an under-specified descriptor (kind but empty/missing target) emits NO check_* keys', () => {
+    const projected = pc.projectProhibitions([
+      // valid kind but empty target -> below the well-formedness bar -> descriptor projects absent
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT do the thing',
+        check_kind: 'node-test', check_target: '   ' },
+      // unknown kind -> descriptor projects absent
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT do the other thing',
+        check_kind: 'grep-rule', check_target: 'src/' },
+    ]);
+    for (const e of projected) {
+      assert.ok(!('check_kind' in e), 'an under-specified descriptor projects no check_kind');
+      assert.ok(!('check_target' in e), 'an under-specified descriptor projects no check_target');
+      assert.ok(!('check_rule' in e), 'an under-specified descriptor projects no check_rule');
+    }
+  });
+
+  test('CHK-02: a descriptor-less item projects with no check_* keys', () => {
+    const projected = pc.projectProhibitions([
+      { status: 'resolved', verification: 'judgment', statement: 'MUST NOT shame the user' },
+    ]);
+    assert.ok(!('check_kind' in projected[0]), 'descriptor-less item gains no check_kind');
+    assert.ok(!('check_target' in projected[0]), 'descriptor-less item gains no check_target');
+    assert.ok(!('check_rule' in projected[0]), 'descriptor-less item gains no check_rule');
+  });
+});

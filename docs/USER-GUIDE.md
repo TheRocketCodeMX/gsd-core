@@ -459,6 +459,26 @@ The review step slots in after execution and before UAT:
 - **Configuration Reference:** see [`docs/CONFIGURATION.md`](CONFIGURATION.md) for the full `config.json` schema, model-profile table, git branching strategies, and security settings.
 - **Discuss Mode:** see [`docs/workflow-discuss-mode.md`](workflow-discuss-mode.md) for interview vs assumptions mode.
 
+### Graphify capability gate (tri-state, v1.43+)
+
+Graphify commands (`graphify status`, `graphify build`, `graphify query`, `graphify diff`) now respect the **full tri-state capability gate**:
+
+1. **Installed** — the `gsd-graphify-*` skills are present in the active install profile.
+2. **Surfaced** — those skills appear on the current runtime surface (e.g., in `~/.claude/commands/gsd/`).
+3. **Config-enabled** — `graphify.enabled: true` is set in `.planning/config.json`.
+
+All three conditions must be true. Setting `graphify.enabled: true` alone is no longer sufficient if graphify has not been installed and surfaced. If graphify commands return `{ disabled: true }` after upgrading, verify that the install profile includes graphify skills (`gsd-tools capability state`) and re-run the installer to surface them.
+
+### Intel capability gate (tri-state, v1.44+)
+
+Intel commands (`intel status`, `intel query`, `intel diff`, `intel snapshot`, `intel validate`, `intel api-surface`) now respect the **full tri-state capability gate** (same resolver as graphify above):
+
+1. **Installed** — the intel capability is present in the active install profile (intel has no skill files, so this is vacuously true for all profiles).
+2. **Surfaced** — the intel capability is on the current runtime surface (vacuously true for all surfaces since intel registers no skill stems).
+3. **Config-enabled** — `intel.enabled: true` is set in `.planning/config.json`.
+
+For intel, conditions 1 and 2 are always satisfied (intel has no skill files). The effective gate is `intel.enabled` in config — the same behaviour as before, but now enforced through the shared `isCapabilityActive('intel', cwd)` resolver rather than a direct config read. This means intel honours the full capability-state pipeline, including any future install-profile or surface restrictions. If intel commands return `{ disabled: true }`, ensure `intel.enabled: true` is set in `.planning/config.json` and verify `gsd-tools capability state` shows intel as active.
+
 ---
 
 ## Usage Examples
