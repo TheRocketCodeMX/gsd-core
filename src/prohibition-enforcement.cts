@@ -67,6 +67,52 @@ export interface CheckDescriptor {
 }
 
 /**
+ * READ-BACK ADAPTER (#1278, plan 01-03): reconstruct a `CheckDescriptor` from the flat scalar keys
+ * `projectProhibitions` emits onto a prohibition item (`check_kind` / `check_target` / `check_rule`,
+ * src/probe-core.cts). This is the deterministic bridge from the projected descriptor back into the
+ * merged #1259 producer request — the verify-phase caller reads the projected scalars, this rebuilds
+ * the `{ kind, target, rule? }` request, and `runProhibitionEnforcement`'s EXISTING fail-closed LOCATE
+ * guard (validKind/validTarget/validRule, below) is the single source of fail-closed truth.
+ *
+ * Contract:
+ *   - `null`/`undefined`/non-object input -> `null`.
+ *   - `check_kind` ABSENT -> `null` (no descriptor -> producer locates nothing -> fail-closed).
+ *   - `check_kind` present -> `{ kind: check_kind, target: check_target }`, adding `rule: check_rule`
+ *     ONLY when `check_rule` is a non-empty string.
+ *   - `failFirst` is NEVER sourced from the projection — it stays a verify-time caller attestation
+ *     (#1279 machine-proves it; out of scope here). The returned descriptor carries no `failFirst`.
+ *   - The adapter does NOT strictly validate kind/target/rule: it faithfully reconstructs whatever
+ *     scalars are present (e.g. `{check_kind:'lint-rule', check_target:'src/'}` with no `check_rule`
+ *     reconstructs to `{kind:'lint-rule', target:'src/'}`), letting the existing LOCATE guard reject
+ *     an under-specified descriptor (located:false, never green). It does NOT re-implement that guard.
+ *   - Pure, deterministic, no-throw.
+ */
+export function descriptorFromProjection(
+  projected: Record<string, unknown> | null | undefined,
+): CheckDescriptor | null {
+  if (!projected || typeof projected !== 'object') return null;
+  if (!('check_kind' in projected)) return null;
+  // The shared `parseMustHavesBlock` (src/frontmatter.cts) coerces /^\d+$/ scalar values to NUMBERS on
+  // round-trip, so a numeric-looking check_kind/check_target/check_rule arrives here as a number. Normalize
+  // ONLY string|number scalars back to string — a non-scalar (object/array/bool) or absent value yields ''
+  // (never an `[object Object]` stringification, no `as string` lie over a number). This keeps the
+  // descriptor honestly typed and the round-trip lossless across the full string domain; an under-specified
+  // '' target/kind is rejected by the producer's locate guard (fail-closed; never green).
+  const scalar = (v: unknown): string =>
+    typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+  const kind = scalar(projected.check_kind) as CheckKind;
+  const target = scalar(projected.check_target);
+  const descriptor: CheckDescriptor = { kind, target };
+  // `rule` belongs only to the lint-rule kind; a stray check_rule on a node-test descriptor is dropped
+  // (the projector never emits one there — defense in depth). failFirst is NOT sourced here (#1279).
+  if (kind === 'lint-rule') {
+    const rule = scalar(projected.check_rule);
+    if (rule.trim().length > 0) descriptor.rule = rule;
+  }
+  return descriptor;
+}
+
+/**
  * The result a check-runner returns: whether the check genuinely, non-vacuously PASSED. The runner
  * reports only what it can OBSERVE (a real pass) — it does NOT determine fail-first. Whether the
  * check is a `regression-must-fail-first` proof is a CALLER-ATTESTED property of the descriptor

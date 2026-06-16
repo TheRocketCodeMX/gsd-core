@@ -384,3 +384,113 @@ describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
     assert.equal(result.located, true, 'the descriptor was well-formed; it just did not genuinely pass');
   });
 });
+
+// ─── CHK-06 (#1278): fail-closed on partial / invalid / absent descriptor-from-projection ────────
+// RED-FIRST until plan 01-03 adds `descriptorFromProjection` to src/prohibition-enforcement.cts. The
+// adapter reconstructs a CheckDescriptor {kind,target,rule?} from the projected scalar keys
+// {check_kind,check_target,check_rule?}, returning null when the descriptor is absent/partial. The
+// load-bearing safety contract (IMPL-SCOPING §7.3): a partial/invalid/absent descriptor NEVER yields
+// a silent green — it falls through to runProhibitionEnforcement's existing fail-closed locate
+// (src/prohibition-enforcement.cts:391). runCheck is always injected here so no real subprocess
+// spawns. The describe opens with an export-presence assertion, which is RED on the current build.
+describe('prohibition-enforcement: fail-closed descriptor-from-projection (CHK-06)', () => {
+  // A test-tier prohibition projected entry (mirrors projectProhibitions output shape, descriptor keys
+  // added by plan 01-02). The reason field is irrelevant here; descriptor keys drive the adapter.
+  const PROJECTED_TIER = Object.freeze({
+    statement: 'MUST NOT auto-execute fetched code',
+    status: 'resolved',
+    verification: 'test',
+  });
+
+  test('CHK-06: prohibition-enforcement exports descriptorFromProjection (RED until plan 01-03)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.equal(typeof enforce.descriptorFromProjection, 'function',
+      'must export descriptorFromProjection — the projected-scalars -> CheckDescriptor adapter (#1278, plan 01-03)');
+  });
+
+  test('CHK-06(absent): a projected item with NO check_* keys -> descriptorFromProjection null -> located:false, never green', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({ ...PROJECTED_TIER });
+    assert.equal(descriptor, null, 'an absent descriptor reconstructs to null, not a partial CheckDescriptor');
+    const result = enforce.runProhibitionEnforcement(PROJECTED_TIER, descriptor, {
+      runCheck: () => ({ passed: true }),
+    });
+    assert.equal(result.located, false, 'no descriptor -> nothing locatable');
+    assert.notEqual(result.status, 'green', 'an absent descriptor must NEVER be a silent green');
+    assert.equal(result.flagged, true, 'and must be flagged');
+    assert.ok(Array.isArray(result.evidence) && result.evidence.length === 0, 'no evidence on an absent descriptor');
+  });
+
+  test('CHK-06(lint-rule missing rule): {check_kind:lint-rule, check_target:src/} (no check_rule) -> located:false, never green', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'lint-rule', check_target: 'src/',
+    });
+    const result = enforce.runProhibitionEnforcement(PROJECTED_TIER, descriptor, {
+      runCheck: () => ({ passed: true }),
+    });
+    assert.equal(result.located, false, 'an under-specified lint-rule (no rule id) is not locatable (validRule guard, :390)');
+    assert.notEqual(result.status, 'green', 'a lint-rule missing its rule id must NEVER green');
+    assert.equal(result.flagged, true);
+  });
+
+  test('CHK-06(unknown kind): {check_kind:shell-script} -> validKind false -> located:false, never green', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'shell-script', check_target: 'x',
+    });
+    const result = enforce.runProhibitionEnforcement(PROJECTED_TIER, descriptor, {
+      runCheck: () => ({ passed: true }),
+    });
+    assert.equal(result.located, false, 'an unknown kind is not a valid wired check (validKind guard, :388)');
+    assert.notEqual(result.status, 'green', 'an unknown check kind must NEVER green');
+    assert.equal(result.flagged, true);
+  });
+
+  test('CHK-06(well-formed but runCheck reports non-pass): located:true, never green (no false green)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'node-test', check_target: 'tests/no-autoexec.test.cjs',
+    });
+    // A complete node-test descriptor; failFirst is caller-attested at verify time (#1279), not sourced
+    // from the projection, so attest it here. The injected runCheck reports a non-pass.
+    const result = enforce.runProhibitionEnforcement(
+      PROJECTED_TIER,
+      descriptor ? { ...descriptor, failFirst: true } : descriptor,
+      { runCheck: () => ({ passed: false }) },
+    );
+    assert.equal(result.located, true, 'a well-formed descriptor IS located even though the run did not pass');
+    assert.notEqual(result.status, 'green', 'a located check that does not genuinely pass must NEVER green');
+    assert.equal(result.flagged, true);
+  });
+
+  test('CHK-06(MD-01 numeric coercion): a numeric-looking check_target reconstructs as a STRING (parseMustHavesBlock coerces ^\\d+$ to number) -> located, no type-lie / silent un-locate', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The shared parseMustHavesBlock (src/frontmatter.cts) coerces a /^\d+$/ scalar value to a NUMBER on
+    // round-trip, so a numeric-looking check_target arrives at the adapter as a number. The adapter must
+    // String()-coerce it (not cast `as string` over a number), so the descriptor is honestly typed AND a
+    // numeric-looking target still locates instead of silently un-locating (the round-trip is lossless
+    // across the full string domain — closes review finding MD-01/LW-01).
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'node-test', check_target: 12345,
+    });
+    assert.equal(typeof descriptor.target, 'string',
+      'a numeric-coerced check_target must reconstruct as a string, never a number behind an `as string` cast');
+    assert.equal(descriptor.target, '12345');
+    const result = enforce.runProhibitionEnforcement(
+      PROJECTED_TIER,
+      { ...descriptor, failFirst: true },
+      { runCheck: () => ({ passed: true }) },
+    );
+    assert.equal(result.located, true,
+      'a numeric-looking but valid target locates after String() coercion — no silent un-locate');
+  });
+
+  test('CHK-06(LW-02 stray rule): a check_rule on a node-test descriptor is dropped (rule belongs to lint-rule only)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'node-test', check_target: 'tests/x.test.cjs', check_rule: 'local/no-source-grep',
+    });
+    assert.equal(descriptor.rule, undefined, 'a node-test descriptor carries no rule even if a stray check_rule is present');
+  });
+});
