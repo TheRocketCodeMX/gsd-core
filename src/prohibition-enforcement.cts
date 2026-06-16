@@ -18,12 +18,14 @@
  * (flagged, non-green) in BOTH interactive and autonomous modes (ADR-550 D4 / D3) — never a silent
  * green.
  *
- * FAIL-FIRST IS CALLER-ATTESTED (honest scope, #1259): the producer requires the caller to ATTEST
- * `failFirst: true` AND requires the runner to observe a real non-vacuous pass — but it does NOT
- * independently prove the check fails-on-violation. Genuine fail-first confirmation needs running
- * the check against a known violation fixture and is a tracked follow-up (recorded in ADR-550's D5d
- * note). What ships here closes the permanent-`gaps_found` dead-end with a genuinely-executed gate;
- * it does not yet replace caller attestation with machine proof of the red-first property.
+ * FAIL-FIRST IS MACHINE-PROVEN (#1279): the producer no longer greens on caller attestation. The
+ * green verdict requires the injectable prover (`proveFailFirst`, default `defaultProveFailFirst`) to
+ * INDEPENDENTLY run the check against a known violation fixture and observe it go red, AND the runner
+ * to observe a real non-vacuous pass: `passed = proof.provenFailFirst === true && run.passed === true`.
+ * Caller attestation (`CheckDescriptor.failFirst`) is demoted to a non-authoritative hint kept only
+ * for backward route-JSON shape — no path greens on it alone (FF-08). The proof method is recorded in
+ * the evidence (`failFirstProof`, FF-07). This replaces the #1259 caller-attested red-first property
+ * with machine proof, closing the gap the ADR-550 D5d note tracked as a follow-up.
  *
  * Authored as strict TypeScript (`src/prohibition-enforcement.cts`) and compiled by
  * `tsc -p tsconfig.build.json` (`npm run build:lib`) to the gitignored runtime artifact
@@ -56,8 +58,9 @@ export type CheckKind = 'node-test' | 'lint-rule';
  * runner family; `target` is the negative-test file path (node-test) or the PATH to lint
  * (lint-rule); `rule` is the eslint rule id (lint-rule only — e.g. `local/no-source-grep`) and is
  * REQUIRED for the lint-rule kind (a lint-rule descriptor without it is not a valid wired check);
- * `failFirst` is the caller's ATTESTATION that the check is a genuine `regression-must-fail-first`
- * proof (caller-declared — see the module docstring; not independently confirmed at verify time).
+ * `failFirst` is a DEMOTED, non-authoritative hint kept only for backward route-JSON shape — the
+ * machine prover (`proveFailFirst`) supersedes it, and NO path greens on attestation alone (FF-08,
+ * #1279). The descriptor's `violationFixture` is what the prover actually uses to prove fail-first.
  */
 export interface CheckDescriptor {
   kind: CheckKind;
@@ -91,8 +94,13 @@ export interface EnforcementEvidence {
   kind: CheckKind;
   target: string;
   rule?: string;
+  /** Machine-proven fail-first (#1279): true ONLY when the prover observed the check go red on a
+   * violation. No longer the caller's attestation — a green item always carries a proven `true`. */
   failFirst: boolean;
   passed: boolean;
+  /** HOW fail-first was machine-proven (FF-07) — recorded from the proof result for provenance.
+   * Additive; keeps the array shape `dispositionForProhibition` reads stable. */
+  failFirstProof?: FailFirstProof['method'];
 }
 
 /**
@@ -479,18 +487,20 @@ function defaultProveFailFirst(check: CheckDescriptor, cwd: string, timeoutMs?: 
 export { defaultProveFailFirst };
 
 /**
- * LOCATE -> CONFIRM fail-first -> RUN -> build enforcementEvidence -> dispositionForProhibition.
+ * LOCATE -> PROVE fail-first -> RUN -> build enforcementEvidence -> dispositionForProhibition.
  *
  * (1) LOCATE: if no well-formed check descriptor is locatable -> fail-closed
  *     (`dispositionForProhibition` with empty evidence) plus `{ located: false, kind: null, evidence: [] }`.
- * (2) ATTEST + RUN: require the caller to attest `failFirst: true` and run it via `runCheck`. A check
- *     the caller does not attest as fail-first, or that does not genuinely (non-vacuously) PASS ->
- *     fail-closed disposition with `located: true` (a real located miss, non-green, flagged) in BOTH
- *     modes. Fail-first is caller-attested, not independently proven (see module docstring).
- * (3) PASS: build a typed `enforcementEvidence` array and call `dispositionForProhibition` — the
- *     non-empty array flips a test-tier item to green (the previously-unreachable branch).
+ * (2) PROVE + RUN: machine-prove fail-first via `proveFailFirst` (default `defaultProveFailFirst`) AND
+ *     run the check via `runCheck`. The green AND is `proof.provenFailFirst === true && run.passed ===
+ *     true` — caller attestation is NOT consulted (FF-08). A check that cannot be proven fail-first, or
+ *     that does not genuinely (non-vacuously) PASS -> fail-closed disposition with `located: true` (a
+ *     real located miss, non-green, flagged) in BOTH modes.
+ * (3) PASS: build a typed `enforcementEvidence` array (recording the proof method) and call
+ *     `dispositionForProhibition` — the non-empty array flips a test-tier item to green.
  *
- * Pure/deterministic: same (prohibition, check, runCheck) -> same result.
+ * Pure/deterministic DECISION layer: the only impure seams are the injectable `runCheck`/`proveFailFirst`;
+ * given their results the disposition is same-input-same-output and mutation-survivable.
  */
 export function runProhibitionEnforcement(
   prohibition: unknown,
@@ -513,21 +523,30 @@ export function runProhibitionEnforcement(
   }
 
   const runCheck = options.runCheck ?? ((toRun: CheckDescriptor) => defaultRunCheck(toRun, options.cwd ?? process.cwd(), options.timeoutMs));
+  const proveFailFirst = options.proveFailFirst ?? ((toProve: CheckDescriptor) => defaultProveFailFirst(toProve, options.cwd ?? process.cwd(), options.timeoutMs));
 
-  // (2) ATTEST fail-first (CALLER-DECLARED) + RUN. The caller must attest `failFirst: true` AND the
-  // runner must observe a genuine NON-VACUOUS pass. The producer does NOT independently prove
-  // fail-first (that needs a violation fixture — tracked follow-up, ADR-550 D5d). A non-attested or
-  // non-passing check hard-gates (never green) in BOTH modes.
-  const attestedFailFirst = c.failFirst === true;
-  // No-throw contract end-to-end: even a (test-injected) runCheck that throws must fail closed,
-  // never propagate. The default real runner already never throws.
+  // (2) PROVE fail-first (MACHINE) + RUN. The prover must INDEPENDENTLY run the check against the
+  // descriptor's violation fixture and observe it go red (`proof.provenFailFirst`), AND the runner
+  // must observe a genuine NON-VACUOUS pass. Caller attestation (`c.failFirst`) is NOT consulted for
+  // the green verdict (FF-08) — a check that cannot be machine-proven fail-first hard-gates (never
+  // green) in BOTH modes, even if attested.
+  // No-throw contract end-to-end: even a (test-injected) prover/runner that throws must fail closed,
+  // never propagate. The default real prover/runner already never throw.
+  let proof: FailFirstProof;
+  try {
+    proof = proveFailFirst(c);
+  } catch {
+    proof = { provenFailFirst: false };
+  }
   let run: CheckRunResult;
   try {
     run = runCheck(c);
   } catch {
     run = { passed: false };
   }
-  const passed = attestedFailFirst && run.passed === true;
+  // The `&&` and `=== true` are mutation-load-bearing — both directions (proven-red AND clean-pass)
+  // must hold for green; Plan 01/02 guards pin them.
+  const passed = proof.provenFailFirst === true && run.passed === true;
 
   if (!passed) {
     // NOT attested fail-first OR did not genuinely pass -> fail-closed, located: true (an actual
@@ -543,13 +562,15 @@ export function runProhibitionEnforcement(
   }
 
   // (3) PASS -> build typed enforcementEvidence and let the policy flip a test-tier item green.
-  // `failFirst` here is the caller's attestation (recorded for provenance), not a machine proof.
+  // `failFirst: true` here means MACHINE-PROVEN (the green AND required `proof.provenFailFirst`),
+  // and `failFirstProof` records HOW it was proven (FF-07).
   const evidence: EnforcementEvidence[] = [{
     kind: c.kind,
     target: c.target,
     ...(typeof c.rule === 'string' ? { rule: c.rule } : {}),
     failFirst: true,
     passed: true,
+    ...(proof.method ? { failFirstProof: proof.method } : {}),
   }];
   const disposition = dispositionForProhibition(prohibition, { enforcementEvidence: evidence });
   return {
