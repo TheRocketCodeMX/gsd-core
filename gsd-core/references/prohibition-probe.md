@@ -151,38 +151,39 @@ Splitting these axes keeps the lifecycle enum free of a verification fact and le
 prohibition adapter declare `test | judgment` without forking the shared lifecycle enum that
 the edge-probe's `explicit | backstop` also uses.
 
-## Optional wired-check descriptor (deterministic locate, #1278)
+## Optional wired-check descriptor (deterministic locate + machine-proof, #1278 + #1346)
 
 A `resolved`/`test`-tier prohibition MAY carry an **optional `check` descriptor** that names
 the wired mechanical check, so verify-phase locates it deterministically instead of inventing
 `{kind, target, rule}` each run. The descriptor is captured at spec-phase (soft / optional —
 the author wires it when the negative test or lint rule already exists) and is represented as
-**three flat scalar keys** on the `must_haves.prohibitions` item — never a nested `check: {}`
+**four flat scalar keys** on the `must_haves.prohibitions` item — never a nested `check: {}`
 object:
 
 - `check_kind` — `node-test` | `lint-rule` (which producer mechanism runs the check).
 - `check_target` — the test file (`node-test`) or the file the rule runs against (`lint-rule`).
 - `check_rule` — the `ruleId` to filter on, **lint-rule only** (absent for `node-test`).
+- `check_violation_fixture` — path to a KNOWN-BAD subject the #1279 prover runs the check against to
+  machine-prove fail-first (rides BOTH kinds; for `node-test` it is injected via `GSD_PROHIB_SUBJECT`).
 
 The flat-scalar shape is load-bearing: the shared `parseMustHavesBlock` is a flat parser and a
 nested object would flatten/mangle the round-trip (ADR-550 2026-06-15 addendum; #644 "no parser
 rewrite" precedent). `projectProhibitions` emits these keys **only for a well-formed descriptor**
-(valid `check_kind` + non-empty `check_target`; `check_rule` only on the lint-rule path), and
-verify-phase reads them back via `descriptorFromProjection` into the `CheckDescriptor` handed to
-`check prohibition-enforcement`. This closes the **locate** half with **zero manual descriptor
-authoring**. Note the projection carries **no `violationFixture`** (`descriptorFromProjection`
-reconstructs only `{ kind, target, rule? }`); because #1279 machine-proves fail-first against a
-fixture, a prohibition wired purely through this projected path **hard-gates (fail-closed)** until a
-`check_violation_fixture` scalar is threaded through — tracked as **#1346**. Until then green needs a
-hand-supplied `violationFixture`.
+(valid `check_kind` + non-empty `check_target`; `check_rule` only on the lint-rule path;
+`check_violation_fixture` only when non-empty), and verify-phase reads them back via
+`descriptorFromProjection` into the `CheckDescriptor` handed to `check prohibition-enforcement`. This
+closes **both** the locate (#1278) and the machine-proof-fixture (#1346) halves with **zero manual
+descriptor authoring**: a prohibition authored with all four scalars greens end-to-end through the
+projection alone.
 
 **Fail-closed + backward-compat.** A partial descriptor (`lint-rule` missing `check_rule`), an
-unknown `check_kind`, or an **absent** descriptor on a test-tier prohibition falls through to the
-producer's existing fail-closed locate — never a silent green. A prohibition with no descriptor
-parses and disposes byte-identically to today. `failFirst` is **not** sourced from the
-descriptor and is now **demoted** (machine-proven fail-first DELIVERED in #1279 — no path greens on
-attestation alone, FF-08); the `dispositionForProhibition` policy is unchanged. The field that gates
-green and is **not yet projected** is `violationFixture` (follow-up #1346).
+unknown `check_kind`, an **absent** descriptor, OR a descriptor with **no `check_violation_fixture`**
+falls through to the producer's fail-closed paths (`located: false`, or located-but-unprovable) —
+never a silent green. A prohibition with no descriptor parses and disposes byte-identically to today.
+`failFirst` is **not** sourced from the descriptor and is **demoted** (machine-proven fail-first
+DELIVERED in #1279 — no path greens on attestation alone, FF-08); the `dispositionForProhibition`
+policy is unchanged. Residual (tracked **#1346**): the node-test proof confirms the fixture exists and
+the check goes RED, but cannot generically prove the red was *caused by* the subject's content.
 
 ## Output schema
 

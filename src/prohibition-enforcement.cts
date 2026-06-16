@@ -90,7 +90,8 @@ export interface CheckDescriptor {
  *   - `null`/`undefined`/non-object input -> `null`.
  *   - `check_kind` ABSENT -> `null` (no descriptor -> producer locates nothing -> fail-closed).
  *   - `check_kind` present -> `{ kind: check_kind, target: check_target }`, adding `rule: check_rule`
- *     ONLY when `check_rule` is a non-empty string.
+ *     ONLY when `check_rule` is a non-empty string, and `violationFixture: check_violation_fixture`
+ *     ONLY when that scalar is a non-empty string (#1346 — composes #1278 locate with #1279 proof).
  *   - `failFirst` is NEVER sourced from the projection — it stays a verify-time caller attestation
  *     (#1279 machine-proves it; out of scope here). The returned descriptor carries no `failFirst`.
  *   - The adapter does NOT strictly validate kind/target/rule: it faithfully reconstructs whatever
@@ -121,6 +122,12 @@ export function descriptorFromProjection(
     const rule = scalar(projected.check_rule);
     if (rule.trim().length > 0) descriptor.rule = rule;
   }
+  // `violationFixture` (#1346) rides BOTH kinds — reconstruct it from `check_violation_fixture` so the
+  // deterministic #1278 locate path and the #1279 machine-proof COMPOSE: a projected fixture lets the
+  // default prover green end-to-end with zero hand-authoring. Absent/blank -> no fixture -> the prover
+  // hard-gates (fail-closed; green requires a fixture), never fabricated.
+  const fixture = scalar(projected.check_violation_fixture);
+  if (fixture.trim().length > 0) descriptor.violationFixture = fixture;
   return descriptor;
 }
 

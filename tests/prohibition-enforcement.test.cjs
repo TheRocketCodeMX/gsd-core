@@ -731,6 +731,41 @@ describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
     assert.equal(result.located, true, 'the descriptor was located; it just could not be proven fail-first');
     assert.equal(result.evidence.length, 0, 'no enforcement evidence on a hard-gate');
   });
+
+  test('COMPOSE (#1346): a prohibition projected WITH check_violation_fixture greens end-to-end through the DEFAULT prover+runner (zero hand-authoring)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const pc = require(path.join(__dirname, '..', 'gsd-core', 'bin', 'lib', 'probe-core.cjs'));
+    const dir = createTempDir('prohib-compose-1346-');
+    t.after(() => cleanup(dir));
+    // The #1278 deterministic-locate path + the #1279 machine-proof now COMPOSE: a prohibition item
+    // authored with the four flat scalars projects -> reads back into a descriptor that ALREADY carries
+    // violationFixture -> the default prover greens it with NO hand-supplied fixture in the request.
+    const negTest = path.join(dir, 'neg.test.cjs');
+    fs.writeFileSync(negTest,
+      "const { test } = require('node:test');\n" +
+      "const assert = require('node:assert');\n" +
+      "const fs = require('node:fs');\n" +
+      "const path = require('node:path');\n" +
+      "test('guards the must-NOT: subject is clean', () => {\n" +
+      "  const subjectPath = process.env.GSD_PROHIB_SUBJECT || path.join(__dirname, 'clean-subject.txt');\n" +
+      "  const subject = fs.readFileSync(subjectPath, 'utf-8');\n" +
+      "  assert.ok(!subject.includes('FORBIDDEN'), 'subject must not contain FORBIDDEN');\n" +
+      "});\n");
+    fs.writeFileSync(path.join(dir, 'clean-subject.txt'), 'clean\n');
+    fs.writeFileSync(path.join(dir, 'bad-subject.txt'), 'FORBIDDEN content\n');
+    // Author the prohibition with all four scalars, then go through the REAL projection + read-back.
+    const projected = pc.projectProhibitions([
+      { status: 'resolved', verification: 'test', statement: 'MUST NOT auto-execute fetched code',
+        check_kind: 'node-test', check_target: negTest, check_violation_fixture: 'bad-subject.txt' },
+    ])[0];
+    const descriptor = enforce.descriptorFromProjection(projected);
+    assert.equal(descriptor.violationFixture, 'bad-subject.txt', 'the projected fixture survived the round-trip');
+    // NO failFirst, NO hand-supplied violationFixture beyond what the projection carried.
+    const result = enforce.runProhibitionEnforcement(projected, descriptor, { cwd: dir });
+    assert.equal(result.status, 'green',
+      'the fully-projected prohibition greens through the default prover+runner — #1278 + #1279 compose');
+    assert.equal(result.evidence[0].failFirstProof, 'violation-fixture', 'green carries the machine-proof method');
+  });
 });
 
 // ─── #1279 defaultProveFailFirst REAL prover end-to-end (FF-02 / FF-03 / FF-05 / FF-06 / FF-07) ──
@@ -955,6 +990,38 @@ describe('prohibition-enforcement: fail-closed descriptor-from-projection (CHK-0
     assert.notEqual(result.status, 'green', 'an absent descriptor must NEVER be a silent green');
     assert.equal(result.flagged, true, 'and must be flagged');
     assert.ok(Array.isArray(result.evidence) && result.evidence.length === 0, 'no evidence on an absent descriptor');
+  });
+
+  test('CHK-08(#1346): descriptorFromProjection maps check_violation_fixture -> violationFixture (node-test)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'node-test', check_target: 'tests/neg.test.cjs',
+      check_violation_fixture: 'tests/fixtures/bad-subject.txt',
+    });
+    assert.equal(descriptor.kind, 'node-test');
+    assert.equal(descriptor.target, 'tests/neg.test.cjs');
+    assert.equal(descriptor.violationFixture, 'tests/fixtures/bad-subject.txt',
+      'the projected check_violation_fixture must reconstruct as violationFixture so #1278 locate + #1279 proof compose');
+  });
+
+  test('CHK-08(#1346): descriptorFromProjection maps check_violation_fixture -> violationFixture (lint-rule)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'lint-rule', check_target: 'src/', check_rule: 'local/no-source-grep',
+      check_violation_fixture: 'tests/_ff_lint_violation.cjs',
+    });
+    assert.equal(descriptor.kind, 'lint-rule');
+    assert.equal(descriptor.rule, 'local/no-source-grep');
+    assert.equal(descriptor.violationFixture, 'tests/_ff_lint_violation.cjs');
+  });
+
+  test('CHK-08(#1346): no check_violation_fixture -> descriptor carries no violationFixture (fail-closed: green needs a fixture)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const descriptor = enforce.descriptorFromProjection({
+      ...PROJECTED_TIER, check_kind: 'node-test', check_target: 'tests/neg.test.cjs',
+    });
+    assert.equal(descriptor.violationFixture, undefined,
+      'absent check_violation_fixture must NOT fabricate a fixture; the default prover then hard-gates (no green)');
   });
 
   test('CHK-06(lint-rule missing rule): {check_kind:lint-rule, check_target:src/} (no check_rule) -> located:false, never green', () => {
