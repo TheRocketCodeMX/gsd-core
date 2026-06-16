@@ -529,3 +529,134 @@ describe('prohibition-enforcement REAL runner end-to-end (#1259)', () => {
     assert.equal(result.located, true, 'the descriptor was well-formed; it just did not genuinely pass');
   });
 });
+
+// ─── #1279 defaultProveFailFirst REAL prover end-to-end (FF-02 / FF-03 / FF-05 / FF-06 / FF-07) ──
+// Exercises the SHIPPING default prover against REAL subprocesses (eslint + node --test) — the gap
+// that let #1259's BL-01/SF-01 slip past injected doubles. The lint-rule path dogfoods the committed
+// `tests/_ff_lint_violation.test.cjs` fixture; the node-test path uses synthetic temp fixtures that
+// demonstrate the `GSD_PROHIB_SUBJECT` subject-injection convention. Typed-result assertions only.
+describe('prohibition-enforcement defaultProveFailFirst REAL prover (#1279)', () => {
+  const fs = require('node:fs');
+  // The committed load-bearing lint fixture (a real, suppressed no-source-grep violation).
+  const LINT_FIXTURE = 'tests/_ff_lint_violation.test.cjs';
+
+  test('exports the prover surface (defaultProveFailFirst + FailFirstProof-shaped result)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    assert.equal(typeof enforce.defaultProveFailFirst, 'function',
+      'must export defaultProveFailFirst — the default real prover');
+  });
+
+  test('lint-rule: proves red on the committed no-source-grep violation fixture (FF-02 red direction)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // Lint the KNOWN-violating fixture through the project flat config; the rule id MUST appear
+    // (in messages or suppressedMessages) → the rule has teeth → fail-first proven.
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: LINT_FIXTURE, violationFixture: LINT_FIXTURE },
+      process.cwd(),
+    );
+    assert.equal(proof.provenFailFirst, true,
+      'a real no-source-grep violation fixture proves the lint rule fails-on-violation');
+    assert.equal(proof.method, 'violation-fixture', 'records the proof method');
+  });
+
+  test('lint-rule: a CLEAN violationFixture (rule does not flag) is NOT proven (FF-02 toothless direction)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // src/clock.cts is a clean in-tree source with no no-source-grep violation. If a "violation
+    // fixture" does not actually trigger the rule, the rule is toothless on it → not a guard → not
+    // proven → must hard-gate.
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'src/clock.cts', violationFixture: 'src/clock.cts' },
+      process.cwd(),
+    );
+    assert.equal(proof.provenFailFirst, false,
+      'a fixture the rule does not flag cannot prove fail-first');
+  });
+
+  test('lint-rule: no violationFixture -> not proven (FF-05 fail-closed)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'src/clock.cts' }, // no violationFixture
+      process.cwd(),
+    );
+    assert.equal(proof.provenFailFirst, false, 'no violationFixture -> cannot prove -> hard-gate');
+  });
+
+  test('node-test: a negative test that goes RED against a known-bad GSD_PROHIB_SUBJECT is proven (FF-03 red direction)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-ff-node-red-');
+    t.after(() => cleanup(dir));
+    // A negative test that HONORS the GSD_PROHIB_SUBJECT convention: it reads the subject path and
+    // asserts the subject is "clean" (does not contain the forbidden token). Against a KNOWN-BAD
+    // fixture, the assertion fails → the run goes RED → fail-first proven.
+    const negTest = path.join(dir, 'neg.test.cjs');
+    fs.writeFileSync(negTest,
+      "const { test } = require('node:test');\n" +
+      "const assert = require('node:assert');\n" +
+      "const fs = require('node:fs');\n" +
+      "test('subject must not contain FORBIDDEN', () => {\n" +
+      "  const subject = fs.readFileSync(process.env.GSD_PROHIB_SUBJECT, 'utf-8');\n" +
+      "  assert.ok(!subject.includes('FORBIDDEN'), 'subject is clean');\n" +
+      "});\n");
+    const badFixture = path.join(dir, 'bad-subject.txt');
+    fs.writeFileSync(badFixture, 'this subject contains FORBIDDEN content\n');
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'node-test', target: negTest, violationFixture: badFixture },
+      dir,
+    );
+    assert.equal(proof.provenFailFirst, true,
+      'the negative test goes RED against the known-bad subject -> fail-first proven');
+    assert.equal(proof.method, 'violation-fixture');
+  });
+
+  test('node-test: a toothless negative test that PASSES even against the violation is NOT proven (FF-03 toothless direction)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-ff-node-tooth-');
+    t.after(() => cleanup(dir));
+    // A negative test that ignores the subject and always passes — it never goes red, so it cannot
+    // prove fail-first even with a violation fixture supplied.
+    const negTest = path.join(dir, 'neg.test.cjs');
+    fs.writeFileSync(negTest,
+      "const { test } = require('node:test');\n" +
+      "const assert = require('node:assert');\n" +
+      "test('always passes (toothless)', () => { assert.ok(true); });\n");
+    const badFixture = path.join(dir, 'bad-subject.txt');
+    fs.writeFileSync(badFixture, 'FORBIDDEN\n');
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'node-test', target: negTest, violationFixture: badFixture },
+      dir,
+    );
+    assert.equal(proof.provenFailFirst, false,
+      'a test that does not go red against the violation is toothless -> not proven');
+  });
+
+  test('node-test: no violationFixture -> not proven (FF-05 fail-closed)', (t) => {
+    const enforce = require(ENFORCEMENT_LIB);
+    const dir = createTempDir('prohib-ff-node-nofix-');
+    t.after(() => cleanup(dir));
+    const negTest = path.join(dir, 'neg.test.cjs');
+    fs.writeFileSync(negTest,
+      "const { test } = require('node:test');\ntest('guards', () => {});\n");
+    const proof = enforce.defaultProveFailFirst(
+      { kind: 'node-test', target: negTest }, // no violationFixture
+      dir,
+    );
+    assert.equal(proof.provenFailFirst, false,
+      'a node-test with no violationFixture cannot be proven -> hard-gate, never attestation');
+  });
+
+  test('prover never throws: a non-existent fixture / unresolvable tooling -> provenFailFirst:false (FF-05/FF-06)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // Non-existent lint fixture path -> eslint lints nothing / errors -> fail-closed, no throw.
+    const lintProof = enforce.defaultProveFailFirst(
+      { kind: 'lint-rule', rule: 'local/no-source-grep', target: 'no/such/file.cjs', violationFixture: 'no/such/file.cjs' },
+      process.cwd(),
+    );
+    assert.equal(lintProof.provenFailFirst, false, 'a missing lint fixture proves nothing, never throws');
+    // Non-existent node-test target -> the run is not RED in the intended way / errors -> fail-closed.
+    const nodeProof = enforce.defaultProveFailFirst(
+      { kind: 'node-test', target: 'no/such/neg.test.cjs', violationFixture: 'no/such/subject.txt' },
+      process.cwd(),
+    );
+    assert.equal(typeof nodeProof.provenFailFirst, 'boolean', 'returns a typed proof, never throws');
+  });
+});
