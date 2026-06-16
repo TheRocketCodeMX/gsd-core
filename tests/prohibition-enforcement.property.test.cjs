@@ -57,4 +57,14 @@ describe('prohibition-enforcement properties (#1259)', () => {
       assert.ok(Number.isInteger(n) && n >= 0);
     }));
   });
+
+  // ─── #1279 isNodeTestRed (FF-03 / FF-06) ───
+  test('isNodeTestRed agrees with parseNodeTestSummary().fail >= 1 and never throws', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    fc.assert(fc.property(fc.string(), (s) => {
+      const red = enforce.isNodeTestRed(s);
+      assert.equal(red, enforce.parseNodeTestSummary(s).fail >= 1,
+        'isNodeTestRed(s) === (parseNodeTestSummary(s).fail >= 1)');
+    }));
+  });
 });

@@ -358,6 +358,17 @@ describe('prohibition-enforcement real-runner helpers (#1259)', () => {
     assert.deepEqual(enforce.parseNodeTestSummary('no summary here'), { tests: 0, pass: 0, fail: 0, cancelled: 0 });
   });
 
+  // ─── #1279 isNodeTestRed pure helper (FF-03 / FF-06) — mutation-pinned `>= 1` boundary ───
+  test('isNodeTestRed is true iff the TAP summary reports # fail >= 1 (mutation-pinned boundary)', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // The `# fail 1` case is load-bearing: it pins `>= 1`, not `> 1`. A mutant flipping `>=`→`>`
+    // (or bumping the threshold) flips this assertion and is caught.
+    assert.equal(enforce.isNodeTestRed('# fail 1\n'), true, '# fail 1 is RED (boundary: >= 1, not > 1)');
+    assert.equal(enforce.isNodeTestRed('# fail 0\n'), false, '# fail 0 is not RED');
+    assert.equal(enforce.isNodeTestRed('# fail 2\n'), true, '# fail 2 is RED');
+    assert.equal(enforce.isNodeTestRed('no summary'), false, 'no parseable summary -> not RED (fail-closed for the prover)');
+  });
+
   test('tapTestNames EXCLUDES skipped/todo tests (they never ran, m1)', () => {
     const enforce = require(ENFORCEMENT_LIB);
     assert.deepEqual(enforce.tapTestNames('ok 1 - guards the must-NOT\nok 2 - other # SKIP\nok 3 - later # TODO\n'),
