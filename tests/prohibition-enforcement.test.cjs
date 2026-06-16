@@ -385,6 +385,35 @@ describe('prohibition-enforcement real-runner helpers (#1259)', () => {
     assert.equal(enforce.isNodeTestRed('no summary'), false, 'no parseable summary -> not RED (fail-closed for the prover)');
   });
 
+  // ─── #1279 isNonVacuousNodeTestRed (FF-03 hardening) — a NON-VACUOUS red proof ───
+  // The fail-first PROOF must mirror the clean-pass non-vacuity discipline: a violation fixture that
+  // makes the negative test CRASH at load (ENOENT/throw/syntax) emits a FILE-NAMED `# fail 1` — the
+  // test never ran its assertion, so that is NOT proof the test is a regression guard. Require at
+  // least one FAILING test named DISTINCTLY from the target file (symmetric with isNonVacuousNodeTestPass).
+  test('isNonVacuousNodeTestRed: a file-named-only failure (a crash, not an assertion) does NOT prove fail-first', () => {
+    const enforce = require(ENFORCEMENT_LIB);
+    // node --test of a file that throws at load: `not ok 1 - <file>`, `# fail 1` — a crash, not a
+    // negative assertion firing red. Must NOT count as a non-vacuous red.
+    const crash = 'not ok 1 - neg.test.cjs\n# tests 1\n# pass 0\n# fail 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestRed(crash, 'neg.test.cjs'), false,
+      'a file-named-only failure is a load crash, not a proven regression guard — fail-closed');
+    // BASENAME-NORMALIZED: node may report the file failure by an absolute/normalized path.
+    const crashAbs = 'not ok 1 - /tmp/x/neg.test.cjs\n# tests 1\n# pass 0\n# fail 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestRed(crashAbs, 'neg.test.cjs'), false,
+      'an absolute-path file-named failure is still a crash (basename compare)');
+    // A genuine negative assertion firing red carries a descriptive name distinct from the file.
+    const realRed = 'not ok 1 - rejects the forbidden pattern\n# tests 1\n# pass 0\n# fail 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestRed(realRed, 'neg.test.cjs'), true,
+      'a distinctly-named failing test is a genuine non-vacuous red — proves fail-first');
+    // No failure at all -> not red.
+    assert.equal(enforce.isNonVacuousNodeTestRed('ok 1 - guards\n# tests 1\n# pass 1\n# fail 0\n', 'neg.test.cjs'), false,
+      '# fail 0 is not red regardless of names');
+    // SKIP/TODO failing lines never ran -> excluded (mirror tapTestNames m1).
+    const skippedRed = 'not ok 1 - rejects the forbidden pattern # SKIP\n# tests 1\n# pass 0\n# fail 1\n';
+    assert.equal(enforce.isNonVacuousNodeTestRed(skippedRed, 'neg.test.cjs'), false,
+      'a SKIP/TODO failing line did not actually run -> not a proof');
+  });
+
   test('tapTestNames EXCLUDES skipped/todo tests (they never ran, m1)', () => {
     const enforce = require(ENFORCEMENT_LIB);
     assert.deepEqual(enforce.tapTestNames('ok 1 - guards the must-NOT\nok 2 - other # SKIP\nok 3 - later # TODO\n'),

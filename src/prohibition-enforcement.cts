@@ -248,6 +248,40 @@ export function isNonVacuousNodeTestPass(out: string, target: string): boolean {
   return tapTestNames(out).some((n) => baseOf(n) !== tgtBase);
 }
 
+/** The names of FAILING (run) tests from TAP `not ok N - <name>` lines, excluding `# SKIP`/`# TODO`
+ * directives (a skipped/todo line never ran). The fail-first analog of `tapTestNames`. */
+export function tapFailedTestNames(out: string): string[] {
+  if (typeof out !== 'string') return [];
+  const names: string[] = [];
+  const re = /^not ok \d+ - (.+)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(out)) !== null) {
+    const rest = m[1];
+    if (/\s#\s*(?:SKIP|TODO)\b/i.test(rest)) continue; // skipped/todo did not run
+    names.push(rest.replace(/\s+#\s.*$/, '').trim());
+  }
+  return names;
+}
+
+/**
+ * A NON-VACUOUS node-test RED — the fail-first proof analog of `isNonVacuousNodeTestPass`. True iff
+ * the run reports `# fail >= 1` AND at least one FAILING test is named DISTINCTLY from the target file.
+ *
+ * Why the distinct-name guard: a violation fixture that makes the negative test CRASH at load
+ * (ENOENT / throw-on-require / syntax error) emits a FILE-NAMED `not ok 1 - <file>` with `# fail 1`.
+ * That is a crash, NOT the negative assertion firing red — so it must not "prove" the test is a
+ * regression guard (the RED-side mirror of the BL-01 vacuity hole on the pass side). Requiring a
+ * failing test named distinctly from the file closes that hole, symmetric with the clean-pass guard.
+ *
+ * KNOWN CONSTRAINT (fail-closed, not a hole): a negative test whose `test('...')` name is EXACTLY its
+ * own file basename is conservatively rejected — same benign authoring constraint, same safe direction.
+ */
+export function isNonVacuousNodeTestRed(out: string, target: string): boolean {
+  if (!isNodeTestRed(out)) return false; // no `# fail >= 1` summary -> not red (fail-closed)
+  const tgtBase = baseOf(target);
+  return tapFailedTestNames(out).some((n) => baseOf(n) !== tgtBase);
+}
+
 /** Number of file results in an eslint `--format json` report (0 if unparseable / not an array). */
 export function eslintFileResultCount(jsonText: string): number {
   try {
@@ -420,9 +454,11 @@ function defaultRunCheck(check: CheckDescriptor, cwd: string, timeoutMs?: number
  *     id to appear in the report (messages OR suppressedMessages — an inline-disabled violation still
  *     proves the rule has teeth, #1259 B1). Absent fixture / unresolvable eslint → not proven.
  *   - node-test: spawn the negative test (TAP) with `GSD_PROHIB_SUBJECT` set to the `violationFixture`
- *     — the CONVENTION (#1279) by which a negative test reads its subject-under-test — and require the
- *     run to go RED (`isNodeTestRed`: `# fail >= 1`). A toothless test that passes anyway → not proven.
- *     Absent fixture → not proven (fail-closed; NEVER falls back to attestation).
+ *     — the CONVENTION (#1279) by which a negative test reads its subject-under-test — and require a
+ *     NON-VACUOUS red (`isNonVacuousNodeTestRed`: `# fail >= 1` AND a failing test named distinctly
+ *     from the file, so a load-CRASH on the bad subject is not mistaken for the assertion firing red).
+ *     A toothless test that passes anyway → not proven. Absent fixture → not proven (fail-closed;
+ *     NEVER falls back to attestation).
  */
 function defaultProveFailFirst(check: CheckDescriptor, cwd: string, timeoutMs?: number): FailFirstProof {
   try {
@@ -476,7 +512,7 @@ function defaultProveFailFirst(check: CheckDescriptor, cwd: string, timeoutMs?: 
         const stdout = e && typeof e === 'object' && 'stdout' in e ? (e as { stdout?: unknown }).stdout : '';
         out = typeof stdout === 'string' ? stdout : '';
       }
-      return { provenFailFirst: isNodeTestRed(out), method: 'violation-fixture' };
+      return { provenFailFirst: isNonVacuousNodeTestRed(out, check.target), method: 'violation-fixture' };
     }
     // Unknown kind — defensive; the LOCATE guard already rejects it.
     return { provenFailFirst: false };
