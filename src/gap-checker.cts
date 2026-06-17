@@ -27,7 +27,7 @@ const { escapeRegex } = phaseId;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningPaths, planningDir, findContextMdIn } = planningWorkspace;
-import { parseDecisions } from './decisions.cjs';
+import { parseDecisions, extractDecisions } from './decisions.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -235,7 +235,10 @@ function runGapAnalysis(cwd: string, phaseDir: string, options: RunGapAnalysisOp
   const ctxFile = findContextMdIn(phaseDirFiles);
   const ctxPath = ctxFile ? path.join(absPhaseDir, ctxFile) : null;
   const ctxMd = ctxPath ? fs.readFileSync(ctxPath, 'utf-8') : '';
-  const dItems: DecisionItem[] = parseDecisions(ctxMd).map(d => ({ ...d, source: 'CONTEXT.md' }));
+
+  // Use extractDecisions so gap-checker can distinguish could-not-parse from none-present.
+  const ctxExtraction = extractDecisions(ctxMd);
+  const dItems: DecisionItem[] = ctxExtraction.decisions.map(d => ({ ...d, source: 'CONTEXT.md' }));
 
   const items: Item[] = [...reqItems, ...dItems];
 
@@ -250,6 +253,42 @@ function runGapAnalysis(cwd: string, phaseDir: string, options: RunGapAnalysisOp
     }
   } catch { /* unreadable */ }
 
+  // FIX D (#1365): surface decision could-not-parse independently of whether
+  // requirements items exist. Without this, a could-not-parse on decisions is
+  // silently masked whenever REQUIREMENTS.md has ≥1 item — the mismatch must
+  // appear in the report regardless of the requirements row count.
+  if (ctxExtraction.outcome === 'could-not-parse') {
+    const mismatchMsg = '## Post-Planning Gap Analysis\n\nextracted 0 of N — possible format mismatch in CONTEXT.md decisions block.\n';
+    // If there are also requirement items, include them in the return with the
+    // mismatch summary appended, so the caller still sees requirement coverage.
+    if (items.length > 0) {
+      const rows = sortRows([
+        ...detectCoverage(items, planText),
+        ...ghostReqIds.map(id => ({ source: 'REQUIREMENTS.md', item: id, status: 'Missing from REQUIREMENTS.md' })),
+      ]);
+      const covered = rows.filter(r => r.status === 'Covered').length;
+      const uncovered = rows.length - covered;
+      const coverageSummary = uncovered === 0
+        ? `✓ All ${rows.length} items covered by plans`
+        : `⚠ ${uncovered} of ${rows.length} items not covered by any plan`;
+      return {
+        enabled: true,
+        rows,
+        table: formatGapTable(rows) + '\n' + coverageSummary + '\n\n' + mismatchMsg,
+        summary: coverageSummary + '; extracted 0 of N — possible format mismatch',
+        counts: { total: rows.length, covered, uncovered },
+      };
+    }
+    return {
+      enabled: true,
+      rows: [],
+      table: mismatchMsg,
+      summary: 'extracted 0 of N — possible format mismatch',
+      counts: { total: 0, covered: 0, uncovered: 0 },
+    };
+  }
+
+  // #1365: if no items at all, surface a clean no-check message.
   if (items.length === 0) {
     return {
       enabled: true,

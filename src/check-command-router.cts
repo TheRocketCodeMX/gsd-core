@@ -18,7 +18,7 @@ const { planningDir } = planningWorkspaceMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseLocatorMod = require('./phase-locator.cjs');
 const { findPhaseInternal } = phaseLocatorMod;
-import { parseDecisions } from './decisions.cjs';
+import { extractDecisions } from './decisions.cjs';
 import type { Decision } from './decisions.cjs';
 import { checkUiPresence } from './ui-safety-gate.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -223,8 +223,12 @@ function buildVerifyMessage(notHonored: UncoveredItem[]): string {
   ].join('\n');
 }
 
-function loadTrackableDecisions(contextPath: string): Decision[] {
-  return parseDecisions(readIfExists(contextPath)).filter((decision) => decision.trackable);
+function loadDecisionExtraction(contextPath: string): { trackable: Decision[]; outcome: 'parsed' | 'none-present' | 'could-not-parse' } {
+  const extraction = extractDecisions(readIfExists(contextPath));
+  return {
+    trackable: extraction.decisions.filter((d) => d.trackable),
+    outcome: extraction.outcome,
+  };
 }
 
 function cmdDecisionCoveragePlan(projectDir: string, args: string[], raw: boolean): void {
@@ -240,7 +244,33 @@ function cmdDecisionCoveragePlan(projectDir: string, args: string[], raw: boolea
     return;
   }
 
-  const decisions = loadTrackableDecisions(contextPath);
+  const { trackable: decisions, outcome } = loadDecisionExtraction(contextPath);
+
+  // #1365 fail-loud gate: any could-not-parse outcome must NOT silently pass —
+  // even when some decisions were extracted (e.g. D-01 valid but D-02 malformed).
+  // A parse-miss on ANY bullet means the gate cannot certify full coverage.
+  // Fire independent of decisions.length so a partial-parse still blocks.
+  if (outcome === 'could-not-parse') {
+    const partialParse = decisions.length > 0;
+    output({
+      passed: false,
+      skipped: false,
+      reason: 'could-not-parse',
+      total: decisions.length,
+      covered: 0,
+      uncovered: [],
+      message: partialParse
+        ? 'Decision coverage gate: decisions could not be fully parsed — one or more ' +
+          '`- **D-NN ...**` bullets appear malformed (missing `:` or ` — ` separator). ' +
+          'Fix the bullet format so all D-NN decisions can be read before re-running the gate.'
+        : 'Decision coverage gate: could not parse decisions — possible format mismatch. ' +
+          'The CONTEXT.md appears to be decision-shaped (has a <decisions> block, a decisions heading, ' +
+          'or D- tokens) but no D-NN bullets could be extracted. Check the formatting of the decisions ' +
+          'block and ensure bullets follow the `- **D-NN:** text` or `- **D-NN — title** body` form.',
+    }, raw, undefined);
+    return;
+  }
+
   if (decisions.length === 0) {
     output({ passed: true, skipped: true, reason: 'no trackable decisions', total: 0, covered: 0, uncovered: [], message: 'No trackable decisions in CONTEXT.md.' }, raw, undefined);
     return;
@@ -318,7 +348,29 @@ function cmdDecisionCoverageVerify(projectDir: string, args: string[], raw: bool
     return;
   }
 
-  const decisions = loadTrackableDecisions(contextPath);
+  const { trackable: decisions, outcome: decisionOutcome } = loadDecisionExtraction(contextPath);
+
+  // Mirror could-not-parse surface for verify (non-blocking advisory WARN).
+  // Fire independent of decisions.length — a parse-miss on any bullet must surface,
+  // even when some decisions were partially extracted (#1365 fix-parity with plan gate).
+  if (decisionOutcome === 'could-not-parse') {
+    const partialParse = decisions.length > 0;
+    output({
+      skipped: false,
+      blocking: false,
+      reason: 'could-not-parse',
+      total: decisions.length,
+      honored: 0,
+      not_honored: [],
+      message: partialParse
+        ? 'Decision coverage verify (warning): decisions could not be fully parsed — one or more ' +
+          '`- **D-NN ...**` bullets appear malformed. Fix the bullet format in the CONTEXT.md decisions block.'
+        : 'Decision coverage verify (warning): could not parse decisions — possible format mismatch. ' +
+          'Check the formatting of the CONTEXT.md decisions block.',
+    }, raw, undefined);
+    return;
+  }
+
   if (decisions.length === 0) {
     output({ skipped: true, blocking: false, reason: 'no trackable decisions', total: 0, honored: 0, not_honored: [], message: 'No trackable decisions in CONTEXT.md.' }, raw, undefined);
     return;
