@@ -100,6 +100,8 @@ interface WorktreeDeps {
   readFileSafe?: (file: string) => string | null;
   mtimeSafe?: (file: string) => Date | null;
   reapMtimeGuardMs?: number;
+  /** Injected current time in ms since epoch for deterministic tests (#1191). */
+  nowMs?: number;
   parseWorktreePorcelain?: (porcelain: string) => WorktreeBranchEntry[];
 }
 
@@ -249,8 +251,7 @@ function executeWorktreePrunePlan(plan: WorktreePrunePlan | null, deps: Worktree
 
   const result = execGit(['worktree', 'prune'], { cwd: plan.repoRoot });
   if (result.timedOut) {
-    // AC4: surface timedOut as a first-class field so callers (e.g.
-    // pruneOrphanedWorktrees in core.cjs) can log a structured WARNING rather
+    // AC4: surface timedOut as a first-class field so callers can log a structured WARNING rather
     // than silently ignoring it (PRED.k302 — error-swallowing-empty-sentinel).
     return {
       ok: false,
@@ -415,6 +416,7 @@ interface CleanupManifestEntry {
   worktree_path: string;
   branch: string;
   expected_base: string;
+  allowed_bases?: string[];
 }
 
 function normalizeCleanupManifestEntry(entry: unknown): CleanupManifestEntry | null {
@@ -427,11 +429,16 @@ function normalizeCleanupManifestEntry(entry: unknown): CleanupManifestEntry | n
   const expectedBase = typeof e.expected_base === 'string' ? e.expected_base : '';
   if (!worktreePath || !branch || !expectedBase) return null;
   if (!/^worktree-agent-[A-Za-z0-9._/-]+$/.test(branch)) return null;
+  const rawAllowedBases = Array.isArray(e.allowed_bases) ? e.allowed_bases : [];
+  const allowedBases = Array.from(new Set(
+    [expectedBase, ...rawAllowedBases.filter((base): base is string => typeof base === 'string' && base.length > 0)]
+  ));
   return {
     agent_id: typeof e.agent_id === 'string' ? e.agent_id : null,
     worktree_path: worktreePath,
     branch,
     expected_base: expectedBase,
+    allowed_bases: allowedBases,
   };
 }
 
@@ -692,7 +699,10 @@ function executeWorktreeWaveCleanupPlan(plan: WaveCleanupPlan | null, deps: Work
     }
 
     const mergeBase = execGit(['merge-base', 'HEAD', entry.branch], { cwd: plan.repoRoot });
-    if (!gitResultOk(mergeBase) || mergeBase.stdout.trim() !== entry.expected_base) {
+    const allowedBases = Array.isArray(entry.allowed_bases) && entry.allowed_bases.length > 0
+      ? entry.allowed_bases
+      : [entry.expected_base];
+    if (!gitResultOk(mergeBase) || !allowedBases.includes(mergeBase.stdout.trim())) {
       result.status = 'blocked';
       result.reason = 'base_mismatch';
       result.stderr = mergeBase?.stderr || '';
@@ -878,6 +888,7 @@ function reapOrphanWorktrees(repoRoot: string, deps: WorktreeDeps = {}): ReapRes
   const readFileSafe = deps.readFileSafe || defaultReadFileSafe;
   const mtimeSafe = deps.mtimeSafe || defaultMtimeSafe;
   const reapMtimeGuardMs = deps.reapMtimeGuardMs !== undefined ? deps.reapMtimeGuardMs : REAP_MTIME_GUARD_MS;
+  const nowMs = deps.nowMs ?? Date.now();
 
   const results: ReapResult[] = [];
 
@@ -982,7 +993,7 @@ function reapOrphanWorktrees(repoRoot: string, deps: WorktreeDeps = {}): ReapRes
 
     // 4a. Stale-lock guard: skip if lock is too fresh (PID recycling / race).
     const lockMtime = mtimeSafe(lockedFile);
-    if (!lockMtime || Date.now() - lockMtime.getTime() < reapMtimeGuardMs) {
+    if (!lockMtime || nowMs - lockMtime.getTime() < reapMtimeGuardMs) {
       results.push({ path: worktreePath, status: 'skipped', reason: 'lock_too_fresh' });
       continue;
     }
@@ -1102,6 +1113,48 @@ function cmdWorktreeReapOrphans(cwd: string): void {
 // Unused exports kept for API compatibility
 void parseWorktreeListPaths;
 
+// ─── Moved from core.cjs (ADR-857 T0 #1268 rehome-core-squatters) ─────────────
+
+/**
+ * Resolve the main worktree root when running inside a git worktree.
+ * In a linked worktree, .planning/ lives in the main worktree, not in the linked one.
+ * Returns the main worktree path, or cwd if not in a worktree.
+ */
+function resolveWorktreeRoot(cwd: string): string {
+  const context = resolveWorktreeContext(cwd, {
+    existsSync: fs.existsSync,
+  });
+  return context.effectiveRoot;
+}
+
+/**
+ * Clear stale worktree metadata references via `git worktree prune`.
+ *
+ * Destructive linked-worktree removal is disabled by default for safety.
+ *
+ * @param repoRoot - absolute path to the main (or any) worktree of
+ *   the repository; used as `cwd` for git commands.
+ * @returns list of worktree paths that were removed (always empty)
+ */
+function pruneOrphanedWorktrees(repoRoot: string): string[] {
+  try {
+    const plan = planWorktreePrune(
+      repoRoot,
+      { allowDestructive: false },
+      { parseWorktreePorcelain }
+    );
+    const pruneResult = executeWorktreePrunePlan(plan) as { timedOut?: boolean } | null;
+    if (pruneResult && pruneResult.timedOut) {
+      process.stderr.write(
+        '[gsd-tools] WARNING: worktree health check degraded' +
+        ' — git worktree prune timed out after 10s.' +
+        ' Orphaned worktree metadata may remain until the next successful run.\n'
+      );
+    }
+  } catch { /* never crash the caller */ }
+  return [];
+}
+
 export = {
   resolveWorktreeContext,
   parseWorktreePorcelain,
@@ -1116,4 +1169,6 @@ export = {
   cmdWorktreeCleanupWave,
   reapOrphanWorktrees,
   cmdWorktreeReapOrphans,
+  resolveWorktreeRoot,
+  pruneOrphanedWorktrees,
 };

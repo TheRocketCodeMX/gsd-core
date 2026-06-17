@@ -212,6 +212,63 @@ All registered hooks are managed by GSD and are removed cleanly on `--uninstall`
 
 ---
 
+### Kimi CLI
+
+> **Support boundary — legacy `kimi-cli` vs Kimi Code.** This integration targets the legacy/Python `kimi-cli` custom-agent contract. The `kimi --agent-file <configRoot>/agents/gsd.yaml` launch shown below is accepted by `kimi-cli`. The newer npm Kimi Code (`@moonshot-ai/kimi-code`, e.g. `0.11.0`) does **not** accept `--agent-file`; it discovers skills through fixed skill roots and `--skills-dir`. The generated `/skill:gsd-*` skills work in both, but the custom-agent (`--agent-file`) surface is specific to legacy `kimi-cli`. For Kimi Code, point it at the installed skills root with `--skills-dir <configRoot>/skills` instead of using `--agent-file`.
+
+```bash
+npx @opengsd/gsd-core@latest --kimi --global
+```
+
+Skills land in Kimi's first existing generic user skills root:
+
+- `~/.config/agents/skills/gsd-*/SKILL.md` when `~/.config/agents/skills` already exists, or when neither generic root exists yet
+- `~/.agents/skills/gsd-*/SKILL.md` when `~/.agents/skills` already exists and `~/.config/agents/skills` does not
+
+Start a new Kimi CLI session after install, then invoke GSD skills with `/skill:gsd-*`, for example:
+
+```text
+/skill:gsd-new-project
+```
+
+The installer also writes the GSD custom agent definition to the same selected config root: `<configRoot>/agents/gsd.yaml` with its prompt at `<configRoot>/agents/gsd.md`; subagents land under `<configRoot>/agents/subagents/gsd-*.yaml` and `<configRoot>/agents/subagents/gsd-*.md`.
+
+Kimi custom agents do not auto-activate just because the files exist. Launch Kimi with the generated agent file when you want the GSD agent surface:
+
+```bash
+kimi --agent-file ~/.config/agents/agents/gsd.yaml
+```
+
+If your machine already uses `~/.agents/skills` and does not have `~/.config/agents/skills`, GSD installs there instead and the launch command becomes:
+
+```bash
+kimi --agent-file ~/.agents/agents/gsd.yaml
+```
+
+Kimi also discovers user skills from the brand-specific `~/.kimi-code` directory. If your Kimi setup is already centered on `~/.kimi-code`, install there explicitly:
+
+```bash
+npx @opengsd/gsd-core@latest --kimi --global --config-dir ~/.kimi-code
+```
+
+Then launch the generated agent from that directory:
+
+```bash
+kimi --agent-file ~/.kimi-code/agents/gsd.yaml
+```
+
+For brand-specific scripted installs, use:
+
+```bash
+KIMI_CONFIG_DIR=~/.kimi-code npx @opengsd/gsd-core@latest --kimi --global
+```
+
+Avoid arbitrary `KIMI_CONFIG_DIR` roots unless your Kimi configuration also adds the matching `skills/` directory to Kimi's extra skill directories. GSD can write files there, but Kimi will not auto-discover skills outside its documented generic and brand-specific roots without that Kimi-side configuration.
+
+`--kimi --local` is intentionally deferred and guarded in v1; use the global install path above for Kimi CLI.
+
+---
+
 ### GitHub Copilot
 
 ```bash
@@ -251,13 +308,17 @@ CURSOR_CONFIG_DIR=~/.cursor-alt npx @opengsd/gsd-core@latest --cursor --global
 
 ---
 
-### Windsurf
+### Windsurf / Devin Desktop
+
+Windsurf has rebranded to **Devin Desktop**. Both runtime names are accepted — use either `--windsurf` or `--devin-desktop`.
 
 ```bash
 npx @opengsd/gsd-core@latest --windsurf --global
+# or equivalently:
+npx @opengsd/gsd-core@latest --devin-desktop --global
 ```
 
-Skills land in `~/.codeium/windsurf/`. GSD installs skills, agents, and workspace rules.
+Global skills land in `~/.codeium/windsurf/` (unchanged). Local workspace installs write to `.devin/skills/` (Devin Desktop's preferred location, #1085); the legacy `.windsurf/skills/` layout is still recognized for backward-compat. GSD installs skills, agents, and workspace rules.
 
 **Override the install directory:**
 
@@ -399,7 +460,7 @@ A local install writes into the `.claude/` directory at your project root. Local
 
 ## Installing prerelease editions (Next / Nightly / Insiders / Preview)
 
-Prerelease editions of runtimes (Windsurf Next, Cursor Nightly, VS Code Insiders, Codex preview channels, etc.) read from a sibling config directory. Set the matching `*_CONFIG_DIR` env var before running the installer:
+Prerelease editions of runtimes (Windsurf Next / Devin Desktop Next, Cursor Nightly, VS Code Insiders, Codex preview channels, etc.) read from a sibling config directory. Set the matching `*_CONFIG_DIR` env var before running the installer:
 
 ```bash
 WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @opengsd/gsd-core@latest --windsurf --global

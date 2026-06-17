@@ -129,7 +129,7 @@ GSD stores project settings in `.planning/config.json`. Created during `/gsd-new
   "intel": {
     "enabled": false
   },
-  "claude_md_path": "./CLAUDE.md"
+  "claude_md_path": "./.claude/CLAUDE.md"
 }
 ```
 
@@ -161,7 +161,7 @@ GSD stores project settings in `.planning/config.json`. Created during `/gsd-new
 | `response_language` | string | language code | (none) | Language for agent responses (e.g., `"pt"`, `"ko"`, `"ja"`). Propagates to all spawned agents for cross-phase language consistency. Added in v1.32 |
 | `context_window` | number | any integer | `200000` | Context window size in tokens. Set `1000000` for 1M-context models (e.g., `claude-fable-5`). Values `>= 500000` enable adaptive context enrichment (full-body reads of prior SUMMARY.md, deeper anti-pattern reads). Configured via `/gsd-config --advanced`. |
 | `context_profile` | string | `dev`, `research`, `review` | (none) | Execution context preset that applies a pre-configured bundle of mode, model, and workflow settings for the current type of work. Added in v1.34 |
-| `claude_md_path` | string | any file path | `./CLAUDE.md` | Custom output path for the generated CLAUDE.md file. Useful for monorepos or projects that need CLAUDE.md in a non-root location. Defaults to `./CLAUDE.md` at the project root. Added in v1.36 |
+| `claude_md_path` | string | any file path | `./.claude/CLAUDE.md` | Custom output path for the generated CLAUDE.md file. Useful for monorepos or projects that need CLAUDE.md in a non-root location. Defaults to `./.claude/CLAUDE.md` — a valid project-scoped memory location that keeps GSD-generated content from polluting a hand-crafted repo-root `CLAUDE.md` ([#1098](https://github.com/open-gsd/gsd-core/issues/1098)). An existing file without GSD markers is never overwritten unless `--force` is passed. Default changed from `./CLAUDE.md` in v1.5. Added in v1.36 |
 | `claude_md_assembly.mode` | enum | `embed`, `link` | `embed` | Controls how managed sections are written into CLAUDE.md. `embed` (default) inlines content between GSD markers. `link` writes `@.planning/<source-path>` instead — Claude Code expands the reference at runtime, reducing CLAUDE.md size by ~65% on typical projects. `link` only applies to sections that have a real source file; `workflow` and fallback sections always embed. Per-block overrides: `claude_md_assembly.blocks.<section>` (e.g. `claude_md_assembly.blocks.architecture: link`). Added in v1.38 |
 | `context` | string | any text | (none) | Custom context string injected into every agent prompt for the project. Use to provide persistent project-specific guidance (e.g., coding conventions, team practices) that every agent should be aware of |
 | `phase_naming` | string | any string | (none) | Custom prefix for phase directory names. When set, overrides the auto-generated phase slug (e.g., `"feature"` produces `feature-01-setup/` instead of the roadmap-derived slug) |
@@ -192,14 +192,14 @@ API key fields accept a string value (the key itself). They can also be set to t
 
 ### Code-review CLI routing
 
-`review.models.<cli>` maps a reviewer flavor to a shell command. The code-review workflow shells out using this command when a matching flavor is requested.
+`review.models.<cli>` maps a reviewer flavor to a bare model id. The code-review workflow injects this value into the CLI's `--model` (or `-m`) flag when invoking the reviewer.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `review.models.claude` | string | (session model) | Command for Claude-flavored review. Defaults to the session model when unset |
-| `review.models.codex` | string | `null` | Command for Codex review, e.g. `"codex exec --model gpt-5"` |
-| `review.models.gemini` | string | `null` | Command for Gemini review, e.g. `"gemini -m gemini-2.5-pro"` |
-| `review.models.opencode` | string | `null` | Command for OpenCode review, e.g. `"opencode run --model claude-sonnet-4"` |
+| `review.models.claude` | string | (session model) | Model id for Claude-flavored review. Defaults to the session model when unset |
+| `review.models.codex` | string | `null` | Model id for Codex review (injected into --model), e.g. `"gpt-5"` |
+| `review.models.gemini` | string | `null` | Model id for Gemini review (injected into -m), e.g. `"gemini-2.5-pro"` |
+| `review.models.opencode` | string | `null` | Model id for OpenCode review (injected into --model), e.g. `"claude-sonnet-4"` |
 
 The `<cli>` slug is validated against `[a-zA-Z0-9_-]+`. Empty or path-containing slugs are rejected by `config-set`.
 
@@ -248,7 +248,7 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.max_discuss_passes` | number | `3` | Maximum number of question rounds in discuss-phase before the workflow stops asking. Useful in headless/auto mode to prevent infinite discussion loops. |
 | `workflow.skip_discuss` | boolean | `false` | When `true`, `/gsd-autonomous` bypasses the discuss-phase entirely, writing minimal CONTEXT.md from the ROADMAP phase goal. Useful for projects where developer preferences are fully captured in PROJECT.md/REQUIREMENTS.md. Added in v1.28 |
 | `workflow.text_mode` | boolean | `false` | Replaces AskUserQuestion TUI menus with plain-text numbered lists. Required for Claude Code remote sessions (`/rc` mode) where TUI menus don't render. Can also be set per-session with `--text` flag on discuss-phase. Added in v1.28 |
-| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31. **Branch-divergence note:** when your branch is ahead of `origin/HEAD`, GSD auto-degrades to sequential and prints a warning. Set `worktree.baseRef:"head"` in `.claude/settings.local.json` (run `node gsd-tools.cjs worktree set-baseref`) to restore parallel execution. See [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md). |
+| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31. **Branch-divergence note:** when your branch has diverged from `origin/HEAD`, GSD auto-degrades to sequential and prints a warning. See [`worktree.baseRef`](#worktree-settings) to restore parallel execution on a diverged branch. |
 | `workflow.worktree_skip_hooks` | boolean | `false` | When `true`, executor agents in worktree mode pass `--no-verify` (skipping pre-commit hooks) and post-wave hook validation runs against the merged result instead. Opt-in escape hatch for projects whose hooks cannot run in agent worktrees. Default `false` runs hooks on every commit (#2924). |
 | `workflow.code_review` | boolean | `true` | Enable `/gsd-code-review` and `/gsd-code-review --fix` commands. When `false`, the commands exit with a configuration gate message. Added in v1.34 |
 | `workflow.code_review_depth` | string | `standard` | Default review depth for `/gsd-code-review`: `quick` (pattern-matching only), `standard` (per-file analysis), or `deep` (cross-file with import graphs). Can be overridden per-run with `--depth=`. Added in v1.34 |
@@ -256,7 +256,7 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.plan_bounce_script` | string | (none) | Path to the external script invoked for plan bounce validation. Receives the PLAN.md path as its first argument. Required when `plan_bounce` is `true`. Added in v1.36 |
 | `workflow.plan_bounce_passes` | number | `2` | Number of sequential bounce passes to run. Each pass feeds the previous pass's output back into the validator. Higher values increase rigor at the cost of latency. Added in v1.36 |
 | `workflow.post_planning_gaps` | boolean | `true` | Unified post-planning gap report (#2493). After all plans are generated and committed, scans REQUIREMENTS.md and CONTEXT.md `<decisions>` against every PLAN.md in the phase directory, then prints one `Source \| Item \| Status` table. Word-boundary matching (REQ-1 vs REQ-10) and natural sort (REQ-02 before REQ-10). Non-blocking — informational report only. Set to `false` to skip Step 13e of plan-phase. |
-| `workflow.plan_review_convergence` | boolean | `false` | Enable the `/gsd-plan-review-convergence` command. Disabled by default — the command exits with an enable instruction when this key is `false`. The command automates the manual plan→review→replan loop: it spawns configured reviewers (Codex, Gemini, Claude, OpenCode, Ollama, LM Studio, llama.cpp), counts unresolved HIGH concerns via the CYCLE_SUMMARY contract, replans with `--reviews` feedback, and repeats until converged or max cycles reached. Enable with `gsd config-set workflow.plan_review_convergence true`. Added in v1.39 |
+| `workflow.plan_review_convergence` | boolean | `false` | Enable the `/gsd-plan-review-convergence` command. Disabled by default — the command exits with an enable instruction when this key is `false`. The command automates the manual plan→review→replan loop: it spawns configured reviewers (Codex, Gemini, Claude, OpenCode, Ollama, LM Studio, llama.cpp), counts unresolved HIGH concerns and actionable MEDIUM/LOW findings via the CYCLE_SUMMARY contract, replans with `--reviews` feedback, and repeats until converged or max cycles reached. Enable with `gsd config-set workflow.plan_review_convergence true`. Added in v1.39 |
 | `workflow.plan_chunked` | boolean | `false` | Enable chunked planning mode. When `true` (or when `--chunked` flag is passed to `/gsd-plan-phase`), the orchestrator splits the single long-lived planner Task into a short outline Task followed by N short per-plan Tasks (~3-5 min each). Each plan is committed individually for crash resilience. If a Task hangs and the terminal is force-killed, rerunning with `--chunked` resumes from the last completed plan. Particularly useful on Windows where long-lived Tasks may hang on stdio. Added in v1.38 |
 | `workflow.code_review_command` | string | (none) | Shell command for external code review integration in `/gsd-ship`. Receives changed file paths via stdin. Non-zero exit blocks the ship workflow. Added in v1.36 |
 | `workflow.tdd_mode` | boolean | `false` | Enable TDD pipeline as a first-class execution mode. When `true`, the planner aggressively applies `type: tdd` to eligible tasks (business logic, APIs, validations, algorithms) and the executor enforces RED/GREEN/REFACTOR gate sequence. An end-of-phase collaborative review checkpoint verifies gate compliance. Added in v1.36 |
@@ -267,7 +267,7 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.ai_integration_phase` | boolean | `true` | Enable the `/gsd-ai-integration-phase` command. When `false`, the command exits with a configuration gate message |
 | `workflow.auto_prune_state` | boolean | `false` | When `true`, automatically prune stale entries from STATE.md at phase boundaries instead of prompting |
 | `workflow.pattern_mapper` | boolean | `true` | Run the `gsd-pattern-mapper` agent between research and planning to map new files to existing codebase analogs |
-| `workflow.subagent_timeout` | number | `600` | Timeout in seconds for individual subagent invocations. Increase for long-running research or execution phases |
+| `workflow.subagent_timeout` | number | `300000` | Timeout in milliseconds for parallel subagent tasks (e.g. codebase mapping). Increase for large codebases or slower models. Default: 300000 (5 minutes) |
 | `executor.stall_detect_interval_minutes` | number | `5` | Minutes between executor stall checks while an executor agent is active. The execute-phase orchestrator uses this cadence to inspect recent commits and avoid waiting forever on a silent agent. |
 | `executor.stall_threshold_minutes` | number | `10` | Minutes without executor completion or expected-branch commit activity before execute-phase offers recovery choices for a possible stalled executor. |
 | `workflow.inline_plan_threshold` | number | `3` | Maximum number of tasks in a phase before the planner generates a separate PLAN.md file instead of inlining tasks in the prompt |
@@ -275,6 +275,14 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.drift_action` | string | `warn` | What to do when `workflow.drift_threshold` is exceeded after `/gsd-execute-phase`. `warn` prints a message suggesting `/gsd-map-codebase --paths …`; `auto-remap` spawns `gsd-codebase-mapper` scoped to the affected paths. Added in v1.39 |
 | `workflow.build_command` | string | (none) | Shell command to build the project in the post-merge build gate (Step A of step 5.6 in execute-phase). When unset, the gate auto-detects: Xcode (`.xcodeproj` present) → `xcodebuild build`, `Makefile` with `build:` target → `make build`, Justfile → `just build`, `Cargo.toml` → `cargo build`, `go.mod` → `go build ./...`, Python → `python -m py_compile`, `package.json` with `build` script → `npm run build`. Runs with a 5-minute timeout; failure increments `WAVE_FAILURE_COUNT`. Added in v1.39 |
 | `workflow.test_command` | string | (none) | Shell command to run the project's test suite in the post-merge test gate (Step B of step 5.6 in execute-phase) and the regression gate. When unset, the gate auto-detects: Xcode (`.xcodeproj` present) → `xcodebuild test`, `Makefile` with `test:` target → `make test`, Justfile → `just test`, `package.json` → `npm test`, `Cargo.toml` → `cargo test`, `go.mod` → `go test ./...`, Python → `python -m pytest`. Runs with a 5-minute timeout; failure increments `WAVE_FAILURE_COUNT`. Added in v1.39 |
+
+## Worktree Settings
+
+> **File:** `.claude/settings.local.json` — not `.planning/config.json`. Unlike all other keys in this reference, `worktree.*` settings live in the Claude Code runtime settings file. Fresh installs and upgrades auto-set `worktree.baseRef: "head"` there (no-clobber) when `workflow.use_worktrees` is enabled. The key can also be set via `gsd-tools worktree set-baseref`.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `worktree.baseRef` | string | (unset) | Controls which ref the worktree-based parallel executor uses as the base when creating new phase/wave worktrees. When unset, the executor bases new worktrees on the repository default branch (`origin/HEAD`); if the current branch has diverged, execute-phase auto-degrades to sequential execution rather than halting (as of v1.4.0). Set to `"head"` to base new worktrees on the local `HEAD` instead — the appropriate choice when working on a branch that has diverged from the default branch, as it prevents the exit-42 base-mismatch halt and allows wave-based parallel execution to proceed normally. See [Fix the worktree base-mismatch (exit 42) error](how-to/fix-worktree-base-mismatch.md). |
 
 ## Code Quality Settings
 
@@ -284,7 +292,7 @@ The `code_quality.*` namespace gates optional structural-analysis tooling that a
 |---------|------|---------|-------------|
 | `code_quality.fallow.enabled` | boolean | `false` | Enables fallow structural pre-pass for `/gsd-code-review`. When `false`, no fallow binary probe or JSON artifact is produced. |
 | `code_quality.fallow.scope` | string | `phase` | Scope for fallow analysis: `phase` (current review file scope) or `repo` (entire repository). |
-| `code_quality.fallow.profile` | string | `standard` | Fallow profile selector passed to the pre-pass runner (`minimal`, `standard`, `strict`). |
+| `code_quality.fallow.profile` | string | `standard` | Strictness preset for the fallow pre-pass (`minimal`, `standard`, `strict`). Fallow has no native profile concept, so this maps to its `--max-crap` complexity threshold: `minimal`→50, `standard`→30, `strict`→15 (lower = stricter). |
 | `code_quality.fallow.mcp` | boolean | `false` | **Reserved — not yet implemented.** When `true`, enables MCP-backed structural findings mode for runtimes that support MCP server routing. Setting this to `true` is currently a no-op and emits a runtime warning. |
 
 ## Ship Settings
@@ -397,52 +405,90 @@ Inject custom skill files into GSD subagent prompts. Skills are read by agents a
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `agent_skills` | object | `{}` | Map of agent types to skill directory paths |
+| `agent_skills` | object | `{}` | Map of agent types to arrays of skill entries |
 | `agent_skills_security.trusted_global_roots` | array of strings | `[]` | Opt-in allowlist of additional trusted directories for `global:` skills. See [Trusted global skill roots](#trusted-global-skill-roots-agent_skills_securitytrusted_global_roots) |
 
 ### Configuration
 
-Add an `agent_skills` section to `.planning/config.json` mapping agent types to arrays of skill directory paths (relative to project root):
+Add an `agent_skills` section to `.planning/config.json` mapping agent types to arrays of skill entries:
 
 ```json
 {
   "agent_skills": {
-    "gsd-executor": ["skills/testing-standards", "skills/api-conventions"],
+    "gsd-executor": [
+      "skills/testing-standards",
+      "global:shared-conventions",
+      "global:coderabbit:code-review"
+    ],
     "gsd-planner": ["skills/architecture-rules"],
     "gsd-verifier": ["skills/acceptance-criteria"]
   }
 }
 ```
 
-Each path must be a directory containing a `SKILL.md` file. Paths are validated for safety (no traversal outside project root).
+### Skill Entry Forms
+
+Each element in the array is one of three forms:
+
+| Form | Example | Resolution |
+|------|---------|------------|
+| Project-relative path | `"skills/my-skill"` | Resolves to `<project>/skills/my-skill/SKILL.md`, injected as an `@`-include |
+| Global personal skill | `"global:<name>"` | Resolves to `~/.claude/skills/<name>/SKILL.md`, injected as an `@`-include |
+| Plugin-provided skill (Claude only) | `"global:<plugin>:<skill>"` | A Claude Code plugin skill, loaded by name via the Skill tool at agent spawn time |
+
+**Project-relative paths** must point to a directory containing a `SKILL.md` file. Paths are validated for safety (no traversal outside the project root).
+
+**Global personal skills** (`global:<name>`) resolve against the runtime's global skills directory (e.g. `~/.claude/skills/`). Symlink-escape protection applies unless the target is listed in `agent_skills_security.trusted_global_roots`.
+
+**Plugin-provided skills** (`global:<plugin>:<skill>`) follow the namespaced form `seg(:seg)*`, where each segment is one or more alphanumeric characters, underscores, or hyphens joined by single colons (e.g. `global:coderabbit:code-review`). This form is **Claude-only**: on the Claude runtime GSD emits a Skill-tool load directive in the agent's `<agent_skills>` block so the agent loads the skill by name via the Skill tool, and Claude Code resolves the `plugin:skill` namespace. On all other runtimes the entry is skipped with a warning — the plugin/Skill-tool model is specific to Claude Code and has no equivalent elsewhere.
+
+> **Why load by name rather than path?** Claude Code's plugin cache is versioned and ephemeral, so there is no stable filesystem path to `@`-include. Loading by namespaced name via the Skill tool lets Claude Code's own resolver locate the current version of the plugin skill at runtime.
+
+The plugin must already be installed in the user's Claude Code environment (`/plugin install …`). GSD only references the skill by its namespaced name and does not read or validate the plugin cache itself.
 
 ### Supported Agent Types
 
-Any GSD agent type can receive skills. Common types:
+Any GSD agent type can receive skills. The agent types that consume `agent_skills` are the GSD sub-agents the workflows dispatch. There are 22 consumer agents in total, including:
 
-- `gsd-executor` -- executes implementation plans
-- `gsd-planner` -- creates phase plans
-- `gsd-checker` -- verifies plan quality
-- `gsd-verifier` -- post-execution verification
-- `gsd-researcher` -- phase research
-- `gsd-project-researcher` -- new-project research
-- `gsd-debugger` -- diagnostic agents
-- `gsd-codebase-mapper` -- codebase analysis
-- `gsd-advisor` -- discuss-phase advisors
-- `gsd-ui-researcher` -- UI design contract creation
-- `gsd-ui-checker` -- UI spec verification
-- `gsd-roadmapper` -- roadmap creation
-- `gsd-synthesizer` -- research synthesis
+- `gsd-executor` — executes implementation plans
+- `gsd-planner` — creates phase plans
+- `gsd-plan-checker` — verifies plan quality
+- `gsd-verifier` — post-execution verification
+- `gsd-phase-researcher` — phase research
+- `gsd-project-researcher` — new-project research
+- `gsd-debugger` — diagnostic agents
+- `gsd-codebase-mapper` — codebase analysis
+- `gsd-code-reviewer` — code review
+- `gsd-ui-researcher` — UI design contract creation
+- `gsd-ui-checker` — UI spec verification
+- `gsd-ui-auditor` — UI audit
+- `gsd-roadmapper` — roadmap creation
+- `gsd-research-synthesizer` — research synthesis
+- and others (see `tests/agent-skills.test.cjs` `CONSUMER_AGENTS` list for the full 22)
+
+The `Skill` tool is granted to consumer agents deliberately and is instruction-bounded — agents use it only to load the skills listed in the `<agent_skills>` block.
 
 ### How It Works
 
-At spawn time, workflows call `gsd-tools query agent-skills <type>` (or legacy `node gsd-tools.cjs agent-skills <type>`) to load configured skills. If skills exist for the agent type, they are injected as an `<agent_skills>` block in the Task() prompt:
+At spawn time, workflows call `gsd-tools query agent-skills <type>` (or legacy `node gsd-tools.cjs agent-skills <type>`) to load configured skills. If skills exist for the agent type, they are injected as an `<agent_skills>` block in the Task() prompt.
+
+For project-relative and global personal skills, entries appear as `@`-includes:
 
 ```xml
 <agent_skills>
 Read these user-configured skills:
 - @skills/testing-standards/SKILL.md
-- @skills/api-conventions/SKILL.md
+- @/Users/you/.claude/skills/shared-conventions/SKILL.md
+</agent_skills>
+```
+
+For a mixed config (path-resolvable and plugin-provided skills together), entries appear interleaved in config order in a single section:
+
+```xml
+<agent_skills>
+Read these user-configured skills:
+- @skills/testing-standards/SKILL.md
+- Load the `coderabbit:code-review` skill via the Skill tool before proceeding (plugin-provided).
 </agent_skills>
 ```
 
@@ -455,6 +501,8 @@ Set skills via the CLI:
 ```bash
 gsd-tools query config-set agent_skills.gsd-executor '["skills/my-skill"]'
 ```
+
+See [How to attach a plugin-provided skill to a GSD agent](how-to/attach-a-plugin-skill-to-a-gsd-agent.md) for a step-by-step walkthrough of the `global:plugin:skill` form.
 
 ---
 
@@ -522,6 +570,49 @@ The `plan_review.*` namespace controls the plan drift guard, which verifies that
 |---------|------|---------|-------------|
 | `plan_review.source_grounding` | boolean | `true` | Enable the plan drift guard. When `true` (the default), plan review resolves every symbol reference cited in a PLAN.md against the live source tree. Plans that cite a non-existent function, class, decorator, or CLI flag produce a `needs-acknowledgement` notice before the plan is approved. Disable with `false` to skip symbol verification entirely. Toggle during setup (`/gsd:new-project`) or at any time via `/gsd:settings`. |
 | `plan_review.source_grounding_authority` | enum | `grep` | Selects the resolver adapter used to verify symbol existence. Allowed values: `grep` (default — ripgrep/grep search of source files, works in any project without additional tooling), `intel` (query the `.planning/intel/api-map.json` index built by `/gsd:map-codebase`; requires `intel.enabled: true`), `treesitter` (reserved for future tree-sitter adapter), `lsp` (reserved for future LSP adapter), `scip` (reserved for future SCIP/LSIF adapter). Use `intel` when you have run `/gsd:map-codebase` and want the faster, pre-indexed lookup. All other values beyond `grep` and `intel` are reserved and have no effect in the current release. |
+
+<a id="mempalace-settings"></a>
+### MemPalace Settings
+
+MemPalace is an opt-in, default-resilient memory capability. Every hook is `onError: skip` — a missing or unreachable MemPalace installation never halts or fails the loop. Enable with `mempalace.enabled: true` after installing MemPalace (`pip install mempalace`).
+
+`mempalace.enabled` is the **master gate**: all five loop hooks (discuss, plan, execute-wave, verify, ship) and both curator contributions are gated on this key. When it is `false` (the default), nothing fires and the GSD loop is byte-for-byte unchanged. The remaining keys only refine behavior when `mempalace.enabled` is `true`; they are honored at runtime by the skills, curator, and fragments — they do not add independent hook gating.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `mempalace.enabled` | boolean | `false` | Master gate for the MemPalace memory capability. When `false` (the default) every recall/capture hook is inactive and the loop is unchanged. All other `mempalace.*` keys are inert while this is `false`. |
+| `mempalace.memory_mode` | enum: `augment`, `kg_backend`, `replace` | `augment` | How MemPalace relates to GSD native memory. `augment` (**implemented** — MemPalace is an additional write-mostly recall layer alongside GSD's native graphs/learnings; lowest coupling). `kg_backend` (**declared; routing seam not yet implemented** — intended to route graphify KG queries through MemPalace's temporal graph instead of `.planning/graphs/`; selecting this today behaves the same as `augment`). `replace` (**declared; not yet functional** — intended to make the palace the durable store for GSD memory reads; selecting this today behaves the same as `augment`). |
+| `mempalace.wing` | string | `""` | Palace wing name for this project. Empty (the default) derives the wing from `project_code` or the project directory name. |
+| `mempalace.recall_on_discuss` | boolean | `true` | When `mempalace.enabled` is `true`: inject a wake-up + semantic-search recall fragment into the orchestrator at `discuss:pre`. Surfaces prior decisions, patterns, and surprises before the discussion starts. |
+| `mempalace.recall_on_plan` | boolean | `true` | When `mempalace.enabled` is `true`: run the `mempalace-recall` skill at `plan:pre` to produce `MEMORY-RECALL.md` from prior decisions, patterns, and surprises relevant to the plan. |
+| `mempalace.capture_artifacts` | boolean | `true` | When `mempalace.enabled` is `true`: file phase artifacts (`CONTEXT.md`, `PLAN.md`, `SUMMARY.md`) verbatim into MemPalace at their respective phase boundaries (`discuss:post`, `plan:post`, `verify:post`). Also captures confirmed bug→fix pairs at `execute:wave:post`. |
+| `mempalace.mirror_kg` | boolean | `true` | When `mempalace.enabled` is `true`: mirror decisions and learnings into MemPalace's temporal knowledge graph (`mempalace_kg_add` with `valid_from` = phase date) alongside drawer capture. |
+| `mempalace.cross_project_tunnels` | boolean | `false` | When `mempalace.enabled` is `true`: at `ship:post`, propose and create tunnels between this wing's rooms and semantically related wings in other projects (`mempalace_find_tunnels`, `mempalace_create_tunnel`). |
+| `mempalace.diary_journal` | boolean | `true` | When `mempalace.enabled` is `true`: at `ship:post`, write a per-agent diary entry (`mempalace_diary_write`) summarising the session. |
+| `mempalace.auto_capture_hooks` | boolean | `false` | **Reserved — not yet implemented.** Intended to install MemPalace's native Claude Code hooks (`session-start`, `stop`, `precompact`) for passive mid-session capture between loop points. The capability's `hooks` array is currently empty; no native hooks are installed by setting this key. This key is forward-declared for the future "Connected Capability" phase. |
+
+#### Memory modes in detail
+
+| Mode | `.planning/graphs` KG | Recall source | Coupling | Status |
+|------|-----------------------|---------------|---------|--------|
+| `augment` (default) | stays native | GSD native + palace search | lowest | **Implemented** |
+| `kg_backend` | intended: routed to MemPalace temporal graph | intended: KG queries hit MemPalace | medium | **Declared — routing seam not yet implemented; behaves as `augment`** |
+| `replace` | intended: backed by palace | intended: palace is the durable store | highest | **Declared — not yet functional; behaves as `augment`** |
+
+Mode is read at hook-render time; switching modes is a config change, not a reinstall. Only `augment` has effect today — `kg_backend` and `replace` are forward-declared for a future release.
+
+#### Example
+
+```bash
+# Enable MemPalace (augment mode — the only implemented mode today)
+gsd-tools query config-set mempalace.enabled true
+
+# Forward-declared: kg_backend/replace are not yet functional (declared for future release)
+# gsd-tools query config-set mempalace.memory_mode kg_backend
+
+# Enable cross-project tunnel proposals at ship:post
+gsd-tools query config-set mempalace.cross_project_tunnels true
+```
 
 <a id="graphify-settings"></a>
 ### Graphify Settings
@@ -1195,13 +1286,15 @@ When `runtime` is set, profile tiers (`opus`/`sonnet`/`haiku`) resolve to runtim
 | Runtime | `opus` | `sonnet` | `haiku` | reasoning_effort |
 |---------|--------|----------|---------|------------------|
 | `claude` | `claude-opus-4-8` | `claude-sonnet-4-6` | `claude-haiku-4-5` | (not used) |
-| `codex` | `gpt-5.5` | `gpt-5.3-codex` | `gpt-5.4-mini` | `xhigh` / `medium` / `medium` |
-| `gemini` | `gemini-3-pro` | `gemini-3-flash` | `gemini-2.5-flash-lite` | (not used) |
+| `codex` | `gpt-5.5` | `gpt-5.4` | `gpt-5.4-mini` | `xhigh` / `medium` / `medium` |
+| `gemini` | `gemini-3.1-pro-preview` | `gemini-3-flash` | `gemini-2.5-flash-lite` | (not used) |
 | `qwen` | `qwen3-max-2026-01-23` | `qwen3-coder-plus` | `qwen3-coder-next` | (not used) |
 | `opencode` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-4-6` | `anthropic/claude-haiku-4-5` | (not used) |
 | `copilot` | `claude-opus-4-8` | `claude-sonnet-4-6` | `claude-haiku-4-5` | (not used) |
 | `hermes` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-4-6` | `anthropic/claude-haiku-4-5` | (not used) |
-| Group B (`kilo`, `cline`, `cursor`, `windsurf`, `augment`, `trae`, `codebuddy`, `antigravity`) | (no built-in default — your runtime handles model selection) | | | |
+| Group B (`kilo`, `cline`, `cursor`, `windsurf` (alias: `devin-desktop`), `augment`, `trae`, `codebuddy`, `antigravity`) | (no built-in default — your runtime handles model selection) | | | |
+
+> **How these model IDs are sourced.** The catalog (`bin/shared/model-catalog.json`) pins each runtime's tier defaults to that provider's current frontier IDs, and may intentionally carry forward-dated IDs ahead of a provider's public docs. To verify an ID is live before changing it, check the provider's own source/API — e.g. Gemini: gemini-cli `packages/core/src/config/models.ts` or `gemini --model <id> --prompt ping`; Codex: `codex debug models` or the OpenAI Codex models page; Qwen: Alibaba Model Studio model list. Only change an ID that the provider actually rejects — absence from documentation alone is not proof of invalidity.
 
 **Codex example** — one config, tiered models, no large `model_overrides` block:
 
@@ -1212,7 +1305,7 @@ When `runtime` is set, profile tiers (`opus`/`sonnet`/`haiku`) resolve to runtim
 }
 ```
 
-This resolves `gsd-planner` → `gpt-5.5` (xhigh), `gsd-executor` → `gpt-5.3-codex` (medium), `gsd-codebase-mapper` → `gpt-5.4-mini` (medium). The Codex installer embeds `model = "..."` and `model_reasoning_effort = "..."` in each generated agent TOML.
+This resolves `gsd-planner` → `gpt-5.5` (xhigh), `gsd-executor` → `gpt-5.4` (medium), `gsd-codebase-mapper` → `gpt-5.4-mini` (medium). The Codex installer embeds `model = "..."` and `model_reasoning_effort = "..."` in each generated agent TOML.
 
 **Claude example** — explicit opt-in resolves to full Claude IDs (no `resolve_model_ids: true` needed):
 
@@ -1278,7 +1371,7 @@ Choose a provider and budget level via the settings workflow; GSD writes the can
     "provider": "openai",
     "budget": "medium",
     "high":   "gpt-5.5",
-    "medium": "gpt-5.3-codex",
+    "medium": "gpt-5.4",
     "low":    "gpt-5.4-mini"
   }
 }
@@ -1296,7 +1389,7 @@ For advanced per-runtime control, `runtime_tiers` accepts explicit entries using
     "runtime_tiers": {
       "codex": {
         "opus":   { "model": "gpt-5.5",        "reasoning_effort": "high" },
-        "sonnet": { "model": "gpt-5.3-codex",  "reasoning_effort": "medium" },
+        "sonnet": { "model": "gpt-5.4",         "reasoning_effort": "medium" },
         "haiku":  { "model": "gpt-5.4-mini",   "reasoning_effort": "low" }
       }
     }

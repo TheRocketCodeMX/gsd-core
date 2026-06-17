@@ -3,6 +3,7 @@
   "modules": {
     "audit": {
       "files": [
+        "audit-command-cutover.test.cjs",
         "audit-fix-command.test.cjs",
         "bug-2659-audit-open-crash.test.cjs",
         "bug-2836-audit-open-summary-uat-drift.test.cjs",
@@ -19,14 +20,17 @@
         "config-field-docs.test.cjs",
         "config-get-default.test.cjs",
         "config-schema.property.test.cjs",
-        "config.test.cjs"
+        "config.test.cjs",
+        "enh-1055-config-intent-descriptor-drive.test.cjs"
       ],
       "issue": "TBD"
     },
     "graphify": {
       "files": [
         "bug-622-graphify-optional-graph-html.test.cjs",
-        "graphify-auto-update.test.cjs",
+        "bug-974-graphify-budget-missing-value.test.cjs",
+        "graphify-auto-update.slow.test.cjs",
+        "graphify-command-cutover.test.cjs",
         "graphify-query.test.cjs",
         "graphify-visualization.test.cjs",
         "graphify.test.cjs"
@@ -37,6 +41,7 @@
       "files": [
         "bug-2351-intel-kilo-layout.test.cjs",
         "bug-3290-intel-updater-layout-block.test.cjs",
+        "intel-command-cutover.test.cjs",
         "intel.test.cjs"
       ],
       "issue": "TBD"
@@ -44,6 +49,7 @@
     "milestone": {
       "files": [
         "bug-730-milestone-phase-details-scope.test.cjs",
+        "bug-978-milestone-complete-force.test.cjs",
         "milestone-archive.test.cjs",
         "milestone-helper.test.cjs",
         "milestone-prefixed-convention.test.cjs",
@@ -74,6 +80,7 @@
     },
     "runtime-artifact-layout": {
       "files": [
+        "runtime-artifact-layout-descriptor-drive.test.cjs",
         "runtime-artifact-layout-install-profiles.test.cjs",
         "runtime-artifact-layout-surface.test.cjs",
         "runtime-artifact-layout.test.cjs"
@@ -82,8 +89,8 @@
     },
     "security": {
       "files": [
-        "security-prompt-injection.test.cjs",
-        "security-scan.test.cjs",
+        "security-prompt-injection.security.test.cjs",
+        "security-scan.security.test.cjs",
         "security.test.cjs"
       ],
       "issue": "TBD"
@@ -98,6 +105,7 @@
         "bug-3454-state-dollar-backreference-growth.test.cjs",
         "bug-397-state-preserve-executor-authored.test.cjs",
         "bug-905-state-syncstatefrontmatter-preserve-scalars.test.cjs",
+        "bug-948-state-noop-write-guard.test.cjs",
         "state-acquirestatelock-non-eexist.test.cjs",
         "state-prune.test.cjs",
         "state.test.cjs"
@@ -110,6 +118,7 @@
         "bug-2994-verify-reapply-patches-installed-path.test.cjs",
         "bug-3381-verify-work-workstream.test.cjs",
         "bug-3657-verify-reapply-patches-pristine-drift.test.cjs",
+        "bug-967-verify-key-links-strict-paths.test.cjs",
         "verify-health.test.cjs",
         "verify-mvp-uat.test.cjs",
         "verify-npm-publish.test.cjs",
@@ -122,8 +131,11 @@
     "install": {
       "files": [
         "bug-410-install-defaults-test-mode-guard.test.cjs",
+        "enh-1077-install-hook-events-dialect-drive.test.cjs",
+        "enh-1082-install-plan-capstone.test.cjs",
         "enh-776-install-gemini-hook-events.test.cjs",
         "install-minimal-hooks.test.cjs",
+        "install-nested-layout.test.cjs",
         "install-path-detection.test.cjs",
         "install-regressions.test.cjs",
         "install-runtime-artifacts.test.cjs",
@@ -139,6 +151,29 @@
         "validate-context.test.cjs"
       ],
       "issue": "892"
+    },
+    "edge-probe": {
+      "files": [
+        "edge-probe-docs-fixtures.test.cjs",
+        "edge-probe-planner-contract.test.cjs",
+        "edge-probe-spec-phase-contract.test.cjs",
+        "edge-probe.test.cjs"
+      ],
+      "issue": "550"
+    },
+    "federated-config": {
+      "files": [
+        "federated-config.test.cjs",
+        "federated-config-loadconfig.test.cjs",
+        "federated-config-key-removal.test.cjs"
+      ],
+      "issue": "TBD"
+    },
+    "external-job": {
+      "files": [
+        "external-job-waiting.test.cjs"
+      ],
+      "issue": "#1165"
     }
   }
 }

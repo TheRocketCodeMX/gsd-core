@@ -203,7 +203,7 @@ This writes `.changeset/<adjective>-<noun>-<noun>.md`. Three random words → co
 
 Fragments are consolidated into `CHANGELOG.md` at release time by the release workflow. See [`.changeset/README.md`](.changeset/README.md) for the format spec and [#2975](https://github.com/open-gsd/gsd-core/issues/2975) for the rationale.
 
-**CI enforcement:** the `Changeset Required` workflow (`scripts/changeset/lint.cjs`) fails any PR that touches `bin/`, `gsd-core/`, `agents/`, `commands/`, `hooks/`, or `sdk/src/` without a `.changeset/*.md` fragment.
+**CI enforcement:** the `Changeset Required` workflow (`scripts/changeset/lint.cjs`) fails any PR that touches `bin/`, `gsd-core/`, `agents/`, `commands/`, `hooks/`, or `sdk/src/` without a `.changeset/*.md` fragment. The gate also **validates the content** of every changed fragment: a fragment whose frontmatter does not parse (e.g. a `pr: 0` placeholder that was never backfilled to the real PR number) fails the gate with `fail_invalid_fragment`, naming the offending file. This stops a malformed fragment from merging to `next` and only detonating later in the release job's CHANGELOG render.
 
 **Opt-out:** PRs with no user-facing impact (test refactors, lint config changes, CI tweaks, formatting-only changes) can add the `no-changelog` label. The lint honors it. When unsure whether a change is user-facing, **add the fragment**.
 
@@ -850,8 +850,16 @@ gsd-core/
                           the canonical example (#2551). New modes for
                           discuss-phase land in
                           workflows/discuss-phase/modes/<mode>.md.
-                          Per-file budgets enforced by
-                          tests/workflow-size-budget.test.cjs.
+                          Per-file sizes are pinned by a committed baseline
+                          (tests/workflow-size-baseline.json) plus loose tier
+                          hard caps, both in tests/workflow-size-budget.test.cjs.
+                          If you legitimately grow or shrink a workflow file,
+                          run `npm run size:baseline` to update the snapshot and
+                          justify any growth in your PR (or extract content
+                          lazily). The same guard covers agent files
+                          (agents/gsd-*.md). Full how-to + reference in
+                          docs/TESTING-SUITES.md (Workflow & agent size
+                          budget); see issue #1074.
   references/           — Reference documentation (.md)
   templates/            — File templates
 agents/                 — Agent definitions (.md) — CANONICAL SOURCE

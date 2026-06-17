@@ -13,6 +13,7 @@ import noSourceGrep from './eslint-rules/no-source-grep.cjs';
 import noMagicSleepInTests from './eslint-rules/no-magic-sleep-in-tests.cjs';
 import noElapsedAssertion from './eslint-rules/no-elapsed-assertion.cjs';
 import noRawRmsyncInTests from './eslint-rules/no-raw-rmsync-in-tests.cjs';
+import noTautologicalAssert from './eslint-rules/no-tautological-assert.cjs';
 
 const localPlugin = {
   rules: {
@@ -20,6 +21,7 @@ const localPlugin = {
     'no-magic-sleep-in-tests': noMagicSleepInTests,
     'no-elapsed-assertion': noElapsedAssertion,
     'no-raw-rmsync-in-tests': noRawRmsyncInTests,
+    'no-tautological-assert': noTautologicalAssert,
   },
 };
 
@@ -35,7 +37,11 @@ export default tseslint.config(
       '**/*.generated.cjs',
       // ADR-457: tsc-generated runtime artifact — lint the src/*.cts source, not the emitted .cjs.
       'gsd-core/bin/lib/semver-compare.cjs',
+      'gsd-core/bin/lib/plan-drift-guard.cjs',
       'gsd-core/bin/lib/cli-exit.cjs',
+      'gsd-core/bin/lib/edge-probe.cjs',
+      'gsd-core/bin/lib/probe-core.cjs',
+      'gsd-core/bin/lib/prohibition-enforcement.cjs',
       'gsd-core/bin/lib/code-review-flags.cjs',
       'gsd-core/bin/lib/context-utilization.cjs',
       'gsd-core/bin/lib/artifacts.cjs',
@@ -73,6 +79,11 @@ export default tseslint.config(
       'gsd-core/bin/lib/command-aliases.cjs',
       'gsd-core/bin/lib/config-schema.cjs',
       'gsd-core/bin/lib/model-profiles.cjs',
+      'gsd-core/bin/lib/model-resolver.cjs',
+      'gsd-core/bin/lib/loop-resolver.cjs',
+      'gsd-core/bin/lib/capability-state.cjs',
+      'gsd-core/bin/lib/capability-activation.cjs',
+      'gsd-core/bin/lib/federated-config.cjs',
       'gsd-core/bin/lib/installer-migrations/002-codex-legacy-hooks-json.cjs',
       'gsd-core/bin/lib/installer-migrations/003-rename-get-shit-done-to-gsd-core.cjs',
       'gsd-core/bin/lib/installer-migrations/004-prune-stale-pristine-snapshots.cjs',
@@ -80,16 +91,27 @@ export default tseslint.config(
       'gsd-core/bin/lib/active-workstream-store.cjs',
       'gsd-core/bin/lib/adr-parser.cjs',
       'gsd-core/bin/lib/graphify.cjs',
+      'gsd-core/bin/lib/graphify-command-router.cjs',
+      'gsd-core/bin/lib/audit-command-router.cjs',
+      'gsd-core/bin/lib/intel-command-router.cjs',
       'gsd-core/bin/lib/install-profiles.cjs',
       'gsd-core/bin/lib/intel.cjs',
       'gsd-core/bin/lib/installer-migrations.cjs',
       'gsd-core/bin/lib/worktree-safety.cjs',
       'gsd-core/bin/lib/worktree-base-ref.cjs',
       'gsd-core/bin/lib/planning-workspace.cjs',
+      'gsd-core/bin/lib/command-roster.cjs',
+      'gsd-core/bin/lib/runtime-artifact-conversion.cjs',
       'gsd-core/bin/lib/runtime-artifact-layout.cjs',
       'gsd-core/bin/lib/runtime-config-adapter-registry.cjs',
+      'gsd-core/bin/lib/runtime-hooks-surface.cjs',
       'gsd-core/bin/lib/command-routing-hub.cjs',
-      'gsd-core/bin/lib/core.cjs',
+      'gsd-core/bin/lib/core-utils.cjs',
+      'gsd-core/bin/lib/io.cjs',
+      'gsd-core/bin/lib/phase-id.cjs',
+      'gsd-core/bin/lib/config-loader.cjs',
+      'gsd-core/bin/lib/phase-locator.cjs',
+      'gsd-core/bin/lib/roadmap-parser.cjs',
       'gsd-core/bin/lib/drift.cjs',
       'gsd-core/bin/lib/cjs-command-router-adapter.cjs',
       'gsd-core/bin/lib/phase-command-router.cjs',
@@ -102,6 +124,7 @@ export default tseslint.config(
       'gsd-core/bin/lib/verification-command-router.cjs',
       'gsd-core/bin/lib/init-command-router.cjs',
       'gsd-core/bin/lib/agent-command-router.cjs',
+      'gsd-core/bin/lib/agent-install-check.cjs',
       'gsd-core/bin/lib/task-command-router.cjs',
       'gsd-core/bin/lib/validate-command-router.cjs',
       'gsd-core/bin/lib/workstream-inventory.cjs',
@@ -124,12 +147,19 @@ export default tseslint.config(
       'gsd-core/bin/lib/profile-pipeline.cjs',
       'gsd-core/bin/lib/template.cjs',
       'gsd-core/bin/lib/uat.cjs',
+      'gsd-core/bin/lib/uat-predicate.cjs',
       'gsd-core/bin/lib/workstream.cjs',
       'gsd-core/bin/lib/roadmap.cjs',
       'gsd-core/bin/lib/audit.cjs',
       'gsd-core/bin/lib/research-store.cjs',
       'gsd-core/bin/lib/research-provider.cjs',
       'gsd-core/bin/lib/package-legitimacy.cjs',
+      // ADR-457: tsc-generated runtime artifact — lint the src/git-base-branch.cts source.
+      'gsd-core/bin/lib/git-base-branch.cjs',
+      // ADR-1213: tsc-generated runtime artifact — lint the src/capability-writer.cts source.
+      'gsd-core/bin/lib/capability-writer.cjs',
+      // issue #1355: tsc-generated runtime artifact — lint the src/teams-status.cts source.
+      'gsd-core/bin/lib/teams-status.cjs',
     ],
   },
 
@@ -181,6 +211,7 @@ export default tseslint.config(
       'no-unsafe-finally': 'warn',
       // eslint-plugin-n rules
       'n/no-process-exit': 'error',
+      'n/no-path-concat': 'error',
       // Local rules — warn for now; flip to error after cleanup phases
       'local/no-source-grep': 'warn',
     },
@@ -207,6 +238,10 @@ export default tseslint.config(
       'local/no-elapsed-assertion': 'warn',
       // Ban raw fs.rmSync in tests — use helpers.cleanup() for Windows-EBUSY retry budget
       'local/no-raw-rmsync-in-tests': 'error',
+      // Ban tautological assertions (always-truthy arg or identical-literal equality)
+      'local/no-tautological-assert': 'error',
+      // Ban source-grep pattern in tests — use require() + behavior assertions instead
+      'local/no-source-grep': 'error',
       // Ban raw setTimeout sync + elapsed/duration-style assertions via no-restricted-syntax
       'no-restricted-syntax': [
         'error',
@@ -231,5 +266,20 @@ export default tseslint.config(
       'no-control-regex': 'error',
       'no-irregular-whitespace': 'warn',
     },
+  },
+
+  // ── #1279 lint-rule fail-first fixture ──────────────────────────────────────
+  // `tests/_ff_lint_violation.cjs` is a PLAIN `.cjs` (NOT `*.test.cjs`) on purpose: it is a KNOWN
+  // `local/no-source-grep` violation that `defaultProveFailFirst` lints to machine-prove the rule
+  // has teeth, and it must stay OFF the `node --test` runner glob (executing it ENOENTs on the
+  // intentional `lib/foo.cjs` path). It still needs the `local` plugin registered so its inline
+  // `/* eslint-disable local/no-source-grep */` resolves (otherwise `eslint .` errors "rule not
+  // found") and the violation lands in `suppressedMessages` (which the prover reads), keeping the
+  // project's own `eslint .` green. (#1279)
+  {
+    files: ['tests/_ff_lint_violation.cjs'],
+    plugins: { local: localPlugin },
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
+    rules: { 'local/no-source-grep': 'error' },
   },
 );

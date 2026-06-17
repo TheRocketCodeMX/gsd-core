@@ -19,7 +19,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('node:os');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 
 const GSD_TOOLS_BIN = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
@@ -2848,7 +2848,7 @@ Plans:
 // comparePhaseNum and normalizePhaseName (imported directly)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { comparePhaseNum, normalizePhaseName } = require('../gsd-core/bin/lib/core.cjs');
+const { comparePhaseNum, normalizePhaseName } = require('../gsd-core/bin/lib/phase-id.cjs');
 
 describe('comparePhaseNum', () => {
   test('sorts integer phases numerically', () => {
@@ -3364,6 +3364,56 @@ describe('bug #1962: normalizePhaseName preserves letter suffix case', () => {
 // (consolidated from tests/bug-1998-phase-complete-checkbox.test.cjs)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Run `gsd-tools phase complete <phase>` for the phase-complete regression
+ * suites and return its stdout.
+ *
+ * `phase complete` writes ROADMAP.md as its LAST step, after a read-heavy
+ * parse/lock sequence (ROADMAP read, two extractCurrentMilestone STATE.md
+ * parses, REQUIREMENTS read, phase-dir scan, STATE read — all before the single
+ * writePlanningFileSet flush). Under the high-concurrency docker run (~672 test
+ * files in parallel), a tight 10s timeout could fire mid-parse and SIGTERM the
+ * subprocess BEFORE that write landed, leaving ROADMAP.md untouched. Call sites
+ * that used a bare `catch {}` then silently proceeded to assert on the pristine
+ * file — an intermittent "checkbox not checked" failure (bug #1998 flake).
+ *
+ * Two-part fix, no retry loop:
+ *  1. A generous timeout so the test's own timer never kills the subprocess
+ *     under load (10s cold-node startup × 672-way CPU/IO contention was the
+ *     real culprit — all I/O is scoped to tmpDir, so there is no cross-process
+ *     race to blame).
+ *  2. Never silently swallow a signal/timeout kill: it means the process was
+ *     terminated before completing its writes, so we surface it loudly with
+ *     context instead of letting it masquerade as an assertion failure. A
+ *     *clean* non-zero exit is still tolerated when `tolerateExit` is set,
+ *     because the ROADMAP write has already landed before any post-write step
+ *     that may exit non-zero in these minimal fixtures.
+ */
+function runPhaseComplete(tmpDir, { phase = '1', tolerateExit = false } = {}) {
+  try {
+    return execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', phase], {
+      cwd: tmpDir,
+      timeout: 60000,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    // A signal/timeout kill terminated the process before it finished writing —
+    // never tolerate it; surface it with whatever output was captured.
+    if (err.killed || err.signal != null || err.code === 'ETIMEDOUT') {
+      throw new Error(
+        `gsd-tools phase complete ${phase} was killed before completion ` +
+          `(signal=${err.signal}, code=${err.code}). ` +
+          `stdout=${err.stdout || ''} stderr=${err.stderr || ''}`
+      );
+    }
+    if (tolerateExit) {
+      return `${err.stdout || ''}${err.stderr || ''}`;
+    }
+    throw err;
+  }
+}
+
 describe('bug #1998: phase complete updates overview checkbox', () => {
   let tmpDir;
   let planningDir;
@@ -3419,11 +3469,7 @@ describe('bug #1998: phase complete updates overview checkbox', () => {
       '| 2. Features | 0/1 | Pending | - |',
     ].join('\n'));
 
-    try {
-      execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], { cwd: tmpDir, timeout: 10000 });
-    } catch {
-      // Command may exit non-zero if STATE.md update fails, but ROADMAP.md update happens first
-    }
+    runPhaseComplete(tmpDir, { tolerateExit: true });
 
     const result = fs.readFileSync(roadmapPath, 'utf-8');
     assert.match(result, /- \[x\] \*\*Phase 1: Foundation\*\*/, 'overview checkbox should be checked');
@@ -3468,11 +3514,7 @@ describe('bug #1998: phase complete updates overview checkbox', () => {
       '</details>',
     ].join('\n'));
 
-    try {
-      execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], { cwd: tmpDir, timeout: 10000 });
-    } catch {
-      // May exit non-zero
-    }
+    runPhaseComplete(tmpDir, { tolerateExit: true });
 
     const result = fs.readFileSync(roadmapPath, 'utf-8');
     assert.match(result, /- \[x\] \*\*Phase 1: Setup\*\*/, 'current milestone checkbox should be checked');
@@ -3559,11 +3601,7 @@ describe('bug #2005: phase complete updates plan count when milestone is inside 
       '</details>',
     ].join('\n'));
 
-    try {
-      execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], { cwd: tmpDir, timeout: 10000 });
-    } catch {
-      // May exit non-zero if STATE.md update fails, but ROADMAP.md update is the target
-    }
+    runPhaseComplete(tmpDir, { tolerateExit: true });
 
     const result = fs.readFileSync(roadmapPath, 'utf-8');
 
@@ -3619,9 +3657,7 @@ describe('bug #2005: phase complete updates plan count when milestone is inside 
       '</details>',
     ].join('\n'));
 
-    try {
-      execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], { cwd: tmpDir, timeout: 10000 });
-    } catch {}
+    runPhaseComplete(tmpDir, { tolerateExit: true });
 
     const result = fs.readFileSync(roadmapPath, 'utf-8');
 
@@ -3709,22 +3745,7 @@ describe('bug #2526: phase complete warns about unregistered REQ-IDs', () => {
       '| REQ-001 | 1 | Pending |',
     ].join('\n'));
 
-    let stdout = '';
-    let stderr = '';
-    try {
-      const result = execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], {
-        cwd: tmpDir,
-        timeout: 10000,
-        encoding: 'utf-8',
-      });
-      stdout = result;
-    } catch (err) {
-      stdout = err.stdout || '';
-      stderr = err.stderr || '';
-      throw err;
-    }
-
-    const combined = stdout + stderr;
+    const combined = runPhaseComplete(tmpDir);
     assert.match(combined, /REQ-002/, 'output should mention REQ-002 as missing from Traceability table');
     assert.match(combined, /REQ-003/, 'output should mention REQ-003 as missing from Traceability table');
   });
@@ -3776,22 +3797,7 @@ describe('bug #2526: phase complete warns about unregistered REQ-IDs', () => {
       '| REQ-002 | 1 | Pending |',
     ].join('\n'));
 
-    let stdout = '';
-    let stderr = '';
-    try {
-      const result = execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], {
-        cwd: tmpDir,
-        timeout: 10000,
-        encoding: 'utf-8',
-      });
-      stdout = result;
-    } catch (err) {
-      stdout = err.stdout || '';
-      stderr = err.stderr || '';
-      throw err;
-    }
-
-    const combined = stdout + stderr;
+    const combined = runPhaseComplete(tmpDir);
     assert.doesNotMatch(
       combined,
       /unregistered|missing.*traceability|not in.*traceability/i,
@@ -3845,22 +3851,7 @@ describe('bug #2526: phase complete warns about unregistered REQ-IDs', () => {
       '| REQ-001 | 1 | Pending |',
     ].join('\n'));
 
-    let stdout = '';
-    let stderr = '';
-    try {
-      const result = execFileSync('node', [GSD_TOOLS_BIN, 'phase', 'complete', '1'], {
-        cwd: tmpDir,
-        timeout: 10000,
-        encoding: 'utf-8',
-      });
-      stdout = result;
-    } catch (err) {
-      stdout = err.stdout || '';
-      stderr = err.stderr || '';
-      throw err;
-    }
-
-    const combined = stdout + stderr;
+    const combined = runPhaseComplete(tmpDir);
     assert.match(combined, /REQ-002/, 'should warn about REQ-002');
     assert.match(combined, /REQ-003/, 'should warn about REQ-003');
     assert.match(combined, /REQ-004/, 'should warn about REQ-004');
@@ -4288,6 +4279,71 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
     return { planningDir, phase5Dir };
   }
 
+  function setupPhase1316Project(tmpDir) {
+    const planningDir = path.join(tmpDir, '.planning');
+    const phasesDir = path.join(planningDir, 'phases');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.mkdirSync(phasesDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(planningDir, 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '## Current Milestone: v3.0',
+        '',
+        '- [ ] Phase 32: Backlog-Closeout Lib Extraction',
+        '- [ ] Phase 33: Follow Up Implementation',
+        '',
+        '### Phase 32: Backlog-Closeout Lib Extraction',
+        '**Goal:** Complete closeout extraction',
+        '**Plans:** 1 plans',
+        '',
+        '### Phase 33: Follow Up Implementation',
+        '**Goal:** Continue implementation',
+      ].join('\n'),
+    );
+
+    fs.writeFileSync(
+      path.join(planningDir, 'STATE.md'),
+      [
+        '---',
+        'gsd_state_version: 1.0',
+        'status: executing',
+        'current_phase: "32"',
+        'last_activity: "2026-06-14"',
+        'progress:',
+        '  total_phases: 2',
+        '  completed_phases: 0',
+        '  total_plans: 1',
+        '  completed_plans: 0',
+        '  percent: 0',
+        '---',
+        '',
+        '# Project State',
+        '',
+        '## Current Position',
+        '',
+        'Phase: 32 — Backlog-Closeout Lib Extraction',
+        'Plan: 1 of 1',
+        'Status: Executing Phase 32',
+        'Last activity: 2026-06-14 — recorded planning complete',
+        '',
+        '## Session',
+        '',
+        'Last session: 2026-06-14T00:00:00.000Z',
+      ].join('\n'),
+    );
+
+    const phase32Dir = path.join(phasesDir, '32-backlog-closeout-lib-extraction');
+    fs.mkdirSync(phase32Dir, { recursive: true });
+    fs.writeFileSync(path.join(phase32Dir, '32-01-PLAN.md'), '# Plan', 'utf8');
+    fs.writeFileSync(path.join(phase32Dir, '32-01-SUMMARY.md'), '# Summary', 'utf8');
+    fs.mkdirSync(path.join(phasesDir, '33-follow-up-implementation'), { recursive: true });
+
+    return { planningDir };
+  }
+
   describe('bug #3517: phase.complete leaves STATE.md with stale fields', () => {
     let tmpDir;
 
@@ -4359,17 +4415,30 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
       const state = fs.readFileSync(statePath, 'utf8');
       const lastUpdatedMatch = state.match(/last_updated:\s*(.+)/);
       assert.ok(lastUpdatedMatch, 'last_updated not found in frontmatter');
+
+      const raw = lastUpdatedMatch[1].trim().replace(/^"(.*)"$/, '$1');
+
+      // Must have been refreshed — not the stale seed value from setupPhase3517Project
       assert.notEqual(
-        lastUpdatedMatch[1].trim(),
+        raw,
         '2026-05-10T08:00:00.000Z',
-        `last_updated must be refreshed, but it is still the stale value: ${lastUpdatedMatch[1]}`,
+        `last_updated must be refreshed, but it is still the stale seed value: ${raw}`,
       );
-      const updatedAt = new Date(lastUpdatedMatch[1].trim().replace(/^"(.*)"$/, '$1'));
-      const now = new Date();
-      const diffMs = Math.abs(now - updatedAt);
+
+      // Must parse as a valid ISO timestamp
+      const updatedAt = new Date(raw);
       assert.ok(
-        diffMs < 60_000,
-        `last_updated should be approximately now (within 60s), got: ${lastUpdatedMatch[1]} (diff: ${diffMs}ms)`,
+        !isNaN(updatedAt.getTime()),
+        `last_updated must be a valid ISO timestamp, got: ${raw}`,
+      );
+
+      // Date portion must equal today's UTC date — avoids any wall-clock window comparison
+      const todayUtc = new Date().toISOString().slice(0, 10);
+      const updatedDateUtc = updatedAt.toISOString().slice(0, 10);
+      assert.equal(
+        updatedDateUtc,
+        todayUtc,
+        `last_updated date portion must equal today's UTC date (${todayUtc}), got: ${updatedDateUtc}`,
       );
     });
 
@@ -4428,6 +4497,39 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
       const state = fs.readFileSync(statePath, 'utf8');
       assert.match(state, /completed_phases:\s*2/, 'completed_phases must be updated in frontmatter');
       assert.match(state, /Phase:\s*0?6\b/, 'numeric Phase line should advance to phase 6');
+    });
+
+    test('prose-block STATE keeps next phase name without field-miss warnings (#1316)', () => {
+      const { planningDir } = setupPhase1316Project(tmpDir);
+
+      const result = spawnSync(process.execPath, [GSD_TOOLS_BIN, 'phase', 'complete', '32'], {
+        cwd: tmpDir,
+        encoding: 'utf8',
+        env: process.env,
+      });
+
+      assert.strictEqual(result.status, 0, `phase complete failed: ${result.stderr || result.stdout}`);
+      assert.ok(
+        !result.stderr.includes('Current Phase Name'),
+        `phase.complete must not warn about missing Current Phase Name on prose-block STATE.md; stderr:\n${result.stderr}`,
+      );
+      assert.ok(
+        !result.stderr.includes('Last Activity Description'),
+        `phase.complete must not warn about missing Last Activity Description on prose-block STATE.md; stderr:\n${result.stderr}`,
+      );
+
+      const state = fs.readFileSync(path.join(planningDir, 'STATE.md'), 'utf8');
+      assert.match(state, /current_phase:\s*"?33"?/, 'current_phase frontmatter must advance to 33');
+      assert.match(
+        state,
+        /^Phase:\s*33\s+—\s+Follow Up Implementation\b/m,
+        `Current Position Phase line must keep the next phase name; state:\n${state}`,
+      );
+      assert.match(
+        state,
+        /^Last activity:\s*\d{4}-\d{2}-\d{2}\s+—\s+Phase 32 complete/m,
+        `Last activity line must use the template em-dash delimiter with narrative; state:\n${state}`,
+      );
     });
 
     test('body By Phase table row for completed phase shows correct plan count', () => {
@@ -4888,3 +4990,328 @@ describe('bug-3287 — init plan-phase exposes expected_phase_dir with project_c
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// bug #1229: phase.add bullet-only phase collision
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Count canonical Phase N entries in roadmap content (header or bullet form).
+// Only counts "### Phase N:" headers and "- [ ] **Phase N:" bullet entries.
+// Does NOT count references like "**Depends on:** Phase N".
+function countBug1229PhaseNumber(roadmapContent, n) {
+  let count = 0;
+  const headerRe = new RegExp('^#{2,4}\\s*Phase\\s+' + n + '[A-Z]?(?:\\.\\d+)*:', 'gim');
+  const bulletRe = new RegExp(
+    '^[ \\t]*-[ \\t]*\\[[^\\]]*\\][ \\t]*\\*{0,2}Phase[ \\t]+' + n + '(?=[:.\\ \\t*]|$)',
+    'gim',
+  );
+  const headerMatches = roadmapContent.match(headerRe);
+  const bulletMatches = roadmapContent.match(bulletRe);
+  if (headerMatches) count += headerMatches.length;
+  if (bulletMatches) count += bulletMatches.length;
+  return count;
+}
+
+describe('bug #1229: phase.add must count bullet-only phases to avoid number collision', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('bullet-only Phase 11 is counted: next add gets Phase 12, not 11', () => {
+    // ROADMAP has Phases 1-3 as full sections and Phase 11 as bullet-only.
+    // Before the fix, maxPhase resolved to 3 (header scan) and phase.add
+    // silently produced Phase 4, then on a second add would produce Phase 11
+    // — or if headers went to 10, it would produce Phase 11 colliding with
+    // the existing bullet.
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '## Phases',
+      '',
+      '- [ ] **Phase 1: Foundation**',
+      '- [ ] **Phase 2: Core**',
+      '- [x] **Phase 3: Done**',
+      '- [ ] **Phase 11: Communications / Zoho Sync**',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Build foundations',
+      '',
+      '### Phase 2: Core',
+      '',
+      '**Goal:** Core work',
+      '',
+      '### Phase 3: Done',
+      '',
+      '**Goal:** Completed work',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    // Create disk dirs for phases 1, 2, 3 (not 11 -- that is bullet-only)
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-foundation'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '02-core'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '03-done'), { recursive: true });
+
+    const result = runGsdTools('phase add New Feature', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      12,
+      `Expected phase 12 (bullet-only Phase 11 must be counted), got ${output.phase_number}`,
+    );
+
+    // Verify no duplicate Phase 11 written
+    const updatedRoadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    const phase11Count = countBug1229PhaseNumber(updatedRoadmap, 11);
+    assert.ok(
+      phase11Count === 1,
+      `ROADMAP must have exactly 1 occurrence of Phase 11 (no duplicate), found ${phase11Count}`,
+    );
+
+    // Verify Phase 12 was written
+    assert.ok(
+      updatedRoadmap.includes('### Phase 12:'),
+      'ROADMAP must contain new ### Phase 12: entry',
+    );
+
+    // Verify directory was created at 12, not 11
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '12-new-feature')),
+      'phases/12-new-feature directory must be created',
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '11-new-feature')),
+      'phases/11-new-feature must NOT be created (collision guard)',
+    );
+  });
+
+  test('[x] checkbox variant bullet phase is counted', () => {
+    // Phase 5 exists only as a [x] bullet (completed, no dir, no header)
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '### Phase 2: API',
+      '',
+      '**Goal:** Build',
+      '',
+      '### Phase 3: UI',
+      '',
+      '**Goal:** Interfaces',
+      '',
+      '### Phase 4: Deploy',
+      '',
+      '**Goal:** Ship it',
+      '',
+      '- [x] **Phase 5: Post-launch Cleanup**',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add Follow-up Work', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      6,
+      `Expected phase 6 ([x] bullet-only Phase 5 must be counted), got ${output.phase_number}`,
+    );
+  });
+
+  test('[~] checkbox variant bullet phase is counted', () => {
+    // Phase 7 exists only as a [~] bullet (in-progress, no dir, no header)
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '- [~] **Phase 7: Partial Work**',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add Next Phase', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      8,
+      `Expected phase 8 ([~] bullet-only Phase 7 must be counted), got ${output.phase_number}`,
+    );
+  });
+
+  test('baseline: no bullet-only phases -- existing behavior preserved', () => {
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '### Phase 2: API',
+      '',
+      '**Goal:** Build',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add Third Phase', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      3,
+      `Expected phase 3 (normal sequential add), got ${output.phase_number}`,
+    );
+  });
+
+  test('bullet without ** bold markers is counted', () => {
+    // Phase 6 as plain bullet without ** markdown bold
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '### Phase 2: Core',
+      '',
+      '**Goal:** Core',
+      '',
+      '- [ ] Phase 6: Plain bullet no bold',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add Another Phase', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      7,
+      `Expected phase 7 (plain-bullet Phase 6 must be counted), got ${output.phase_number}`,
+    );
+  });
+
+  test('titleless bold bullet "- [ ] **Phase 11**" is counted: next add gets Phase 12', () => {
+    // Regression for the adversarial-review finding: the original bulletPattern
+    // required a colon or whitespace after the digits, so "- [ ] **Phase 11**"
+    // (bold-close immediately after the number) was silently skipped and phase.add
+    // would assign Phase 11 again — the exact collision class bug #1229 fixes.
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '### Phase 2: Core',
+      '',
+      '**Goal:** Core',
+      '',
+      '- [ ] **Phase 11**',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add Titleless Bold Follow-up', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      12,
+      `Expected phase 12 (titleless bold bullet "**Phase 11**" must be counted), got ${output.phase_number}`,
+    );
+
+    const updatedRoadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.ok(
+      updatedRoadmap.includes('### Phase 12:'),
+      'ROADMAP must contain new ### Phase 12: entry',
+    );
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '12-titleless-bold-follow-up')),
+      'phases/12-titleless-bold-follow-up directory must be created',
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '11-titleless-bold-follow-up')),
+      'phases/11-titleless-bold-follow-up must NOT be created (collision guard)',
+    );
+  });
+
+  test('EOL bullet "- [ ] Phase 11" (no title, no bold) is counted: next add gets Phase 12', () => {
+    // Regression: "- [ ] Phase 11" at end-of-line was not matched by the original
+    // pattern whose trailing [:\s] requires at least one character after the digits.
+    const roadmap = [
+      '# Roadmap v1.0',
+      '',
+      '### Phase 1: Foundation',
+      '',
+      '**Goal:** Setup',
+      '',
+      '### Phase 2: Core',
+      '',
+      '**Goal:** Core',
+      '',
+      '- [ ] Phase 11',
+      '',
+      '---',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmap);
+
+    const result = runGsdTools('phase add EOL Follow-up', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.phase_number,
+      12,
+      `Expected phase 12 (EOL bullet "Phase 11" must be counted), got ${output.phase_number}`,
+    );
+
+    const updatedRoadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.ok(
+      updatedRoadmap.includes('### Phase 12:'),
+      'ROADMAP must contain new ### Phase 12: entry',
+    );
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'phases', '12-eol-follow-up')),
+      'phases/12-eol-follow-up directory must be created',
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'phases', '11-eol-follow-up')),
+      'phases/11-eol-follow-up must NOT be created (collision guard)',
+    );
+  });
+});
