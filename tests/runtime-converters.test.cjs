@@ -18,6 +18,7 @@ const {
   convertClaudeToOpencodeFrontmatter,
   convertClaudeToKiloFrontmatter,
   convertClaudeToGeminiAgent,
+  convertClaudeAgentToAntigravityAgent,
   convertClaudeCommandToOpencodeSkill,
   convertClaudeCommandToKiloSkill,
   neutralizeAgentReferences,
@@ -291,6 +292,69 @@ Offer choices via AskUserQuestion when user input is needed.
     assert.ok(!frontmatter.includes('AskUserQuestion'), 'does not preserve Claude-only AskUserQuestion tool');
     assert.ok(!result.includes('AskUserQuestion'), 'does not leave Claude-only tool references in the body');
     assert.ok(result.includes('conversational prompting'), 'uses runtime-neutral body wording for user prompts');
+  });
+
+  describe('#1394 regression: excludes Skill/SlashCommand from Gemini frontmatter', () => {
+    // Skill/SlashCommand are Claude-only tools with no Gemini built-in equivalent.
+    // Without explicit exclusion they hit the lowercase fallback and emit an
+    // invalid 'skill'/'slashcommand' tool name, which fails Gemini frontmatter
+    // validation (tools.N: Invalid tool name) and aborts the entire agent load —
+    // previously killing 22 of 34 GSD agents on Gemini.
+
+    // Direct unit assertion against the canonical converter (criterion 1).
+    test('convertGeminiToolName returns null for Skill and SlashCommand', () => {
+      const { convertGeminiToolName } = require('../gsd-core/bin/lib/runtime-artifact-conversion.cjs');
+      assert.equal(convertGeminiToolName('Skill'), null, 'Skill is excluded, not lowercased to "skill"');
+      assert.equal(convertGeminiToolName('SlashCommand'), null, 'SlashCommand is excluded, not lowercased to "slashcommand"');
+      // Existing AskUserQuestion exclusion must still hold.
+      assert.equal(convertGeminiToolName('AskUserQuestion'), null, 'AskUserQuestion remains excluded');
+      // Sanity: a mapped tool still converts.
+      assert.equal(convertGeminiToolName('Read'), 'read_file', 'mapped tools still convert');
+    });
+
+    // Agent-level assertion against the live install path (criterion 2/3).
+    test('a Skill tools entry produces no skill/slashcommand in emitted frontmatter', () => {
+      const input = `---
+name: gsd-planner
+description: Creates executable phase plans.
+tools: Read, Write, Bash, Glob, Grep, Skill, WebFetch, SlashCommand
+---
+
+<role>
+Plan the phase.
+</role>`;
+
+      const result = convertClaudeToGeminiAgent(input);
+      const frontmatter = result.split('---')[1] || '';
+
+      assert.ok(frontmatter.includes('  - read_file'), 'maps Read -> read_file');
+      assert.ok(frontmatter.includes('  - web_fetch'), 'maps WebFetch -> web_fetch');
+      assert.ok(!frontmatter.includes('  - skill'), 'does not emit invalid Gemini skill tool');
+      assert.ok(!frontmatter.includes('  - slashcommand'), 'does not emit invalid Gemini slashcommand tool');
+    });
+
+    // Antigravity reuses convertGeminiToolName (it runs on the Gemini backend),
+    // so the exclusion intentionally applies there too. Antigravity surfaces GSD
+    // skills through the skill surface (SKILL.md), not the agent tools: allowlist,
+    // so dropping the invalid 'skill' tool name does not remove skill access —
+    // this locks that cross-runtime behavior (criterion 4).
+    test('Antigravity conversion also excludes Skill/SlashCommand (shared Gemini backend)', () => {
+      const input = `---
+name: gsd-planner
+description: Creates executable phase plans.
+tools: Read, Write, Bash, Skill, WebFetch, SlashCommand
+---
+
+<role>Plan the phase.</role>`;
+
+      const result = convertClaudeAgentToAntigravityAgent(input);
+      const toolsLine = result.split('\n').find(l => l.startsWith('tools:')) || '';
+
+      assert.ok(toolsLine.includes('read_file'), 'maps Read -> read_file');
+      assert.ok(toolsLine.includes('web_fetch'), 'maps WebFetch -> web_fetch');
+      assert.ok(!/\bskill\b/.test(toolsLine), 'no invalid skill tool in Antigravity frontmatter');
+      assert.ok(!/\bslashcommand\b/.test(toolsLine), 'no invalid slashcommand tool in Antigravity frontmatter');
+    });
   });
 });
 
