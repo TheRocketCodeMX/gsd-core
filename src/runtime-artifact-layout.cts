@@ -175,6 +175,16 @@ function agentsKind(destSubpath: string, prefix: string, configDir: string): Art
  * Agent filenames are preserved verbatim (the prefix is already embedded in the
  * agent stem — e.g. `gsd-planner.md`).
  *
+ * #1173 SCOPE: this wires the per-runtime agent CONVERTER (frontmatter/body +
+ * isGlobal scope) into the descriptor path. The remaining byte-for-byte parity
+ * behaviors of the legacy `bin/install.js` agent loop — Copilot's `.agent.md`
+ * filename rename, the cross-cutting path-prefix rewrite + attribution, and the
+ * config-reading steps (claude effort, opencode model override) — are NOT applied
+ * here yet; they are tracked by the ADR-1235 cutover (later steps) and remain
+ * provided by the legacy loop, which runs after `installRuntimeArtifacts` and is
+ * authoritative for the real install. So this kind is correct for converter
+ * coverage but not yet a full standalone replacement for these runtimes.
+ *
  * Mirrors the `convertedCommandsKind` pattern (#785).
  *
  * @param destSubpath   destination subpath within configDir (e.g. 'agents')
@@ -187,14 +197,24 @@ function convertedAgentsKind(
   prefix: string,
   converterName: string,
   configDir: string,
+  scope: 'local' | 'global' = 'global',
 ): ArtifactKind {
   return {
     kind: 'agents',
     destSubpath,
     prefix,
     stage: (resolved) => {
-      const converter = conversionExports[converterName] as (content: string) => string;
-      return stageAgentsForRuntimeWithConverter(findAgentsSourceRoot(configDir), resolved, converter);
+      // isGlobal is threaded so scope-aware agent converters (copilot, antigravity)
+      // choose global-home vs workspace-relative paths; converters that only take
+      // (content) ignore the extra positional arg. Mirrors skillsKind's scope
+      // threading (#1173).
+      const converter = conversionExports[converterName] as (content: string, isGlobal?: boolean) => string;
+      return stageAgentsForRuntimeWithConverter(
+        findAgentsSourceRoot(configDir),
+        resolved,
+        converter,
+        scope === 'global',
+      );
     },
   };
 }
@@ -411,7 +431,7 @@ function dispatchKindEntry(entry: ArtifactKindDescriptor, runtime: string, confi
       if (converter == null) {
         return agentsKind(destSubpath, prefix, configDir);
       }
-      return convertedAgentsKind(destSubpath, prefix, converter, configDir);
+      return convertedAgentsKind(destSubpath, prefix, converter, configDir, scope);
 
     case 'skills':
       if (converter == null) {

@@ -34,6 +34,14 @@
           "nesting": "nested",
           "recursive": false,
           "converter": "convertClaudeCommandToAntigravitySkill"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToAntigravityAgent"
         }
       ],
       "local": [
@@ -44,6 +52,14 @@
           "nesting": "nested",
           "recursive": false,
           "converter": "convertClaudeCommandToAntigravitySkill"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToAntigravityAgent"
         }
       ]
     },

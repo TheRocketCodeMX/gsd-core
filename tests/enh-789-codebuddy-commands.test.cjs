@@ -53,11 +53,12 @@ const RESOLVED_CORE = resolveProfile({ modes: ['core'], manifest: MANIFEST });
 // ─── Layout contract ─────────────────────────────────────────────────────────
 
 describe('enh-789 — codebuddy layout has commands + skills kinds', () => {
-  test('resolveRuntimeArtifactLayout codebuddy returns 2 kinds', () => {
+  test('resolveRuntimeArtifactLayout codebuddy returns 3 kinds', () => {
+    // #1173: codebuddy gained an agents kind (descriptor-driven per-runtime agent conversion).
     const layout = resolveRuntimeArtifactLayout('codebuddy', '/tmp/fake-codebuddy-dir');
-    assert.strictEqual(layout.kinds.length, 2, 'codebuddy must have exactly 2 artifact kinds');
+    assert.strictEqual(layout.kinds.length, 3, 'codebuddy must have exactly 3 artifact kinds');
     const kindNames = layout.kinds.map(k => k.kind).sort();
-    assert.deepStrictEqual(kindNames, ['commands', 'skills']);
+    assert.deepStrictEqual(kindNames, ['agents', 'commands', 'skills']);
   });
 
   test('codebuddy commands kind targets commands/ with gsd- prefix', () => {

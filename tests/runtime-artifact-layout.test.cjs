@@ -65,7 +65,7 @@ describe('resolveRuntimeArtifactLayout — cursor', () => {
     const layout = resolveRuntimeArtifactLayout('cursor', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'cursor');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 2);
+    assert.strictEqual(layout.kinds.length, 3);
 
     const skillsKind = layout.kinds.find(k => k.kind === 'skills');
     assert.ok(skillsKind, 'must have a skills kind');
@@ -78,6 +78,12 @@ describe('resolveRuntimeArtifactLayout — cursor', () => {
     assert.strictEqual(commandsKind.destSubpath, 'commands');
     assert.strictEqual(commandsKind.prefix, 'gsd-');
     assert.strictEqual(typeof commandsKind.stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    const agentsKind = layout.kinds.find(k => k.kind === 'agents');
+    assert.ok(agentsKind, 'must have an agents kind (#1173 descriptor-driven agent conversion)');
+    assert.strictEqual(agentsKind.destSubpath, 'agents');
+    assert.strictEqual(agentsKind.prefix, 'gsd-');
+    assert.strictEqual(typeof agentsKind.stage, 'function');
   });
 });
 
@@ -112,11 +118,16 @@ describe('resolveRuntimeArtifactLayout — copilot', () => {
     const layout = resolveRuntimeArtifactLayout('copilot', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'copilot');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 1);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'skills');
     assert.strictEqual(layout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[1].kind, 'agents');
+    assert.strictEqual(layout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[1].stage, 'function');
   });
 });
 
@@ -125,11 +136,16 @@ describe('resolveRuntimeArtifactLayout — antigravity', () => {
     const layout = resolveRuntimeArtifactLayout('antigravity', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'antigravity');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 1);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'skills');
     assert.strictEqual(layout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[1].kind, 'agents');
+    assert.strictEqual(layout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[1].stage, 'function');
   });
 });
 
@@ -138,11 +154,16 @@ describe('resolveRuntimeArtifactLayout — windsurf', () => {
     const layout = resolveRuntimeArtifactLayout('windsurf', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'windsurf');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 1);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'skills');
     assert.strictEqual(layout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[1].kind, 'agents');
+    assert.strictEqual(layout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[1].stage, 'function');
   });
 });
 
@@ -151,7 +172,7 @@ describe('resolveRuntimeArtifactLayout — augment', () => {
     const layout = resolveRuntimeArtifactLayout('augment', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'augment');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 2);
+    assert.strictEqual(layout.kinds.length, 3);
     // commands kind first
     assert.strictEqual(layout.kinds[0].kind, 'commands');
     assert.strictEqual(layout.kinds[0].destSubpath, 'commands');
@@ -162,6 +183,11 @@ describe('resolveRuntimeArtifactLayout — augment', () => {
     assert.strictEqual(layout.kinds[1].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[1].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[2].kind, 'agents');
+    assert.strictEqual(layout.kinds[2].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[2].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[2].stage, 'function');
   });
 });
 
@@ -170,11 +196,16 @@ describe('resolveRuntimeArtifactLayout — trae', () => {
     const layout = resolveRuntimeArtifactLayout('trae', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'trae');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 1);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'skills');
     assert.strictEqual(layout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[1].kind, 'agents');
+    assert.strictEqual(layout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[1].stage, 'function');
   });
 });
 
@@ -231,7 +262,7 @@ describe('resolveRuntimeArtifactLayout — codebuddy', () => {
     const layout = resolveRuntimeArtifactLayout('codebuddy', FAKE_DIR);
     assert.strictEqual(layout.runtime, 'codebuddy');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 2);
+    assert.strictEqual(layout.kinds.length, 3);
     // commands kind first
     assert.strictEqual(layout.kinds[0].kind, 'commands');
     assert.strictEqual(layout.kinds[0].destSubpath, 'commands');
@@ -242,6 +273,11 @@ describe('resolveRuntimeArtifactLayout — codebuddy', () => {
     assert.strictEqual(layout.kinds[1].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[1].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[2].kind, 'agents');
+    assert.strictEqual(layout.kinds[2].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[2].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[2].stage, 'function');
   });
 });
 
@@ -250,11 +286,16 @@ describe('resolveRuntimeArtifactLayout — cline', () => {
     const layout = resolveRuntimeArtifactLayout('cline', FAKE_DIR, 'global');
     assert.strictEqual(layout.runtime, 'cline');
     assert.strictEqual(layout.configDir, FAKE_DIR);
-    assert.strictEqual(layout.kinds.length, 1);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'skills');
     assert.strictEqual(layout.kinds[0].destSubpath, 'skills');
     assert.strictEqual(layout.kinds[0].prefix, 'gsd-');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
+    // #1173: agents kind appended (descriptor now applies per-runtime agent conversion).
+    assert.strictEqual(layout.kinds[1].kind, 'agents');
+    assert.strictEqual(layout.kinds[1].destSubpath, 'agents');
+    assert.strictEqual(layout.kinds[1].prefix, 'gsd-');
+    assert.strictEqual(typeof layout.kinds[1].stage, 'function');
   });
 
   test('cline local: no skills kinds (global-only, #782)', () => {
