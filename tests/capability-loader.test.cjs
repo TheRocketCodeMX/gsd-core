@@ -146,6 +146,92 @@ describe('loadRegistry — uncommitted (_pending) overlay is not activated (ADR-
   });
 });
 
+describe('loadRegistry — _overlay.commandRoots (ADR-1244 Phase 5 dispatch)', () => {
+  // commandRoots requires a COMMITTED ledger entry (the consent signal). Write one.
+  function writeCommittedLedger(home, ids) {
+    const entries = {};
+    for (const id of ids) entries[id] = { id, version: '1.0.0', source: 's', integrity: '', files: [], sharedEdits: [] };
+    fs.writeFileSync(path.join(home, '.gsd-capabilities.json'), JSON.stringify({ version: '1', updatedAt: '2026-01-01T00:00:00Z', entries }), 'utf8');
+  }
+
+  test('a COMMITTED overlay cap that declares commands records its absolute install root', (t) => {
+    const home = makeOverlayHome([featureCap('tpcap', { commands: [{ family: 'tp-cmd', module: 'router.cjs', router: 'run' }] })]);
+    t.after(() => cleanup(home));
+    writeCommittedLedger(home, ['tpcap']);
+    const reg = load(home);
+    assert.ok(reg.capabilities['tpcap'], 'overlay cap accepted');
+    assert.ok(reg._overlay && reg._overlay.commandRoots, '_overlay.commandRoots present');
+    assert.strictEqual(reg._overlay.commandRoots['tpcap'], path.join(home, '.gsd', 'capabilities', 'tpcap'), 'install root recorded');
+  });
+
+  test('CONSENT NEGATIVE PROOF: a cap with commands but NO ledger entry (bundle dropped on disk) is NOT in commandRoots', (t) => {
+    // No ledger written at all — models a repo that ships .gsd/capabilities/<id> without an install.
+    const home = makeOverlayHome([featureCap('dropped', { commands: [{ family: 'dropped-cmd', module: 'router.cjs', router: 'run' }] })]);
+    t.after(() => cleanup(home));
+    const reg = load(home);
+    const roots = (reg._overlay && reg._overlay.commandRoots) || {};
+    assert.ok(!('dropped' in roots), 'an uninstalled (no-ledger) cap must not be command-dispatchable');
+    // Declarative surfaces still load (Phase 2 behavior unchanged) — only command dispatch is gated.
+    assert.ok(reg.capabilities['dropped'], 'declarative surfaces still compose');
+  });
+
+  test('an overlay cap WITHOUT commands is not in commandRoots, and first-party families are absent too', (t) => {
+    const home = makeOverlayHome([
+      featureCap('nocmd', { skills: ['nocmd-skill'] }),
+      featureCap('tpcap', { commands: [{ family: 'tp-cmd', module: 'router.cjs', router: 'run' }] }),
+    ]);
+    t.after(() => cleanup(home));
+    writeCommittedLedger(home, ['tpcap']);
+    const reg = load(home);
+    const roots = reg._overlay.commandRoots;
+    assert.ok(!('nocmd' in roots), 'declarative overlay cap not in commandRoots');
+    assert.ok(!('graphify' in roots) && !('intel' in roots), 'first-party families never appear in commandRoots');
+  });
+
+  test('CONSENT NEGATIVE PROOF: a _pending (uncommitted) overlay cap with commands is NOT in commandRoots', (t) => {
+    const home = makeOverlayHome([featureCap('pendcmd', { commands: [{ family: 'pend-cmd', module: 'router.cjs', router: 'run' }] })]);
+    t.after(() => cleanup(home));
+    fs.writeFileSync(
+      path.join(home, '.gsd-capabilities.json'),
+      JSON.stringify({
+        version: '1', updatedAt: '2026-01-01T00:00:00Z',
+        entries: { pendcmd: { id: 'pendcmd', version: '1.0.0', source: 's', integrity: '', files: [], sharedEdits: [], _pending: { kind: 'install', backupName: null, sharedFiles: [] } } },
+      }),
+      'utf8',
+    );
+    const reg = load(home);
+    const roots = (reg._overlay && reg._overlay.commandRoots) || {};
+    assert.ok(!('pendcmd' in roots), 'an unconsented capability must not expose a dispatchable command root');
+    assert.ok(!reg.capabilities['pendcmd'], 'unconsented cap not activated');
+  });
+
+  test('FAIL CLOSED: a malformed/tampered committed-looking entry is NOT treated as consent', (t) => {
+    const home = makeOverlayHome([
+      featureCap('mal1', { commands: [{ family: 'mal1-cmd', module: 'router.cjs', router: 'run' }] }),
+      featureCap('mal2', { commands: [{ family: 'mal2-cmd', module: 'router.cjs', router: 'run' }] }),
+      featureCap('mal3', { commands: [{ family: 'mal3-cmd', module: 'router.cjs', router: 'run' }] }),
+    ]);
+    t.after(() => cleanup(home));
+    fs.writeFileSync(
+      path.join(home, '.gsd-capabilities.json'),
+      JSON.stringify({
+        version: '1', updatedAt: '2026-01-01T00:00:00Z',
+        entries: {
+          mal1: { id: 'mal1', version: '1.0.0', source: 's', integrity: '', files: [], sharedEdits: [], _pending: null }, // falsy-but-present intent → not committed
+          mal2: { id: 'WRONG', version: '1.0.0', source: 's', integrity: '', files: [], sharedEdits: [] }, // id mismatch
+          mal3: { id: 'mal3', version: '1.0.0' }, // missing required fields
+        },
+      }),
+      'utf8',
+    );
+    const reg = load(home);
+    const roots = (reg._overlay && reg._overlay.commandRoots) || {};
+    assert.ok(!('mal1' in roots), '_pending:null (own-property intent) is not consent');
+    assert.ok(!('mal2' in roots), 'entry.id mismatch is not consent');
+    assert.ok(!('mal3' in roots), 'missing required fields is not consent');
+  });
+});
+
 describe('loadRegistry — first-party always wins', () => {
   test('overlay whose id collides with a first-party id is rejected; first-party preserved', (t) => {
     const home = makeOverlayHome([featureCap('ui', { skills: ['hijacked'] })]);
