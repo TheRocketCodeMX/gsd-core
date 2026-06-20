@@ -29,7 +29,13 @@ const {
   resolveCapabilitySource,
   parseSpec,
   _setCapabilitySourceHttpGet,
+  _setHttpsGetImpl,
+  MAX_RESPONSE_BYTES,
+  MANIFEST_MAX_BYTES,
+  MAX_STAGED_BUNDLE_BYTES,
+  MAX_STAGED_BUNDLE_ENTRIES,
 } = capSource;
+const { EventEmitter } = require('node:events');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,6 +77,16 @@ function makeLocalCap(cap) {
 /** Compute sha512-<base64> from a Buffer. */
 function sha512b64(buf) {
   return 'sha512-' + crypto.createHash('sha512').update(buf).digest('base64');
+}
+
+/** A minimal fs.Dirent-shaped object for synthetic streaming-opendir tests. */
+function makeDirent(name, { file = false, dir = false, symlink = false } = {}) {
+  return {
+    name,
+    isSymbolicLink: () => symlink,
+    isDirectory: () => dir,
+    isFile: () => file,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -688,3 +704,573 @@ function _fakeTarball(cap) {
   // We just need a buffer; the injected tar override does the actual "extraction".
   return Buffer.from(JSON.stringify({ _fakeTarball: true, id: cap.id }), 'utf8');
 }
+
+// ---------------------------------------------------------------------------
+// #1461 DOS-1 — realHttpsGet must BOUND the fetched response size. Without a cap,
+// res.on('data') accumulates chunks and Buffer.concat'd into memory with no
+// ceiling → a hostile/oversized tarball OOMs the process. Verified by injecting a
+// fake low-level https.get (the _setHttpsGetImpl seam) that streams a response.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a fake https.get implementation that drives realHttpsGet's streaming path.
+ * @param chunks      array of Buffers to emit on the response 'data' events
+ * @param headers     response headers (e.g. { 'content-length': '...' })
+ * @param statusCode  response status (default 200)
+ * Returns a function matching the https.get(url, opts, cb) shape. It captures whether
+ * req.destroy() / res.destroy() were called so a test can assert the cap aborts the stream.
+ */
+function makeFakeHttpsGet(chunks, headers = {}, statusCode = 200) {
+  const state = { reqDestroyed: false, resDestroyed: false, emittedBytes: 0, ended: false };
+  const fn = (_url, _opts, cb) => {
+    const req = new EventEmitter();
+    req.setTimeout = () => req;
+    req.destroy = () => { state.reqDestroyed = true; };
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    res.headers = headers;
+    res.destroy = () => { state.resDestroyed = true; };
+    // Drive the response on the next tick so realHttpsGet has attached its listeners.
+    setImmediate(() => {
+      cb(res);
+      for (const c of chunks) {
+        if (state.reqDestroyed || state.resDestroyed) break;
+        state.emittedBytes += c.length;
+        res.emit('data', c);
+      }
+      if (!state.reqDestroyed && !state.resDestroyed) {
+        state.ended = true;
+        res.emit('end');
+      }
+    });
+    return req;
+  };
+  fn.state = state;
+  return fn;
+}
+
+describe('#1461 DOS-1 — realHttpsGet bounds the response size (MAX_RESPONSE_BYTES)', () => {
+  let gsdHome = '';
+  beforeEach(() => { gsdHome = createTempDir('gsd-dos-home-'); });
+  afterEach(() => {
+    _setHttpsGetImpl(null); // restore the real https.get
+    _setCapabilitySourceHttpGet(null);
+    cleanup(gsdHome);
+  });
+
+  test('MAX_RESPONSE_BYTES is a sane bounded cap (64 MiB)', () => {
+    assert.strictEqual(MAX_RESPONSE_BYTES, 64 * 1024 * 1024, 'cap is generous but bounded');
+  });
+
+  test('a streamed body exceeding MAX_RESPONSE_BYTES is rejected and not buffered unboundedly', async () => {
+    // Stream chunks whose cumulative length exceeds the cap. Each chunk is 1 MiB; we emit cap+2
+    // chunks. With the cap in place the stream is destroyed after crossing MAX_RESPONSE_BYTES, so
+    // far fewer than all chunks are ever emitted.
+    const ONE_MIB = 1024 * 1024;
+    const chunkCount = MAX_RESPONSE_BYTES / ONE_MIB + 2; // 66 chunks of 1 MiB
+    const chunks = Array.from({ length: chunkCount }, () => Buffer.alloc(ONE_MIB, 0x61));
+    const fake = makeFakeHttpsGet(chunks, {} /* no content-length → exercise the streaming guard */);
+    _setHttpsGetImpl(fake);
+
+    // REVERT-FAILS: without the per-`data` size guard in realHttpsGet, all chunks are accumulated
+    // and the promise RESOLVES with an oversized body (then proceeds to integrity/extraction) —
+    // assert.rejects below fails because nothing rejected.
+    await assert.rejects(
+      () => resolveCapabilitySource('https://example.com/huge.tgz', { gsdHome, hostVersion: '1.5.0' }),
+      /exceeds .*bytes/i,
+      'an oversized streamed body must reject with the size error'
+    );
+    // The stream was aborted: the request/response were destroyed and NOT every chunk was emitted.
+    assert.ok(fake.state.reqDestroyed || fake.state.resDestroyed, 'the request/response is destroyed on overflow');
+    assert.ok(fake.state.emittedBytes <= (MAX_RESPONSE_BYTES + ONE_MIB),
+      'streaming stops shortly after crossing the cap (not all chunks buffered)');
+    assert.ok(!fake.state.ended, 'the response never reaches end — it was cut off');
+  });
+
+  test('a content-length header over the cap is rejected BEFORE buffering any body', async () => {
+    // Advertise an oversized content-length but emit NO data — the early header check must reject.
+    const fake = makeFakeHttpsGet([], { 'content-length': String(MAX_RESPONSE_BYTES + 1) });
+    _setHttpsGetImpl(fake);
+
+    // REVERT-FAILS: without the content-length pre-check in realHttpsGet, the (empty) stream simply
+    // ends and the promise RESOLVES — assert.rejects fails because nothing rejected.
+    await assert.rejects(
+      () => resolveCapabilitySource('https://example.com/lying.tgz', { gsdHome, hostVersion: '1.5.0' }),
+      /exceeds .*bytes|content-length/i,
+      'an over-cap content-length must reject before buffering'
+    );
+    assert.strictEqual(fake.state.emittedBytes, 0, 'no body bytes were buffered before rejection');
+    assert.ok(fake.state.reqDestroyed || fake.state.resDestroyed, 'the request/response is destroyed on the header check');
+  });
+
+  test('CONTROL: a normal small tarball still fetches + installs through realHttpsGet', async () => {
+    // A small valid body that passes the cap. The high-level _httpGet seam is NOT used here — we go
+    // through the real realHttpsGet via the injected low-level https.get so the size-cap code path is
+    // exercised on the happy path too. A tar override performs the "extraction".
+    const cap = featureCap('dos-control-cap');
+    const tgzBuf = _fakeTarball(cap);
+    const fake = makeFakeHttpsGet([tgzBuf], { 'content-length': String(tgzBuf.length) });
+    _setHttpsGetImpl(fake);
+
+    const result = await resolveCapabilitySource('https://example.com/dos-control-cap.tgz', {
+      gsdHome,
+      hostVersion: '1.5.0',
+      execOverrides: {
+        tar: (_prog, args) => {
+          if (args[0] === '-tzf') {
+            return { exitCode: 0, stdout: 'capability.json\n', stderr: '', signal: null, error: null };
+          }
+          if (args[0] === '-tvzf') {
+            return { exitCode: 0, stdout: '-rw-r--r-- 0 user group 10 Jan  1 2020 capability.json\n', stderr: '', signal: null, error: null };
+          }
+          const extractDir = args[args.indexOf('-C') + 1];
+          fs.writeFileSync(path.join(extractDir, 'capability.json'), JSON.stringify(cap), 'utf8');
+          return { exitCode: 0, stdout: '', stderr: '', signal: null, error: null };
+        },
+      },
+    });
+
+    assert.strictEqual(result.id, 'dos-control-cap', 'a normal small tarball resolves through the bounded fetch path');
+    assert.ok(fs.existsSync(result.stagedDir), 'staged dir exists after a normal fetch+install');
+    assert.ok(fake.state.ended, 'a within-cap body streams to completion');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 finding 2 (HIGH) — the resolver/staging must read every UNTRUSTED
+// capability.json via the shared bounded reader (regular-file + size cap), NOT a
+// raw fs.readFileSync. A repo-planted/extracted oversized (or FIFO/non-regular)
+// manifest would otherwise read unbounded into memory (OOM) or BLOCK the resolver.
+// A null/oversized/non-regular read → reject the source with a clear error.
+// ---------------------------------------------------------------------------
+describe('#1461 finding 2 — untrusted capability.json reads are size-bounded (no OOM/hang)', () => {
+  let gsdHome = '';
+  beforeEach(() => { gsdHome = createTempDir('gsd-cap-manifest-bound-'); });
+  afterEach(() => { cleanup(gsdHome); });
+
+  test('MANIFEST_MAX_BYTES is a sane bounded cap (8 MiB)', () => {
+    assert.strictEqual(MANIFEST_MAX_BYTES, 8 * 1024 * 1024, 'manifest cap is generous but bounded');
+  });
+
+  test('local: an OVERSIZED capability.json fails closed with a clear error (no OOM)', async () => {
+    // Build a local bundle whose capability.json EXCEEDS the cap. The bounded reader's fstat-size
+    // check refuses it WITHOUT reading the whole file into memory.
+    const dir = createTempDir('gsd-cap-oversized-local-');
+    try {
+      // One byte over the cap is enough for the size check to refuse.
+      const oversized = Buffer.alloc(MANIFEST_MAX_BYTES + 1, 0x20); // spaces (still "JSON-ish" length-wise)
+      fs.writeFileSync(path.join(dir, 'capability.json'), oversized);
+
+      // REVERT-FAILS: with a raw fs.readFileSync of capability.json, the whole oversized file is read
+      // into memory and JSON.parse fails with a SYNTAX error (not the bounded-reader size error). The
+      // bounded reader rejects on the fstat size BEFORE reading — so the error message names the size.
+      await assert.rejects(
+        () => resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' }),
+        /exceeds|size|maximum|not a regular file|cannot read/i,
+        'an oversized local capability.json must be refused by the bounded reader',
+      );
+    } finally {
+      cleanup(dir);
+    }
+    assert.ok(!fs.existsSync(path.join(gsdHome, '.gsd', 'capabilities')) ||
+      fs.readdirSync(path.join(gsdHome, '.gsd', 'capabilities')).filter((e) => e !== '.staging').length === 0,
+      'no capability is staged after an oversized manifest is refused');
+  });
+
+  test('CONTROL: a small valid local capability.json still resolves through the bounded reader', async () => {
+    const dir = makeLocalCap(featureCap('bounded-control-cap'));
+    try {
+      const result = await resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' });
+      assert.strictEqual(result.id, 'bounded-control-cap', 'a small valid manifest still resolves');
+      assert.ok(fs.existsSync(path.join(result.stagedDir, 'capability.json')), 'staged manifest present');
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('local PRE-READ: an oversized capability.json is refused by the bounded reader (before any staging)', async () => {
+    // HONEST SCOPE (#1461 finding 3): for a LOCAL source the adapter's bounded pre-read of
+    // capability.json (to learn the id) runs FIRST and refuses an oversized manifest BEFORE staging —
+    // so this proves the LOCAL PRE-READ bound, NOT the stageValidated staged re-read (an earlier
+    // version of this test falsely claimed to exercise the staged re-read). The staged re-read is
+    // covered directly below via _readManifestBounded.
+    const dir = createTempDir('gsd-cap-oversized-stage-');
+    try {
+      const cap = featureCap('oversized-stage-cap');
+      // A valid manifest padded past the cap via a large filler field — still parseable JSON shape but
+      // over the byte cap, so the bounded reader refuses it on size.
+      const padded = JSON.stringify({ ...cap, _filler: 'x'.repeat(MANIFEST_MAX_BYTES) });
+      fs.writeFileSync(path.join(dir, 'capability.json'), padded);
+      await assert.rejects(
+        () => resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' }),
+        /exceeds|size|maximum|cannot read/i,
+        'an oversized local capability.json must be refused by the bounded pre-read',
+      );
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('staged re-read: the bounded manifest reader refuses an oversized staged capability.json directly', () => {
+    // #1461 finding 3: exercise stageValidated's bounded re-read WITHOUT the local pre-read shadowing
+    // it. _readManifestBounded is the exact reader stageValidated uses on the COPIED manifest; an
+    // oversized staged file is refused on size (fail-closed), not read unbounded.
+    //
+    // REVERT-FAILS: with a raw fs.readFileSync in the staged re-read, this would read the whole
+    // oversized file and either OOM or surface a JSON SyntaxError, not the bounded size refusal.
+    const dir = createTempDir('gsd-cap-stagedread-direct-');
+    try {
+      const padded = Buffer.alloc(MANIFEST_MAX_BYTES + 1, 0x20); // spaces — over the cap by one byte.
+      fs.writeFileSync(path.join(dir, 'capability.json'), padded);
+      assert.throws(
+        () => capSource._readManifestBounded(path.join(dir, 'capability.json'), 'capability.json not found'),
+        /exceeds|size|maximum|not a regular file|cannot read|not found/i,
+        'the bounded staged re-read refuses an oversized manifest on size',
+      );
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 finding 1 (HIGH) — the STAGED bundle directory is byte-bounded UNIFORMLY.
+// realHttpsGet is capped, but copyDirRecursive / git clone / npm pack / tar
+// extraction RESULTS were only TIMEOUT-bounded, so a huge source tree / repo /
+// package / tar bomb could fill disk during staging. stageValidated now enforces
+// ONE aggregate byte-budget (MAX_STAGED_BUNDLE_BYTES) over the staged dir via a
+// BOUNDED streaming walk AFTER staging and BEFORE validation/promotion — a single
+// chokepoint that covers EVERY adapter (tar / npm / git / local).
+// ---------------------------------------------------------------------------
+describe('#1461 finding 1 — the staged bundle dir is aggregate-byte-bounded (uniform DoS bound)', () => {
+  let gsdHome = '';
+  beforeEach(() => { gsdHome = createTempDir('gsd-cap-stagebudget-'); });
+  afterEach(() => {
+    _setCapabilitySourceHttpGet(null);
+    cleanup(gsdHome);
+  });
+
+  test('MAX_STAGED_BUNDLE_BYTES is a sane bounded cap (128 MiB)', () => {
+    assert.strictEqual(MAX_STAGED_BUNDLE_BYTES, 128 * 1024 * 1024, 'staged-bundle cap is generous but bounded');
+  });
+
+  test('local: a staged bundle whose TOTAL bytes exceed the budget is refused before promotion', async () => {
+    // A valid small manifest (so id/validation pass), plus a sibling artifact whose size pushes the
+    // bundle TOTAL over the budget. The bounded streaming walk in stageValidated sums regular-file
+    // bytes and fails closed BEFORE validation/promotion.
+    //
+    // REVERT-FAILS: without the staged-dir aggregate budget, copyDirRecursive copies the oversized
+    // artifact into staging and the source resolves+promotes normally — the oversized bundle lands on
+    // disk. With the budget, the bounded walk throws and the source never resolves.
+    const dir = createTempDir('gsd-cap-stagebudget-local-');
+    try {
+      fs.writeFileSync(path.join(dir, 'capability.json'), JSON.stringify(featureCap('stagebudget-cap')), 'utf8');
+      // One byte over the budget across a single artifact is enough for the cumulative counter to trip.
+      // ftruncate makes a sparse file so we don't actually write 128 MiB of real bytes (st.size still
+      // reports the full length, which is what the budget walk sums).
+      const big = path.join(dir, 'artifact.bin');
+      const fd = fs.openSync(big, 'w');
+      try { fs.ftruncateSync(fd, MAX_STAGED_BUNDLE_BYTES + 1); } finally { fs.closeSync(fd); }
+
+      await assert.rejects(
+        () => resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' }),
+        /staged bundle|exceeds|budget|maximum|too large/i,
+        'an over-budget staged bundle must be refused before promotion',
+      );
+    } finally {
+      cleanup(dir);
+    }
+    const capRoot = path.join(gsdHome, '.gsd', 'capabilities');
+    assert.ok(!fs.existsSync(capRoot) ||
+      fs.readdirSync(capRoot).filter((e) => e !== '.staging').length === 0,
+      'no capability is promoted after an over-budget bundle is refused');
+    // The staging dir for the rejected bundle must be cleaned up (atomicity).
+    const stagingRoot = path.join(capRoot, '.staging');
+    if (fs.existsSync(stagingRoot)) {
+      assert.strictEqual(fs.readdirSync(stagingRoot).length, 0, '.staging must be empty after an over-budget refusal');
+    }
+  });
+
+  test('tarball: an extracted bundle over the budget is refused at the common staging chokepoint', async () => {
+    // Drives the budget via the tarball adapter to prove the chokepoint is adapter-agnostic: the tar
+    // override "extracts" an oversized artifact next to a valid manifest; stageValidated's budget walk
+    // (after copyDirRecursive) rejects it.
+    const cap = featureCap('stagebudget-tar-cap');
+    const tgzBuf = _fakeTarball(cap);
+    _setCapabilitySourceHttpGet(() => Promise.resolve({ statusCode: 200, body: tgzBuf }));
+    await assert.rejects(
+      () => resolveCapabilitySource('https://example.com/big.tgz', {
+        gsdHome, hostVersion: '1.5.0',
+        execOverrides: {
+          tar: (_prog, args) => {
+            if (args[0] === '-tzf') {
+              return { exitCode: 0, stdout: 'capability.json\nbomb.bin\n', stderr: '', signal: null, error: null };
+            }
+            if (args[0] === '-tvzf') {
+              return {
+                exitCode: 0,
+                stdout:
+                  '-rw-r--r-- 0 user group 10 Jan  1 2020 capability.json\n' +
+                  '-rw-r--r-- 0 user group 10 Jan  1 2020 bomb.bin\n',
+                stderr: '', signal: null, error: null,
+              };
+            }
+            // "extraction": write a valid manifest + an oversized (sparse) artifact into extractDir.
+            const extractDir = args[args.indexOf('-C') + 1];
+            fs.writeFileSync(path.join(extractDir, 'capability.json'), JSON.stringify(cap), 'utf8');
+            const fd = fs.openSync(path.join(extractDir, 'bomb.bin'), 'w');
+            try { fs.ftruncateSync(fd, MAX_STAGED_BUNDLE_BYTES + 1); } finally { fs.closeSync(fd); }
+            return { exitCode: 0, stdout: '', stderr: '', signal: null, error: null };
+          },
+        },
+      }),
+      /staged bundle|exceeds|budget|maximum|too large/i,
+      'an over-budget extracted tarball must be refused at the staging chokepoint',
+    );
+    const capRoot = path.join(gsdHome, '.gsd', 'capabilities');
+    assert.ok(!fs.existsSync(capRoot) ||
+      fs.readdirSync(capRoot).filter((e) => e !== '.staging').length === 0,
+      'no capability is promoted after an over-budget tarball is refused');
+  });
+
+  test('CONTROL: a within-budget bundle still resolves + promotes normally', async () => {
+    const dir = makeLocalCap(featureCap('stagebudget-control-cap'));
+    try {
+      const result = await resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' });
+      assert.strictEqual(result.id, 'stagebudget-control-cap', 'a within-budget bundle resolves');
+      assert.ok(fs.existsSync(path.join(result.stagedDir, 'capability.json')), 'staged manifest present');
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 finding 1 (HIGH, ROUND 2) — copyDirRecursive itself is STREAMING +
+// BUDGETED, so the COPY can never materialize a whole hostile directory.
+//
+// The post-copy assertStagedBundleWithinBudget walk is bounded, but it runs
+// AFTER copyDirRecursive. The OLD copyDirRecursive used
+// `fs.readdirSync(src, { withFileTypes: true })`, which materializes the ENTIRE
+// directory-entry array into memory BEFORE the budget walk can run — so a
+// hostile source tree with a directory holding millions of tiny entries
+// (fetch < 64 MiB, but a colossal dirent array) OOMs the process during the
+// COPY, before the post-copy budget can fail closed. copyDirRecursive now
+// streams each directory via fs.opendirSync + dir.readSync() and threads a
+// cumulative entry + byte counter, throwing the MOMENT either cap is exceeded —
+// DURING the copy, before reading/copying the rest.
+// ---------------------------------------------------------------------------
+describe('#1461 finding 1 (ROUND 2) — copyDirRecursive streams + budgets the copy (no full materialization)', () => {
+  let gsdHome = '';
+  beforeEach(() => { gsdHome = createTempDir('gsd-cap-copybudget-'); });
+  afterEach(() => {
+    _setCapabilitySourceHttpGet(null);
+    cleanup(gsdHome);
+  });
+
+  test('MAX_STAGED_BUNDLE_ENTRIES is exported as a sane bounded cap (100k)', () => {
+    assert.strictEqual(MAX_STAGED_BUNDLE_ENTRIES, 100_000, 'staged-bundle entry cap is generous but bounded');
+  });
+
+  test('a source dir with more than MAX_STAGED_BUNDLE_ENTRIES entries is refused, and the copy NEVER readdirSyncs the source', async () => {
+    // ANTI-VACUOUS, two-pronged:
+    //   (1) the bounded entry error fires (fail closed), AND
+    //   (2) the COPY enumerated the source via opendirSync/readSync — it did NOT call the
+    //       whole-array `fs.readdirSync(src, { withFileTypes:true })` materialization on the source.
+    //
+    // We don't actually create 100k real files (slow + disk). Instead we monkeypatch fs.opendirSync to
+    // return a SYNTHETIC Dir whose readSync() yields lazily-generated tiny-file dirents far past the cap,
+    // while a real on-disk capability.json + a few real files back the source so non-enumeration fs ops
+    // still work. We also spy fs.readdirSync to PROVE the whole-array materialization is never used on
+    // the source during the copy.
+    //
+    // REVERT-FAILS: reverting copyDirRecursive to `fs.readdirSync(src, { withFileTypes:true })` makes the
+    // copy call readdirSync on the source (assertion (2) fails) AND would materialize the entire (here
+    // synthetic, effectively unbounded) dirent array before any cap could trip.
+    const src = createTempDir('gsd-cap-copybudget-src-');
+    try {
+      fs.writeFileSync(path.join(src, 'capability.json'), JSON.stringify(featureCap('copybudget-cap')), 'utf8');
+
+      const TOTAL_SYNTH = MAX_STAGED_BUNDLE_ENTRIES + 50_000; // far past the cap
+      let readSyncCalls = 0;
+      let readdirOnSrc = 0;
+      let opendirOnSrc = 0;
+
+      const realOpendir = fs.opendirSync;
+      const realReaddir = fs.readdirSync;
+      const realLstat = fs.lstatSync;
+      const realCopyFile = fs.copyFileSync;
+
+      // Make any per-entry lstat/copy of a synthetic file a no-op (the files don't exist on disk).
+      fs.lstatSync = function patchedLstat(p, ...rest) {
+        if (typeof p === 'string' && /[/\\]synth-\d+\.txt$/.test(p)) {
+          return {
+            isSymbolicLink: () => false,
+            isDirectory: () => false,
+            isFile: () => true,
+            size: 1,
+          };
+        }
+        return realLstat.call(this, p, ...rest);
+      };
+      fs.copyFileSync = function patchedCopyFile(s, d, ...rest) {
+        if (typeof s === 'string' && /[/\\]synth-\d+\.txt$/.test(s)) return undefined;
+        return realCopyFile.call(this, s, d, ...rest);
+      };
+
+      fs.readdirSync = function patchedReaddir(p, ...rest) {
+        if (p === src) readdirOnSrc++;
+        return realReaddir.call(this, p, ...rest);
+      };
+
+      fs.opendirSync = function patchedOpendir(p, ...rest) {
+        if (p === src) {
+          opendirOnSrc++;
+          let i = 0;
+          // A streaming Dir that yields the real manifest first, then synthetic tiny files lazily.
+          return {
+            readSync() {
+              readSyncCalls++;
+              if (i === 0) { i++; return makeDirent('capability.json', { file: true }); }
+              if (i <= TOTAL_SYNTH) { const n = i++; return makeDirent(`synth-${n}.txt`, { file: true }); }
+              return null;
+            },
+            closeSync() {},
+            [Symbol.iterator]() { return this; },
+          };
+        }
+        return realOpendir.call(this, p, ...rest);
+      };
+
+      try {
+        await assert.rejects(
+          () => resolveCapabilitySource(src, { gsdHome, hostVersion: '1.5.0' }),
+          /entry count exceeds|maximum of 100000|too many entries/i,
+          'a source with more than the entry cap must be refused during the streaming copy',
+        );
+      } finally {
+        fs.opendirSync = realOpendir;
+        fs.readdirSync = realReaddir;
+        fs.lstatSync = realLstat;
+        fs.copyFileSync = realCopyFile;
+      }
+
+      // (2a) The copy enumerated the source via the streaming opendir/readSync path.
+      assert.ok(opendirOnSrc >= 1, 'copyDirRecursive must opendirSync the source (streaming)');
+      assert.ok(readSyncCalls >= 1, 'copyDirRecursive must readSync the source (streaming)');
+      // (2b) The copy did NOT use the whole-array readdirSync materialization on the source.
+      assert.strictEqual(readdirOnSrc, 0, 'copyDirRecursive must NOT readdirSync the source (no full materialization)');
+      // (2c) It aborted at ~the cap, NOT after enumerating all TOTAL_SYNTH entries.
+      assert.ok(
+        readSyncCalls <= MAX_STAGED_BUNDLE_ENTRIES + 5,
+        `streaming copy must abort at ~the cap (readSync called ${readSyncCalls}, cap ${MAX_STAGED_BUNDLE_ENTRIES})`,
+      );
+    } finally {
+      cleanup(src);
+    }
+    // Atomicity: nothing promoted; .staging cleaned up.
+    const capRoot = path.join(gsdHome, '.gsd', 'capabilities');
+    assert.ok(!fs.existsSync(capRoot) ||
+      fs.readdirSync(capRoot).filter((e) => e !== '.staging').length === 0,
+      'no capability is promoted after an over-entry-budget bundle is refused');
+    const stagingRoot = path.join(capRoot, '.staging');
+    if (fs.existsSync(stagingRoot)) {
+      assert.strictEqual(fs.readdirSync(stagingRoot).length, 0, '.staging must be empty after an over-entry refusal');
+    }
+  });
+
+  test('a source whose copied bytes exceed the budget is refused DURING the copy (cumulative byte counter)', async () => {
+    // The streaming copy threads a cumulative BYTE counter too: an oversized regular file trips the byte
+    // cap during the copy, before the rest of the tree is read/copied.
+    //
+    // REVERT-FAILS: the old copyDirRecursive copied everything unconditionally and relied solely on the
+    // post-copy walk; if that post-copy walk were ALSO removed (and copy not budgeted), the oversized
+    // artifact would land in staging. With the in-copy byte budget the copy itself fails closed.
+    const src = createTempDir('gsd-cap-copybudget-bytes-');
+    try {
+      fs.writeFileSync(path.join(src, 'capability.json'), JSON.stringify(featureCap('copybudget-bytes-cap')), 'utf8');
+      const big = path.join(src, 'artifact.bin');
+      const fd = fs.openSync(big, 'w');
+      try { fs.ftruncateSync(fd, MAX_STAGED_BUNDLE_BYTES + 1); } finally { fs.closeSync(fd); }
+
+      await assert.rejects(
+        () => resolveCapabilitySource(src, { gsdHome, hostVersion: '1.5.0' }),
+        /exceeds|budget|maximum|too large|staged bundle/i,
+        'an over-byte-budget source must be refused during the streaming copy',
+      );
+    } finally {
+      cleanup(src);
+    }
+    const capRoot = path.join(gsdHome, '.gsd', 'capabilities');
+    assert.ok(!fs.existsSync(capRoot) ||
+      fs.readdirSync(capRoot).filter((e) => e !== '.staging').length === 0,
+      'no capability is promoted after an over-byte-budget bundle is refused');
+  });
+
+  test('CONTROL: a normal small source still stages through the streaming copy', async () => {
+    const dir = createTempDir('gsd-cap-copybudget-control-');
+    try {
+      fs.writeFileSync(path.join(dir, 'capability.json'), JSON.stringify(featureCap('copybudget-control-cap')), 'utf8');
+      fs.mkdirSync(path.join(dir, 'nested'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'nested', 'extra.txt'), 'hello', 'utf8');
+
+      const result = await resolveCapabilitySource(dir, { gsdHome, hostVersion: '1.5.0' });
+      assert.strictEqual(result.id, 'copybudget-control-cap', 'a within-budget bundle resolves');
+      assert.ok(fs.existsSync(path.join(result.stagedDir, 'capability.json')), 'staged manifest present');
+      assert.ok(fs.existsSync(path.join(result.stagedDir, 'nested', 'extra.txt')), 'nested file copied through the streaming copy');
+      assert.strictEqual(fs.readFileSync(path.join(result.stagedDir, 'nested', 'extra.txt'), 'utf8'), 'hello', 'nested file bytes preserved');
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 finding 2 (MED) — the spoofable parseTarMemberSize header-size parse was
+// REMOVED. The staged-dir aggregate budget (finding 1) is now the real bound on
+// the extracted RESULT, so the fragile/spoofable BSD-vs-GNU date-token size scan
+// is gone. The tar NAME/TYPE guards (traversal, symlink, hardlink) remain and a
+// within-name/type tarball still resolves through extraction.
+// ---------------------------------------------------------------------------
+describe('#1461 finding 2 — tar header-size parse removed; NAME/TYPE guards remain', () => {
+  let gsdHome = '';
+  beforeEach(() => { gsdHome = createTempDir('gsd-cap-tarsize-removed-'); });
+  afterEach(() => {
+    _setCapabilitySourceHttpGet(null);
+    cleanup(gsdHome);
+  });
+
+  test('the spoofable per-member size cap export (MAX_TAR_MEMBER_BYTES) is REMOVED', () => {
+    // REVERT-FAILS: if parseTarMemberSize / its export are re-introduced, this asserts the constant
+    // is gone (the spoofable BSD-owner="Jan" mis-anchor fail-open is no longer relied upon).
+    assert.strictEqual(capSource.MAX_TAR_MEMBER_BYTES, undefined, 'the spoofable per-member tar size cap is removed');
+  });
+
+  test('a tar with a HUGE declared member size (formerly rejected by the size parse) now extracts — and the staged budget is the real bound', async () => {
+    // This listing once tripped the per-member size cap. With that removed, the NAME/TYPE guards pass
+    // and extraction proceeds; a WITHIN-budget extracted result resolves normally. (An over-budget
+    // result would be caught by finding 1's staged-dir budget, exercised in the finding-1 suite.)
+    const cap = featureCap('tarsize-removed-cap');
+    const tgzBuf = _fakeTarball(cap);
+    _setCapabilitySourceHttpGet(() => Promise.resolve({ statusCode: 200, body: tgzBuf }));
+    const result = await resolveCapabilitySource('https://example.com/huge-decl.tgz', {
+      gsdHome, hostVersion: '1.5.0',
+      execOverrides: {
+        tar: (_prog, args) => {
+          if (args[0] === '-tzf') {
+            return { exitCode: 0, stdout: 'capability.json\n', stderr: '', signal: null, error: null };
+          }
+          if (args[0] === '-tvzf') {
+            // A wildly large DECLARED size in the column — formerly rejected, now ignored.
+            return { exitCode: 0, stdout: '-rw-r--r-- 0 user group 999999999999 Jan  1 2020 capability.json\n', stderr: '', signal: null, error: null };
+          }
+          const extractDir = args[args.indexOf('-C') + 1];
+          fs.writeFileSync(path.join(extractDir, 'capability.json'), JSON.stringify(cap), 'utf8');
+          return { exitCode: 0, stdout: '', stderr: '', signal: null, error: null };
+        },
+      },
+    });
+    assert.strictEqual(result.id, 'tarsize-removed-cap', 'a huge-declared-size tar with safe names/types now extracts');
+    assert.ok(fs.existsSync(result.stagedDir), 'staged dir exists after extraction');
+  });
+});

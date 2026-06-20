@@ -170,6 +170,26 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// ---------------------------------------------------------------------------
+// Test seams (#1461). The validator and generator are normally `require()`d
+// fresh inside loadRegistry. These optional overrides let a test inject a
+// validator whose cross-capability check THROWS (OVL-1) or a generator whose
+// buildRegistry THROWS (OVL-2), to prove the loader still NEVER crashes the
+// loop — it skips the offending overlay with a warning / falls back to the
+// frozen first-party registry. Pass null to restore the real module.
+// ---------------------------------------------------------------------------
+let _validatorOverride: ValidatorModule | null = null;
+let _generatorOverride: GeneratorModule | null = null;
+
+/** Test seam: override the capability validator module. Pass null to restore. */
+function _setValidatorForTest(v: ValidatorModule | null): void {
+  _validatorOverride = v;
+}
+/** Test seam: override the registry generator module. Pass null to restore. */
+function _setGeneratorForTest(g: GeneratorModule | null): void {
+  _generatorOverride = g;
+}
+
 /** Resolve the running GSD version; fail-closed to '0.0.0' if it cannot be read. */
 function readHostVersion(): string {
   try {
@@ -407,6 +427,32 @@ function withOverlayMeta(reg: Registry, meta: OverlayMeta): Registry {
 }
 
 /**
+ * Loop extension points a capability declares a gate at (the `point` strings off `cap.gates`).
+ * SINGLE source of truth shared by BOTH the per-candidate `skip()` closure AND the OVL-2
+ * buildRegistry-failure fallback (#1461) so a dropped gate-declaring overlay fails CLOSED via the
+ * SAME extraction the per-candidate path uses — never one path blocking and the other failing open.
+ *
+ * #1461 finding 1 (HIGH): this MUST be TOTAL over an UNTRUSTED, possibly-malformed manifest — it
+ * runs on a candidate BEFORE per-candidate validation has confirmed the shape. A null `cap`, a
+ * non-object `cap`, a non-array `cap.gates` (e.g. `gates: {}` / `gates: null`), or a malformed gate
+ * ENTRY (`gates: [null]` / `gates: ["x"]` / a gate with a non-string `point`) must NEVER throw: it
+ * returns only the extractable `point` strings, filtering null/non-object/malformed entries. A
+ * `null` gate has no extractable point, so it contributes nothing (no spurious fail-closed block).
+ */
+function gatePointsOf(cap: unknown): string[] {
+  if (!cap || typeof cap !== 'object') return [];
+  const gates = (cap as { gates?: unknown }).gates;
+  if (!Array.isArray(gates)) return [];
+  return (gates as unknown[])
+    .map((g) =>
+      g && typeof g === 'object' && typeof (g as Record<string, unknown>).point === 'string'
+        ? ((g as Record<string, unknown>).point as string)
+        : null,
+    )
+    .filter((p): p is string => typeof p === 'string');
+}
+
+/**
  * Load the capability registry, optionally composing the installed overlay.
  *
  * @returns the registry object (same shape as `capability-registry.cjs`). When
@@ -420,7 +466,7 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
   if (!options.includeInstalled) return base;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-  const validator: ValidatorModule = require('./capability-validator.cjs');
+  const validator: ValidatorModule = _validatorOverride ?? require('./capability-validator.cjs');
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
   const semver: SemverModule = require('./semver-compare.cjs');
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
@@ -467,7 +513,7 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
   const getGenerator = (): GeneratorModule => {
     if (generatorMod) return generatorMod;
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-    const mod: GeneratorModule = require('../../../scripts/gen-capability-registry.cjs');
+    const mod: GeneratorModule = _generatorOverride ?? require('../../../scripts/gen-capability-registry.cjs');
     generatorMod = mod;
     return mod;
   };
@@ -526,11 +572,7 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
 
       // Points at which this capability declares a gate — used to fail CLOSED if
       // the capability is skipped (a skipped deploy gate must block, not pass).
-      const gatePoints: string[] = Array.isArray(cap.gates)
-        ? (cap.gates as Array<Record<string, unknown>>)
-            .map((g) => (g && typeof g === 'object' && typeof g.point === 'string' ? g.point : null))
-            .filter((p): p is string => typeof p === 'string')
-        : [];
+      const gatePoints: string[] = gatePointsOf(cap);
       const declaresGate = gatePoints.length > 0;
       const skip = (reason: string): void => {
         warnings.push({ id, scope: root.scope, reason });
@@ -540,6 +582,21 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
         }
       };
 
+      // #1461 finding 1 (HIGH): make the ENTIRE per-candidate processing body TOTAL. The committed
+      // validator is NOT total for malformed ARRAY entries — validateGate/validateStep/
+      // validateContribution dereference an entry (`.point`, `.into`, …) BEFORE any shape check, so a
+      // manifest with `gates: [null]` (or `steps: [null]` / `contributions: [null]`) makes
+      // validateCapability THROW `Cannot read properties of null (reading 'point')`. That throw was
+      // OUTSIDE any per-candidate guard → it escaped loadRegistry and crashed EVERY consumer
+      // (loop-resolver, config-loader, surface, capability-state, gsd-tools). ADR-1244 D2 mandates a
+      // malformed overlay is SKIPPED with a warning, never crashes the loop. Wrapping the whole body
+      // (manifest already parsed above) means ANY throw from ANY validator/step becomes a structured
+      // `skip()` + continue to the next candidate — which ALSO fail-closes a declared gate (the `skip`
+      // closure records incompatibleGateCapIds/blockedGates for the extractable gate points). The
+      // existing structured skip/continue paths inside are unchanged; this is a fail-safe BACKSTOP for
+      // a validator/step that THROWS rather than returning errors. `continue` inside this try simply
+      // advances the `for` loop (there is no finally to interfere).
+      try {
       // 1. Reserved namespace — third-party may not impersonate first-party.
       if (RESERVED_ID_PREFIX.test(id)) {
         skip('id uses a reserved first-party prefix (gsd-/gsd-core-/anthropic-)');
@@ -666,11 +723,25 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
       //    owner-uniqueness, config-key exclusivity vs central schema, requires acyclicity
       //    + tier-monotone. Incremental: add the candidate, validate, drop on any error.
       acceptedMap.set(id, cap);
-      const crossErrs = [
-        ...validator.validateAgainstContract(cap, id),
-        ...validator.validateConsumesGlobal(acceptedMap),
-        ...validator.validateCrossCapability(acceptedMap, getCentralKeys()),
-      ];
+      // #1461 OVL-1 (HIGH): these validators are CONTRACTED to RETURN error arrays, but one can THROW
+      // (e.g. validateConsumesGlobal asserting on a duplicate producer). An unguarded throw here
+      // escapes loadRegistry and crashes EVERY consumer (loop-resolver, config-loader, surface,
+      // capability-state, gsd-tools). ADR-1244 D2: a malformed overlay is SKIPPED with a warning,
+      // never crashes the loop. So a throwing validator is treated EXACTLY like a validation failure:
+      // drop this one candidate (with a warning) and continue — the rest of the overlay set is
+      // unaffected. (The returns-errors path below is unchanged.)
+      let crossErrs: string[];
+      try {
+        crossErrs = [
+          ...validator.validateAgainstContract(cap, id),
+          ...validator.validateConsumesGlobal(acceptedMap),
+          ...validator.validateCrossCapability(acceptedMap, getCentralKeys()),
+        ];
+      } catch (e) {
+        acceptedMap.delete(id);
+        skip('cross-capability validation error: ' + errMessage(e));
+        continue;
+      }
       if (crossErrs.length) {
         acceptedMap.delete(id);
         skip('cross-capability validation failed: ' + crossErrs.slice(0, 3).join('; '));
@@ -692,6 +763,17 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
       // dispatchable. (Project-scope ledgers live in the repo tree and are thus only as trustworthy
       // as the repo — see docs/explanation/capability-trust-model.md.)
       if (families.length > 0 && committedIds.has(id)) commandRoots[id] = capDir;
+      } catch (e) {
+        // #1461 finding 1 (HIGH): ANY throw from ANY validator/step in the per-candidate body lands
+        // here — drop just THIS candidate with a structured skip-warning and continue with the rest of
+        // the overlay set (the loop is never crashed). `skip()` ALSO fail-closes the candidate's
+        // declared gates (incompatibleGateCapIds/blockedGates) so a malformed gate-declaring overlay
+        // blocks rather than silently passing. Remove any half-committed acceptedMap entry so the
+        // partially-processed candidate cannot leak into the final buildRegistry compose.
+        acceptedMap.delete(id);
+        skip('overlay processing error: ' + errMessage(e));
+        continue;
+      }
     }
   }
 
@@ -706,8 +788,38 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
 
   // Compose via the canonical builder so every derived view matches first-party.
   // acceptedMap already holds first-party ∪ accepted overlays (validated above).
-  const merged = getGenerator().buildRegistry(acceptedMap);
-  return withOverlayMeta(merged, meta);
+  //
+  // #1461 OVL-2 (HIGH): an overlay can pass every per-candidate step yet trip a STRICTER whole-build
+  // check inside buildRegistry (config-slice shape, topo cycle across the merged set, configFormat
+  // parity). An unguarded buildRegistry throw escapes loadRegistry and crashes the loop. ADR-1244 D2
+  // mandates NEVER-CRASH: on a compose failure, fall back to the frozen FIRST-PARTY registry plus a
+  // warning recording why — the loop still gets a usable registry, just without the overlay surfaces.
+  try {
+    const merged = getGenerator().buildRegistry(acceptedMap);
+    return withOverlayMeta(merged, meta);
+  } catch (e) {
+    const reason = 'buildRegistry failed composing overlays: ' + errMessage(e) + '; falling back to first-party';
+    meta.warnings.push({ id: '*', scope: 'global', reason });
+    // #1461 finding 3 (LOW): the fallback DROPS every accepted overlay, so NO dropped overlay may
+    // retain a command root. A stale `commandRoots[capId]` would let a runtime dispatcher require()/
+    // run a third-party command family FROM the install root of a capability the fallback decided NOT
+    // to load. Clear the map (the first-party base never lists overlay commandRoots — first-party
+    // command modules ship in bin/lib/, not via _overlay.commandRoots).
+    meta.commandRoots = {};
+    // #1461 OVL-2 fail-CLOSED on compose failure (HIGH): the fallback DROPS every accepted overlay,
+    // so any accepted overlay that DECLARED a gate would have its gate silently vanish → a blocking
+    // gate FAILS OPEN, violating ADR-1244 (a skipped capability declaring a gate must FAIL CLOSED).
+    // Record each dropped gate-declaring overlay's gate as blocked using the SAME extraction the
+    // per-candidate `skip()` closure uses (gatePointsOf), so loop-resolver injects the synthetic
+    // blocking gate at each declared point exactly as it would for a per-candidate skip.
+    for (const cap of overlayCaps) {
+      const gatePoints = gatePointsOf(cap);
+      if (gatePoints.length === 0) continue;
+      meta.incompatibleGateCapIds.push(cap.id);
+      for (const point of gatePoints) meta.blockedGates.push({ point, capId: cap.id, reason });
+    }
+    return withOverlayMeta(base, meta);
+  }
 }
 
-module.exports = { loadRegistry };
+module.exports = { loadRegistry, _setValidatorForTest, _setGeneratorForTest };

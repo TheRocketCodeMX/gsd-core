@@ -18,7 +18,9 @@
  *
  * ADR-457 build-at-publish: authored as TypeScript .cts → emits .cjs via tsc.
  *
- * Exports: resolveCapabilitySource, parseSpec, _setCapabilitySourceHttpGet
+ * Exports: resolveCapabilitySource, parseSpec, _setCapabilitySourceHttpGet,
+ *          _setHttpsGetImpl, _readManifestBounded, MAX_RESPONSE_BYTES,
+ *          MANIFEST_MAX_BYTES, MAX_STAGED_BUNDLE_BYTES, MAX_STAGED_BUNDLE_ENTRIES
  */
 
 import fs from 'node:fs';
@@ -40,6 +42,12 @@ const capValidator = require('./capability-validator.cjs') as ValidatorModule;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const semverMod = require('./semver-compare.cjs') as {
   semverSatisfies: (version: unknown, range: unknown) => boolean;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ledgerMod = require('./capability-ledger.cjs') as {
+  /** Shared fd-based bounded reader: content, null for ENOENT, or THROWS (non-regular/oversized/IO). */
+  readSmallRegularFile: (filePath: string, maxBytes: number) => string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -129,19 +137,115 @@ interface HttpResponse {
 
 type HttpGetFn = (url: string) => Promise<HttpResponse>;
 
+/**
+ * DOS-1 (#1461): GENEROUS but BOUNDED cap on a fetched capability source response. `realHttpsGet`
+ * previously accumulated `res.on('data')` chunks with NO ceiling, so a hostile or accidental
+ * oversized tarball (e.g. an HTTP endpoint streaming gigabytes) would buffer unbounded into memory
+ * and OOM the process. A real capability bundle is a few hundred KiB of declarative JSON + small
+ * artifacts; 64 MiB is far more than any legitimate bundle yet still a hard ceiling. Enforced two
+ * ways: (1) a `content-length` header over the cap is rejected BEFORE buffering any body; (2) the
+ * cumulative streamed byte count is tracked across `data` events and the request is destroyed +
+ * rejected the instant it exceeds the cap (covers chunked / missing-content-length responses).
+ */
+const MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+
+/**
+ * #1461 finding 2 (HIGH): GENEROUS but BOUNDED cap on an UNTRUSTED `capability.json` read during
+ * resolve/staging. Every untrusted manifest (tarball / npm / git / local staging) MUST be read via
+ * the SHARED bounded reader (`readSmallRegularFile`: open → fstat → require-regular-file → size-cap →
+ * read-exactly-size), NOT a raw `fs.readFileSync`. A raw read of an oversized extracted-or-local
+ * `capability.json` reads unbounded into memory (OOM), and a FIFO/device/non-regular manifest BLOCKS
+ * the resolver forever. A legitimate manifest is a few KiB of declarative JSON; 8 MiB is far more than
+ * any real capability.json yet a hard ceiling. The reader returns null for a genuinely-missing file
+ * (ENOENT) and THROWS for non-regular/oversized/IO — both are mapped to a clear "manifest not
+ * found / refused" rejection (fail-closed: the source never resolves).
+ */
+const MANIFEST_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * #1461 finding 1 (HIGH): ONE uniform aggregate byte-budget over the STAGED bundle directory. The HTTP
+ * fetch is capped (MAX_RESPONSE_BYTES), but `copyDirRecursive` / `fs.copyFileSync`, `git clone`,
+ * `npm pack`, and `tar -x` were only TIMEOUT-bounded — so a huge local source tree, a giant git repo, a
+ * large npm package, or a gzip/tar bomb that expands far beyond the compressed download cap could fill
+ * disk during staging. This single budget, enforced at the common staging chokepoint (stageValidated,
+ * AFTER the source is copied into staging and BEFORE validation/promotion), uniformly bounds the RESULT
+ * of every adapter: it sums the regular-file bytes of the staged dir via a BOUNDED streaming walk and
+ * fails closed if the total exceeds the cap. 128 MiB is generous for a real capability bundle (a few
+ * hundred KiB of declarative JSON + small artifacts) yet hard-bounds a bomb.
+ *
+ * RESIDUAL (#1461 finding 4): this bounds the staged RESULT — it rejects an oversized install BEFORE
+ * promotion, but a transient disk-fill DURING extraction/clone (before the post-staging walk runs) is a
+ * residual a fully-airtight bound would need a streaming byte-quota DURING extraction/clone (e.g. a
+ * cgroup/disk-quota or a custom streaming extractor) to close. This is a stated, proportionate limit:
+ * this resolver path is USER-INITIATED `install` only (the cloned-repo / loader overlay path does NOT
+ * invoke the resolver and is bounded separately by capability-consent's bundleContentHash caps), and
+ * staging happens under a temp/.staging dir that is rmSync'd on any failure.
+ */
+const MAX_STAGED_BUNDLE_BYTES = 128 * 1024 * 1024;
+
+/**
+ * #1461 finding 1: a cumulative ENTRY-count ceiling for the staged-dir budget walk so the enumeration
+ * ITSELF is bounded (a hostile bundle with millions of tiny files / a very deep tree cannot force
+ * unbounded readdir work before the byte cap trips). 100k entries is far more than any real bundle.
+ */
+const MAX_STAGED_BUNDLE_ENTRIES = 100_000;
+
+/**
+ * The low-level `https.get`-shaped transport. Extracted as an overridable module-level reference so
+ * a test can inject a fake response stream (chunked / oversized / content-length-tagged) to exercise
+ * the MAX_RESPONSE_BYTES enforcement in realHttpsGet WITHOUT real network I/O. Defaults to the real
+ * node:https get. (The higher-level `_httpGet` seam below short-circuits realHttpsGet entirely and is
+ * used by the integrity tests; this seam is specifically for the streaming/size-cap path.)
+ */
+type HttpsGetImpl = typeof https.get;
+let _httpsGetImpl: HttpsGetImpl = https.get;
+
+/** Test seam: override the low-level https.get transport used by realHttpsGet. Pass null to restore. */
+function _setHttpsGetImpl(fn: HttpsGetImpl | null): void {
+  _httpsGetImpl = fn ?? https.get;
+}
+
 // ---------------------------------------------------------------------------
 // Injectable HTTP transport (test seam)
 // ---------------------------------------------------------------------------
 
 function realHttpsGet(url: string): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
-    const req = https.get(
+    const req = _httpsGetImpl(
       url,
       { headers: { 'User-Agent': 'gsd-core-capability-source/1.0' } },
       (res) => {
+        // DOS-1: reject early if the server ADVERTISES a body over the cap — no bytes buffered.
+        const contentLength = Number(res.headers?.['content-length']);
+        if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+          req.destroy();
+          res.destroy?.();
+          reject(
+            new Error(
+              `response exceeds ${MAX_RESPONSE_BYTES} bytes (content-length ${contentLength}) fetching ${url}`
+            )
+          );
+          return;
+        }
         const chunks: Buffer[] = [];
-        res.on('data', (c: Buffer) => chunks.push(c));
+        let received = 0;
+        let aborted = false;
+        res.on('data', (c: Buffer) => {
+          if (aborted) return;
+          received += c.length;
+          // DOS-1: enforce the ceiling on the ACTUAL streamed bytes (covers chunked / lying or
+          // absent content-length). Destroy the request/response and reject — never keep buffering.
+          if (received > MAX_RESPONSE_BYTES) {
+            aborted = true;
+            req.destroy();
+            res.destroy?.();
+            reject(new Error(`response exceeds ${MAX_RESPONSE_BYTES} bytes fetching ${url}`));
+            return;
+          }
+          chunks.push(c);
+        });
         res.on('end', () => {
+          if (aborted) return;
           const body = Buffer.concat(chunks);
           if (res.statusCode !== 200) {
             reject(new Error(`HTTP ${res.statusCode ?? 0} fetching ${url}`));
@@ -205,6 +309,42 @@ function verifyIntegrity(buf: Buffer, expected: string): void {
 }
 
 /**
+ * #1461 finding 2 (HIGH): read an UNTRUSTED `capability.json` (extracted or local) via the SHARED
+ * bounded reader and parse it as a JSON object, failing CLOSED on every untrusted-input condition.
+ * Replaces the raw `fs.readFileSync(manifestPath,'utf8')` at each resolve/staging site so an oversized
+ * manifest cannot read unbounded (OOM) and a FIFO/device/non-regular manifest cannot BLOCK forever.
+ *   - ENOENT (reader returns null) → throw `<notFoundMessage>` (genuinely missing).
+ *   - non-regular / oversized / IO (reader THROWS)  → throw `<notFoundMessage>: <reason>` (refused).
+ *   - not valid JSON  → throw the caller's invalid-JSON message.
+ *   - not a JSON object  → throw the caller's not-an-object message.
+ */
+function readManifestBounded(
+  manifestPath: string,
+  notFoundMessage: string,
+): Record<string, unknown> {
+  let raw: string | null;
+  try {
+    raw = ledgerMod.readSmallRegularFile(manifestPath, MANIFEST_MAX_BYTES);
+  } catch (err) {
+    // Non-regular (FIFO/device/dir), oversized, or IO error — fail closed with a clear message.
+    throw new Error(`${notFoundMessage}: ${(err as Error).message}`);
+  }
+  if (raw === null) {
+    throw new Error(notFoundMessage); // genuinely missing (ENOENT).
+  }
+  let cap: unknown;
+  try {
+    cap = JSON.parse(raw);
+  } catch {
+    throw new Error('capability.json is not valid JSON');
+  }
+  if (typeof cap !== 'object' || cap === null || Array.isArray(cap)) {
+    throw new Error('capability.json must be a JSON object');
+  }
+  return cap as Record<string, unknown>;
+}
+
+/**
  * Reject spec/id values containing path separators or `..`.
  * Throws if the id is unsafe.
  */
@@ -242,28 +382,170 @@ function assertSafeGitUrl(url: string): void {
 }
 
 /**
- * Copy a directory tree recursively into destDir.
+ * Copy a directory tree recursively into destDir — STREAMING and BUDGETED.
  *
  * SECURITY: symlinks are REJECTED (fail closed). A fetched bundle could otherwise
  * smuggle a symlink (e.g. `id_rsa -> ~/.ssh/id_rsa`) that fs.copyFileSync would
  * FOLLOW, copying an arbitrary host file's bytes into the staged capability dir.
  * Dirent.isSymbolicLink() reflects the entry itself (lstat semantics), so this
  * catches both file and directory symlinks before any copy.
+ *
+ * #1461 finding 1 (HIGH, ROUND 2): the copy ITSELF is bounded. The former
+ * `fs.readdirSync(src, { withFileTypes: true })` materialized the ENTIRE directory-entry
+ * array into memory BEFORE any budget could run — and copyDirRecursive runs at staging time
+ * BEFORE the post-copy assertStagedBundleWithinBudget walk. So a hostile local/git/npm/tar
+ * source whose tree has a directory holding millions of tiny files (fetch < 64 MiB, but a
+ * colossal dirent array) OOMs the process during the COPY, before the post-copy budget can
+ * fail closed. We now STREAM each directory via fs.opendirSync + dir.readSync() (one entry at
+ * a time, never the whole array) and thread CUMULATIVE counters across the recursion — total
+ * entries (cap MAX_STAGED_BUNDLE_ENTRIES) and total regular-file bytes (cap
+ * MAX_STAGED_BUNDLE_BYTES) — throwing the MOMENT either is exceeded, DURING the copy, before
+ * reading/copying the rest. The shared mutable `budget` object mirrors bundleContentHash's
+ * cumulative walk in capability-consent. The throw propagates to stageValidated's catch, which
+ * rmSync's the staging dir (fail closed, no partial bundle promoted).
  */
-function copyDirRecursive(src: string, dest: string): void {
+function copyDirRecursive(
+  src: string,
+  dest: string,
+  budget: { entries: number; bytes: number } = { entries: 0, bytes: 0 },
+): void {
   fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isSymbolicLink()) {
-      throw new Error(`Refusing to stage symlink in capability bundle: ${entry.name}`);
-    } else if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else if (entry.isFile()) {
-      fs.copyFileSync(srcPath, destPath);
-    }
-    // Non-regular entries (sockets, fifos, devices) are silently skipped.
+  let dir: fs.Dir;
+  try {
+    dir = fs.opendirSync(src);
+  } catch (err) {
+    throw new Error(`Cannot read source directory "${src}": ${(err as Error).message}`);
   }
+  try {
+    for (;;) {
+      let entry: fs.Dirent | null;
+      try {
+        entry = dir.readSync();
+      } catch (err) {
+        throw new Error(`Cannot read source directory "${src}": ${(err as Error).message}`);
+      }
+      if (entry === null) break;
+
+      // BOUND THE ENUMERATION ITSELF: count this entry and fail closed BEFORE it is processed,
+      // so a huge directory (or deep tree) is never read in full into memory first.
+      budget.entries++;
+      if (budget.entries > MAX_STAGED_BUNDLE_ENTRIES) {
+        throw new Error(
+          `Refusing to stage bundle: entry count exceeds the maximum of ${MAX_STAGED_BUNDLE_ENTRIES}`
+        );
+      }
+
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to stage symlink in capability bundle: ${entry.name}`);
+      } else if (entry.isDirectory()) {
+        copyDirRecursive(srcPath, destPath, budget);
+      } else if (entry.isFile()) {
+        // Cumulative byte budget: lstat the entry (NOT stat — a symlink is already rejected above,
+        // but lstat is the authoritative size of the regular file being copied) and fail closed the
+        // MOMENT the running total crosses the cap, BEFORE copying the oversized file's bytes.
+        let st: fs.Stats;
+        try {
+          st = fs.lstatSync(srcPath);
+        } catch (err) {
+          throw new Error(`Cannot lstat source entry "${srcPath}": ${(err as Error).message}`);
+        }
+        budget.bytes += st.size;
+        if (budget.bytes > MAX_STAGED_BUNDLE_BYTES) {
+          throw new Error(
+            `Refusing to stage bundle: total staged size exceeds the maximum of ` +
+            `${MAX_STAGED_BUNDLE_BYTES} bytes (possible oversized source tree, git repo, npm package, or tar bomb)`
+          );
+        }
+        fs.copyFileSync(srcPath, destPath);
+      }
+      // Non-regular entries (sockets, fifos, devices) are silently skipped.
+    }
+  } finally {
+    try { dir.closeSync(); } catch { /* best-effort: no fd leak per opened Dir */ }
+  }
+}
+
+/**
+ * #1461 finding 1 (HIGH): sum the total regular-file bytes under `stagedDir` via a BOUNDED streaming
+ * walk and fail closed if the total exceeds MAX_STAGED_BUNDLE_BYTES. This is the SINGLE uniform bound on
+ * the RESULT of staging for EVERY adapter (local copy / git clone / npm pack / tar extraction) — placed
+ * at the common chokepoint in stageValidated AFTER copyDirRecursive and BEFORE validation/promotion.
+ *
+ * Bounded like capability-consent.bundleContentHash's enumeration: each level is STREAMED via
+ * fs.opendirSync + dir.readSync() with a CUMULATIVE entry counter (`count.n`) that throws the moment it
+ * exceeds MAX_STAGED_BUNDLE_ENTRIES — BEFORE the rest of a huge/deep level is read — so a hostile bundle
+ * with millions of tiny files or a very deep tree cannot force unbounded readdir/memory work before the
+ * byte cap trips. Per-entry: lstat (NOT stat) so a symlink is detected as itself; symlinks and other
+ * non-regular entries are REJECTED (fail closed — copyDirRecursive already refuses symlinks at copy time,
+ * but a fresh lstat here is the authoritative check on what actually landed in staging). Regular-file
+ * st.size is accumulated and the walk throws the moment the running total crosses the cap.
+ */
+function assertStagedBundleWithinBudget(stagedDir: string): void {
+  const total = { bytes: 0 };
+  const count = { n: 0 };
+  const walk = (absDir: string): void => {
+    let dir: fs.Dir;
+    try {
+      dir = fs.opendirSync(absDir);
+    } catch (err) {
+      throw new Error(`Cannot read staged directory "${absDir}": ${(err as Error).message}`);
+    }
+    const levelEntries: fs.Dirent[] = [];
+    try {
+      for (;;) {
+        let ent: fs.Dirent | null;
+        try {
+          ent = dir.readSync();
+        } catch (err) {
+          throw new Error(`Cannot read staged directory "${absDir}": ${(err as Error).message}`);
+        }
+        if (ent === null) break;
+        // BOUND THE ENUMERATION ITSELF: fail closed before this entry is retained, so a huge directory
+        // (or deep tree) cannot be loaded in full first.
+        count.n++;
+        if (count.n > MAX_STAGED_BUNDLE_ENTRIES) {
+          throw new Error(
+            `Refusing to stage bundle: entry count exceeds the maximum of ${MAX_STAGED_BUNDLE_ENTRIES}`
+          );
+        }
+        levelEntries.push(ent);
+      }
+    } finally {
+      try { dir.closeSync(); } catch { /* best-effort */ }
+    }
+    for (const ent of levelEntries) {
+      const abs = path.join(absDir, ent.name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(abs);
+      } catch (err) {
+        throw new Error(`Cannot lstat staged entry "${abs}": ${(err as Error).message}`);
+      }
+      if (st.isSymbolicLink()) {
+        // Defense in depth: copyDirRecursive already refuses symlinks, but the budget walk is the
+        // authoritative re-check on what actually landed in staging.
+        throw new Error(`Refusing to stage symlink in capability bundle: ${abs}`);
+      }
+      if (st.isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      if (!st.isFile()) {
+        // Sockets / FIFOs / devices are not part of a real capability bundle.
+        throw new Error(`Refusing to stage non-regular file in capability bundle: ${abs}`);
+      }
+      total.bytes += st.size;
+      if (total.bytes > MAX_STAGED_BUNDLE_BYTES) {
+        throw new Error(
+          `Refusing to stage bundle: total staged size exceeds the maximum of ` +
+          `${MAX_STAGED_BUNDLE_BYTES} bytes (possible oversized source tree, git repo, npm package, or tar bomb)`
+        );
+      }
+    }
+  };
+  walk(stagedDir);
 }
 
 /**
@@ -271,6 +553,14 @@ function copyDirRecursive(src: string, dest: string): void {
  * an absolute path or a `..` segment BEFORE extraction (system tar mostly guards
  * this, but the hard contract is "traversal rejected", so we verify explicitly).
  * Symlink members that survive extraction are caught later by copyDirRecursive.
+ *
+ * #1461 finding 2 (MED): the former per-member declared-size parse (parseTarMemberSize) was REMOVED.
+ * It scanned the verbose listing for a date-looking token and treated the previous token as the size,
+ * but on BSD `tar -tv` the owner/group columns PRECEDE the size, so a member owner/group like "Jan"
+ * mis-anchored the scan → fail-OPEN (a bomb's real size column skipped). The staged-dir aggregate
+ * budget (assertStagedBundleWithinBudget, #1461 finding 1) is now the real, non-spoofable bound on the
+ * extracted RESULT, so the fragile header parse is redundant. This function keeps only the NAME and
+ * TYPE guards (traversal / symlink / hardlink), which are unambiguous and not size-dependent.
  */
 function assertSafeTarMembers(execTar: TarExecFn, tgzPath: string): void {
   // (1) Member NAMES — reject path traversal (absolute / "..").
@@ -340,26 +630,37 @@ function stageValidated(opts: {
   fs.mkdirSync(stagingDir, { recursive: true });
 
   try {
-    // Copy source into staging.
+    // Copy source into staging — STREAMING + BUDGETED (#1461 finding 1, ROUND 2). copyDirRecursive now
+    // enforces BOTH the entry-count and aggregate-byte budget DURING the copy (per-entry, via opendirSync
+    // + readSync, never readdirSync of the whole array), so a hostile source with millions of tiny files
+    // or an oversized artifact fails closed IN-PROCESS before the whole directory is materialized — it can
+    // no longer OOM the process before a post-copy walk runs. The catch below rmSync's the staging dir on
+    // throw, so an over-budget bundle never lands at the final location.
     copyDirRecursive(sourceDir, stagingDir);
 
-    // Read and parse the capability manifest.
+    // #1461 finding 1 (HIGH): belt-and-suspenders aggregate byte-budget re-verification on what ACTUALLY
+    // landed in staging. copyDirRecursive (above) is now the PRIMARY in-process bound — it fails closed
+    // DURING the copy — so this post-copy walk is no longer the sole guard, but it is kept as a cheap
+    // authoritative re-lstat of the staged RESULT at the common chokepoint AFTER staging and BEFORE
+    // validation/promotion: it re-checks the entry/byte caps and re-rejects any symlink / non-regular
+    // entry on the real staged tree (every staging path here flows through copyDirRecursive — there is no
+    // in-place-dir staging path — so the copy already bounds it; this is defense in depth).
+    //
+    // RESIDUAL (#1461 finding 4): the copy and this walk bound the staged RESULT (rejects an oversized
+    // install before promotion); a transient disk-fill DURING extraction/clone (system tar/git/npm write
+    // to a temp dir BEFORE copyDirRecursive streams it into staging) is a residual a fully-airtight bound
+    // would need a streaming byte-quota DURING extraction/clone to close. Proportionate: this resolver
+    // path is USER-INITIATED `install` only (the cloned-repo / loader overlay path does NOT invoke the
+    // resolver and is bounded separately), and the temp/.staging dirs are removed on any failure.
+    assertStagedBundleWithinBudget(stagingDir);
+
+    // Read and parse the capability manifest via the SHARED bounded reader (#1461 finding 2): an
+    // oversized/non-regular staged capability.json is refused (fail-closed) rather than read unbounded.
     const manifestPath = path.join(stagingDir, 'capability.json');
-    let rawManifest: string;
-    try {
-      rawManifest = fs.readFileSync(manifestPath, 'utf8');
-    } catch {
-      throw new Error(`capability.json not found in staged directory: ${stagingDir}`);
-    }
-    let cap: Record<string, unknown>;
-    try {
-      cap = JSON.parse(rawManifest) as Record<string, unknown>;
-    } catch {
-      throw new Error('capability.json is not valid JSON');
-    }
-    if (typeof cap !== 'object' || cap === null || Array.isArray(cap)) {
-      throw new Error('capability.json must be a JSON object');
-    }
+    const cap = readManifestBounded(
+      manifestPath,
+      `capability.json not found in staged directory: ${stagingDir}`,
+    );
 
     // engines.gsd pre-check — reject before staging finalizes (unless the caller owns the gate).
     const engines = cap['engines'];
@@ -516,14 +817,13 @@ function resolveLocal(
   if (!fs.existsSync(absPath)) {
     throw new Error(`Local capability path does not exist: ${absPath}`);
   }
-  // Read id from capability.json to know the staging dest.
+  // Read id from capability.json to know the staging dest — via the SHARED bounded reader (#1461
+  // finding 2): an oversized/non-regular local capability.json is refused, never read unbounded.
   const manifestPath = path.join(absPath, 'capability.json');
-  let cap: Record<string, unknown>;
-  try {
-    cap = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-  } catch {
-    throw new Error(`Cannot read capability.json from local path: ${manifestPath}`);
-  }
+  const cap = readManifestBounded(
+    manifestPath,
+    `Cannot read capability.json from local path: ${manifestPath}`,
+  );
   const id = typeof cap['id'] === 'string' ? cap['id'] : '';
   if (!id) throw new Error('capability.json missing "id" field');
 
@@ -558,14 +858,13 @@ function resolveGit(
       }
     }
 
-    // Read id from capability.json.
+    // Read id from capability.json via the SHARED bounded reader (#1461 finding 2): a cloned repo's
+    // oversized/non-regular capability.json is refused, never read unbounded.
     const manifestPath = path.join(cloneDir, 'capability.json');
-    let cap: Record<string, unknown>;
-    try {
-      cap = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-    } catch {
-      throw new Error(`capability.json not found in cloned repo: ${parsed.target}`);
-    }
+    const cap = readManifestBounded(
+      manifestPath,
+      `capability.json not found in cloned repo: ${parsed.target}`,
+    );
     const id = typeof cap['id'] === 'string' ? cap['id'] : '';
     if (!id) throw new Error('capability.json missing "id" field');
 
@@ -620,14 +919,13 @@ function resolveNpm(
     const packageDir = path.join(extractDir, 'package');
     const sourceDir = fs.existsSync(path.join(packageDir, 'capability.json')) ? packageDir : extractDir;
 
-    // Read id from capability.json.
+    // Read id from capability.json via the SHARED bounded reader (#1461 finding 2): an extracted
+    // oversized/non-regular capability.json is refused, never read unbounded.
     const manifestPath = path.join(sourceDir, 'capability.json');
-    let cap: Record<string, unknown>;
-    try {
-      cap = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-    } catch {
-      throw new Error(`capability.json not found after npm pack extraction from: ${parsed.target}`);
-    }
+    const cap = readManifestBounded(
+      manifestPath,
+      `capability.json not found after npm pack extraction from: ${parsed.target}`,
+    );
     const id = typeof cap['id'] === 'string' ? cap['id'] : '';
     if (!id) throw new Error('capability.json missing "id" field');
 
@@ -674,14 +972,13 @@ async function resolveTarball(
     const packageDir = path.join(extractDir, 'package');
     const sourceDir = fs.existsSync(path.join(packageDir, 'capability.json')) ? packageDir : extractDir;
 
-    // Read id from capability.json.
+    // Read id from capability.json via the SHARED bounded reader (#1461 finding 2): an extracted
+    // oversized/non-regular capability.json is refused, never read unbounded.
     const manifestPath = path.join(sourceDir, 'capability.json');
-    let cap: Record<string, unknown>;
-    try {
-      cap = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-    } catch {
-      throw new Error(`capability.json not found in tarball from: ${parsed.target}`);
-    }
+    const cap = readManifestBounded(
+      manifestPath,
+      `capability.json not found in tarball from: ${parsed.target}`,
+    );
     const id = typeof cap['id'] === 'string' ? cap['id'] : '';
     if (!id) throw new Error('capability.json missing "id" field');
 
@@ -737,4 +1034,12 @@ export = {
   resolveCapabilitySource,
   parseSpec,
   _setCapabilitySourceHttpGet,
+  _setHttpsGetImpl,
+  // #1461 finding 3 test seam: the exact bounded reader stageValidated uses on the COPIED manifest, so
+  // a test can exercise the staged re-read directly (not just the local pre-read that shadows it).
+  _readManifestBounded: readManifestBounded,
+  MAX_RESPONSE_BYTES,
+  MANIFEST_MAX_BYTES,
+  MAX_STAGED_BUNDLE_BYTES,
+  MAX_STAGED_BUNDLE_ENTRIES,
 };
