@@ -1,4 +1,4 @@
-// allow-test-rule: source-text-is-the-product
+// allow-test-rule: source-text-is-the-product see #1452
 // The execute-phase.md workflow and context-budget.md reference ARE the runtime
 // contract loaded by AI runtimes. Asserting that the canonical wording for
 // `workflow.context_guard_mode` is present in those files is the only way to
@@ -126,32 +126,39 @@ describe('workflow.context_guard_mode config round-trip', () => {
 
 describe('execute-phase.md documents the context_guard step', () => {
   let executePhase;
+  let contextGuardRef;
 
   beforeEach(() => {
     executePhase = fs.readFileSync(
       path.join(REPO_ROOT, 'gsd-core', 'workflows', 'execute-phase.md'),
       'utf-8',
     );
+    // The step body is extracted to a reference file loaded via @-ref in execute-phase.md.
+    // Both files together constitute the execute-phase wave-boundary contract.
+    const refPath = path.join(REPO_ROOT, 'gsd-core', 'references', 'execute-phase-context-guard.md');
+    contextGuardRef = fs.existsSync(refPath) ? fs.readFileSync(refPath, 'utf-8') : '';
   });
 
   test('references workflow.context_guard_mode by canonical name', () => {
+    const combined = executePhase + '\n' + contextGuardRef;
     assert.ok(
-      executePhase.includes('workflow.context_guard_mode'),
-      'execute-phase.md must reference workflow.context_guard_mode so runtimes resolve the config-driven behavior',
+      combined.includes('workflow.context_guard_mode'),
+      'execute-phase.md (or its @-referenced execute-phase-context-guard.md) must reference workflow.context_guard_mode so runtimes resolve the config-driven behavior',
     );
   });
 
   test('defines context_guard step at wave boundaries', () => {
     assert.ok(
       executePhase.includes('context_guard') || executePhase.includes('context-guard'),
-      'execute-phase.md must define a context_guard step that fires before each wave',
+      'execute-phase.md must define a context_guard step (or @-ref to it) that fires before each wave',
     );
   });
 
   test('references context-budget.md tiers in the guard step', () => {
+    const combined = executePhase + '\n' + contextGuardRef;
     assert.ok(
-      executePhase.includes('context-budget') || executePhase.includes('POOR') || executePhase.includes('DEGRADING'),
-      'execute-phase.md context_guard must reference context-budget.md degradation tiers',
+      combined.includes('context-budget') || combined.includes('POOR') || combined.includes('DEGRADING'),
+      'execute-phase.md context_guard (or its @-referenced file) must reference context-budget.md degradation tiers',
     );
   });
 });
