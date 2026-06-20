@@ -16,7 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { cleanup } = require('./helpers.cjs');
-const { loadRegistry } = require('../gsd-core/bin/lib/capability-loader.cjs');
+const { loadRegistry, _setValidatorForTest, _setGeneratorForTest } = require('../gsd-core/bin/lib/capability-loader.cjs');
 const baseRegistry = require('../gsd-core/bin/lib/capability-registry.cjs');
 const { buildRegistry } = require('../scripts/gen-capability-registry.cjs');
 
@@ -1061,5 +1061,288 @@ describe('loadRegistry — convergence: gate-before-materialize + realpath fail-
     t.after(() => cleanup(proj));
     const reg = loadRegistry({ includeInstalled: true, gsdHome: home, cwd: proj, hostVersion: HOST });
     assert.ok(reg.capabilities['f1r6-ctl-global'], 'a distinct real global cap stays trusted-active (both realpaths OK and differ)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 OVL-1 — a THROWING cross-capability validator drops ONE candidate
+// (skip-with-warning), never crashes loadRegistry. ADR-1244 D2 invariant:
+// "invalid/incompatible overlays are skipped with a warning at load, never
+// crash the loop." The per-candidate cross-validation (validateAgainstContract
+// / validateConsumesGlobal / validateCrossCapability) is assumed to RETURN
+// error arrays, but a validator can THROW (e.g. a duplicate-producer assertion).
+// An unguarded throw escapes loadRegistry and crashes EVERY consumer.
+// ---------------------------------------------------------------------------
+const realValidator = require('../gsd-core/bin/lib/capability-validator.cjs');
+
+describe('loadRegistry — #1461 OVL-1: a throwing cross-capability validator skips one candidate, never crashes', () => {
+  test('validateConsumesGlobal THROWING for one overlay drops it (warning) and a second valid overlay still loads', (t) => {
+    // Two valid overlays on disk. A wrapper validator delegates everything to the real validator
+    // EXCEPT validateConsumesGlobal, which THROWS the moment the poison candidate is in the merged
+    // map (mimics a validator that asserts rather than returning an error array, e.g. on a
+    // duplicate-producer). The throw escapes the unguarded per-candidate cross-validation.
+    const home = makeOverlayHome([
+      featureCap('ovl1-poison', { skills: ['ovl1-poison-skill'] }),
+      featureCap('ovl1-good', { skills: ['ovl1-good-skill'] }),
+    ]);
+    t.after(() => { _setValidatorForTest(null); cleanup(home); });
+
+    _setValidatorForTest({
+      ...realValidator,
+      validateConsumesGlobal(capMap) {
+        if (capMap.has('ovl1-poison')) {
+          throw new Error('synthetic validator explosion on duplicate producer');
+        }
+        return realValidator.validateConsumesGlobal(capMap);
+      },
+    });
+
+    // REVERT-FAILS: with the per-candidate cross-validation UN-wrapped (no try/catch), this throw
+    // escapes loadRegistry → assert.doesNotThrow fails (loadRegistry throws and crashes the loop).
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = loadRegistry({ includeInstalled: true, gsdHome: home, cwd: home, hostVersion: HOST });
+    }, 'a throwing cross-capability validator must NOT crash loadRegistry');
+
+    // The throwing candidate is dropped with a warning; the second valid overlay still loads.
+    assert.ok(!reg.capabilities['ovl1-poison'], 'the candidate whose validator threw is skipped, not registered');
+    assert.ok(reg._overlay.warnings.some((w) => w.id === 'ovl1-poison' && /cross-capability/i.test(w.reason)),
+      'the dropped candidate carries a cross-capability skip warning');
+    assert.ok(reg.capabilities['ovl1-good'], 'a SECOND valid overlay still loads after the throwing one is dropped');
+    // First-party stays fully intact.
+    assert.ok(Object.keys(reg.capabilities).length >= Object.keys(baseRegistry.capabilities).length + 1,
+      'first-party registry remains intact alongside the surviving overlay');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 OVL-2 — a THROWING buildRegistry (the final compose) must NOT crash
+// loadRegistry. An overlay can pass every per-candidate step yet trip a
+// stricter whole-build check inside buildRegistry (config-slice shape, topo
+// cycle, configFormat parity). The unguarded final compose would crash the loop.
+// Required guarantee: NEVER crash → fall back to the frozen first-party
+// registry + a warning.
+// ---------------------------------------------------------------------------
+const realGenerator = require('../scripts/gen-capability-registry.cjs');
+
+describe('loadRegistry — #1461 OVL-2: a throwing buildRegistry falls back to first-party, never crashes', () => {
+  test('buildRegistry THROWING returns the first-party base + a warning (loop consumers still get a usable registry)', (t) => {
+    // A single valid overlay reaches the final compose. The generator wrapper delegates
+    // loadCentralConfigKeys to the real generator but makes buildRegistry THROW — simulating an
+    // overlay that passes per-candidate validation but breaks the full canonical build.
+    const home = makeOverlayHome([
+      featureCap('ovl2-cap', { skills: ['ovl2-skill'] }),
+    ]);
+    t.after(() => { _setGeneratorForTest(null); cleanup(home); });
+
+    _setGeneratorForTest({
+      loadCentralConfigKeys: () => realGenerator.loadCentralConfigKeys(),
+      buildRegistry() {
+        throw new Error('synthetic buildRegistry explosion composing overlays');
+      },
+    });
+
+    // REVERT-FAILS: with the final `getGenerator().buildRegistry(acceptedMap)` UN-wrapped, this throw
+    // escapes loadRegistry → assert.doesNotThrow fails (loadRegistry throws and crashes the loop).
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = loadRegistry({ includeInstalled: true, gsdHome: home, cwd: home, hostVersion: HOST });
+    }, 'a throwing buildRegistry must NOT crash loadRegistry');
+
+    // Falls back to the frozen first-party base: every first-party capability is present and the
+    // overlay is absent (the build that would have added it threw).
+    assert.ok(!reg.capabilities['ovl2-cap'], 'the overlay is absent — the compose that would add it failed');
+    for (const id of Object.keys(baseRegistry.capabilities)) {
+      assert.ok(reg.capabilities[id], `first-party capability "${id}" survives the fallback`);
+    }
+    // A warning records WHY the loop fell back.
+    assert.ok(reg._overlay.warnings.some((w) => /buildRegistry/i.test(w.reason)),
+      'a warning records the buildRegistry failure + first-party fallback');
+  });
+
+  test('a DROPPED gate-declaring overlay still BLOCKS its gate (fail-closed, not fail-open)', (t) => {
+    // An overlay that DECLARES a blocking gate is ACCEPTED per-candidate and reaches the final
+    // compose; buildRegistry then THROWS. Dropping the overlay must NOT silently drop its gate: a
+    // blocking gate that vanishes fails OPEN (ADR-1244: a skipped capability declaring a gate must
+    // FAIL CLOSED). So the fallback must record the dropped overlay's declared gate as blocked —
+    // exactly as the per-candidate `skip()` closure does for `declaresGate`.
+    const home = makeOverlayHome([
+      featureCap('ovl2-gate-cap', {
+        skills: ['ovl2-gate-skill'],
+        config: { 'workflow.ovl2_gate': { type: 'boolean', default: true, description: 'Gate.' } },
+        gates: [{ point: 'execute:wave:post', check: { query: 'x.ovl2_gate' }, blocking: true, onError: 'halt' }],
+        steps: [{ point: 'execute:wave:post', ref: { skill: 'ovl2-gate-skill' }, produces: ['G.md'], consumes: [], when: 'workflow.ovl2_gate', onError: 'skip' }],
+      }),
+    ]);
+    t.after(() => { _setGeneratorForTest(null); cleanup(home); });
+
+    _setGeneratorForTest({
+      loadCentralConfigKeys: () => realGenerator.loadCentralConfigKeys(),
+      buildRegistry() {
+        throw new Error('synthetic buildRegistry explosion dropping a gate-declaring overlay');
+      },
+    });
+
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = loadRegistry({ includeInstalled: true, gsdHome: home, cwd: home, hostVersion: HOST });
+    }, 'a throwing buildRegistry must NOT crash loadRegistry');
+
+    // Fell back to first-party (the overlay surfaces are gone)...
+    assert.ok(!reg.capabilities['ovl2-gate-cap'], 'the gate-declaring overlay is absent after compose failure');
+    // ...BUT its declared blocking gate is recorded as blocked (fail-closed).
+    // REVERT-FAILS: without the catch iterating overlayCaps to populate gates, both of these are
+    // empty (the gate silently fails OPEN) → these assertions fail.
+    assert.ok(reg._overlay.incompatibleGateCapIds.includes('ovl2-gate-cap'),
+      'dropped gate-declaring overlay tracked as a fail-closed blocker');
+    assert.ok(
+      reg._overlay.blockedGates.some((g) => g.point === 'execute:wave:post' && g.capId === 'ovl2-gate-cap'),
+      'dropped overlay\'s blocking gate point recorded as blocked (loop injects the synthetic gate)');
+  });
+
+  // #1461 OVL-2 finding 3 (LOW): on the first-party fallback, the returned meta's commandRoots must be
+  // CLEARED — no dropped overlay may retain a command root in the fallback (a dispatcher reading
+  // _overlay.commandRoots[capId] would otherwise require()/run a command family from a capability that
+  // the fallback decided NOT to load). The base first-party registry never lists overlay commandRoots,
+  // so the fallback meta.commandRoots must be {}.
+  test('the first-party fallback returns an EMPTY _overlay.commandRoots (no stale command root for a dropped overlay)', (t) => {
+    // A committed overlay that ships a command family — so commandRoots[id] is populated BEFORE the
+    // compose step. The committed ledger entry is required for the loader to record the command root.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-ovl2-cmdroot-'));
+    t.after(() => { _setGeneratorForTest(null); cleanup(home); });
+    const id = 'ovl2-cmd-cap';
+    const dir = path.join(home, '.gsd', 'capabilities', id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'capability.json'),
+      JSON.stringify(featureCap(id, {
+        skills: ['ovl2-cmd-skill'],
+        commands: [{ family: 'ovl2-cmd-family', module: 'router.cjs', router: 'route' }],
+      })),
+      'utf8',
+    );
+    // A committed (non-_pending, structurally-valid per isValidLedgerEntry) ledger entry so the loader
+    // populates commandRoots[id] — requires id/version/source/integrity strings + files[] + sharedEdits[].
+    fs.writeFileSync(
+      path.join(home, '.gsd-capabilities.json'),
+      JSON.stringify({ version: 1, updatedAt: '2026-01-01T00:00:00.000Z', entries: { [id]: { id, version: '1.0.0', source: 'local', integrity: '', files: [], sharedEdits: [] } } }),
+      'utf8',
+    );
+
+    _setGeneratorForTest({
+      loadCentralConfigKeys: () => realGenerator.loadCentralConfigKeys(),
+      buildRegistry() {
+        throw new Error('synthetic buildRegistry explosion forcing the first-party fallback');
+      },
+    });
+
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = loadRegistry({ includeInstalled: true, gsdHome: home, cwd: home, hostVersion: HOST });
+    }, 'a throwing buildRegistry must NOT crash loadRegistry');
+
+    // The overlay is dropped (compose threw) AND its command root is cleared in the fallback meta.
+    assert.ok(!reg.capabilities[id], 'the command-shipping overlay is absent after the compose failure');
+    // REVERT-FAILS: without `meta.commandRoots = {}` in the OVL-2 catch, commandRoots[id] survives the
+    // fallback (the loader populated it before the throw) → this assertion fails.
+    assert.deepStrictEqual(reg._overlay.commandRoots, {}, 'the fallback meta carries NO stale command roots');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1461 finding 1 (HIGH) — a per-candidate validator that THROWS on a malformed
+// ARRAY entry must NOT crash loadRegistry. The committed validateCapability is
+// NOT total: validateGate/validateStep/validateContribution dereference the entry
+// (`.point`, `.into`, …) BEFORE any shape check, so `gates: [null]` (or a
+// malformed steps/contributions entry) throws `Cannot read properties of null`
+// from INSIDE validateCapability — which runs OUTSIDE the per-candidate try/catch.
+// ADR-1244 D2: a malformed overlay is SKIPPED with a warning, never crashes the
+// loop. The WHOLE per-candidate body must be total.
+// ---------------------------------------------------------------------------
+describe('loadRegistry — #1461 finding 1: a throwing per-candidate validator skips one overlay, never crashes', () => {
+  test('an overlay with `gates: [null]` does NOT crash loadRegistry — it is skipped, other valid overlays still load', (t) => {
+    const home = makeOverlayHome([
+      // gates: [null] passes Array.isArray(cap.gates) then validateGate(null) dereferences null.point.
+      featureCap('null-gate-cap', { skills: ['null-gate-skill'], gates: [null] }),
+      featureCap('good-after-null-gate', { skills: ['good-after-null-gate-skill'] }),
+    ]);
+    t.after(() => cleanup(home));
+
+    // REVERT-FAILS: with validateCapability OUTSIDE the per-candidate try/catch, validateGate(null)
+    // throws → loadRegistry throws → assert.doesNotThrow fails (the loop crashes).
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = load(home);
+    }, 'an overlay with `gates: [null]` must NOT crash loadRegistry');
+
+    assert.ok(!reg.capabilities['null-gate-cap'], 'the overlay whose validator threw is skipped, not registered');
+    assert.ok(reg._overlay.warnings.some((w) => w.id === 'null-gate-cap'),
+      'the dropped overlay carries a skip warning');
+    assert.ok(reg.capabilities['good-after-null-gate'], 'a SECOND valid overlay still loads after the throwing one is skipped');
+    // First-party stays fully intact.
+    assert.ok(Object.keys(reg.capabilities).length >= Object.keys(baseRegistry.capabilities).length + 1,
+      'first-party registry remains intact alongside the surviving overlay');
+  });
+
+  test('an overlay with a malformed `steps`/`contributions` entry (null) does NOT crash loadRegistry — skipped', (t) => {
+    const home = makeOverlayHome([
+      featureCap('null-step-cap', { skills: ['null-step-skill'], steps: [null] }),
+      featureCap('null-contrib-cap', { skills: ['null-contrib-skill'], contributions: [null] }),
+      featureCap('good-after-null-step', { skills: ['good-after-null-step-skill'] }),
+    ]);
+    t.after(() => cleanup(home));
+
+    // REVERT-FAILS: validateStep(null)/validateContribution(null) deref null.point → throw escapes the
+    // unguarded validateCapability → loadRegistry throws → assert.doesNotThrow fails.
+    let reg;
+    assert.doesNotThrow(() => {
+      reg = load(home);
+    }, 'an overlay with a null steps/contributions entry must NOT crash loadRegistry');
+
+    assert.ok(!reg.capabilities['null-step-cap'], 'the overlay with a null step is skipped');
+    assert.ok(!reg.capabilities['null-contrib-cap'], 'the overlay with a null contribution is skipped');
+    assert.ok(reg._overlay.warnings.some((w) => w.id === 'null-step-cap'), 'null-step overlay carries a warning');
+    assert.ok(reg._overlay.warnings.some((w) => w.id === 'null-contrib-cap'), 'null-contrib overlay carries a warning');
+    assert.ok(reg.capabilities['good-after-null-step'], 'a valid overlay still loads after the malformed ones are skipped');
+  });
+
+  test('a gate entry with a VALID point but otherwise malformed still FAILS CLOSED (gatePointsOf is total)', (t) => {
+    // The gate object HAS a string `point` (so the point is extractable) but is otherwise malformed
+    // (no valid `check`, no `blocking`) → validateCapability returns errors (not a throw) → the cap is
+    // skipped via the structured `skip()` path. Because it declares a gate at an extractable point, that
+    // point must be recorded as fail-closed (incompatibleGateCapIds + blockedGates).
+    const home = makeOverlayHome([
+      featureCap('valid-point-bad-gate', {
+        skills: ['valid-point-bad-gate-skill'],
+        gates: [{ point: 'execute:wave:post' }], // valid point, missing check/blocking → validation errors
+      }),
+    ]);
+    t.after(() => cleanup(home));
+
+    let reg;
+    assert.doesNotThrow(() => { reg = load(home); });
+    assert.ok(!reg.capabilities['valid-point-bad-gate'], 'a malformed-but-point-bearing gate cap is skipped');
+    // The extractable point fail-closes (a skipped gate-declaring cap must block, not pass).
+    assert.ok(reg._overlay.incompatibleGateCapIds.includes('valid-point-bad-gate'),
+      'a skipped cap declaring a gate at an extractable point is tracked as a fail-closed blocker');
+    assert.ok(reg._overlay.blockedGates.some((g) => g.point === 'execute:wave:post' && g.capId === 'valid-point-bad-gate'),
+      'the extractable gate point is recorded as blocked');
+  });
+
+  test('a `null` gate (no extractable point) is a no-crash SKIP with no spurious blocked gate', (t) => {
+    // gatePointsOf must be TOTAL over `gates: [null]`: a null entry has no extractable `point`, so it
+    // contributes NO blocked gate (declaresGate is false) — but it must not crash either.
+    const home = makeOverlayHome([
+      featureCap('null-gate-no-block', { skills: ['null-gate-no-block-skill'], gates: [null] }),
+    ]);
+    t.after(() => cleanup(home));
+
+    let reg;
+    assert.doesNotThrow(() => { reg = load(home); });
+    assert.ok(!reg.capabilities['null-gate-no-block'], 'the null-gate overlay is skipped');
+    assert.ok(!reg._overlay.incompatibleGateCapIds.includes('null-gate-no-block'),
+      'a null gate has no extractable point → no spurious fail-closed block');
+    assert.ok(!reg._overlay.blockedGates.some((g) => g.capId === 'null-gate-no-block'),
+      'a null gate records no blockedGates entry');
   });
 });
