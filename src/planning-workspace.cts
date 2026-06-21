@@ -37,6 +37,53 @@ process.on('exit', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Lock liveness probe (test seam) — audit M1
+//
+// mtime is a leaky proxy for "the holder is alive". The prior withPlanningLock
+// timeout fallback unconditionally unlinked WHATEVER lock existed — even a fresh,
+// live holder's — and re-acquired it, force-stealing a live writer's critical
+// section. We backport capability-lock.cts's pid-liveness gate: a dead holder is
+// stolen promptly inside the polite loop; a live holder is waited on. The
+// indirection lets unit tests inject a deterministic isPidAlive without real pids.
+// ---------------------------------------------------------------------------
+
+/** Is `pid` a live process? process.kill(pid, 0) succeeds for a live (signalable) process. */
+function _realIsPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true; // signalable → alive
+  } catch (err) {
+    // EPERM = process exists but we cannot signal it (still ALIVE). ESRCH = gone.
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+const _planningLockProbes: { isPidAlive: (pid: number) => boolean } = { isPidAlive: _realIsPidAlive };
+
+function _planningLockIsPidAlive(pid: number): boolean {
+  return _planningLockProbes.isPidAlive(pid);
+}
+
+/**
+ * Is the holder recorded in the .lock body VERIFIED-LIVE? The body is JSON
+ * { pid, cwd, acquired }. Returns true ONLY when the body parses AND the recorded
+ * pid signals alive. A garbage / pid-less / unreadable body (or a dead pid) is NOT
+ * verified-live, so the lock stays stealable — corrupt locks never block forever,
+ * and a live holder is never force-stolen.
+ */
+function _planningHolderVerifiedLive(lockPath: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+  } catch {
+    return false; // unreadable / unparseable body → cannot verify → not verified-live
+  }
+  const pid = (parsed as { pid?: unknown } | null)?.pid;
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return false;
+  return _planningLockIsPidAlive(pid);
+}
+
 // Transient errno codes that indicate a temporary filesystem condition under
 // concurrent O_EXCL races — Docker overlay-fs (ENOENT/EINVAL/EIO), NFS
 // (ESTALE), and OS-level interrupt/retry signals (EAGAIN/EINTR).  These are
@@ -160,16 +207,18 @@ function withPlanningLock<T>(cwd: string, fn: () => T, clock?: Clock): T {
         continue;
       }
       if (nodeErr.code === 'EEXIST') {
-        // Lock exists — check if stale (>30s old)
+        // Liveness-gated steal (audit M1). Steal the lock PROMPTLY only when its
+        // recorded holder is NOT verified-live (crashed/dead pid or garbage body).
+        // A verified-live holder is waited on — never force-stolen — because nuking
+        // a slow-but-live writer's lock corrupts the .planning/ critical section.
         try {
-          const stat = fs.statSync(lockPath);
-          if (clock.now() - stat.mtimeMs > 30000) {
+          if (!_planningHolderVerifiedLive(lockPath)) {
             fs.unlinkSync(lockPath);
-            continue; // retry
+            continue; // dead/garbage holder — retry immediately to grab the freed lock
           }
         } catch { continue; }
 
-        // Wait and retry (cross-platform, no shell dependency)
+        // Live holder — wait and retry (cross-platform, no shell dependency).
         clock.sleep(100);
         continue;
       }
@@ -177,10 +226,18 @@ function withPlanningLock<T>(cwd: string, fn: () => T, clock?: Clock): T {
     }
   }
 
-  // Timeout — stale-lock recovery, then re-acquire atomically before entering critical section.
-  try { fs.unlinkSync(lockPath); } catch { /* ok */ }
-  acquireLock();
-  return runWithHeldLock();
+  // Timeout against a holder still present at budget exhaustion. The polite loop
+  // already stole any DEAD holder; reaching here means the holder is verified-live
+  // (or a pid-reuse alias we must not corrupt). Do NOT force-steal — the prior
+  // unconditional `unlinkSync(lockPath); acquireLock()` here (audit M1) robbed live
+  // writers, and its re-acquire sat OUTSIDE any try so a concurrent re-create raced
+  // a raw EEXIST out of the helper (audit M2). Surface a clear timeout error instead.
+  const timeoutErr = new Error(
+    'withPlanningLock: ' + lockPath + ' held by a live process for ' +
+    (clock.now() - start) + 'ms (exceeded ' + lockTimeout + 'ms budget)'
+  );
+  (timeoutErr as unknown as Record<string, unknown>).lockTimeout = true;
+  throw timeoutErr;
 }
 
 function createPlanningWorkspace(cwd: string, opts: WorkstreamAdapterOpts = {}): {
@@ -269,4 +326,12 @@ export = {
   getActiveWorkstream,
   setActiveWorkstream,
   findContextMdIn,
+  // Test seam (audit M1): inject a deterministic isPidAlive so the liveness-gated
+  // steal decision is exercised without real pids. Mirrors capability-lock.cts.
+  _setLockProbes(probes: Partial<{ isPidAlive: (pid: number) => boolean }>): void {
+    if (typeof probes.isPidAlive === 'function') _planningLockProbes.isPidAlive = probes.isPidAlive;
+  },
+  _resetLockProbes(): void {
+    _planningLockProbes.isPidAlive = _realIsPidAlive;
+  },
 };

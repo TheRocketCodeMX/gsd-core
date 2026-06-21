@@ -152,6 +152,54 @@ process.on('exit', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Lock liveness probe (test seam) — audit M1
+//
+// mtime is a LEAKY proxy for "the holder is still alive": a live-but-slow writer
+// whose critical section runs past staleThresholdMs ages out and a waiter would
+// steal its lock → two writers in STATE.md's read-modify-write window → lost
+// update / corruption (the recurring #500/#905/#1230 family). The real signal —
+// process.kill(pid, 0) — is already used by capability-lock.cts. We backport it
+// here. The indirection lets unit tests inject a deterministic isPidAlive without
+// real pids (mirrors capability-lock's _lockProbes / _setLockProbes seam).
+// ---------------------------------------------------------------------------
+
+/** Is `pid` a live process? process.kill(pid, 0) succeeds for a live (signalable) process. */
+function _realIsPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true; // signalable → alive
+  } catch (err) {
+    // EPERM = process exists but we cannot signal it (still ALIVE). ESRCH = gone.
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+const _stateLockProbes: { isPidAlive: (pid: number) => boolean } = { isPidAlive: _realIsPidAlive };
+
+function _stateLockIsPidAlive(pid: number): boolean {
+  return _stateLockProbes.isPidAlive(pid);
+}
+
+/**
+ * Is the holder recorded in the lock body VERIFIED-LIVE? The STATE.md lock body is
+ * a bare pid (written at acquire time). Returns true ONLY when the body parses to a
+ * positive integer pid AND that pid signals alive. A garbage / non-numeric / legacy
+ * body (or a dead pid) is NOT verified-live, so the lock stays stealable — corrupt
+ * locks never block forever, and a live holder is never stolen.
+ */
+function _stateHolderVerifiedLive(lockPath: string): boolean {
+  let body: string;
+  try {
+    body = fs.readFileSync(lockPath, 'utf-8');
+  } catch {
+    return false; // unreadable body → cannot verify → not verified-live (stealable under ceiling)
+  }
+  const pid = parseInt(body.trim(), 10);
+  if (!Number.isInteger(pid) || pid <= 0 || String(pid) !== body.trim()) return false;
+  return _stateLockIsPidAlive(pid);
+}
+
 // Hoisted to module scope — compiled once, not per call (#320). Stateless (/i, used with .match).
 const byPhaseTablePattern = /(\|\s*Phase\s*\|\s*Plans\s*\|\s*Total\s*\|\s*Avg\/Plan\s*\|[ \t]*\n\|(?:[- :\t]+\|)+[ \t]*\n)((?:[ \t]*\|[^\n]*\n)*)(?=\n|$)/i;
 
@@ -1587,8 +1635,14 @@ function acquireStateLock(statePath: string, clock?: StateLockClock): string {
   if (clock === undefined) clock = realClock;
   const lockPath = statePath + '.lock';
   const retryDelay = 200; // ms
-  const staleThresholdMs = 10000;
   const maxWaitMs = 30000;
+  // Deadman ceiling (audit M1) — set ABOVE maxWaitMs so a holder that reads as
+  // VERIFIED-LIVE is NEVER stolen within the wait budget; only a crashed (dead
+  // pid) or unparseable-body lock is stolen, and a pid-reuse holder (reads alive
+  // but is unrelated) is recovered once age crosses this absolute ceiling rather
+  // than blocking forever. The prior mtime-only `staleThresholdMs = 10000` gate
+  // was BELOW maxWaitMs, so a live-but-slow holder >10 s was robbed mid-write.
+  const deadmanCeilingMs = 60000;
   const startedAt = clock.now();
 
   // Shared helper: check the time budget then back off with jitter before the
@@ -1625,12 +1679,18 @@ function acquireStateLock(statePath: string, clock?: StateLockClock): string {
         continue;
       }
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; // propagate — silent bypass causes lost updates
-      // Only unlink a lock we did not place when it has crossed the staleness
-      // threshold (crashed holder). Nuking a fresh lock held by a slow-but-live
-      // writer causes lost updates (#3711 regression).
+      // Liveness-gated steal (audit M1). Only unlink a lock we did not place when
+      // either (a) its recorded holder is NOT verified-live — a crashed/dead pid or
+      // a garbage/legacy body — so it is stolen PROMPTLY regardless of age, or
+      // (b) its age has crossed the absolute deadman ceiling (set above maxWaitMs)
+      // — the pid-reuse backstop. A VERIFIED-LIVE holder under the ceiling is NEVER
+      // stolen, even if older than the old mtime-only threshold: nuking a slow-but-
+      // live writer's lock causes lost updates (#3711 / #500/#905/#1230 family).
       try {
         const stat = fs.statSync(lockPath);
-        if ((clock).now() - stat.mtimeMs > staleThresholdMs) {
+        const ageMs = clock.now() - stat.mtimeMs;
+        const holderLive = _stateHolderVerifiedLive(lockPath);
+        if (!holderLive || ageMs > deadmanCeilingMs) {
           let removed = false;
           try { fs.unlinkSync(lockPath); removed = true; } catch { /* swallow: bounded below */ }
           if (removed) {
@@ -2891,4 +2951,12 @@ export = {
   cmdStateMilestoneSwitch,
   cmdSignalWaiting,
   cmdSignalResume,
+  // Test seam (audit M1): inject a deterministic isPidAlive so the liveness-gated
+  // steal decision is exercised without real pids. Mirrors capability-lock.cts.
+  _setLockProbes(probes: Partial<{ isPidAlive: (pid: number) => boolean }>): void {
+    if (typeof probes.isPidAlive === 'function') _stateLockProbes.isPidAlive = probes.isPidAlive;
+  },
+  _resetLockProbes(): void {
+    _stateLockProbes.isPidAlive = _realIsPidAlive;
+  },
 };

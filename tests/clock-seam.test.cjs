@@ -36,7 +36,8 @@ const path = require('node:path');
 const os = require('node:os');
 
 const { makeFakeClock } = require('./helpers/clock.cjs');
-const { acquireStateLock, releaseStateLock, readModifyWriteStateMd } = require('../gsd-core/bin/lib/state.cjs');
+const stateMod = require('../gsd-core/bin/lib/state.cjs');
+const { acquireStateLock, releaseStateLock, readModifyWriteStateMd } = stateMod;
 const { withPlanningLock } = require('../gsd-core/bin/lib/planning-workspace.cjs');
 const { createTempProject, cleanup, runGsdTools } = require('./helpers.cjs');
 
@@ -119,6 +120,105 @@ describe('acquireStateLock clock seam', () => {
 
     const acquired = acquireStateLock(statePath, clock);
     assert.ok(fs.existsSync(acquired), 'must acquire lock after taking over stale lock');
+    releaseStateLock(acquired);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1a. acquireStateLock PID-liveness staleness (audit M1)
+//
+// mtime is a leaky proxy for "holder is alive": a live-but-slow holder whose
+// critical section runs past staleThresholdMs ages out and gets its lock stolen
+// by a waiter → two writers in STATE.md's critical section → lost update.
+// The fix gates the steal on a real liveness signal (process.kill(pid,0),
+// injected via the _setLockProbes seam) and orders the deadman ceiling ABOVE the
+// wait budget so a verified-live holder is NEVER stolen within budget. A dead
+// holder is stolen promptly regardless of age. A garbage/legacy body is treated
+// as not-verified-live so corrupt locks stay recoverable under the deadman ceiling.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock PID-liveness staleness (audit M1)', () => {
+  let tmpDir;
+  let statePath;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-liveness-state-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+  });
+
+  afterEach(() => {
+    stateMod._resetLockProbes();
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('exports _setLockProbes / _resetLockProbes seams', () => {
+    assert.ok(typeof stateMod._setLockProbes === 'function', '_setLockProbes seam must be exported');
+    assert.ok(typeof stateMod._resetLockProbes === 'function', '_resetLockProbes seam must be exported');
+  });
+
+  test('live holder is NOT stolen even when aged past the stale threshold (waiter budgets out)', () => {
+    const lockPath = statePath + '.lock';
+    const livePid = 4242;
+    fs.writeFileSync(lockPath, String(livePid));
+
+    // Holder pid reads as ALIVE via the injected probe (deterministic, no real pid).
+    stateMod._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
+    // Drive the clock so the lock is aged WELL past the 10 000 ms stale threshold
+    // (stale < age) but the waiter only ever budgets out at maxWaitMs (30 000 ms).
+    // sleep advances time; once the 30 000 ms budget is exhausted it must throw,
+    // and it must NOT have unlinked the live holder's lock.
+    const clock = makeFakeClock(60000); // age = now - mtime ≫ 10 000 ms
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'a verified-live holder must never be stolen within the wait budget — waiter must time out instead'
+    );
+
+    // The live holder's lock body must be intact (never unlinked + re-created).
+    assert.ok(fs.existsSync(lockPath), 'live holder lock must still exist (not stolen)');
+    assert.strictEqual(fs.readFileSync(lockPath, 'utf-8'), String(livePid), 'live holder lock body must be unchanged');
+
+    fs.unlinkSync(lockPath);
+  });
+
+  test('dead holder is stolen promptly without waiting out the full budget', () => {
+    const lockPath = statePath + '.lock';
+    const deadPid = 777;
+    fs.writeFileSync(lockPath, String(deadPid));
+
+    // Holder pid reads as DEAD via the injected probe → eligible for immediate steal.
+    stateMod._setLockProbes({ isPidAlive: () => false });
+
+    // Fresh, NON-aged lock (mtime ≈ now). Without liveness the old mtime-only gate
+    // would refuse to steal a <10 000 ms lock and force a long wait; with liveness
+    // a dead holder is stolen immediately regardless of age.
+    const clock = makeFakeClock(Date.now());
+    const acquired = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(acquired), 'dead holder lock must be stolen and re-acquired');
+    assert.strictEqual(
+      clock.sleepCalls.length, 0,
+      'a dead holder must be stolen promptly — no wait/backoff sleeps before acquisition'
+    );
+    releaseStateLock(acquired);
+  });
+
+  test('garbage/legacy lock body → not-verified-live → recoverable under the deadman ceiling, never an infinite block', () => {
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, 'not-a-pid\x00garbage'); // unreadable / non-numeric body
+
+    // Probe would say "alive" for ANY pid — proves the steal does not depend on a
+    // bogus parse succeeding: an unparseable body is treated as not-verified-live.
+    stateMod._setLockProbes({ isPidAlive: () => true });
+
+    // Age the body past the deadman ceiling (above maxWaitMs) so the corrupt lock
+    // is recoverable rather than blocking forever.
+    const clock = makeFakeClock(Date.now() + 120000);
+    const acquired = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(acquired), 'corrupt/legacy lock must be recoverable (stolen under the deadman ceiling)');
     releaseStateLock(acquired);
   });
 });
@@ -649,58 +749,38 @@ describe('withPlanningLock clock seam', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', '.lock')), 'lock must be released even when fn() throws');
   });
 
-  test('timeout fires when clock exceeds lockTimeout (10 000 ms)', () => {
+  test('timeout fires (sleep seam exercised) when a LIVE holder is contended past lockTimeout', () => {
+    // Audit M1 rewrite: the prior version asserted the now-REMOVED force-steal
+    // fallback (timeout → unconditional unlink + re-acquire). That fallback robbed
+    // live writers; the fix replaces it with a clear timeout throw. This test now
+    // pins the new contract: a verified-LIVE holder held past lockTimeout makes the
+    // waiter exercise the clock.sleep seam and then throw — never force-stolen.
     const lockPath = path.join(tmpDir, '.planning', '.lock');
-    fs.writeFileSync(lockPath, String(process.pid)); // simulate held lock
+    const livePid = 9191;
+    fs.writeFileSync(lockPath, JSON.stringify({ pid: livePid, cwd: tmpDir, acquired: new Date().toISOString() }));
 
-    // Clock that advances past lockTimeout on every sleep call so the while
-    // condition trips immediately after the first retry.
+    // Holder reads as ALIVE via the injected probe → waited on, never stolen.
+    require('../gsd-core/bin/lib/planning-workspace.cjs')._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
     let nowValue = 0;
-
-    // withPlanningLock exits the while loop (timeout), deletes the lock, then
-    // calls runWithHeldLock() which tries writeFileSync with { flag: 'wx' }.
-    // Since our lock file is still there (we placed it), runWithHeldLock throws EEXIST.
-    // That exception propagates — so we get an error (either EEXIST or the
-    // function succeeds on the post-timeout acquisition attempt depending on timing).
-    // What we need to assert: the clock.sleep was invoked (timeout path was reached).
-    //
-    // Because withPlanningLock removes the lock file at timeout and re-acquires,
-    // and we placed the lock file ourselves (not via withPlanningLock), the re-acquire
-    // will SUCCEED (wx open on an absent file). So the function returns normally.
-    // Remove our self-placed lock so withPlanningLock can take it over.
-    fs.unlinkSync(lockPath);
-
-    // Now seed the lock AFTER withPlanningLock starts by using a wrapper that
-    // creates the lock file on the first sleep call.
-    let seeded = false;
-    nowValue = 0;
     const clock2 = {
       now() { return nowValue; },
-      sleep(ms) {
-        if (!seeded) {
-          seeded = true;
-          // The test: verify withPlanningLock calls clock.sleep when contended
-          // (confirms the seam is wired, not that Atomics.wait is called).
-        }
-        nowValue += ms + 11000;
-      },
+      sleep(ms) { nowValue += ms + 11000; }, // advance past lockTimeout on first sleep
     };
 
-    // Re-seed the lock (simulating a competing process)
-    fs.writeFileSync(lockPath, '12345'); // non-existent PID; stale check uses mtime
-
-    // Set mtime to now so the stale check (>30s) does NOT fire
-    const now = new Date();
-    fs.utimesSync(lockPath, now, now);
-
-    // With the lock fresh and held, withPlanningLock will enter the retry loop
-    // and call clock2.sleep at least once. After advancing past lockTimeout,
-    // it exits the while loop and tries to recover by unlinking and re-acquiring.
-    const result = withPlanningLock(tmpDir, () => 'recovered', clock2);
-    assert.strictEqual(result, 'recovered', 'must succeed after timeout recovery path');
-    // clock2.sleep was called, confirming the seam was exercised
-    // (the sleep method must have advanced nowValue past lockTimeout)
-    assert.ok(nowValue > 10000, 'clock must have advanced past lockTimeout via sleep calls');
+    try {
+      assert.throws(
+        () => withPlanningLock(tmpDir, () => 'should-not-run', clock2),
+        /exceeded.*10000ms budget/,
+        'a live holder held past lockTimeout must throw a clear timeout error (not force-steal)'
+      );
+      // The sleep seam must have been exercised (timeout path reached).
+      assert.ok(nowValue > 10000, 'clock must have advanced past lockTimeout via the sleep seam');
+      // The live holder's lock must be intact (never unlinked).
+      assert.ok(fs.existsSync(lockPath), 'live holder lock must survive the timeout (not force-stolen)');
+    } finally {
+      require('../gsd-core/bin/lib/planning-workspace.cjs')._resetLockProbes();
+    }
   });
 });
 

@@ -4,6 +4,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { cleanup } = require('./helpers.cjs');
+const { makeFakeClock } = require('./helpers/clock.cjs');
+
+const planningWorkspaceDirect = require('../gsd-core/bin/lib/planning-workspace.cjs');
 
 const {
   createPlanningWorkspace,
@@ -13,9 +16,7 @@ const {
   withPlanningLock,
   getActiveWorkstream,
   setActiveWorkstream,
-} = require('../gsd-core/bin/lib/planning-workspace.cjs');
-
-const planningWorkspaceDirect = require('../gsd-core/bin/lib/planning-workspace.cjs');
+} = planningWorkspaceDirect;
 
 describe('planning-workspace: planningDir/planningPaths parity', () => {
   const cwd = '/fake/repo';
@@ -183,5 +184,109 @@ describe('planning-workspace direct: functions expose matching behavior', () => 
     } finally {
       cleanup(tmpDir);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// withPlanningLock PID-liveness staleness + EEXIST safety (audit M1 + M2)
+//
+// M1: the prior timeout fallback unconditionally unlinked WHATEVER lock existed —
+//     even a fresh, live holder's — then re-acquired. A legitimate op taking
+//     longer than lockTimeout (10 000 ms) got its lock force-stolen. The fix gates
+//     stealing on a real liveness signal (injected via _setLockProbes): a dead
+//     holder is stolen promptly inside the polite loop; a LIVE holder is waited on
+//     and, on genuine timeout, the waiter throws a clear timeout error rather than
+//     corrupting the live holder's critical section.
+//
+// M2: the timeout-fallback re-acquire (acquireLock with { flag: 'wx' }) sat OUTSIDE
+//     any try/catch — if another process re-created the lock between the unlink and
+//     the wx write, a raw EEXIST escaped the helper and crashed the command. The
+//     fix removes the unconditional force-steal so no raw EEXIST can escape.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('withPlanningLock PID-liveness staleness + EEXIST safety (audit M1+M2)', () => {
+  let tmpDir;
+  let lockPath;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-liveness-planning-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    lockPath = path.join(tmpDir, '.planning', '.lock');
+  });
+
+  afterEach(() => {
+    planningWorkspaceDirect._resetLockProbes();
+    try { fs.unlinkSync(lockPath); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('exports _setLockProbes / _resetLockProbes seams', () => {
+    assert.ok(typeof planningWorkspaceDirect._setLockProbes === 'function', '_setLockProbes seam must be exported');
+    assert.ok(typeof planningWorkspaceDirect._resetLockProbes === 'function', '_resetLockProbes seam must be exported');
+  });
+
+  test('live holder held past lockTimeout is NOT force-stolen — waiter throws a clear timeout error', () => {
+    const livePid = 5151;
+    fs.writeFileSync(lockPath, JSON.stringify({
+      pid: livePid,
+      cwd: tmpDir,
+      acquired: new Date().toISOString(),
+    }));
+
+    // Holder pid reads as ALIVE → must never be force-stolen.
+    planningWorkspaceDirect._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
+    let ranCriticalSection = false;
+    // Fake clock whose sleep advances past lockTimeout (10 000 ms) so the polite
+    // loop budgets out; the live holder must survive and the waiter must throw.
+    const clock = makeFakeClock(0);
+    assert.throws(
+      () => withPlanningLock(tmpDir, () => { ranCriticalSection = true; return 'stolen'; }, clock),
+      /lock/i,
+      'a live holder must never be force-stolen on timeout — the waiter must throw a clear timeout error'
+    );
+
+    assert.strictEqual(ranCriticalSection, false, 'critical section must NOT run against a live holder (no force-steal)');
+    assert.ok(fs.existsSync(lockPath), 'live holder lock must still exist (not unlinked)');
+    const body = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+    assert.strictEqual(body.pid, livePid, 'live holder lock body must be unchanged');
+  });
+
+  test('dead holder is stolen promptly inside the polite loop (no full timeout wait)', () => {
+    const deadPid = 888;
+    fs.writeFileSync(lockPath, JSON.stringify({
+      pid: deadPid,
+      cwd: tmpDir,
+      acquired: new Date().toISOString(),
+    }));
+
+    // Holder pid reads as DEAD → eligible for prompt steal inside the loop.
+    planningWorkspaceDirect._setLockProbes({ isPidAlive: () => false });
+
+    const clock = makeFakeClock(0);
+    const result = withPlanningLock(tmpDir, () => 'acquired', clock);
+    assert.strictEqual(result, 'acquired', 'dead holder lock must be stolen and the critical section must run');
+    assert.ok(!fs.existsSync(lockPath), 'lock must be released after the critical section completes');
+  });
+
+  test('M2: no raw EEXIST escapes the helper on the timeout path against a live holder', () => {
+    const livePid = 6262;
+    fs.writeFileSync(lockPath, JSON.stringify({
+      pid: livePid,
+      cwd: tmpDir,
+      acquired: new Date().toISOString(),
+    }));
+
+    planningWorkspaceDirect._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
+    const clock = makeFakeClock(0);
+    let caught;
+    try {
+      withPlanningLock(tmpDir, () => 'x', clock);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught, 'helper must surface a failure rather than silently force-stealing a live lock');
+    assert.notStrictEqual(caught.code, 'EEXIST', 'a raw EEXIST must never escape the lock helper (M2)');
   });
 });
