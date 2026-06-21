@@ -175,15 +175,19 @@ function agentsKind(destSubpath: string, prefix: string, configDir: string): Art
  * Agent filenames are preserved verbatim (the prefix is already embedded in the
  * agent stem — e.g. `gsd-planner.md`).
  *
- * #1173 SCOPE: this wires the per-runtime agent CONVERTER (frontmatter/body +
- * isGlobal scope) into the descriptor path. The remaining byte-for-byte parity
- * behaviors of the legacy `bin/install.js` agent loop — Copilot's `.agent.md`
- * filename rename, the cross-cutting path-prefix rewrite + attribution, and the
- * config-reading steps (claude effort, opencode model override) — are NOT applied
- * here yet; they are tracked by the ADR-1235 cutover (later steps) and remain
- * provided by the legacy loop, which runs after `installRuntimeArtifacts` and is
- * authoritative for the real install. So this kind is correct for converter
- * coverage but not yet a full standalone replacement for these runtimes.
+ * #1173 SCOPE — plumbing only (declarations deferred): this provides the
+ * converter dispatch + `isGlobal` scope threading for the descriptor's `agents`
+ * kind, but NO runtime currently declares a converted `agents` kind in its
+ * `capability.json`. The descriptor declarations for the 8 non-Claude runtimes
+ * (copilot/antigravity/cursor/windsurf/augment/trae/codebuddy/cline) are
+ * DEFERRED to a follow-up that first ships the ADR-1235 §0 byte-for-byte parity
+ * harness, because the second `layout.kinds` consumer — `applySurface` /
+ * `/gsd:surface` / `--materialize` (`src/surface.cts`) — does not yet mirror the
+ * legacy agent pipeline (Copilot's `.agent.md` filename rename, the cross-cutting
+ * path-prefix rewrite + attribution, stale-file cleanup, config-reading steps),
+ * so declaring the kind now would regress the surface path. Until then the legacy
+ * `bin/install.js` agent loop remains authoritative for the real install, and
+ * this `convertedAgentsKind` is exercised only by synthetic-descriptor seam tests.
  *
  * Mirrors the `convertedCommandsKind` pattern (#785).
  *

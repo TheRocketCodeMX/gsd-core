@@ -46,13 +46,6 @@ const FAKE_DIR = '/tmp/fake-config-dir-dd';
 // 'function' means we assert typeof kind.stage === 'function'.
 
 const GOLDEN = {
-  // #1173: these 8 runtimes (copilot/antigravity/cursor/windsurf/augment/trae/
-  // codebuddy/cline) gained an `agents` kind so the descriptor-driven path applies
-  // their per-runtime agent converter. This INTENTIONALLY extends the layout beyond
-  // the old switch() (which emitted no agents branch for them — their agents were
-  // converted only by the legacy bin/install.js loop). Not an equivalence regression
-  // of the ADR-857 descriptor migration; a sanctioned #1173 (ADR-1235 agent-conversion
-  // cutover) extension. cline stays global-only (empty local).
   // ── claude ──────────────────────────────────────────────────────────────────
   'claude/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
@@ -68,12 +61,10 @@ const GOLDEN = {
   'cursor/global': [
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
     { kind: 'commands', destSubpath: 'commands',  prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'cursor/local': [
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
     { kind: 'commands', destSubpath: 'commands',  prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── gemini ───────────────────────────────────────────────────────────────────
@@ -98,33 +89,27 @@ const GOLDEN = {
   // Old switch: no scope branch → local == global. 5b backfill restores this.
   'copilot/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'copilot/local': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── antigravity ──────────────────────────────────────────────────────────────
   // Old switch: no scope branch → local == global. 5b backfill restores this.
   'antigravity/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'antigravity/local': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── windsurf ─────────────────────────────────────────────────────────────────
   // Old switch: no scope branch → local == global. 5b backfill restores this.
   'windsurf/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'windsurf/local': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── augment ──────────────────────────────────────────────────────────────────
@@ -132,23 +117,19 @@ const GOLDEN = {
   'augment/global': [
     { kind: 'commands', destSubpath: 'commands', prefix: 'gsd-' },
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'augment/local': [
     { kind: 'commands', destSubpath: 'commands', prefix: 'gsd-' },
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── trae ─────────────────────────────────────────────────────────────────────
   // Old switch: no scope branch → local == global. 5b backfill restores this.
   'trae/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'trae/local': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── qwen ─────────────────────────────────────────────────────────────────────
@@ -174,19 +155,16 @@ const GOLDEN = {
   'codebuddy/global': [
     { kind: 'commands', destSubpath: 'commands', prefix: 'gsd-' },
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'codebuddy/local': [
     { kind: 'commands', destSubpath: 'commands', prefix: 'gsd-' },
     { kind: 'skills',   destSubpath: 'skills',   prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
 
   // ── cline ────────────────────────────────────────────────────────────────────
   // Old switch: scope='global' → [skills]; scope='local' → []. Matches descriptor.
   'cline/global': [
     { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-' },
-    { kind: 'agents',   destSubpath: 'agents',       prefix: 'gsd-' },
   ],
   'cline/local': [],
 
@@ -385,16 +363,13 @@ describe('resolveRuntimeArtifactLayout — scope defaults to global (descriptor-
 // ── Non-vacuous check: verify at least one multi-kind runtime ─────────────────
 
 describe('resolveRuntimeArtifactLayout — multi-kind runtimes non-vacuous (descriptor-driven)', () => {
-  test('augment global returns 3 kinds (commands + skills + agents)', () => {
-    // #1173: augment gained an agents kind (per-runtime converter) after commands+skills.
+  test('augment global returns 2 kinds (commands + skills)', () => {
     const layout = resolveRuntimeArtifactLayout('augment', FAKE_DIR, 'global');
-    assert.strictEqual(layout.kinds.length, 3);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'commands');
     assert.strictEqual(layout.kinds[1].kind, 'skills');
-    assert.strictEqual(layout.kinds[2].kind, 'agents');
     assert.strictEqual(typeof layout.kinds[0].stage, 'function');
     assert.strictEqual(typeof layout.kinds[1].stage, 'function');
-    assert.strictEqual(typeof layout.kinds[2].stage, 'function');
   });
 
   test('kimi global returns skills then kimi-agents', () => {
@@ -406,12 +381,10 @@ describe('resolveRuntimeArtifactLayout — multi-kind runtimes non-vacuous (desc
     assert.strictEqual(layout.kinds[1].prefix, 'gsd');
   });
 
-  test('codebuddy global returns commands then skills then agents', () => {
-    // #1173: codebuddy gained an agents kind (per-runtime converter) after commands+skills.
+  test('codebuddy global returns commands then skills', () => {
     const layout = resolveRuntimeArtifactLayout('codebuddy', FAKE_DIR, 'global');
-    assert.strictEqual(layout.kinds.length, 3);
+    assert.strictEqual(layout.kinds.length, 2);
     assert.strictEqual(layout.kinds[0].kind, 'commands');
     assert.strictEqual(layout.kinds[1].kind, 'skills');
-    assert.strictEqual(layout.kinds[2].kind, 'agents');
   });
 });

@@ -630,14 +630,11 @@ describe('resolveRuntimeArtifactLayout — cline scope-aware (Fix 2)', () => {
     assert.strictEqual(layout.kinds.length, 0, 'cline local must have 0 kinds');
   });
 
-  test('cline global: kinds.length === 2 (skills + agents)', () => {
-    // #1173: cline global gained an agents kind (descriptor-driven agent conversion);
-    // cline local stays empty (0 kinds) — agents was wired for global only.
+  test('cline global: kinds.length === 1 (skills kind)', () => {
     const { resolveRuntimeArtifactLayout } = require('../gsd-core/bin/lib/runtime-artifact-layout.cjs');
     const layout = resolveRuntimeArtifactLayout('cline', '/tmp/x', 'global');
-    assert.strictEqual(layout.kinds.length, 2, 'cline global must have skills + agents kinds');
+    assert.strictEqual(layout.kinds.length, 1, 'cline global must have 1 skills kind');
     assert.strictEqual(layout.kinds[0].kind, 'skills');
-    assert.strictEqual(layout.kinds[1].kind, 'agents');
   });
 
   test('installRuntimeArtifacts cline local: no skills/ dir created', (t) => {

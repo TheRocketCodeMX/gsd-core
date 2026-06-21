@@ -285,6 +285,48 @@ describe('feat-1173: dispatchKindEntry agents converter wiring', () => {
     const stagedContent = fs.readFileSync(path.join(stagedDir, 'gsd-planner.md'), 'utf8');
     assert.strictEqual(stagedContent, CLAUDE_AGENT_SOURCE, 'converter=null must raw-copy the agent content');
   });
+
+  test('scope threads isGlobal to a scope-aware converter (global vs local differ)', (t) => {
+    // The plumbing kept by #1173 (option a): convertedAgentsKind / dispatchKindEntry
+    // pass the install scope to the converter as isGlobal. A scope-aware converter
+    // (copilot) must therefore produce different output for global vs local. This
+    // proves the thread is live via a synthetic descriptor — no real runtime
+    // declares a converted agents kind yet (declarations deferred to the ADR-1235
+    // §0 parity follow-up).
+    const fixtureRoot = makeFixtureRoot([{ name: 'gsd-planner.md', content: CLAUDE_AGENT_SOURCE }]);
+    t.after(() => {
+      cleanup(fixtureRoot);
+      cleanupStagedSkills();
+    });
+
+    const agentsEntry = {
+      kind: 'agents',
+      destSubpath: 'agents',
+      prefix: 'gsd-',
+      nesting: 'flat',
+      recursive: false,
+      converter: 'convertClaudeAgentToCopilotAgent',
+    };
+    const registry = {
+      runtimes: { testruntime: { runtime: { artifactLayout: { global: [agentsEntry], local: [agentsEntry] } } } },
+    };
+
+    const profile = { name: 'full', skills: '*', agents: new Set() };
+    const stageFor = (scope) => {
+      const layout = resolveRuntimeArtifactLayoutFromRegistry(registry, 'testruntime', fixtureRoot, scope);
+      const agentKind = layout.kinds.find((k) => k.kind === 'agents');
+      assert.ok(agentKind, `${scope} layout must include an agents kind`);
+      return fs.readFileSync(path.join(agentKind.stage(profile), 'gsd-planner.md'), 'utf8');
+    };
+
+    const globalOut = stageFor('global');
+    const localOut = stageFor('local');
+    assert.notStrictEqual(
+      globalOut,
+      localOut,
+      'scope-aware converter output must differ by scope — proves isGlobal is threaded from the descriptor scope',
+    );
+  });
 });
 
 // ─── real registry: claude agents kind has converter=null ────────────────────
@@ -297,76 +339,4 @@ describe('feat-1173: real registry claude agents kind has converter=null (backwa
     assert.ok(agentsEntry, 'claude local artifactLayout must have an agents entry');
     assert.strictEqual(agentsEntry.converter, null, 'claude agents entry must have converter=null');
   });
-});
-
-// ─── feat-1173: real-registry wiring for the 8 runtimes ───────────────────────
-// The synthetic-descriptor tests above prove the dispatch SEAM exists. These
-// prove the actual deliverable: each of the 8 runtimes' capability.json now
-// declares the correct agent converter, the descriptor path APPLIES it (not a
-// raw copy), and the install scope is threaded so scope-aware converters
-// (copilot/antigravity) choose global- vs workspace-relative paths. These fail
-// on pristine `next`, where these runtimes have no agents kind (silent raw copy).
-describe('feat-1173: real-registry agent converter wiring (8 runtimes)', () => {
-  const conv = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'runtime-artifact-conversion.cjs'));
-  const layout = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'runtime-artifact-layout.cjs'));
-  const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
-
-  // runtime → its agent converter + the scopes whose descriptor carries an agents kind.
-  // cline is global-only (its local artifactLayout is empty), so it wires global only.
-  const WIRED = [
-    { runtime: 'copilot',     converter: 'convertClaudeAgentToCopilotAgent',     scopeAware: true,  scopes: ['global', 'local'] },
-    { runtime: 'antigravity', converter: 'convertClaudeAgentToAntigravityAgent', scopeAware: true,  scopes: ['global', 'local'] },
-    { runtime: 'cursor',      converter: 'convertClaudeAgentToCursorAgent',      scopeAware: false, scopes: ['global', 'local'] },
-    { runtime: 'windsurf',    converter: 'convertClaudeAgentToWindsurfAgent',    scopeAware: false, scopes: ['global', 'local'] },
-    { runtime: 'augment',     converter: 'convertClaudeAgentToAugmentAgent',     scopeAware: false, scopes: ['global', 'local'] },
-    { runtime: 'trae',        converter: 'convertClaudeAgentToTraeAgent',        scopeAware: false, scopes: ['global', 'local'] },
-    { runtime: 'codebuddy',   converter: 'convertClaudeAgentToCodebuddyAgent',   scopeAware: false, scopes: ['global', 'local'] },
-    { runtime: 'cline',       converter: 'convertClaudeAgentToClineAgent',       scopeAware: false, scopes: ['global'] },
-  ];
-
-  for (const { runtime, converter, scopeAware, scopes } of WIRED) {
-    test(`${runtime}: capability descriptor declares ${converter} for ${scopes.join('+')}`, () => {
-      const al = registry.runtimes[runtime].runtime.artifactLayout;
-      for (const scope of scopes) {
-        const entry = (al[scope] || []).find((e) => e.kind === 'agents');
-        assert.ok(entry, `${runtime} ${scope} must declare an agents kind`);
-        assert.strictEqual(entry.converter, converter, `${runtime} ${scope} agents converter`);
-      }
-      if (!scopes.includes('local')) {
-        assert.ok(!(al.local || []).some((e) => e.kind === 'agents'),
-          `${runtime} local must NOT declare an agents kind (global-only runtime)`);
-      }
-    });
-
-    test(`${runtime}: descriptor staging applies ${converter} with scope threading`, (t) => {
-      const fixtureRoot = makeFixtureRoot([{ name: 'gsd-planner.md', content: CLAUDE_AGENT_SOURCE }]);
-      t.after(() => { cleanup(fixtureRoot); cleanupStagedSkills(); });
-      const profile = { name: 'full', skills: '*', agents: new Set() };
-
-      for (const scope of scopes) {
-        const lay = layout.resolveRuntimeArtifactLayout(runtime, fixtureRoot, scope);
-        const agentsKind = lay.kinds.find((k) => k.kind === 'agents');
-        assert.ok(agentsKind, `${runtime} ${scope} layout must include an agents kind`);
-        const stagedDir = agentsKind.stage(profile);
-        const staged = fs.readFileSync(path.join(stagedDir, 'gsd-planner.md'), 'utf8');
-
-        // Conversion actually happened (guards against the raw-copy regression).
-        assert.notStrictEqual(staged, CLAUDE_AGENT_SOURCE,
-          `${runtime} ${scope}: descriptor must convert, not raw-copy`);
-        // Routed to the correct converter, with isGlobal threaded from the scope.
-        const expected = conv[converter](CLAUDE_AGENT_SOURCE, scope === 'global');
-        assert.strictEqual(staged, expected,
-          `${runtime} ${scope}: staged must equal ${converter}(src, isGlobal=${scope === 'global'})`);
-      }
-
-      // Scope-aware converters must differ by scope — proves the isGlobal thread is
-      // real (a broken/constant thread would make global and local identical).
-      if (scopeAware) {
-        assert.notStrictEqual(
-          conv[converter](CLAUDE_AGENT_SOURCE, true),
-          conv[converter](CLAUDE_AGENT_SOURCE, false),
-          `${runtime}: global vs local conversion must differ (scope threading observable)`);
-      }
-    });
-  }
 });

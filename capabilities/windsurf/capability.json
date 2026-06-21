@@ -28,14 +28,6 @@
           "nesting": "flat",
           "recursive": false,
           "converter": "convertClaudeCommandToWindsurfSkill"
-        },
-        {
-          "kind": "agents",
-          "destSubpath": "agents",
-          "prefix": "gsd-",
-          "nesting": "flat",
-          "recursive": false,
-          "converter": "convertClaudeAgentToWindsurfAgent"
         }
       ],
       "local": [
@@ -46,14 +38,6 @@
           "nesting": "flat",
           "recursive": false,
           "converter": "convertClaudeCommandToWindsurfSkill"
-        },
-        {
-          "kind": "agents",
-          "destSubpath": "agents",
-          "prefix": "gsd-",
-          "nesting": "flat",
-          "recursive": false,
-          "converter": "convertClaudeAgentToWindsurfAgent"
         }
       ]
     },
