@@ -1,5 +1,5 @@
 'use strict';
-// allow-test-rule: architectural-invariant
+// allow-test-rule: architectural-invariant (see #1531)
 // writeStateMd's "scan happens INSIDE the lock" property is a concurrency invariant.
 // A single-threaded test cannot observe the difference between scan-before-lock and
 // scan-after-lock unless something mutates the disk in the window between the two.

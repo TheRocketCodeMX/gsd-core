@@ -1,5 +1,5 @@
 'use strict';
-// allow-test-rule: architectural-invariant
+// allow-test-rule: architectural-invariant (see #1531)
 // acquireStateLock's "no orphan empty lock + no fd leak on a recoverable
 // writeSync/closeSync error" property is a resource-safety invariant of a private
 // function. A single-threaded test cannot otherwise force the openSync-succeeds-
