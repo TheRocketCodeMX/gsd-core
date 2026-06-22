@@ -86,7 +86,7 @@
     "gen:loop-host-contract": "node scripts/gen-loop-host-contract.cjs --write",
     "gen:plugin-skills": "node scripts/gen-plugin-skills.cjs --write",
     "gen:capability-registry": "node scripts/gen-capability-registry.cjs --write",
-    "prepack": "npm run build:lib && npm run gen:plugin-skills",
+    "prepack": "npm run build:lib",
     "prepare": "npm run build:lib",
     "version": "node scripts/sync-manifest-versions.cjs --stage && node scripts/gen-capability-registry.cjs --write && git add gsd-core/bin/lib/capability-registry.cjs",
     "prepublishOnly": "npm run build:lib && npm run build:hooks",
