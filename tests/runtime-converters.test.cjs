@@ -18,7 +18,6 @@ const {
   convertClaudeToOpencodeFrontmatter,
   convertClaudeToKiloFrontmatter,
   convertClaudeToGeminiAgent,
-  convertGeminiToolName,
   convertClaudeAgentToAntigravityAgent,
   convertClaudeCommandToOpencodeSkill,
   convertClaudeCommandToKiloSkill,
@@ -302,25 +301,17 @@ Offer choices via AskUserQuestion when user input is needed.
     // validation (tools.N: Invalid tool name) and aborts the entire agent load —
     // previously killing 22 of 34 GSD agents on Gemini.
 
-    // Direct unit assertion against the LIVE install path (bin/install.js copy —
-    // the one that actually generates agents), not the tsc build artifact, so a
-    // stale build can't give a false-green while the live copy is broken.
-    test('convertGeminiToolName returns null for Skill and SlashCommand', () => {
-      assert.equal(convertGeminiToolName('Skill'), null, 'Skill is excluded, not lowercased to "skill"');
-      assert.equal(convertGeminiToolName('SlashCommand'), null, 'SlashCommand is excluded, not lowercased to "slashcommand"');
-      // Existing AskUserQuestion/ask_user exclusion (the same if-block this PR extends) must still hold.
-      assert.equal(convertGeminiToolName('AskUserQuestion'), null, 'AskUserQuestion remains excluded');
-      assert.equal(convertGeminiToolName('ask_user'), null, 'ask_user remains excluded');
-      // Sanity: a mapped tool still converts.
-      assert.equal(convertGeminiToolName('Read'), 'read_file', 'mapped tools still convert');
-    });
-
     // Agent-level assertion against the live install path (criterion 2/3).
-    test('a Skill tools entry produces no skill/slashcommand in emitted frontmatter', () => {
+    // Asserts the emitted frontmatter rather than the internal converter so the
+    // test exercises the public, install-path-exported API (convertGeminiToolName
+    // is an internal helper, deliberately not exported per #1559). The Skill,
+    // SlashCommand, and AskUserQuestion inputs all exercise the exclusion if-block;
+    // Read/WebFetch exercise the mapped-tool path that must survive.
+    test('Skill/SlashCommand/AskUserQuestion are dropped from emitted Gemini frontmatter', () => {
       const input = `---
 name: gsd-planner
 description: Creates executable phase plans.
-tools: Read, Write, Bash, Glob, Grep, Skill, WebFetch, SlashCommand
+tools: Read, Write, Bash, Glob, Grep, Skill, WebFetch, SlashCommand, AskUserQuestion
 ---
 
 <role>
@@ -330,10 +321,15 @@ Plan the phase.
       const result = convertClaudeToGeminiAgent(input);
       const frontmatter = result.split('---')[1] || '';
 
+      // Mapped tools still convert (the exclusion must not break the happy path).
       assert.ok(frontmatter.includes('  - read_file'), 'maps Read -> read_file');
       assert.ok(frontmatter.includes('  - web_fetch'), 'maps WebFetch -> web_fetch');
+      // Claude-only tools with no Gemini equivalent are excluded, not lowercased
+      // into invalid names that would fail frontmatter validation (#1394 / #3362).
       assert.ok(!frontmatter.includes('  - skill'), 'does not emit invalid Gemini skill tool');
       assert.ok(!frontmatter.includes('  - slashcommand'), 'does not emit invalid Gemini slashcommand tool');
+      assert.ok(!frontmatter.includes('  - ask_user'), 'AskUserQuestion remains excluded');
+      assert.ok(!frontmatter.includes('  - askuserquestion'), 'AskUserQuestion is not lowercased into an invalid tool');
     });
 
     // Antigravity reuses convertGeminiToolName (it runs on the Gemini backend),
