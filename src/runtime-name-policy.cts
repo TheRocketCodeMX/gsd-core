@@ -90,6 +90,37 @@ export function resolveRuntimeNameFromCandidates(...candidates: unknown[]): stri
 }
 
 /**
+ * Map a runtime id to its project instruction file path (relative to project
+ * root). Bug #1529: this is the SINGLE source of truth shared by both
+ * consumption surfaces —
+ *   (A) the Node surface: profile-output.cjs (generate-claude-md handler)
+ *   (B) the bash surface: `gsd-tools query project-instruction-file --runtime <r>`,
+ *       consumed by gsd-core/workflows/new-project.md to set $INSTRUCTION_FILE
+ *
+ * Mapping table (per the #1529 issue contract):
+ *
+ *   claude                      → .claude/CLAUDE.md
+ *   codex, opencode, kilo, kimi → AGENTS.md
+ *   copilot                     → copilot-instructions.md
+ *   antigravity, gemini         → GEMINI.md
+ *   unknown / future runtimes   → AGENTS.md (safe cross-agent default)
+ *
+ * Aliases are normalized via `canonicalizeRuntimeName` first, so inputs like
+ * `codex-cli` resolve to `codex` → `AGENTS.md`. Replaces the prior codex-only
+ * override in profile-output.cjs (#3163) which left AGENTS-native runtimes
+ * (opencode/kilo/kimi) incorrectly emitting `.claude/CLAUDE.md`. Pure: no I/O.
+ */
+export function getProjectInstructionFile(runtime: unknown): string {
+  const canonical = canonicalizeRuntimeName(runtime);
+  if (canonical === 'claude') return '.claude/CLAUDE.md';
+  if (canonical === 'copilot') return 'copilot-instructions.md';
+  if (canonical === 'antigravity' || canonical === 'gemini') return 'GEMINI.md';
+  // codex, opencode, kilo, kimi, AND unknown/future runtimes all default to
+  // root AGENTS.md (the safe cross-agent instruction file).
+  return 'AGENTS.md';
+}
+
+/**
  * Map a canonical runtime id to its on-disk local config directory name
  * (e.g. `cursor` -> `.cursor`, `windsurf` -> `.devin`). Unknown/empty inputs
  * fall back to `.claude`.
