@@ -15,7 +15,7 @@ requires: [recommend-architecture, testing-strategy, cicd-strategy, plan-phase]
 <objective>
 Decide WHERE the system runs — which cloud, which compute rung per component, what data layer per environment, and the observability + IaC floors — matched to actual traffic shape, team size, and spend, and capture it so CI/CD and planning follow a coherent platform.
 
-**Position in workflow:** `recommend-architecture → testing-strategy → infrastructure-strategy → cicd-strategy / plan-phase`
+**Position in workflow:** `recommend-architecture → security-strategy → frontend-architecture (if frontend) → testing-strategy → infrastructure-strategy → cicd-strategy → plan-phase`. Canonical order: `@~/.claude/gsd-core/references/strategy-chain.md`.
 
 **How it works:**
 1. Load PRODUCT-BRIEF (scale expectations), the architecture ADR (topology), and TEST-STRATEGY (CI needs)

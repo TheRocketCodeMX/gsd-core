@@ -46,9 +46,10 @@ From the project docs, build an internal draft:
 - Which nouns/verbs recur (candidate ubiquitous-language terms)?
 - Are there distinct business areas or user roles (candidate subdomains)?
 
-**Brownfield mode (existing code).** Greenfield (define from docs/vision) is the default below. But when `.planning/codebase/*.md` exists OR real source is present, **reverse-engineer the domain from the code first, then reconcile** — don't model from a blank slate (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`, "Reverse-engineer, don't re-invent"):
+**Brownfield mode (existing code).** Greenfield (define from docs/vision) is the default below. Trigger brownfield when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `.planning/codebase/*.md` exists OR real source is present: **reverse-engineer the domain from the code first, then reconcile** — don't model from a blank slate (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`, "Reverse-engineer, don't re-invent"):
 
 ```bash
+gsd_run query project mode 2>/dev/null   # Origin — robust + placeholder-aware (replaces the fragile sed read)
 ls .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
@@ -116,6 +117,15 @@ Record each subdomain's name, type, one-line description, rationale, and the der
 
 For the single core domain only, capture in one line **what "winning" means** — the decision dimensions the core optimizes (e.g., "best match = price × reliability × lane-fit") — NOT the algorithm or any implementation. This sharpens the core for the architecture and planning phases.
 
+## Step 4.5: Actors & authorization axes (when the domain has multiple roles)
+
+If the domain has more than one kind of actor/role (most multi-user products do), model them explicitly — this is **domain knowledge, not architecture**, and it's error-prone (the classic 9-vs-13-vs-28-roles, account-role-vs-resource-role tangle surfaces here, not in planning). Capture in DOMAIN-MODEL.md:
+- **The actor/role taxonomy** — every distinct role, its ubiquitous-language name, and whether it's an **account-level role** vs a **per-resource / relationship role** (different axes — don't collapse them).
+- **The authorization axes** — what each role can do and the **scope/relationship** that gates it (own-vs-any, tenant, team, deal-party). Record the axes as domain facts; do NOT pick RBAC/ABAC/ReBAC here — that is `security-strategy`'s call.
+- **Reconcile** against any canonical role source (a role bible / seed data / old code) — the canonical spec wins on role facts (precedence rule in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`).
+
+Feeds `security-strategy` (the authz model), the data model (ownership/tenant columns), and testing (seed-per-role + negative authz tests). Skip only if there is genuinely a single actor.
+
 ## Step 5: Bounded contexts (optional — only if `--event-storming`)
 
 If `--event-storming` is NOT set: write in DOMAIN-MODEL.md "Bounded Contexts: deferred — single context assumed; planning will refine if boundaries emerge" (unless Step 6's candidate-boundary rule fires — then record the candidates instead). Skip to Step 6.
@@ -160,8 +170,10 @@ DOMAIN-MODEL.md written — strategic domain foundation set.
   Subdomains: [N]  ([core] core · [supporting] supporting · [generic] generic)
   Bounded contexts: [N]  (or "deferred")
 
-Next: /gsd:recommend-architecture   (uses the subdomain complexity) → testing → planning
+Next: /gsd:recommend-architecture   (uses the subdomain complexity) → security-strategy → frontend-architecture (if FE) → testing → infrastructure → cicd → plan-phase
 ```
+
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=model-domain` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
 **Roadmap reconciliation:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
 

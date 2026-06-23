@@ -39,17 +39,18 @@ cat .planning/REQUIREMENTS.md 2>/dev/null || true
 cat .planning/adr/*.md 2>/dev/null || true
 cat .planning/TEST-STRATEGY.md 2>/dev/null || true
 cat .planning/codebase/STACK.md 2>/dev/null || true
-ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "BROWNFIELD" || echo "GREENFIELD"
+gsd_run query project mode 2>/dev/null   # Origin/Design/Code-quality — robust + placeholder-aware (is_placeholder distinguishes a filled value from the template stub)
+ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
-**Brownfield mode (existing infra).** If `BROWNFIELD` (a `map-codebase` run produced `.planning/codebase/STACK.md`, or infra/config already exists), **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend right-size-or-migrate, not a from-scratch build: assess the existing infra (from STACK.md + config — current compute rung, data layer, IaC, CI) **against the ladder**, e.g. "currently self-managed K8s at low utilization → the CAST-AI data says serverless-containers is cheaper → here's the decision card." Recommend evolution via **strangler** — route *new* workloads to the target rung and migrate existing ones incrementally — **never a big-bang re-platform**. Surface each gap as a **decision card** (current → target → gap cost: **cost · blast radius · reversibility** → Follow / Improve / Refactor-migrate) and **default-select Improve**. Walk Steps 4–7 below as the current-state→target reconciliation rather than a blank-slate walk. Greenfield (no map, no infra) keeps the from-scratch ladder walk as the default.
+**Brownfield mode (existing infra).** Trigger when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `HAS_MAPS`/infra-config already exists. Then **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend right-size-or-migrate, not a from-scratch build: assess the existing infra (from STACK.md + config — current compute rung, data layer, IaC, CI) **against the ladder**, e.g. "currently self-managed K8s at low utilization → the CAST-AI data says serverless-containers is cheaper → here's the decision card." Recommend evolution via **strangler** — route *new* workloads to the target rung and migrate existing ones incrementally — **never a big-bang re-platform**. Surface each gap as a **decision card** (current → target → gap cost: **cost · blast radius · reversibility** → Follow / Improve / Refactor-migrate) and **default-select Improve**. Walk Steps 4–7 below as the current-state→target reconciliation rather than a blank-slate walk. Greenfield (no map, no infra) keeps the from-scratch ladder walk as the default.
 
 **Read `@~/.claude/gsd-core/references/infrastructure-strategy.md` now** — it defines the compute ladder with quantified move-up triggers, the crossover numbers (Fargate-vs-EC2, the CAST AI utilization data, the <4-engineers floor), the per-cloud asymmetries and equivalences table, the observability floor, the when-you-actually-need triggers, the IaC floor, the anti-patterns, and the meta-tell.
 
 **Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
 
 
-From the artifacts, extract: **scale expectations + traffic shape** (PRODUCT-BRIEF), **deployment topology** — how many independently deployed components (the ADR; monolith → one service is the normal answer), and **CI environment needs** (TEST-STRATEGY: test containers, e2e environments). **If `NO_ADR`:** tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" then ask: how many deployables, and is anything stateful self-managed?
+From the artifacts, extract: **scale expectations + traffic shape** (PRODUCT-BRIEF), **deployment topology** — how many independently deployed components (the ADR; monolith → one service is the normal answer), and **CI environment needs** (TEST-STRATEGY: test containers, e2e environments). **If `NO_ADR`:** unless recommend-architecture is a ledgered skip (`gsd_run query project strategy-skipped recommend-architecture --raw` = `true` → note once, don't re-offer), tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" then ask: how many deployables, and is anything stateful self-managed?
 
 Then gather the three inputs every crossover keys off (AskUserQuestion, header "Shape", or a text list): **traffic shape** (idle most of the day? bursty? steady?), **team size** (engineers who'd touch infra), and **expected monthly compute spend** (or "no idea" — fine, the default rung is the safe prior).
 
@@ -128,6 +129,8 @@ INFRA-STRATEGY.md written — infrastructure matched to traffic shape and team s
 
 Next: /gsd:cicd-strategy   (pipelines + deploy targets will follow this strategy)
 ```
+
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=infrastructure-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
 **Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the compute rungs and data layer — if a phase assumes compute, a data store, or an environment this strategy invalidates or reshapes (e.g. a phase planning a self-managed cluster now dropped to serverless containers, or one missing the IaC/observability floor this strategy mandates), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
 

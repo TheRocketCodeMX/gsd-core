@@ -15,6 +15,8 @@ The common sweet spot is a **Domain Model inside a modular monolith**. High scal
 
 Use the core subdomain's complexity from DOMAIN-MODEL. Apply per subdomain: the complex core may warrant a Domain Model (± Hexagonal); supporting/generic subdomains stay Transaction Script.
 
+**Strategic vs tactical DDD (don't conflate).** *Strategic* DDD — ubiquitous language + subdomain classification (core/supporting/generic) — is cheap and **universal**; it's done in `model-domain` regardless of the rung chosen here (Evans himself regretted over-emphasizing the building blocks). The rungs below are *tactical* (aggregates, value objects, repositories, domain events) — they earn their place **only in a genuinely complex core subdomain**, never as a default.
+
 ### The floor — the cheap baseline, even for simple projects
 
 Below the rungs sits a baseline that applies **even to simple/short-lived projects** and is explicitly **NOT full hexagonal**: **dependency inversion at *true external boundaries only* (DB, 3rd-party APIs, clock/IO) + a Functional Core / Imperative Shell shape (pure logic separated from side-effecting glue) + strong, independent tests.** This is the lighter discipline the senior voices on *both* sides of the "always hexagonal?" debate converge on — it delivers the pro-camp's real prize (day-one isolated testability) at a fraction of hexagonal's cost, with **no internal port ceremony**. Extract a real internal port only "when you feel the second adapter appearing."
@@ -25,7 +27,7 @@ Transaction Script is the domain-logic *organization* at the floor — it still 
 |------|--------------|-----------------------|
 | **Transaction Script / simple layered CRUD** (floor) | "validate → persist → return"; few rules; supporting/generic subdomains | — |
 | **Domain Model** | business rules multiply and tangle; the same invariant is duplicated across scripts; rich conditional behavior; long-lived core | rich aggregates wrapping what is really CRUD; anemic getter-bag "domain" objects |
-| **Hexagonal / Clean wrapper** (orthogonal — wraps either above) | a **current, concrete** second adapter or delivery mechanism (DB/queue/3rd-party swap, second front-end); or a genuinely pure core worth isolating for test speed | ports/interfaces with exactly one forever-implementation; DTO-mapping boilerplate around a CRUD endpoint; a wrapper claimed on lifespan or abstract "testability" alone |
+| **Hexagonal / Clean wrapper** (orthogonal — wraps either above) | a **current, concrete** second adapter or delivery mechanism (DB/queue/3rd-party swap, second front-end); or a genuinely pure core worth isolating for test speed | ports/interfaces with exactly one forever-implementation; DTO-mapping boilerplate around a CRUD endpoint; a wrapper claimed on lifespan or abstract "testability" alone; **layering hexagonal/clean on top of an opinionated framework (NestJS/Spring/Rails) that already supplies IoC + interface-DI + module boundaries — when the domain has no real behavioral complexity or volatile dependency, the framework IS the architecture; full hexagonal there only duplicates it** |
 | **CQRS** | read and write models genuinely diverge; reads ≫ writes; write model under strain | separate read/write stacks where one model serves both fine |
 | **Event Sourcing** | audit/temporal history is a hard requirement (finance, compliance, "reconstruct past state") | ES on a simple entity with no audit/temporal need |
 

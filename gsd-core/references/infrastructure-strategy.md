@@ -62,7 +62,7 @@ The ladder is cloud-portable — pick the cloud by team familiarity and existing
 4. **One golden-signals dashboard** from metrics the platform already emits: request rate, error rate, p50/p95/p99 latency, instance count/CPU. No agents needed on the default rung.
 5. **3–5 alerts max:** error-rate spike, p95 over threshold, uptime fail, queue depth if async, and — non-negotiable — a **billing budget alert** (the most important alert a small team sets).
 
-**Defer until >3 services in a request path** (or the first "which service caused this?" incident): distributed tracing / OpenTelemetry wiring, formal SLO/error-budget machinery, self-hosted Prometheus+Grafana+Loki stack (becomes its own pet), paid log aggregation, on-call tooling for a 3-person team.
+**Defer until real intra-backend fan-out** (or the first "which service caused this?" incident): the **heavy self-hosted tracing backend** (Prometheus+Grafana+Loki / Tempo — becomes its own pet), formal SLO/error-budget machinery, paid log aggregation, on-call tooling for a 3-person team. **Note — NOT deferred:** FE↔BE trace correlation across the single client→server boundary is a **day-one floor item** (W3C `traceparent` + linked error tracking via vendor SDKs), not heavy tracing infra — see `application-telemetry.md`. The old ">3 services" rule wrongly swept that in.
 
 ## When you actually need…
 

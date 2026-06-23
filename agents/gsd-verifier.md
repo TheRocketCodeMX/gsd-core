@@ -104,6 +104,7 @@ ls "$PHASE_DIR"/*-PLAN.md 2>/dev/null
 ls "$PHASE_DIR"/*-SUMMARY.md 2>/dev/null
 gsd-tools query roadmap.get-phase "$PHASE_NUM"
 grep -E "^| $PHASE_NUM" .planning/REQUIREMENTS.md 2>/dev/null
+gsd-tools query project mode 2>/dev/null   # Origin/Code-quality — drives the Mode-fit (brownfield parity) gate below
 ```
 
 Extract phase goal from ROADMAP.md — this is the outcome to verify, not the tasks.
@@ -454,6 +455,12 @@ git diff ${DIFF_BASE:-HEAD~1}..HEAD -- '*test*' '*spec*' 2>/dev/null | grep -nE 
 **Architecture-fit gate (per `engineering-standards.md`):** "wired and tamper-free" is not enough — judge the *shape*, not just that it runs.
 - **Floor check (applies ALWAYS, even with no ADR):** the universal floor is dependency inversion at the true external boundaries (DB/3rd-party/IO) + a Functional-Core/Imperative-Shell shape so the logic is testable without the real services. An implementation that reaches into the DB/3rd-party from everywhere, untestable without standing up real infrastructure, **skipped the floor** — a 🛑 BLOCKER (`status: gaps_found`) *even on a simple Transaction-Script subdomain*. The floor is the cheap baseline, not ceremony.
 - **Rung-fit check (when `.planning/adr/*.md` or `DOMAIN-MODEL.md` exists):** the implementation must match the ADR's chosen rung. Both directions: (a) **under-engineering** — thin CRUD / patch-around where the rung mandates a Domain Model / hexagonal ports / CQRS / event-driven flow (a working-but-wrong-shape impl is a 🛑 BLOCKER, not a passing phase); (b) **over-engineering** — ports/aggregates/CQRS/speculative layers on a subdomain the ADR marked Transaction Script (⚠️ Warning).
+
+- **Strategy-fit check (when the artifacts exist):** the implementation must honor `FRONTEND-ARCHITECTURE.md` (no business/validation/error-classification logic in components; server-state in the cache, not a client store; the FE side of the seam) and `SECURITY-STRATEGY.md` (authz enforced server-side per the model; the ASVS-level controls + security DoD present). A feature that ships but violates the FE architecture or skips its security/observability DoD is **incomplete** — 🛑 by blast radius, else ⚠️.
+
+- **Mode-fit check (PROJECT.md `## Mode` — the build-loop contract in `@~/.claude/gsd-core/references/brownfield-adaptation.md`):** when **Origin = rewrite-refactor** or **Code-quality = vibe-coded-to-harden**, behavior preservation is part of the goal — the *old* behavior is an oracle, not greenfield-derived truths alone:
+  - **Parity:** for every change-region the plan dispositioned *preserve* or *refactor*, characterization/parity evidence must exist (old behavior pinned, the same suite green against the new code). Behavior drift with no recorded, approved change is a 🛑 BLOCKER.
+  - **Coverage (when `LEGACY-INVENTORY.md` exists):** the "never lose a feature" gate holds — every inventoried capability in scope maps to delivered code/tests or an explicitly recorded drop. A silently-dropped capability is a 🛑 BLOCKER.
 
 Categorize: 🛑 Blocker (prevents goal, unresolved debt marker, reward-hacked check, or ADR-rung under-build) | ⚠️ Warning (incomplete, or over-built vs the rung) | ℹ️ Info (notable)
 

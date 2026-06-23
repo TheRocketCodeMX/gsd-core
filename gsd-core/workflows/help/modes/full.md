@@ -576,6 +576,9 @@ The commands above cover the most common day-to-day flows. Every command listed 
 - **`/gsd:spec-phase <phase> [--auto] [--text]`** — Clarify WHAT a phase delivers with ambiguity scoring; produces a SPEC.md before discuss-phase.
 - **`/gsd:model-domain [--auto] [--text] [--event-storming]`** — Capture ubiquitous language and classify subdomains (core/supporting/generic) for greenfield projects; strategic DDD before architecture.
 - **`/gsd:recommend-architecture [--auto] [--text]`** — Recommend an architecture matched to domain complexity and NFRs (two-axis) and capture it as an ADR; avoids over/under-engineering.
+- **`/gsd:security-strategy [--auto] [--text]`** — Decide the app-wide security posture (thin/scale-to-zero): data classification, derived ASVS level, authz model, threat-model parent, security DoD; writes SECURITY-STRATEGY.md.
+- **`/gsd:frontend-architecture [--auto] [--text]`** — Recommend a frontend architecture (structure, state, rendering, design system, the FE side of the seam) when the project has a frontend; writes FRONTEND-ARCHITECTURE.md.
+- **`/gsd:legacy-inventory [--text] [--design <path>]`** — Exhaustively inventory a predecessor codebase for a rewrite (coverage matrix, three-way gap map, salvage card); requirements derive from design ∪ old-behavior; writes LEGACY-INVENTORY.md.
 - **`/gsd:ai-integration-phase [phase]`** — Generate an AI-SPEC.md design contract for phases that involve building AI systems.
 - **`/gsd:ui-phase [phase]`** — Generate UI design contract (UI-SPEC.md) for frontend phases.
 - **`/gsd:import --from <filepath> | --from-gsd2`** — Ingest external plans with conflict detection, or reverse-migrate a GSD-2 (`.gsd/`) project back to GSD v1 (`.planning/`) format.

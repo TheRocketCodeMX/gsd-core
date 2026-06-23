@@ -30,6 +30,8 @@ If the prompt contains a `<required_reading>` block, you MUST use the `Read` too
 - **BLOCKER** — a cross-phase connection is absent or broken; an E2E user flow cannot complete
 - **WARNING** — a connection exists but is fragile, incomplete for edge cases, or inconsistently applied
 Every expected cross-phase connection must resolve to WIRED (verified end-to-end) or BROKEN (BLOCKER).
+
+**When the seam/telemetry artifacts exist** (`FRONTEND-ARCHITECTURE.md` / `fe-be-seam.md` / `application-telemetry.md`): also verify the FE↔BE **error contract** is wired across the boundary (the BE returns the machine-`code` envelope; the FE branches on it with a fallback — not a shape mismatch), **trace correlation** propagates FE→BE (one `trace_id`), and instrumented **telemetry events** flow end-to-end (emitted → ingested). A contract/trace/telemetry break across phases is a BLOCKER.
 </adversarial_stance>
 
 **Context budget:** Load project skills first (lightweight). Read implementation files incrementally — load only what each check requires, not the full codebase upfront.

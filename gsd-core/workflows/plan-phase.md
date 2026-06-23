@@ -19,6 +19,7 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 - gsd-pattern-mapper — Analyzes codebase for existing patterns, produces PATTERNS.md
 - gsd-planner — Creates detailed plans from phase scope
 - gsd-plan-checker — Reviews plan quality before execution
+- gsd-roadmapper — Elaborates the coarse roadmap against locked strategy (pre-flight gate)
 </available_agent_types>
 
 <process>
@@ -98,6 +99,22 @@ fi
 ```
 
 The gate fires only on `Complete`. `Executed` and `Needs Review` are not gated — those states mean planning was finished but verification did not pass, and replanning is a legitimate next step.
+
+## 1.6. Roadmap elaboration gate (strategy → build; fires once per milestone)
+
+The roadmap may have been generated **coarse** (before the strategy chain ran). Before planning, ensure its phase *structure* reflects the locked strategy — **gated** (fires only when the roadmap predates the artifacts) and **idempotent** (a marker):
+
+```bash
+ELAB=skip
+if [ -f .planning/ROADMAP.md ] && ! grep -q 'Elaborated against strategy' .planning/ROADMAP.md; then
+  for f in .planning/adr/*.md .planning/SECURITY-STRATEGY.md .planning/FRONTEND-ARCHITECTURE.md .planning/TEST-STRATEGY.md .planning/INFRA-STRATEGY.md .planning/CICD-STRATEGY.md; do
+    [ -e "$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
+  done
+fi
+echo "roadmap_elaboration: $ELAB"
+```
+
+**If `ELAB=stale`:** Read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy — only on this path) and follow it: it elaborates the roadmap once against the locked strategy (auto / offer-in-interactive), spawning `gsd-roadmapper` in elaborate-mode, then you re-read ROADMAP.md and continue. **Else (`ELAB=skip`):** proceed normally — per-phase planning consumes the artifacts via canonical_refs.
 
 ## 2. Parse and Normalize Arguments
 
@@ -627,13 +644,19 @@ Check if phase has frontend indicators:
 
 ```bash
 PHASE_SECTION=$(gsd_run query roadmap.get-phase "${PHASE}" 2>/dev/null)
-# Shell-free word-boundary gate (#3718): Node.js helper — no locale env-var dependency.
-# Reads via stdin to avoid OS ARG_MAX limits on large phase text.
-# Resolve the helper against the GSD install dir via RUNTIME_DIR (#448) — NOT the consuming
-# project's git root — falling back to git toplevel / $HOME/.claude. Exit codes mirror grep (0=UI,1=none).
-_GSD_RT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-UI_GATE_JS=$(for _c in "$_GSD_RT/gsd-core/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/.claude/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/gsd-core/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/bin/lib/ui-safety-gate.cjs"; do [ -f "$_c" ] && { echo "$_c"; break; }; done)
-if [ -n "$UI_GATE_JS" ]; then printf '%s' "$PHASE_SECTION" | node "$UI_GATE_JS" >/dev/null 2>&1; HAS_UI=$?; else echo "WARN: ui-safety-gate.cjs not found via RUNTIME_DIR/\$HOME (#448) — assuming UI present" >&2; HAS_UI=0; fi
+# Per-phase UI signal. The roadmapper's `**UI hint**` annotation is authoritative + PER-PHASE
+# (design-aware — see gsd-roadmapper): `yes` ⇒ UI; an explicit `no` ⇒ NOT UI (the roadmapper assessed it).
+# Only when there is NO hint do we fall back to the word-boundary keyword gate (#3718) — and we strip the
+# hint line first so the annotation can't self-match the bare "UI" token.
+if printf '%s' "$PHASE_SECTION" | grep -qiE 'UI hint[^a-z]*:?[^a-z]*yes'; then
+  HAS_UI=0
+elif printf '%s' "$PHASE_SECTION" | grep -qi 'UI hint'; then
+  HAS_UI=1   # explicit non-yes UI-hint (e.g. "no") — authoritative; the roadmapper already judged this phase
+else
+  _GSD_RT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  UI_GATE_JS=$(for _c in "$_GSD_RT/gsd-core/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/.claude/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/gsd-core/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/bin/lib/ui-safety-gate.cjs"; do [ -f "$_c" ] && { echo "$_c"; break; }; done)
+  if [ -n "$UI_GATE_JS" ]; then printf '%s' "$PHASE_SECTION" | grep -vi 'UI hint' | node "$UI_GATE_JS" >/dev/null 2>&1; HAS_UI=$?; else echo "WARN: ui-safety-gate.cjs not found (#448) — assuming UI present" >&2; HAS_UI=0; fi
+fi
 ```
 
 **If `HAS_UI` is 0 (frontend indicators found):**

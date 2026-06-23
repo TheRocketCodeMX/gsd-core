@@ -23,6 +23,10 @@ Shared reference injected into the producing agents (`gsd-planner`, `gsd-phase-r
 6. **Correct AND complete — edge cases first.** Before coding, enumerate the edge cases and failure modes the behavior must handle; a change that serves only the happy path is unfinished. This completeness is what makes code simple — not doing less.
 7. **Never hack a check to pass.** Don't hardcode an expected output, weaken/skip/delete a test, or make a gate trivially pass. A test exists so it *can* fail; one that cannot fail is worthless. (Caught mechanically by the reviewers below — not trusted to good intent.)
 
+## Cross-cutting concerns are per-phase Definition-of-Done (not one-off requirements)
+
+Some requirements are **cross-cutting** — every phase must satisfy them — so they don't fit the one-requirement→one-phase traceability model. Structured logging, the FE↔BE error contract, telemetry/analytics instrumentation, accessibility, i18n, input validation, and the security DoD are **inherited by every phase as Definition-of-Done**, sourced from the strategy artifacts (`application-telemetry.md`, `fe-be-seam.md`, `frontend-architecture.md`, `SECURITY-STRATEGY.md`). Tag them `[CROSS-CUTTING]` (not a phase number) in REQUIREMENTS/ROADMAP, and verify them on **every** phase rather than one. The reviewers (`gsd-code-reviewer`, `gsd-verifier`, `gsd-security-auditor`) check the inherited DoD per phase — a phase that ships its feature but skips its logging/errors/analytics/authz DoD is **incomplete**, which is the under-engineering direction of the calibration spine.
+
 ## Why this is enforced by gates, not vibes
 
 Prose against shortcuts is *weak alone* — frontier agents still write "make verify return true" under pressure. The durable counter is an external signal the producer can't fake, plus a fresh-context reviewer that checks **both** directions:

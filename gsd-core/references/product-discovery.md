@@ -25,6 +25,10 @@ The first answer is polished — push 2–3 times with concrete specifics, not s
 
 Discovery recurs at every artifact maturity: nothing yet (greenfield) → meeting/levantamiento notes → research corpus → full design spec. One mechanism serves all of it — the **gap map**: classify each block of the question set against its named outputs as ANSWERED / WEAK / SILENT from the docs, confirm the ANSWERED, challenge the WEAK, interview the SILENT. Greenfield is simply the all-SILENT case.
 
+## Locked-scope mode — when scope is fixed upstream
+
+When the scope is **already locked** by an upstream design, a stakeholder mandate, or a contract (the user says "implement everything in this design" / "the scope is set"), the wedge-finding/narrowing instinct *fights* the build. Detect it and **flip the posture** from *narrow-the-scope* to: (1) **validate demand** for the locked scope (is there evidence it's wanted?), (2) **sequence** the locked scope (what ships first — the walking skeleton), and (3) **surface the risks/assumptions** behind it (the four risks still apply — name the leaps of faith). Do not push to cut scope the user has declared fixed; challenge the *evidence and sequencing*, not the *existence* of the scope.
+
 Two blocks are **never doc-answerable** (cap at WEAK however mature the docs):
 - **Demand evidence** — documents hold intentions and theses, not past behavior; the money-moved/usage record lives in people's heads and inboxes. A deep design process can run for weeks without ever surfacing the one paid consultation that validates the thesis — only the past-tense interview finds it.
 - **User definition** — specs smuggle the everyone-trap in writing (multi-stakeholder framings, personas-as-demographics). Re-test the documented user with the same pushback as a spoken claim.

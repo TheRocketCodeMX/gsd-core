@@ -574,6 +574,33 @@ export const ROADMAP_COMMAND_ALIASES: CommandAlias[] = [
   }
 ];
 
+export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
+  {
+    "canonical": "project.mode",
+    "aliases": [
+      "project mode"
+    ],
+    "subcommand": "mode",
+    "mutation": false
+  },
+  {
+    "canonical": "project.strategy-plan",
+    "aliases": [
+      "project strategy-plan"
+    ],
+    "subcommand": "strategy-plan",
+    "mutation": false
+  },
+  {
+    "canonical": "project.strategy-skipped",
+    "aliases": [
+      "project strategy-skipped"
+    ],
+    "subcommand": "strategy-skipped",
+    "mutation": false
+  }
+];
+
 export const NON_FAMILY_COMMAND_ALIASES: NonFamilyCommandAlias[] = [
   {
     "canonical": "agent.classify-failure",
@@ -826,3 +853,4 @@ export const PHASE_SUBCOMMANDS: string[] = PHASE_COMMAND_ALIASES.map((entry) => 
 export const PHASES_SUBCOMMANDS: string[] = PHASES_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const VALIDATE_SUBCOMMANDS: string[] = VALIDATE_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const ROADMAP_SUBCOMMANDS: string[] = ROADMAP_COMMAND_ALIASES.map((entry) => entry.subcommand);
+export const PROJECT_SUBCOMMANDS: string[] = PROJECT_COMMAND_ALIASES.map((entry) => entry.subcommand);

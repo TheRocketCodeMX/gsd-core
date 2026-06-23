@@ -15,7 +15,7 @@ requires: [recommend-architecture, add-tests, plan-phase]
 <objective>
 Decide WHAT to test, at WHICH level, and HOW MUCH — matched to the architecture — and capture it so execution and add-tests follow a coherent shape. Extends the project's existing test rigor (TESTING-STANDARDS.md), it does not replace it.
 
-**Position in workflow:** `recommend-architecture → testing-strategy → plan-phase / execute-phase`
+**Position in workflow:** `recommend-architecture → security-strategy → frontend-architecture (if frontend) → testing-strategy → infrastructure-strategy → cicd-strategy → plan-phase` (security/frontend/infra/cicd are conditional or skippable per project). Canonical order: `@~/.claude/gsd-core/references/strategy-chain.md`.
 
 **How it works:**
 1. Load the architecture decision (ADR / SKELETON) and DOMAIN-MODEL

@@ -147,6 +147,7 @@ build/
 /gsd-core/bin/lib/validate-command-router.cjs
 /gsd-core/bin/lib/workstream-inventory.cjs
 /gsd-core/bin/lib/roadmap-command-router.cjs
+/gsd-core/bin/lib/project-command-router.cjs
 /gsd-core/bin/lib/state-command-router.cjs
 /gsd-core/bin/lib/config.cjs
 /gsd-core/bin/lib/profile-output.cjs
@@ -160,6 +161,7 @@ build/
 /gsd-core/bin/lib/uat.cjs
 /gsd-core/bin/lib/workstream.cjs
 /gsd-core/bin/lib/roadmap.cjs
+/gsd-core/bin/lib/project.cjs
 /gsd-core/bin/lib/audit.cjs
 __pycache__/
 *.pyc
