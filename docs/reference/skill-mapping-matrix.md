@@ -32,7 +32,7 @@ For the transform each converter applies, see [ADR-1593 §3 — converter transf
 | **cursor** | `skills/` | `gsd-` | flat | recursive | `convertClaudeCommandToCursorSkill` | Also ships flat `commands/` via `convertClaudeCommandToCursorCommand`. `configFormat: none`. |
 | **copilot** | `skills/` | `gsd-` | flat | unconfirmed → conservative | `convertClaudeCommandToCopilotSkill` | Markdown config. Scope-aware converter (global-home vs workspace-relative). |
 | **antigravity** | `skills/` | `gsd-` | nested | non-recursive (one-level) | `convertClaudeCommandToAntigravitySkill` | `dot-home-nested` config home. Scope-aware converter. Nesting confirmed: *"will not recursive scan"*. |
-| **windsurf** | `skills/` | `gsd-` | flat | unconfirmed → conservative | `convertClaudeCommandToWindsurfSkill` | `configFormat: none`. `installSurface: profile-marker-only`. |
+| **windsurf** | — *(no skills kind)* | `gsd-` | — | workflows | `convertClaudeCommandToWindsurfWorkflow` | Emits `.windsurf/workflows/gsd-*.md` slash-command workflows. `configFormat: none`. `installSurface: profile-marker-only`. |
 | **augment** | `skills/` | `gsd-` | nested | non-recursive (single-level) | `convertClaudeCommandToAugmentSkill` | Also ships flat `commands/`. Settings-json config. |
 | **trae** | `skills/` | `gsd-` | nested | non-recursive (flat; nesting errors) | `convertClaudeCommandToTraeSkill` | `configFormat: none`. Trae IDE (trae.ai), not trae-agent. |
 | **qwen** | `skills/` | `gsd-` | nested | non-recursive (flat readdir) | `convertClaudeCommandToClaudeSkill` | **Shares Claude's converter.** Emits numeric `priority:` (`QWEN_SKILL_PRIORITY`) for `/skills` ordering. Settings-json config. |

@@ -13,6 +13,7 @@ const assert = require('node:assert/strict');
 
 const {
   convertClaudeCommandToWindsurfSkill,
+  convertClaudeCommandToWindsurfWorkflow,
   convertClaudeAgentToWindsurfAgent,
   convertClaudeToWindsurfMarkdown,
 } = require('../bin/install.js');
@@ -73,6 +74,29 @@ Body content.
   });
 });
 
+describe('convertClaudeCommandToWindsurfWorkflow', () => {
+  test('writes a plain workflow wrapper for slash commands', () => {
+    const input = `---
+name: quick
+description: Execute a quick task
+---
+
+<objective>
+Test body
+</objective>
+`;
+
+    const result = convertClaudeCommandToWindsurfWorkflow(input, 'gsd-quick');
+
+    assert.ok(!result.startsWith('---'), 'workflow has no YAML frontmatter');
+    assert.match(result, /^# gsd-quick$/m, 'workflow title names the slash command');
+    assert.ok(result.includes('Execute a quick task'), 'description is preserved');
+    assert.ok(result.includes('@~/.claude/gsd-core/commands/gsd/quick.md'), 'workflow delegates to canonical command body');
+    assert.ok(result.includes('/gsd-quick'), 'workflow mentions the slash command invocation');
+    assert.ok(Buffer.byteLength(result, 'utf8') <= 12000, 'workflow respects Windsurf limit');
+  });
+});
+
 describe('convertClaudeAgentToWindsurfAgent', () => {
   test('converts agent frontmatter with unquoted name', () => {
     const input = `---
@@ -105,17 +129,17 @@ describe('convertClaudeToWindsurfMarkdown', () => {
     assert.ok(!result.includes('Claude Code'), 'original brand removed');
   });
 
-  test('replaces CLAUDE.md with .devin/rules (no trailing slash)', () => {
+  test('replaces CLAUDE.md with .windsurf/rules (no trailing slash)', () => {
     const input = 'See `CLAUDE.md` for configuration. Also check ./CLAUDE.md file.';
     const result = convertClaudeToWindsurfMarkdown(input);
-    assert.ok(result.includes('.devin/rules'), 'CLAUDE.md replaced with .devin/rules (#1085)');
-    assert.ok(!result.includes('.devin/rules/'), 'no trailing slash (Node v25 compat)');
+    assert.ok(result.includes('.windsurf/rules'), 'CLAUDE.md replaced with .windsurf/rules');
+    assert.ok(!result.includes('.windsurf/rules/'), 'no trailing slash (Node v25 compat)');
   });
 
-  test('replaces .claude/skills/ with .devin/skills/', () => {
+  test('replaces .claude/skills/ with .windsurf/skills/', () => {
     const input = 'Skills are stored in .claude/skills/ directory.';
     const result = convertClaudeToWindsurfMarkdown(input);
-    assert.ok(result.includes('.devin/skills/'), 'skills path replaced with .devin/skills/ (#1085)');
+    assert.ok(result.includes('.windsurf/skills/'), 'skills path replaced with .windsurf/skills/');
   });
 
   test('replaces Bash( with Shell( and Edit( with StrReplace(', () => {
