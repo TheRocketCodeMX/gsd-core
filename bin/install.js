@@ -9905,6 +9905,23 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     failures.push('gsd-core');
   }
 
+  // #1629 critical fix: Windsurf workflow wrappers (convertClaudeCommandToWindsurfWorkflow)
+  // delegate to command bodies at <targetDir>/gsd-core/commands/gsd/${stem}.md via a
+  // hardcoded @~/.claude/gsd-core/commands/gsd/ path that _applyRuntimeRewrites rewrites
+  // to the install target. The source gsd-core/ dir does NOT ship with commands/ —
+  // the canonical command source lives at the package root (commands/gsd/). Without
+  // this copy, every /gsd-* workflow in Cascade references a missing file and the LLM
+  // cannot execute the command body. Surfaced by the #1629 regression test after the
+  // original adversarial review of #1622 missed it.
+  if (isWindsurf && !isGlobal) {
+    const commandsSrc = path.join(src, 'commands', 'gsd');
+    const commandsDest = path.join(skillDest, 'commands', 'gsd');
+    if (fs.existsSync(commandsSrc)) {
+      copyWithPathReplacement(commandsSrc, commandsDest, pathPrefix, runtime, true, isGlobal);
+      console.log(`  ${green}✓${reset} Installed command bodies to gsd-core/commands/gsd/ (workflow delegation targets)`);
+    }
+  }
+
   // Copy shared manifests into the gsd-core payload
   // at the co-located path that CJS modules resolve first:
   //   gsd-core/bin/shared/*.json
