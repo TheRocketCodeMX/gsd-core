@@ -55,6 +55,12 @@ This ensures the design contract aligns with project-specific conventions and li
 | `## Claude's Discretion` | Your freedom areas — research and recommend |
 | `## Deferred Ideas` | Out of scope — ignore completely |
 
+**PROJECT.md `## Mode`** (if exists) — the project mode + the **Design input** pointer
+
+| Section | How You Use It |
+|---------|----------------|
+| Design input | If a provided design is recorded here (path/link), **actually read and ingest it** per `@~/.claude/gsd-core/references/design-ingestion.md` — the per-form mechanics (Figma → API/MCP or exported frames+tokens; a deployed prototype → scrape with WebFetch/firecrawl; a generated export → parse it; a tokens/component package → read it). It is the **same canonical source** `frontend-architecture`/`legacy-inventory` use (don't re-locate a different one). Distill tokens/components/screens/states/copy into the UI-SPEC and **reconcile vs code+requirements** (designs under-show built behavior) — do NOT push house defaults over a provided design. |
+
 **RESEARCH.md** (if exists) — Technical findings from `/gsd:plan-phase`
 
 | Section | How You Use It |
@@ -68,6 +74,13 @@ This ensures the design contract aligns with project-specific conventions and li
 |---------|----------------|
 | Requirement descriptions | Extract any visual/UX requirements already specified |
 | Success criteria | Infer what states and interactions are needed |
+
+**FRONTEND-ARCHITECTURE.md** (if exists) — Global frontend architecture
+
+| Section | How You Use It |
+|---------|----------------|
+| Design system + insulation | The primitive vendor + token layering are ALREADY chosen here — record them in UI-SPEC, do NOT re-decide them; use its tokens |
+| Structure / state / rendering | The per-phase UI-SPEC must stay consistent with these global decisions |
 
 If upstream artifacts answer a design contract question, do NOT re-ask it. Pre-populate the contract and confirm.
 </upstream_input>

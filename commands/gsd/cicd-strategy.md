@@ -15,7 +15,7 @@ requires: [testing-strategy, plan-phase]
 <objective>
 Decide WHERE CI runs, HOW it authenticates to the cloud, WHICH test tiers gate which pipeline stage, and HOW deploys promote — matched to the test strategy, the target infrastructure, and the team — and capture it so CI/deploy phases plan against a coherent pipeline.
 
-**Position in workflow:** `testing-strategy → cicd-strategy → plan-phase / execute-phase`
+**Position in workflow:** `testing-strategy → infrastructure-strategy → cicd-strategy → plan-phase`. Canonical order: `@~/.claude/gsd-core/references/strategy-chain.md`.
 
 **How it works:**
 1. Load TEST-STRATEGY.md (the tiers + smoke list) and INFRA-STRATEGY.md / ADR (the target cloud)

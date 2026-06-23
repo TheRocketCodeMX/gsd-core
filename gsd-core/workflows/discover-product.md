@@ -98,7 +98,9 @@ fi
 
 ## Step 12: Wrap up
 
-Display:
+**Preview the likely strategy path.** The brief already implies the surface, sensitivity, and scale — so sketch the probable archetype + the strategy steps it will need, per `@~/.claude/gsd-core/references/strategy-flow.md`. This is a **preview, not the authoritative plan** — `new-project` writes the real `## Strategy Plan` once requirements exist. Record the sensed surface/sensitivity/scale in the brief's handoff notes so `new-project` doesn't re-ask.
+
+Display (fill the preview line from the sensed archetype, e.g. "backend API handling PII → model-domain → recommend-architecture → security-strategy (L2) → testing-strategy → infra → cicd"):
 ```
 PRODUCT-BRIEF.md written — product defined.
 
@@ -107,8 +109,9 @@ PRODUCT-BRIEF.md written — product defined.
   Demand: [strong | medium | weak — based on past-behavior evidence]
   Four risks: [N validated · M open]
   Spec amendments: [N proposed — apply to [spec] or it stays governing]   (challenge mode only)
+  Likely strategy path: [archetype → the previewed ordered strategy steps]
 
-Next: /gsd:new-project (capture it) → /gsd:model-domain (the domain) → /gsd:recommend-architecture
+Next: /gsd:new-project (capture it — it writes your `## Strategy Plan`) → then the strategy steps it recommends.
 ```
 
 </process>

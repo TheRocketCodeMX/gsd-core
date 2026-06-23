@@ -15,7 +15,7 @@ requires: [new-project, plan-phase, phase]
 <objective>
 Establish the shared domain vocabulary and subdomain boundaries that downstream phases depend on — before any architecture decision.
 
-**Position in workflow:** `new-project → model-domain (optional) → recommend-architecture → plan-phase`
+**Position in workflow:** `new-project → model-domain (optional) → recommend-architecture → security-strategy → frontend-architecture (if frontend) → testing-strategy → … → plan-phase`. Canonical order: `@~/.claude/gsd-core/references/strategy-chain.md`.
 
 **How it works:**
 1. Load project context (PROJECT.md, REQUIREMENTS.md, ROADMAP.md if present)

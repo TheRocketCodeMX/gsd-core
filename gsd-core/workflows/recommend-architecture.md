@@ -41,7 +41,7 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 
 **Grounding maturity governs elicitation depth.** When upstream artifacts (DOMAIN-MODEL, a design spec, research) already answer a question below, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve `AskUserQuestion` for genuine decision points: contested rungs, gate answers the docs don't record, and contradictions (the reconcile rule still ALWAYS runs). Honor a posture stated in `$ARGUMENTS` without re-asking.
 
-**Brownfield mode (existing architecture).** Greenfield (recommend the target from scratch) is the default. But when existing code or `map-codebase` maps are present, **assess the current topology first and recommend an evolution path** — never impose a from-scratch ideal on the running system (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`):
+**Brownfield mode (existing architecture).** Greenfield (recommend the target from scratch) is the default. Trigger brownfield when the `## Mode` block (cat'd in Step 2) records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — existing code / `map-codebase` maps are present: **assess the current topology first and recommend an evolution path** — never impose a from-scratch ideal on the running system (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`). When `## Mode` Code-quality = vibe-coded-to-harden, treat the existing topology as *under-engineered by default* — the meta-tell (Step 5) should expect missing seams/tests and recommend raising rungs, not honoring the prototype's shortcuts as intentional.
 
 ```bash
 ls .planning/codebase/ARCHITECTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
@@ -55,7 +55,7 @@ If maps exist, `cat .planning/codebase/ARCHITECTURE.md` (consume STRUCTURE.md/CO
 
 Greenfield behavior remains the default when no existing code is present.
 
-**If `NO_DOMAIN_MODEL`:** tell the user "No domain model found — I'll ask the complexity questions directly. (Consider `/gsd:model-domain` first for a sharper result.)" Then gather, per major area: is it core/supporting/generic, and how complex (rich rules vs CRUD)?
+**If `NO_DOMAIN_MODEL`:** unless model-domain is a ledgered skip (`gsd_run query project strategy-skipped model-domain --raw` = `true` → note once, don't re-offer), tell the user "No domain model found — I'll ask the complexity questions directly. (Consider `/gsd:model-domain` first for a sharper result.)" Then gather, per major area: is it core/supporting/generic, and how complex (rich rules vs CRUD)?
 
 From DOMAIN-MODEL.md (or the answers): extract each subdomain's type + complexity, **plus** the bounded contexts (owns / talks-to), the context-map relationships, and any flagged polysemes — Step 4.5 consumes them. The **core** subdomain's complexity is the primary driver of Axis A.
 
@@ -113,13 +113,23 @@ Run this check in **both directions** — it is a first-class gate, not a formal
 
 State the surviving justifications; you'll record them in the ADR.
 
+## Step 5.5: Service error contract + telemetry floor (the seam the backend owns)
+
+Whenever the system exposes a service boundary — an HTTP/RPC API, a CLI with structured output, a queue consumer (i.e. nearly everything except a pure in-process library) — lock the transport-agnostic contract + observability floor **here**, so a **backend-only or polyglot** project gets it even though it never runs `frontend-architecture`. (For a frontend project this only fixes the *backend* side; `frontend-architecture` decides the FE side against the same contract.)
+
+**Read `@~/.claude/gsd-core/references/fe-be-seam.md`** (the machine-readable error contract — an RFC 9457-style envelope with a stable machine `code` the caller branches on; the backend owns codes, callers own copy) **and `@~/.claude/gsd-core/references/application-telemetry.md`** (the telemetry floor — structured logs, a propagated `trace_id`, the count-once rule).
+
+Decide and record in the ADR (one short "Service contract & telemetry floor" subsection — scale-to-zero: a pure local CLI/library with no boundary writes "n/a — no service boundary"):
+- the **error envelope shape + machine `code` scheme** at the boundary (and that it's enforced by one machine-checked contract, not restated per caller);
+- the **telemetry floor** — structured logging + `trace_id` propagation across the boundary — runtime-verify the current best-maintained option for the detected stack, recorded dated (do not freeze a library in this doc).
+
 ## Step 6: Present recommendation & write the ADR
 
 **Recommend, don't dictate.** Present, via `AskUserQuestion` (header "Architecture"):
 - Your recommended option in one paragraph (the Axis-A rungs per subdomain + the Axis-B topology), how it compares to the default baseline (modular monolith + Domain Model in the complex core + Transaction Script elsewhere + ADRs + fitness functions), and 1–2 alternatives with trade-offs.
 - options: "Accept the recommendation", "Adjust (I'll tell you what)", "Show me the alternatives in detail"
 
-Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with the next number, `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md, Status = Accepted). Fill: Context (complexity + NFRs + team/ops), Decision (Axis A per-subdomain table + Axis B with the three gate answers + tenancy when multi-tenant + the Module map), Promotion triggers (component → observable condition → response), Consequences (incl. **fitness functions** to enforce boundaries), Alternatives rejected, and the over-/under-engineering check (each non-floor rung ↔ its concrete requirement).
+Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with the next number, `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md, Status = Accepted). Fill: Context (complexity + NFRs + team/ops), Decision (Axis A per-subdomain table + Axis B with the three gate answers + tenancy when multi-tenant + the Module map + the **Service contract & telemetry floor** subsection from Step 5.5), Promotion triggers (component → observable condition → response), Consequences (incl. **fitness functions** to enforce boundaries), Alternatives rejected, and the over-/under-engineering check (each non-floor rung ↔ its concrete requirement).
 
 Write to `.planning/adr/NNNN-architecture.md`. Capture *why* and trade-offs, not implementation detail.
 
@@ -145,8 +155,10 @@ ADR-NNNN written — architecture decided.
   Fitness functions: [N] to enforce boundaries
   Promotion triggers: [N] recorded — re-check at /gsd:new-milestone
 
-Next: /gsd:testing-strategy   (test shape follows this architecture) → plan-phase
+Next: /gsd:security-strategy   (app-wide security posture — thin/scale-to-zero) → /gsd:frontend-architecture (if the project has a frontend) → /gsd:testing-strategy   (test shape follows this architecture) → plan-phase
 ```
+
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=recommend-architecture` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
 **Roadmap reconciliation:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
 

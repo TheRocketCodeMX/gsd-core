@@ -31,6 +31,7 @@ If the flag is absent, keep the current behavior of continuing phase numbering f
 - Read MILESTONES.md (what shipped previously)
 - Read STATE.md (pending todos, blockers)
 - Check for MILESTONE-CONTEXT.md (from /gsd-discuss-milestone)
+- **Assess the existing system (brownfield default):** read `.planning/codebase/*.md` if present (or suggest `/gsd:map-codebase` first when the milestone touches unfamiliar/large areas) so this milestone's requirements + roadmap are grounded in the existing code's reality — integration points, blast radius, what's already built — per `@~/.claude/gsd-core/references/brownfield-adaptation.md` (assess what exists, then extend)
 
 ## 2. Gather Milestone Goals
 
@@ -150,6 +151,8 @@ Add/update:
 
 Update Active requirements section and "Last updated" footer.
 
+**Refresh the `## Mode` section** for this milestone (per `@~/.claude/gsd-core/references/exploration-and-adaptability.md`): a milestone is brownfield-extend by default, but re-detect — does it rewrite/refactor an existing area, ingest a new design, or harden vibe-coded code? Update Origin × Design-input × Code-quality (+ the named combination) if the milestone changes them; if PROJECT.md predates the Mode section, add it.
+
 Ensure the `## Evolution` section exists in PROJECT.md. If missing (projects created before this feature), add it before the footer:
 
 ```markdown
@@ -170,6 +173,22 @@ This document evolves at phase transitions and milestone boundaries.
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 ```
+
+## 4.5. Strategy Plan refresh (warm-start — what does THIS milestone need?)
+
+This is the **warm-start** strategy recommender (the new-project Step 7.6 equivalent for an existing project). **Read `@~/.claude/gsd-core/references/strategy-flow.md` now** and map the milestone's *objective* to which strategy steps to revisit or adopt — never silently build on stale (or absent) decisions. Refresh `## Strategy Plan` in PROJECT.md accordingly.
+
+**First, the adopt case.** If the strategy artifacts are largely **absent** (an existing project newly adopting GSD — e.g. upgraded from an older gsd-core, or first GSD use on real code), this milestone is a **retrofit**: explore the code (`/gsd:map-codebase` for extend, `/gsd:legacy-inventory` for rewrite/harden) and run the relevant chain in assess-evolve to establish the missing ADR/SECURITY/TEST/etc. against the running system. Recommend the cold-start matrix scoped to what's missing.
+
+**Otherwise, map the objective** (objective→revisit map in `strategy-flow.md`) — offer the matching skill(s) via `AskUserQuestion` (printed recommendation in `--text`/auto):
+- **first frontend / major new client** → `/gsd:frontend-architecture` (+ ui-phase)
+- **payments / PII / new trust boundary / regulated flow** → `/gsd:security-strategy` (re-derive ASVS + authz)
+- **new bounded context / domain shift** → `/gsd:model-domain` + `/gsd:recommend-architecture`
+- **deploy target / data layer / pipeline change** → `/gsd:infrastructure-strategy` / `/gsd:cicd-strategy`
+- **rewrite/refactor of an existing area** → `/gsd:legacy-inventory` first (requirements = design ∪ old-behavior)
+- **production-readiness / hardening** (a working app → production-grade) → the **hardening playlist** (members defined once in `strategy-flow.md`'s Overlays — characterize → seam → secure → observe → CI gate; don't restate them here)
+
+**Re-surface ledgered skips:** if `## Strategy Plan`'s skip-ledger records a step that this milestone's scope now makes relevant (e.g. a previously-skipped `frontend-architecture` and this milestone adds a frontend), re-offer it. If nothing applies, note "strategy artifacts still fit this milestone" and continue. The strategy decisions are project-wide and must stay valid as scope evolves.
 
 ## 5. Update STATE.md
 
@@ -485,6 +504,7 @@ Create roadmap for milestone v[X.Y]:
 2. Derive phases from THIS MILESTONE's requirements only
 3. Map every requirement to exactly one phase
 4. Derive 2-5 success criteria per phase (observable user behaviors)
+4b. Detail only the near-horizon phase(s); keep later phases coarse (milestone-level) — they are elaborated against locked decisions (or at plan-phase), not baked now
 5. Validate 100% coverage
 6. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability)
 7. Return ROADMAP CREATED with summary
@@ -586,6 +606,16 @@ Print a summary:
 
 ## 11. Done
 
+**Strategy on-ramp** (Step 4.5 refreshed `## Strategy Plan`):
+
+```bash
+NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # first `recommended` step, or empty
+```
+
+- **Auto mode + `NEXT_STRATEGY` set:** exit and `SlashCommand("/gsd:${NEXT_STRATEGY} --auto")` — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
+- **Interactive + `NEXT_STRATEGY` set:** lead the panel below with `/gsd:${NEXT_STRATEGY}` (the strategy this milestone needs) as the next step, and offer `/gsd:discuss-phase [N]` as "skip strategy, build directly" — do NOT jump straight to discuss-phase when a strategy step is recommended.
+- **`NEXT_STRATEGY` empty** (strategy artifacts still fit, or none recommended): use the build-loop handoff below.
+
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  GSD ► MILESTONE INITIALIZED ✓
@@ -628,7 +658,7 @@ Also: `/gsd:plan-phase [N] ${GSD_WS}` — skip discussion, plan directly
 - [ ] Phase numbering mode respected (continued or reset)
 - [ ] All commits made (if planning docs committed)
 - [ ] Pending todos scanned for phase matches; matched todos tagged with `resolves_phase: N`
-- [ ] User knows next step: `/gsd:discuss-phase [N] ${GSD_WS}`
+- [ ] `## Strategy Plan` refreshed (Step 4.5); user directed to the milestone's first recommended strategy step (or `/gsd:discuss-phase [N]` when none is recommended)
 
 **Atomic commits:** Each phase commits its artifacts immediately.
 </success_criteria>

@@ -95,6 +95,10 @@ Read the plan file provided in your prompt context.
 Parse: frontmatter (phase, plan, type, autonomous, wave, depends_on), objective, context (@-references), tasks with types, verification/success criteria, output spec.
 
 **If plan references CONTEXT.md:** Honor user's vision throughout execution.
+
+**Mode awareness** (PROJECT.md `## Mode` — Origin × Design-input × Code-quality):
+- **From-design** (a provided design): the phase's UI-SPEC is the design's *distillation* — treat it as a **fidelity contract** (match it), not invented guidance; don't deviate from the distilled spec without a recorded reason.
+- **Origin ≠ greenfield / Code-quality = legacy or vibe-coded** (changing existing code): match the surrounding code's grain, keep changes incremental, and honor the plan's characterization-test gate where present — when a task changes behavior-bearing legacy, the pinned current behavior is the oracle (do not "clean up" behavior silently). See `@~/.claude/gsd-core/references/brownfield-adaptation.md`.
 </step>
 
 <step name="record_start_time">

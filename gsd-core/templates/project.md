@@ -17,6 +17,37 @@ Use the user's language and framing. Update whenever reality drifts from this de
 [The ONE thing that matters most. If everything else fails, this must work.
 One sentence that drives prioritization when tradeoffs arise.]
 
+## Mode
+
+<!-- The detected build mode-combination — recorded once here, read by every strategy/build skill so they adapt instead of re-detecting (see exploration-and-adaptability.md). -->
+
+- **Origin:** [greenfield | brownfield-extend | rewrite/refactor]
+- **Design input:** [none | a provided design to ingest, at `<path-or-link>` | an existing design system to honor] <!-- record the location ONCE here; ui-researcher / frontend-architecture / legacy-inventory all ingest the SAME design from this pointer -->
+- **Code-quality baseline:** [clean | legacy-debt | vibe-coded-to-harden]
+- **Combination:** [the named combination, e.g. "greenfield-rewrite + new-design + salvageable-old-code"]
+
+## Strategy Plan
+
+<!-- The archetype-tailored strategy path for this project — written by new-project / new-milestone from the archetype + Mode, per strategy-flow.md. The recommended steps to run before/around the build loop; refreshed at milestone boundaries. Each step's status: recommended | done | skipped. -->
+
+**Archetype:** [e.g. backend service · real domain · public+PII · deployed]
+
+**Recommended path:** [the ordered strategy steps for this archetype, e.g. model-domain → recommend-architecture → security-strategy (L2) → testing-strategy → infrastructure-strategy → cicd-strategy → build]
+
+| Step | Status |
+|---|---|
+| [model-domain] | [recommended] |
+| [recommend-architecture] | [recommended] |
+
+### Skip-ledger
+
+<!-- A deliberately-declined recommended step. Enforcers treat a ledgered skip as a DECISION (note once, don't re-nag); new-milestone re-surfaces it only when scope makes it relevant again.
+     EXACT format (the `—` is an em-dash, required — skill names contain hyphens, so the separator must be unambiguous):
+     - <skill> — skipped (<reason>, <YYYY-MM-DD>)
+     e.g.  - testing-strategy — skipped (throwaway prototype, 2026-06-23) -->
+
+- (none yet)
+
 ## Requirements
 
 ### Validated
@@ -82,6 +113,11 @@ Common types: Tech stack, Timeline, Budget, Dependencies, Compatibility, Perform
 - Everything else can fail; this cannot
 - Drives prioritization when tradeoffs arise
 - Rarely changes; if it does, it's a significant pivot
+
+**Mode:**
+- The detected build mode-combination across three orthogonal dimensions (Origin × Design-input × Code-quality), per `exploration-and-adaptability.md`
+- Detected per-area but summarized here for the project; downstream strategy/build skills read this instead of re-running `ls`-based detection
+- Update it when the mode changes (e.g. a greenfield project gains a salvageable codebase, or a new design is provided)
 
 **Requirements — Validated:**
 - Requirements that shipped and proved valuable

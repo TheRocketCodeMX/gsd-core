@@ -96,7 +96,13 @@ Forward produces task lists. Goal-backward produces success criteria that tasks 
 
 Every v1 requirement must map to exactly one phase. No orphans. No duplicates.
 
-If a requirement doesn't fit any phase → create a phase or defer to v2.
+**Exception — cross-cutting requirements.** Requirements tagged `[CROSS-CUTTING]` (logging / errors / analytics / a11y / i18n / security DoD — per `engineering-standards.md`) are NOT mapped 1:1. They're inherited by **every** phase as Definition-of-Done; list them once under a single "Cross-cutting (all phases)" entry and do not count them as orphans or duplicates.
+
+**Detail the near horizon; keep later phases coarse.** The roadmap is built before the strategy decisions (architecture / security / testing / infra) that reshape it — so detail only the near-horizon phase(s) fully and keep later phases coarse (milestone-level), to be **elaborated** against the locked decisions at the end of the strategy chain, not re-litigated. This avoids baking premature detail the chain then has to patch.
+
+**Elaborate-mode (re-run after the strategy chain).** When you are re-invoked and a ROADMAP.md already exists AND strategy artifacts now present (ADR / SECURITY-STRATEGY / FRONTEND-ARCHITECTURE / TEST-STRATEGY / INFRA-STRATEGY / CICD-STRATEGY) postdate it, **ELABORATE — do not regenerate.** Read the strategy artifacts, then *detail the near-horizon coarse phases* against the locked decisions (e.g. Phase 1 absorbs the IaC/CI-CD/security/observability scaffolding the strategies mandate; split a phase that now straddles a module seam; fold in cross-cutting DoD). **Preserve** the existing phase structure, numbering, requirement mappings, and any user edits — change only what a locked decision forces, and surface each change. Never silently re-derive the whole roadmap (that discards prior reasoning + edits). When you elaborate, write a one-line marker near the top of ROADMAP.md — `**Elaborated against strategy:** <artifacts> (<date>)` — so the elaboration is idempotent (the build loop runs it exactly once). This is the elaboration step the coarse-first design depends on.
+
+If a (non-cross-cutting) requirement doesn't fit any phase → create a phase or defer to v2.
 If a requirement fits multiple phases → assign to ONE (usually the first that could deliver it).
 
 </philosophy>
@@ -338,7 +344,10 @@ After roadmap creation, REQUIREMENTS.md gets updated with phase mappings:
 
 ### UI Phase Detection
 
-After writing phase details, scan each phase's goal, name, requirements, and success criteria for UI/frontend keywords. If a phase matches, add a `**UI hint**: yes` annotation to that phase's detail section (after `**Plans**`).
+After writing phase details, mark each phase that delivers a user-facing surface with a `**UI hint**: yes` annotation in its detail section (after `**Plans**`). This per-phase annotation is **authoritative** for plan-phase's UI-SPEC gate — so accuracy matters: a backend-only phase must NOT be marked, and a UI phase must NOT be missed.
+
+- **Default (no design / no FE architecture):** scan each phase's goal, name, requirements, and success criteria for the UI/frontend keywords below.
+- **Design-aware (when `FRONTEND-ARCHITECTURE.md` exists OR PROJECT.md `## Mode` records a provided design — check `gsd_run query project mode`):** mark UI phases from the **design + FE architecture**, not keywords alone — a phase that builds a screen/flow from the provided design gets `**UI hint**: yes` even if its roadmap prose lacks obvious keywords. This replaces plan-phase's former blunt project-wide "design ⇒ all phases are UI" override with accurate per-phase truth: only the phases that actually deliver UI are marked, so backend phases of a design-driven project are correctly left unmarked.
 
 **Detection keywords** (case-insensitive):
 

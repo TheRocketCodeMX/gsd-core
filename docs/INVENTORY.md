@@ -56,7 +56,7 @@ Full roster at `agents/gsd-*.md`. The "Primary doc" column flags whether [`docs/
 
 ---
 
-## Commands (73 shipped)
+## Commands (76 shipped)
 
 Full roster at `commands/gsd/*.md`. The groupings below mirror `docs/COMMANDS.md` section order; each row carries the command name, a one-line role derived from the command's frontmatter `description:`, and a link to the source file. `tests/command-count-sync.test.cjs` locks the count against the filesystem.
 
@@ -100,6 +100,9 @@ These six routers are descriptor-only entries that the model picks first; the bo
 | `/gsd-discover-product` | Optional product discovery — demand vs interest, narrowest wedge, four risks, outcome-framed. | [commands/gsd/discover-product.md](../commands/gsd/discover-product.md) |
 | `/gsd-model-domain` | Greenfield DDD — ubiquitous language + subdomain distillation with derived complexity. | [commands/gsd/model-domain.md](../commands/gsd/model-domain.md) |
 | `/gsd-recommend-architecture` | Recommend an architecture matched to domain complexity and NFRs; produces an ADR. | [commands/gsd/recommend-architecture.md](../commands/gsd/recommend-architecture.md) |
+| `/gsd-security-strategy` | Decide the app-wide security posture — data classification, ASVS level, authz model, security DoD. | [commands/gsd/security-strategy.md](../commands/gsd/security-strategy.md) |
+| `/gsd-legacy-inventory` | Inventory a predecessor codebase for a rewrite — coverage matrix, salvage card, gap map. | [commands/gsd/legacy-inventory.md](../commands/gsd/legacy-inventory.md) |
+| `/gsd-frontend-architecture` | Recommend a frontend architecture matched to the backend topology — structure, state, rendering, design system, the FE side of the seam. | [commands/gsd/frontend-architecture.md](../commands/gsd/frontend-architecture.md) |
 | `/gsd-testing-strategy` | Recommend a test strategy matched to the architecture — shape, levels, what to test. | [commands/gsd/testing-strategy.md](../commands/gsd/testing-strategy.md) |
 | `/gsd-infrastructure-strategy` | Recommend compute/data/environments infrastructure matched to actual scale and team. | [commands/gsd/infrastructure-strategy.md](../commands/gsd/infrastructure-strategy.md) |
 | `/gsd-cicd-strategy` | Recommend a CI/CD strategy — platform, OIDC auth, secrets split, pipeline stages, deploy ladder. | [commands/gsd/cicd-strategy.md](../commands/gsd/cicd-strategy.md) |
@@ -172,7 +175,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 
 ---
 
-## Workflows (94 shipped)
+## Workflows (97 shipped)
 
 Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that commands reference internally; most are not read directly by end users. Rows below map each workflow file to its role (derived from the `<purpose>` block) and, where applicable, to the command that invokes it.
 
@@ -201,6 +204,9 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `discover-product.md` | Product discovery interview — demand evidence, wedge, four risks; produces PRODUCT-BRIEF.md. | `/gsd-discover-product` |
 | `model-domain.md` | Strategic DDD — ubiquitous language + subdomain distillation; produces DOMAIN-MODEL.md. | `/gsd-model-domain` |
 | `recommend-architecture.md` | Two-axis architecture recommendation; produces .planning/adr/NNNN-architecture.md. | `/gsd-recommend-architecture` |
+| `security-strategy.md` | App-wide security posture (thin/scale-to-zero); produces .planning/SECURITY-STRATEGY.md. | `/gsd-security-strategy` |
+| `legacy-inventory.md` | Exhaustive predecessor inventory for a rewrite; produces .planning/LEGACY-INVENTORY.md. | `/gsd-legacy-inventory` |
+| `frontend-architecture.md` | Frontend architecture matched to the backend topology; produces .planning/FRONTEND-ARCHITECTURE.md. | `/gsd-frontend-architecture` |
 | `testing-strategy.md` | Architecture-matched test strategy; produces TEST-STRATEGY.md. | `/gsd-testing-strategy` |
 | `infrastructure-strategy.md` | Compute/data/environments recommendation; produces INFRA-STRATEGY.md. | `/gsd-infrastructure-strategy` |
 | `cicd-strategy.md` | CI/CD platform, secrets, pipeline-stage and deploy-ladder recommendation; produces CICD-STRATEGY.md. | `/gsd-cicd-strategy` |
@@ -276,7 +282,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (85 shipped)
+## References (93 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -297,6 +303,14 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | `tdd.md` | Test-driven development integration patterns. |
 | `engineering-standards.md` | Senior-quality contract — invariant quality bar + ceremony set by the ADR (both over- and under-engineering are failures); injected into producers, enforced by reviewers. |
 | `brownfield-adaptation.md` | Working an existing codebase — follow/improve/refactor matrix, Feathers safe-change sequence, decision-card pattern; the brownfield half of the strategy chain + scout. |
+| `exploration-and-adaptability.md` | The core spine — combinable mode taxonomy (greenfield/brownfield/rewrite/from-design/vibe-coded), the three mandatory explorations (code/design/web), and the runtime tech-selection discipline. |
+| `strategy-chain.md` | Canonical order + per-link consumes/warns/next contract for the discovery→strategy→build chain; the single wiring manifest. |
+| `strategy-flow.md` | The selection policy over the chain — archetype→recommended-path matrix + brownfield/design/harden overlays + the objective→revisit map; drives the entry-point Strategy Plan + skip-ledger. |
+| `design-ingestion.md` | How to read a provided design into the build — per-form mechanics (Figma / generated-export / deployed prototype / tokens package / in-repo system), normalize to the UI-SPEC contract, reconcile vs code+requirements. |
+| `frontend-architecture.md` | The FE half of the architecture doctrine — floor/rungs/triggers, state management, rendering, design-system + insulation; the FE side of the seam. |
+| `fe-be-seam.md` | The frontend↔backend contract + error contract (machine-code + trace-id + fault-masking; HTTP/gRPC/event bindings) + CORS/CSRF-by-auth + the responsibility split. |
+| `application-telemetry.md` | App-level logging (incl. dev/prod policy), FE↔BE trace correlation without duplication, and product-analytics taxonomy; distinct from infra's ops floor. |
+| `security-posture.md` | App-wide security posture — ASVS-by-context, the data-protection floor + trigger-rungs, the regime master-switch, authz model + auth methods, the threat-model parent. |
 | `ui-brand.md` | Visual output formatting patterns. |
 | `common-bug-patterns.md` | Common bug patterns for code review and verification. |
 | `debugger-philosophy.md` | Evergreen debugging disciplines loaded by `gsd-debugger`. |
@@ -421,7 +435,7 @@ The `gsd-planner` agent is decomposed into a core agent plus reference modules t
 
 ---
 
-## CLI Modules (90 shipped)
+## CLI Modules (92 shipped)
 
 Full listing: `gsd-core/bin/lib/*.cjs`.
 
@@ -483,6 +497,8 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `research-provider.cjs` | Research provider waterfall, confidence tiers, and planResearch (cache-hits + fetch plan) |
 | `research-store.cjs` | Content-addressed research cache: sha256 keys, per-source TTL staleness, two-tier (user ~/.gsd / project .planning) store |
 | `review-reviewer-selection.cjs` | Reviewer selection/normalization helpers for `/gsd-review` default reviewer policy and precedence |
+| `project-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools project` |
+| `project.cjs` | PROJECT.md section queries — `project.mode` (placeholder-aware), `project.strategy-plan`, `project.strategy-skipped` |
 | `roadmap-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools roadmap` |
 | `roadmap-upgrade.cjs` | Migration tool for converting legacy `Phase N` entries to milestone-prefixed `Phase M-NN` convention; `computeMigrationPlan` + `applyMigration` with dry-run default and atomic rollback |
 | `roadmap.cjs` | ROADMAP.md parsing, phase extraction, plan progress |

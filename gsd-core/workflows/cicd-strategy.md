@@ -38,17 +38,19 @@ cat .planning/INFRA-STRATEGY.md 2>/dev/null || true
 cat .planning/adr/*.md 2>/dev/null || true
 cat .planning/PROJECT.md 2>/dev/null || true
 cat .planning/codebase/STACK.md 2>/dev/null || true
-ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "BROWNFIELD" || echo "GREENFIELD"
+ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"   # plus the ## Mode block cat'd above — Origin is authoritative
 ```
 
-**Brownfield mode (existing pipeline).** If `BROWNFIELD` (a `map-codebase` run produced `.planning/codebase/STACK.md`, or CI config already exists), **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend a **transition plan**, not a rip-and-replace: **audit the existing pipeline** (from STACK.md + the CI config) against the tier→stage map (Step 5), the **≤10-min PR budget**, and the **pinned-`sub` OIDC / secrets** standard (Step 4). Recommend incremental fixes via **decision cards** (current → target → gap cost → Follow / Improve / Refactor), e.g. "15-min gate → split to PR-smoke + nightly," "long-lived service-account key → OIDC federation," "moved-tag actions → SHA-pin." **Default-select Improve**; sequence the changes (don't enable everything at once). Greenfield (no map, no pipeline) keeps the from-scratch pipeline design below as the default.
+**Brownfield mode (existing pipeline).** Trigger when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `HAS_MAPS`/CI-config already exists. Then **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend a **transition plan**, not a rip-and-replace: **audit the existing pipeline** (from STACK.md + the CI config) against the tier→stage map (Step 5), the **≤10-min PR budget**, and the **pinned-`sub` OIDC / secrets** standard (Step 4). Recommend incremental fixes via **decision cards** (current → target → gap cost → Follow / Improve / Refactor), e.g. "15-min gate → split to PR-smoke + nightly," "long-lived service-account key → OIDC federation," "moved-tag actions → SHA-pin." **Default-select Improve**; sequence the changes (don't enable everything at once). Greenfield (no map, no pipeline) keeps the from-scratch pipeline design below as the default.
 
 **Read `@~/.claude/gsd-core/references/cicd-strategy.md` now** — it defines the GHA-default platform decision, OIDC-with-pinned-`sub`, the secrets split, the tier→stage mapping with the ≤10-min PR budget, the flaky canon, the merge-queue trigger, the deployment ladder, the free-six supply-chain table stakes, and the anti-pattern table.
 
 **Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
 
 
-**If `NO_TEST_STRATEGY`:** tell the user "No test strategy found — the pipeline mapping is much better with one. (Consider `/gsd:testing-strategy` first.)" If they decline, proceed with generic tiers (small/unit → PR; medium/integration → merge; large/e2e → nightly) and note the gap in the output. From TEST-STRATEGY.md, extract: the per-subdomain level emphasis, the persistent e2e smoke list (the 3–7 flows), and the mutation-testing targets. From INFRA-STRATEGY.md / ADR / PROJECT.md, extract: target cloud + deploy target, repo host, team size, and blast radius (payments/PII/data = high). Ask only what's missing (header "Context"): team size, blast radius, expected merge volume.
+**If `NO_TEST_STRATEGY`:** first check the skip-ledger — `gsd_run query project strategy-skipped testing-strategy --raw` (true = a deliberate skip). **If `true`: note once ("test strategy deliberately skipped — proceeding with generic tiers") and do NOT re-offer** (the skip-ledger exception in `strategy-chain.md`). Otherwise tell the user "No test strategy found — the pipeline mapping is much better with one. (Consider `/gsd:testing-strategy` first.)" If they decline, proceed with generic tiers (small/unit → PR; medium/integration → merge; large/e2e → nightly) and note the gap in the output. From TEST-STRATEGY.md, extract: the per-subdomain level emphasis, the persistent e2e smoke list (the 3–7 flows), and the mutation-testing targets. From INFRA-STRATEGY.md / ADR / PROJECT.md, extract: target cloud + deploy target, repo host, team size, and blast radius (payments/PII/data = high). Ask only what's missing (header "Context"): team size, blast radius, expected merge volume.
+
+**If `NO_INFRA_STRATEGY`:** first check the skip-ledger — `gsd_run query project strategy-skipped infrastructure-strategy --raw` (true = a deliberate skip). **If `true`: note once and do NOT re-offer.** Otherwise tell the user "No infrastructure strategy found — the target cloud, deploy targets, and environments come from it, so the pipeline maps much better with one. (Consider `/gsd:infrastructure-strategy` first.)" If they decline, fall back to the ADR / PROJECT.md for the target cloud and note the gap in the output.
 
 ## Step 3: Platform choice
 
@@ -137,6 +139,8 @@ CICD-STRATEGY.md written — pipeline mapped to the test strategy.
 
 Next: /gsd:plan-phase   (CI/deploy phases will plan against this strategy)
 ```
+
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=cicd-strategy` — in `--auto` it dispatches the build loop (`/gsd:discuss-phase 1`) since cicd is the last strategy step; interactive runs use the `Next:` pointer above.
 
 **Strategy-chain completion (this is the chain's last link — close the loop):**
 1. **Synthesis table** — if other strategy artifacts exist (`PRODUCT-BRIEF`, `DOMAIN-MODEL`, `adr/*`, `TEST-STRATEGY`, `INFRA-STRATEGY`), display a one-line-per-artifact decision summary so the user sees the whole strategized picture in one place.

@@ -139,6 +139,10 @@ CONTEXT: [✓ if has_context | - if not]
 [Next phase/plan objective from roadmap analyze]
 ```
 
+**Strategy Plan awareness (safety net for the on-ramp).** Read PROJECT.md's `## Strategy Plan` if present. If it lists steps with status `recommended` (not `done`, not in the skip-ledger) whose artifacts don't yet exist, surface them in "What's Next" before the build route — e.g. "Strategy not yet decided: `recommend-architecture`, `security-strategy` are recommended but not run (or `/gsd:new-project` if no `## Strategy Plan` exists)." A ledgered skip is a decision — do NOT surface it. This makes `progress` able to recover a dropped strategy on-ramp.
+
+**Mode-staleness hint.** Read `## Mode` (`gsd_run query project mode`). If the project's current reality has visibly outgrown it — e.g. Mode records `prototype`/`vibe-coded` but the build now has substantial code + tests headed for production, or recent phases added a frontend Mode doesn't mention — note it briefly: "Your `## Mode` may be stale — consider `/gsd:new-milestone` to refresh Mode + Strategy Plan." Don't nag if it still fits.
+
 </step>
 
 <step name="mvp_display">

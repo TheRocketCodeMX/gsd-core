@@ -61,6 +61,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-03 | Phase 1 | Pending |
 | AUTH-04 | Phase 1 | Pending |
 | [REQ-ID] | Phase [N] | Pending |
+| [REQ-ID] `[CROSS-CUTTING]` | All phases (DoD) | Pending |
 
 **Coverage:**
 - v1 requirements: [X] total

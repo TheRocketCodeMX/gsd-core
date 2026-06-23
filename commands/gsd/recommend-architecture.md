@@ -15,7 +15,7 @@ requires: [model-domain, plan-phase, phase]
 <objective>
 Recommend an application architecture that matches the project's actual complexity — neither over- nor under-engineered — and capture it as an ADR the planning phase consumes.
 
-**Position in workflow:** `new-project → model-domain → recommend-architecture → plan-phase`
+**Position in workflow:** `model-domain → recommend-architecture → security-strategy → frontend-architecture (if frontend) → testing-strategy → infrastructure-strategy → cicd-strategy → plan-phase`. Canonical order: `@~/.claude/gsd-core/references/strategy-chain.md`.
 
 **How it works:**
 1. Load context (PROJECT.md, REQUIREMENTS.md, and DOMAIN-MODEL.md if present)

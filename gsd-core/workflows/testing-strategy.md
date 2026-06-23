@@ -39,17 +39,18 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 cat .planning/adr/*.md 2>/dev/null || true
 cat TESTING-STANDARDS.md 2>/dev/null || true
 cat .planning/codebase/TESTING.md 2>/dev/null || true
-ls .planning/codebase/TESTING.md >/dev/null 2>&1 && echo "BROWNFIELD" || echo "GREENFIELD"
+gsd_run query project mode 2>/dev/null   # Origin/Design/Code-quality — robust + placeholder-aware (is_placeholder distinguishes a filled value from the template stub)
+ls .planning/codebase/TESTING.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
 **Read `@~/.claude/gsd-core/references/test-strategy.md` now** — it defines behavior-over-implementation, sociable-by-default, test-once-at-cheapest-level, shape-follows-architecture (size axis), the gnarly-bits list, persistent-vs-transient e2e, and coverage-as-floor + mutation.
 
-**Brownfield mode (existing test suite / untested legacy).** If `BROWNFIELD` (a `map-codebase` run produced `.planning/codebase/TESTING.md`, or existing code is present), **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend the test strategy as an *evolution*, not a from-scratch shape: assess the current tests from TESTING.md (framework, structure, coverage) and frame Steps 3–6 as additions on top of what exists, keeping the existing framework/conventions unless there's a decision-card reason to change. Key rule: for **untested legacy you intend to change, write characterization tests first** (pin the *current* behavior, bugs included) — starting at the **highest churn × risk hotspots** (git history), as a *local* safety net around the change region; never block on a global coverage %. Surface each gap (missing level, weak assertions, money-as-float, etc.) as a **decision card** (current → target → gap cost → Follow / Improve / Refactor) and **default-select Improve**; gate any Refactor behind those characterization tests. Greenfield (no map, no code) keeps the from-scratch derivation below as the default.
+**Brownfield mode (existing test suite / untested legacy).** Trigger when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `HAS_MAPS`/existing code is present (and especially when Code-quality = vibe-coded-to-harden). Then **read `@~/.claude/gsd-core/references/brownfield-adaptation.md` now** and recommend the test strategy as an *evolution*, not a from-scratch shape: assess the current tests from TESTING.md (framework, structure, coverage) and frame Steps 3–6 as additions on top of what exists, keeping the existing framework/conventions unless there's a decision-card reason to change. Key rule: for **untested legacy you intend to change, write characterization tests first** (pin the *current* behavior, bugs included) — starting at the **highest churn × risk hotspots** (git history), as a *local* safety net around the change region; never block on a global coverage %. Surface each gap (missing level, weak assertions, money-as-float, etc.) as a **decision card** (current → target → gap cost → Follow / Improve / Refactor) and **default-select Improve**; gate any Refactor behind those characterization tests. Greenfield (no map, no code) keeps the from-scratch derivation below as the default.
 
 **Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
 
 
-**If `NO_ADR`:** tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" Then, per major subdomain, get its rung (Transaction Script / Domain Model / Hexagonal / CQRS / Event Sourcing) and whether it's DB/integration-bound. Otherwise extract each subdomain's rung from the ADR.
+**If `NO_ADR`:** unless recommend-architecture is a ledgered skip (`gsd_run query project strategy-skipped recommend-architecture --raw` = `true` → note once, don't re-offer), tell the user "No architecture decision found — I'll ask briefly. (Consider `/gsd:recommend-architecture` first.)" Then, per major subdomain, get its rung (Transaction Script / Domain Model / Hexagonal / CQRS / Event Sourcing) and whether it's DB/integration-bound. Otherwise extract each subdomain's rung from the ADR.
 
 ## Step 3: Derive the shape FROM the architecture (per subdomain)
 
@@ -107,8 +108,10 @@ TEST-STRATEGY.md written — test shape set to follow the architecture.
   Persistent e2e smoke: [N] flows
   Coverage = floor; mutation on [critical modules]; TDD = behavior + small increments (test-first: ${TDD_MODE})
 
-Next: /gsd:plan-phase   (plans + /gsd:add-tests will follow this strategy)
+Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strategy → /gsd:plan-phase. Skip infra + cicd straight to /gsd:plan-phase only for a local-only / no-deploy project. (plans + /gsd:add-tests will follow this strategy)
 ```
+
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=testing-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
 **Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
 
