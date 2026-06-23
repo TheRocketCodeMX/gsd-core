@@ -62,6 +62,12 @@ const UI_GATE_PATTERN = new RegExp(
 // Global-flagged variant for extracting ALL matches per line (matchAll).
 const UI_GATE_PATTERN_GLOBAL = new RegExp(UI_GATE_PATTERN.source, 'gi');
 
+// Negation guard (#dogfood): a token immediately preceded by a negator ("no UI", "without a
+// frontend", "not a screen") is a DENIAL, not a UI signal — a backend phase describing itself by
+// contrast must not be flagged. Matches a negator (+ optional article) right before the token.
+// The fail-safe-toward-UI bias is preserved for non-negated mentions.
+const NEGATOR_BEFORE_TOKEN = /(?:^|[^a-z])(?:no|not|without|never|sans|zero|n't)\s+(?:a\s+|an\s+|the\s+)?$/i;
+
 /**
  * Check a roadmap phase section string for frontend UI indicators.
  *
@@ -82,6 +88,9 @@ export function checkUiPresence(text: string): UiPresenceResult {
     // Reset lastIndex before each line so the global pattern restarts from 0.
     UI_GATE_PATTERN_GLOBAL.lastIndex = 0;
     for (const m of line.matchAll(UI_GATE_PATTERN_GLOBAL)) {
+      // Skip a token that's negated ("no UI", "without a frontend").
+      const tokenStart = (m.index ?? 0) + (m[1] ? m[1].length : 0);
+      if (NEGATOR_BEFORE_TOKEN.test(line.slice(0, tokenStart))) continue;
       found.add(m[2].toLowerCase());
     }
   }

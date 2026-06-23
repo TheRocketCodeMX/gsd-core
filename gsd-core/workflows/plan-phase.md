@@ -644,16 +644,18 @@ Check if phase has frontend indicators:
 
 ```bash
 PHASE_SECTION=$(gsd_run query roadmap.get-phase "${PHASE}" 2>/dev/null)
-# Per-phase UI signal. The roadmapper's `**UI hint**: yes` annotation is authoritative and PER-PHASE
-# (design-aware when a design/FE-arch exists — see gsd-roadmapper) — so a backend phase of a design-driven
-# project is NOT forced into UI, and a design screen-phase lacking keywords still gets caught. Fall back to
-# the word-boundary keyword gate (#3718) only when the phase carries no UI-hint annotation.
-if printf '%s' "$PHASE_SECTION" | grep -qi 'UI hint.*yes'; then
+# Per-phase UI signal. The roadmapper's `**UI hint**` annotation is authoritative + PER-PHASE
+# (design-aware — see gsd-roadmapper): `yes` ⇒ UI; an explicit `no` ⇒ NOT UI (the roadmapper assessed it).
+# Only when there is NO hint do we fall back to the word-boundary keyword gate (#3718) — and we strip the
+# hint line first so the annotation can't self-match the bare "UI" token.
+if printf '%s' "$PHASE_SECTION" | grep -qiE 'UI hint[^a-z]*:?[^a-z]*yes'; then
   HAS_UI=0
+elif printf '%s' "$PHASE_SECTION" | grep -qi 'UI hint'; then
+  HAS_UI=1   # explicit non-yes UI-hint (e.g. "no") — authoritative; the roadmapper already judged this phase
 else
   _GSD_RT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
   UI_GATE_JS=$(for _c in "$_GSD_RT/gsd-core/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/bin/lib/ui-safety-gate.cjs" "$_GSD_RT/.claude/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/gsd-core/bin/lib/ui-safety-gate.cjs" "$HOME/.claude/bin/lib/ui-safety-gate.cjs"; do [ -f "$_c" ] && { echo "$_c"; break; }; done)
-  if [ -n "$UI_GATE_JS" ]; then printf '%s' "$PHASE_SECTION" | node "$UI_GATE_JS" >/dev/null 2>&1; HAS_UI=$?; else echo "WARN: ui-safety-gate.cjs not found (#448) — assuming UI present" >&2; HAS_UI=0; fi
+  if [ -n "$UI_GATE_JS" ]; then printf '%s' "$PHASE_SECTION" | grep -vi 'UI hint' | node "$UI_GATE_JS" >/dev/null 2>&1; HAS_UI=$?; else echo "WARN: ui-safety-gate.cjs not found (#448) — assuming UI present" >&2; HAS_UI=0; fi
 fi
 ```
 
