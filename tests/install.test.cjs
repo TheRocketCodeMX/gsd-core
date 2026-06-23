@@ -1330,6 +1330,33 @@ describe('windsurf local install writes workflow slash commands (#1615)', () => 
     }
   });
 
+  // #1629 Finding A: every workflow's @-reference target must exist on disk
+  // after install. Pre-fix, gsd-core/ was copied AFTER workflows were written;
+  // a throw or kill in that window left workflows pointing at missing files.
+  // Post-fix, gsd-core/ is copied first. This behavioral invariant catches
+  // any ordering regression that leaves a workflow target absent.
+  test('every workflow @-reference target exists on disk after install (#1629 Finding A)', () => {
+    install(false, 'windsurf');
+    const workflowsDir = path.join(tmpDir, '.windsurf', 'workflows');
+    const workflowEntries = fs.readdirSync(workflowsDir, { withFileTypes: true })
+      .filter(e => e.isFile() && e.name.startsWith('gsd-') && e.name.endsWith('.md'));
+    assert.ok(workflowEntries.length > 0, 'pre-condition: at least one gsd-* workflow must be installed');
+
+    const commandsGsdDir = path.join(tmpDir, '.windsurf', 'gsd-core', 'commands', 'gsd');
+    assert.ok(fs.existsSync(commandsGsdDir),
+      `gsd-core/commands/gsd/ must exist at ${commandsGsdDir} so workflows can delegate to it`);
+
+    for (const workflowEntry of workflowEntries) {
+      // Workflow naming convention: gsd-<stem>.md → delegates to commands/gsd/<stem>.md
+      const stem = workflowEntry.name.replace(/^gsd-/, '').replace(/\.md$/, '');
+      const targetFile = path.join(commandsGsdDir, `${stem}.md`);
+      assert.ok(
+        fs.existsSync(targetFile),
+        `${workflowEntry.name} delegates to commands/gsd/${stem}.md, but that file does not exist at ${targetFile}`,
+      );
+    }
+  });
+
   test('global windsurf install does not write unsupported workflows or skills', () => {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-ws-global-'));
     const savedHome = process.env.HOME;
