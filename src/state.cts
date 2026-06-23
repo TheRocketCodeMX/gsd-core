@@ -3189,6 +3189,9 @@ export = {
   cmdStateMilestoneSwitch,
   cmdSignalWaiting,
   cmdSignalResume,
+  // Test seam (#1514): the pure retired/folded-phase parser, exposed so its
+  // strikethrough-detection logic can be property-tested directly.
+  _extractRetiredPhaseNumbers: extractRetiredPhaseNumbers,
   // Test seam (audit M1): inject a deterministic isPidAlive so the liveness-gated
   // steal decision is exercised without real pids. Mirrors capability-lock.cts.
   _setLockProbes(probes: Partial<{ isPidAlive: (pid: number) => boolean }>): void {

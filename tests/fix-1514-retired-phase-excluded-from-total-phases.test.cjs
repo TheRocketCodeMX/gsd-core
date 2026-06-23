@@ -31,6 +31,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const fc = require('./helpers/fast-check-setup.cjs');
+const { _extractRetiredPhaseNumbers } = require('../gsd-core/bin/lib/state.cjs');
+const { normalizePhaseName } = require('../gsd-core/bin/lib/phase-id.cjs');
 
 // Six phases, all shipped, except Phase 04 which is retired/folded into 05.
 // Phases 01-03,05,06 have PLAN+SUMMARY (complete); Phase 04 keeps a directory
@@ -249,6 +252,19 @@ describe('bug #1514 — retired exclusion across phase shapes', () => {
     assert.equal(progress.percent, 100, `Got ${progress.percent}`);
   });
 
+  test('boundary: every phase retired (k === n) → total_phases 0', () => {
+    tmpDir = seedFromSpecs('bug-1514-all-', [
+      { id: '01', retired: true, dir: '01-a' },
+      { id: '02', retired: true, dir: '02-b' },
+      { id: '03', retired: true, dir: '03-c' },
+    ]);
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `state json failed: ${result.error}`);
+    const { progress } = JSON.parse(result.output);
+    assert.equal(progress.total_phases, 0, `all phases retired → denominator 0. Got ${progress.total_phases}`);
+    assert.equal(progress.completed_phases, 0, `Got ${progress.completed_phases}`);
+  });
+
   test('strikethrough in a non-checklist/heading line (a goal) does NOT retire that phase', () => {
     // Detection is scoped to checklist/heading lines, so a struck GOAL line
     // that begins with a phase reference must not retire it.
@@ -285,5 +301,52 @@ describe('bug #1514 — retired exclusion across phase shapes', () => {
     const { progress } = JSON.parse(result.output);
     assert.equal(progress.total_phases, 3, `struck prose in a goal line must not retire Phase 02. Got ${progress.total_phases}`);
     assert.equal(progress.completed_phases, 3, `Got ${progress.completed_phases}`);
+  });
+});
+
+// ─── Property: the strikethrough parser extracts exactly the struck set ──────
+
+// extractRetiredPhaseNumbers is the parsing/transformation core of the fix, so
+// per RULESET.TESTS.property-based-testing it carries a fast-check property:
+// for a roadmap with k of n checklist phases struck, the parser must return
+// exactly the canonical keys of those k phases — no more, no fewer — across
+// randomized phase counts and numeric/zero-padded/project-code ID forms. This
+// underpins the `total_phases === n - k` guarantee the integration tests assert.
+describe('bug #1514 — extractRetiredPhaseNumbers property: returns exactly the struck set', () => {
+  const idForm = (num, form) =>
+    form === 'padded' ? String(num).padStart(2, '0')
+      : form === 'project' ? `PROJ-${num}`
+        : String(num);
+  const keyOf = (num, form) => normalizePhaseName(idForm(num, form)).toUpperCase();
+
+  test('k-of-n struck phases → exactly k canonical keys, for any n/form', () => {
+    fc.assert(
+      fc.property(
+        // Distinct phase numbers so canonical keys don't collide within a run.
+        fc.uniqueArray(fc.integer({ min: 1, max: 98 }), { minLength: 1, maxLength: 10 }),
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 10 }),
+        fc.constantFrom('plain', 'padded', 'project'),
+        (nums, flagsRaw, form) => {
+          const lines = ['## Milestone v1.0: M', '', '### Phases'];
+          const struck = [];
+          nums.forEach((num, i) => {
+            const id = idForm(num, form);
+            if (flagsRaw[i]) {
+              lines.push(`- [x] ~~**Phase ${id}: P${num}**~~ — folded; retired`);
+              struck.push(num);
+            } else {
+              lines.push(`- [x] **Phase ${id}: P${num}** — done`);
+            }
+          });
+
+          const got = _extractRetiredPhaseNumbers(lines.join('\n'));
+          const expected = new Set(struck.map((num) => keyOf(num, form)));
+
+          assert.equal(got.size, expected.size, `size: got ${got.size}, expected ${expected.size}`);
+          for (const k of expected) assert.ok(got.has(k), `missing struck key ${k}`);
+          for (const k of got) assert.ok(expected.has(k), `extra (non-struck) key ${k}`);
+        },
+      ),
+    );
   });
 });
