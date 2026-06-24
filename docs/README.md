@@ -10,6 +10,8 @@ Language versions: [English](README.md) · [Português (pt-BR)](pt-BR/README.md)
 
 - [Your first project](tutorials/your-first-project.md) — install to first shipped phase, one guaranteed path
 - [Onboarding an existing codebase](tutorials/onboarding-an-existing-codebase.md) — bring GSD Core to a brownfield repo
+- [Build your first capability](tutorials/build-your-first-capability.md) — author a tiny declarative capability and watch it act in the loop
+- [Install your first capability](tutorials/install-your-first-capability.md) — install a third-party capability end-to-end: consent, verify, check for updates, remove
 
 ---
 
@@ -56,6 +58,9 @@ Language versions: [English](README.md) · [Português (pt-BR)](pt-BR/README.md)
 - [PLAN.md schema](reference/plan-md.md) — field-by-field reference for `.planning/phases/<N>/PLAN.md`
 - [Planning artifacts](reference/planning-artifacts.md) — all `.planning/` files and their roles
 - [Review and verification capabilities](reference/review-verification-capabilities.md) — code review, security, and Nyquist capability ownership and hook contracts
+- [Capability matrix](reference/capability-matrix.md) — generated catalogue of every capability's role, tier, extension points, hook kinds, and `engines.gsd`
+- [Capability manifest](reference/capability-manifest.md) — the full `capability.json` schema and validation rules
+- [`gsd capability` command](reference/gsd-capability-command.md) — install / update / remove / list reference for third-party capabilities
 
 ---
 
@@ -65,6 +70,8 @@ Language versions: [English](README.md) · [Português (pt-BR)](pt-BR/README.md)
 - [The phase loop](explanation/the-phase-loop.md) — design rationale for the Discuss → Plan → Execute → Verify → Ship cycle
 - [Multi-agent orchestration](explanation/multi-agent-orchestration.md) — how subagents are spawned, scoped, and coordinated
 - [Security model](explanation/security-model.md) — trust boundaries, permissions, and safe automation
+- [The capability trust model](explanation/capability-trust-model.md) — why third-party capabilities are gated by consent + integrity + reversibility, not a sandbox
+- [How overlay capabilities compose](explanation/capability-overlay-model.md) — why first-party always wins and how the loader resolves precedence, conflicts, and fail-closed gates
 - [Architecture](ARCHITECTURE.md) — system architecture, agent model, and data flow
 - [Discuss modes](workflow-discuss-mode.md) — assumptions mode vs interview mode for `/gsd-discuss-phase`
 - [Context monitoring](context-monitor.md) — context window monitoring hook architecture

@@ -1719,3 +1719,94 @@ describe('isCapabilityActive cross-runtime detection (GSD_RUNTIME → config.run
     }
   });
 });
+
+// ─── ADR-1244 D2 overlay wiring — capability-state sees installed overlays ───
+
+describe('ADR-1244 D2: overlay-aware registry wiring in capability-state', () => {
+  // Verifies that resolveCapabilityRuntimeState uses loadRegistry({includeInstalled:true})
+  // so a valid installed overlay capability appears in the capabilities list.
+  // The overlay cap has no activationKey so it activates freely.
+  const { resolveCapabilityRuntimeState } = require('../gsd-core/bin/lib/capability-state.cjs');
+
+  test('valid overlay capability appears in runtime state capabilities list', () => {
+    const overlayHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-state-overlay-'));
+    const prevGsdHome = process.env.GSD_HOME;
+    try {
+      // Write a valid overlay capability manifest
+      const capDir = path.join(overlayHome, '.gsd', 'capabilities', 'my-overlay-cap');
+      fs.mkdirSync(capDir, { recursive: true });
+      const capManifest = {
+        id: 'my-overlay-cap',
+        role: 'feature',
+        version: '1.0.0',
+        title: 'My Overlay Cap',
+        description: 'ADR-1244 D2 wiring test overlay',
+        tier: 'standard',
+        requires: [],
+        engines: { gsd: '>=0.0.0' },
+        runtimeCompat: { supported: ['*'], unsupported: [] },
+        skills: [], agents: [], hooks: [], config: {}, steps: [], contributions: [], gates: [],
+      };
+      fs.writeFileSync(path.join(capDir, 'capability.json'), JSON.stringify(capManifest), 'utf8');
+
+      // Point GSD_HOME to the overlay home so loadRegistry finds it
+      process.env.GSD_HOME = overlayHome;
+
+      // Use a non-existent cwd so no project-scope overlay is scanned — pure global
+      const nonExistentCwd = path.join(os.tmpdir(), 'cap-state-overlay-cwd-' + Date.now());
+      const result = resolveCapabilityRuntimeState(nonExistentCwd, undefined);
+
+      const overlayEntry = result.capabilities.find((c) => c.id === 'my-overlay-cap');
+      assert.ok(
+        overlayEntry !== undefined,
+        'overlay capability "my-overlay-cap" must appear in resolveCapabilityRuntimeState results ' +
+        '(ADR-1244 D2: capability-state must use overlay-aware loadRegistry)',
+      );
+    } finally {
+      if (prevGsdHome === undefined) delete process.env.GSD_HOME;
+      else process.env.GSD_HOME = prevGsdHome;
+      cleanup(overlayHome);
+    }
+  });
+});
+
+// ─── #1459 IC-04: capability-state threads the consent home (GSD_HOME) to loadRegistry ───
+
+describe('#1459 IC-04: capability-state threads gsdHome to the overlay loader', () => {
+  const { mock } = require('node:test');
+  const { resolveCapabilityRuntimeState } = require('../gsd-core/bin/lib/capability-state.cjs');
+  // The SAME cached loader module instance capability-state requires internally — spy its loadRegistry.
+  const loader = require('../gsd-core/bin/lib/capability-loader.cjs');
+
+  test('resolveCapabilityRuntimeState passes gsdHome=process.env.GSD_HOME to EVERY overlay-aware loadRegistry call', () => {
+    // revert-fails: if ANY consumer reached on this path (capability-state itself, or the federated
+    // config-loader it calls via loadConfig) called loadRegistry({ includeInstalled, cwd }) WITHOUT
+    // gsdHome (the pre-IC-04 form), that call's captured options.gsdHome would be undefined while
+    // process.env.GSD_HOME is set, so the per-call strictEqual below fails. The loader's behavioral
+    // env-fallback would still resolve the right home, masking the regression — only this
+    // explicit-threading spy pins the contract that every consumer forwards the home it sees. We assert
+    // EVERY includeInstalled call (not just the last) so reverting any single consumer's threading fails.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-state-ic04-'));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-state-ic04-cwd-'));
+    const prev = process.env.GSD_HOME;
+    const calls = [];
+    const spy = mock.method(loader, 'loadRegistry', function (opts) {
+      calls.push(opts || {});
+      return realRegistry; // a valid registry shape; we only assert on the call options.
+    });
+    try {
+      process.env.GSD_HOME = home;
+      resolveCapabilityRuntimeState(cwd, null);
+      const overlayCalls = calls.filter((o) => o.includeInstalled === true);
+      assert.ok(overlayCalls.length > 0, 'at least one overlay-aware loadRegistry call was made on this path');
+      for (const o of overlayCalls) {
+        assert.strictEqual(o.gsdHome, home, 'every overlay-aware loadRegistry call threads gsdHome = process.env.GSD_HOME (IC-04)');
+      }
+    } finally {
+      spy.mock.restore();
+      if (prev === undefined) delete process.env.GSD_HOME; else process.env.GSD_HOME = prev;
+      cleanup(home);
+      cleanup(cwd);
+    }
+  });
+});

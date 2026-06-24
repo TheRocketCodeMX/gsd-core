@@ -14,6 +14,7 @@ import noMagicSleepInTests from './eslint-rules/no-magic-sleep-in-tests.cjs';
 import noElapsedAssertion from './eslint-rules/no-elapsed-assertion.cjs';
 import noRawRmsyncInTests from './eslint-rules/no-raw-rmsync-in-tests.cjs';
 import noTautologicalAssert from './eslint-rules/no-tautological-assert.cjs';
+import noAdhocMarkdownParsing from './eslint-rules/no-adhoc-markdown-parsing.cjs';
 
 const localPlugin = {
   rules: {
@@ -22,6 +23,7 @@ const localPlugin = {
     'no-elapsed-assertion': noElapsedAssertion,
     'no-raw-rmsync-in-tests': noRawRmsyncInTests,
     'no-tautological-assert': noTautologicalAssert,
+    'no-adhoc-markdown-parsing': noAdhocMarkdownParsing,
   },
 };
 
@@ -37,6 +39,14 @@ export default tseslint.config(
       '**/*.generated.cjs',
       // ADR-457: tsc-generated runtime artifact — lint the src/*.cts source, not the emitted .cjs.
       'gsd-core/bin/lib/semver-compare.cjs',
+      'gsd-core/bin/lib/capability-loader.cjs',
+      'gsd-core/bin/lib/capability-source.cjs',
+      'gsd-core/bin/lib/capability-ledger.cjs',
+      'gsd-core/bin/lib/capability-trust.cjs',
+      'gsd-core/bin/lib/capability-lifecycle.cjs',
+      'gsd-core/bin/lib/capability-consent.cjs',
+      'gsd-core/bin/lib/capability-lock.cjs',
+      'gsd-core/bin/lib/resolution.cjs',
       'gsd-core/bin/lib/plan-drift-guard.cjs',
       'gsd-core/bin/lib/cli-exit.cjs',
       'gsd-core/bin/lib/edge-probe.cjs',
@@ -102,6 +112,7 @@ export default tseslint.config(
       'gsd-core/bin/lib/planning-workspace.cjs',
       'gsd-core/bin/lib/command-roster.cjs',
       'gsd-core/bin/lib/runtime-artifact-conversion.cjs',
+      'gsd-core/bin/lib/runtime-artifact-install-plan.cjs',
       'gsd-core/bin/lib/runtime-artifact-layout.cjs',
       'gsd-core/bin/lib/runtime-config-adapter-registry.cjs',
       'gsd-core/bin/lib/runtime-hooks-surface.cjs',
@@ -122,6 +133,8 @@ export default tseslint.config(
       'gsd-core/bin/lib/verify-command-router.cjs',
       'gsd-core/bin/lib/verification.cjs',
       'gsd-core/bin/lib/verification-command-router.cjs',
+      'gsd-core/bin/lib/eval.cjs',
+      'gsd-core/bin/lib/eval-command-router.cjs',
       'gsd-core/bin/lib/init-command-router.cjs',
       'gsd-core/bin/lib/agent-command-router.cjs',
       'gsd-core/bin/lib/agent-install-check.cjs',
@@ -147,6 +160,7 @@ export default tseslint.config(
       'gsd-core/bin/lib/profile-pipeline.cjs',
       'gsd-core/bin/lib/template.cjs',
       'gsd-core/bin/lib/uat.cjs',
+      'gsd-core/bin/lib/coverage.cjs',
       'gsd-core/bin/lib/uat-predicate.cjs',
       'gsd-core/bin/lib/workstream.cjs',
       'gsd-core/bin/lib/roadmap.cjs',
@@ -160,6 +174,8 @@ export default tseslint.config(
       'gsd-core/bin/lib/capability-writer.cjs',
       // issue #1355: tsc-generated runtime artifact — lint the src/teams-status.cts source.
       'gsd-core/bin/lib/teams-status.cjs',
+      // ADR-1372: tsc-generated runtime artifact — lint the src/markdown-sectionizer.cts source.
+      'gsd-core/bin/lib/markdown-sectionizer.cjs',
     ],
   },
 
@@ -169,6 +185,9 @@ export default tseslint.config(
   // these rules add lint-level coverage. warn-first per the harness convention.
   {
     files: ['src/**/*.cts'],
+    plugins: {
+      local: localPlugin,
+    },
     extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -178,6 +197,9 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // ADR-1372 T7: enforce use of the markdown-sectionizer seam; grandfather
+      // pre-migration sites with // allow-adhoc-markdown: <reason>
+      'local/no-adhoc-markdown-parsing': 'error',
     },
   },
 

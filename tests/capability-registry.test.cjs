@@ -69,6 +69,11 @@ const {
 
 const { LOOP_HOST_CONTRACT } = require('../gsd-core/bin/lib/loop-host-contract.cjs');
 
+// ADR-1244 D2: the validator was extracted to a shared runtime-callable module.
+// The generator must re-export it verbatim — the parity suite below proves no drift.
+const capValidatorModule = require('../gsd-core/bin/lib/capability-validator.cjs');
+const generatorModule = require('../scripts/gen-capability-registry.cjs');
+
 const fc = require('fast-check');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -283,6 +288,57 @@ describe('validateCapability adversarial cases', () => {
     assert.ok(
       errors.some((e) => e.includes('agentVerdict') && e.includes('blocking')),
       'Expected error about agentVerdict forcing blocking:false, got: ' + JSON.stringify(errors),
+    );
+  });
+
+  test('#1634: a valid tool-scoping matcher is accepted on a lifecycle hook', () => {
+    const cap = {
+      ...UI_CAP,
+      hooks: [{ event: 'PreToolUse', script: 'hooks/genfile-guard.cjs', matcher: 'Write|Edit' }],
+    };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(
+      !errors.some((e) => e.includes('matcher')),
+      'A valid matcher must not produce a matcher error, got: ' + JSON.stringify(errors),
+    );
+  });
+
+  test('#1634: an absent matcher is accepted (match-all)', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PreToolUse', script: 'hooks/g.js' }] };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(
+      !errors.some((e) => e.includes('matcher')),
+      'An absent matcher must not error, got: ' + JSON.stringify(errors),
+    );
+  });
+
+  test('#1634: an empty-string matcher is rejected', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PreToolUse', script: 'hooks/g.js', matcher: '' }] };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(
+      errors.some((e) => e.includes('matcher') && e.includes('non-empty')),
+      'Expected a non-empty matcher error, got: ' + JSON.stringify(errors),
+    );
+  });
+
+  test('#1634: a non-string matcher is rejected', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PreToolUse', script: 'hooks/g.js', matcher: 42 }] };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(
+      errors.some((e) => e.includes('matcher')),
+      'Expected a matcher type error, got: ' + JSON.stringify(errors),
+    );
+  });
+
+  test('#1634: a matcher containing control characters is rejected', () => {
+    const cap = {
+      ...UI_CAP,
+      hooks: [{ event: 'PreToolUse', script: 'hooks/g.js', matcher: 'Write\n|Edit' }],
+    };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(
+      errors.some((e) => e.includes('matcher') && e.includes('control')),
+      'Expected a control-character matcher error, got: ' + JSON.stringify(errors),
     );
   });
 });
@@ -1470,6 +1526,7 @@ describe('S1: fragment.path traversal guard', () => {
       JSON.stringify({
         id: 'planning-advice',
         role: 'feature',
+        version: '1.0.0',
         title: 'Planning advice',
         description: 'Synthetic fixture for fragment path materialization.',
         tier: 'full',
@@ -1515,6 +1572,7 @@ describe('S1: fragment.path traversal guard', () => {
       JSON.stringify({
         id: 'research',
         role: 'feature',
+        version: '1.0.0',
         title: 'Research',
         description: 'Synthetic fixture for step fragment materialization.',
         tier: 'standard',
@@ -1702,7 +1760,7 @@ describe('C3: role:runtime body validation', () => {
   // configHome is now an object (Decision 1), artifactLayout is { global, local } (Decision 3),
   // commandStyle is closed enum (Decision 4), hooksSurface is closed enum (Decision 5).
   const VALID_RUNTIME_CAP = {
-    id: 'cursor', role: 'runtime', title: 'Cursor', description: 'Cursor IDE runtime',
+    id: 'cursor', role: 'runtime', version: '1.0.0', title: 'Cursor', description: 'Cursor IDE runtime',
     tier: 'standard', requires: [],
     runtime: {
       configHome: { kind: 'dot-home', name: '.cursor', env: ['CURSOR_CONFIG_DIR'] },
@@ -1810,6 +1868,62 @@ describe('C4: description and hooks validation', () => {
     const errors = validateCapability(cap, 'ui');
     const hookErrors = errors.filter((e) => e.includes('hooks['));
     assert.deepEqual(hookErrors, [], 'Expected no hook errors for valid hooks entry, got: ' + JSON.stringify(hookErrors));
+  });
+
+  // ─── #1460 (R) HIGH: hook script path must be shell-safe ──────────────────
+  // The hook `script` is resolved to an absolute path and written verbatim as the hook
+  // `command` STRING in settings.json (consumed by a shell). A manifest-controlled script
+  // name containing shell metacharacters (`;`, `|`, `$`, backtick, whitespace, …) would
+  // inject a second command at hook-exec time. Fail closed at the validator: reject any
+  // script path outside the conservative [A-Za-z0-9._/-] allowlist. revert-fails: without
+  // the allowlist these all pass the non-empty-string check and validate OK.
+  for (const [label, script] of [
+    ['command-injection via `;`', 'run.sh; touch /tmp/pwn'],
+    ['embedded space', 'my hook.sh'],
+    ['command substitution `$( )`', 'run-$(whoami).sh'],
+    ['backtick substitution', 'run-`id`.sh'],
+    ['pipe metacharacter', 'a.sh|b.sh'],
+    ['newline injection', 'a.sh\ntouch /tmp/pwn'],
+    ['ampersand background', 'a.sh & evil'],
+    ['shell glob', 'hooks/*.sh'],
+    ['redirect', 'a.sh > /tmp/pwn'],
+    ['leading dash (option injection)', '-rf'],
+    ['single quote', "a'.sh"],
+    ['double quote', 'a".sh'],
+    ['NUL/control char', 'a\u0000.sh'],
+  ]) {
+    test(`hook script with unsafe chars is rejected (${label})`, () => {
+      const cap = { ...UI_CAP, hooks: [{ event: 'PostToolUse', script }] };
+      const errors = validateCapability(cap, 'ui');
+      const hookErrors = errors.filter((e) => e.includes('hooks[0].script'));
+      assert.ok(
+        hookErrors.length > 0,
+        `Expected a hooks[0].script rejection for ${label} (script=${JSON.stringify(script)}), got: ` + JSON.stringify(errors),
+      );
+      assert.ok(
+        hookErrors.some((e) => /unsafe character/.test(e)),
+        'Error should mention unsafe characters, got: ' + JSON.stringify(hookErrors),
+      );
+    });
+  }
+
+  test('hook script with absolute path is rejected', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PostToolUse', script: '/etc/evil.sh' }] };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(errors.some((e) => e.includes('hooks[0].script')), 'absolute script must be rejected: ' + JSON.stringify(errors));
+  });
+
+  test('hook script with .. traversal is rejected', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PostToolUse', script: '../../etc/evil.sh' }] };
+    const errors = validateCapability(cap, 'ui');
+    assert.ok(errors.some((e) => e.includes('hooks[0].script')), '.. script must be rejected: ' + JSON.stringify(errors));
+  });
+
+  test('hook script with a normal nested relative path is still accepted', () => {
+    const cap = { ...UI_CAP, hooks: [{ event: 'PostToolUse', script: 'hooks/sub-dir/format_v2.sh' }] };
+    const errors = validateCapability(cap, 'ui');
+    const hookErrors = errors.filter((e) => e.includes('hooks[0].script'));
+    assert.deepEqual(hookErrors, [], 'Expected a normal nested relative script to be accepted, got: ' + JSON.stringify(hookErrors));
   });
 
   test('description present in UI_CAP passes validation', () => {
@@ -2886,6 +3000,7 @@ function makeCommandCap(id, commands) {
   return {
     id,
     role: 'feature',
+    version: '1.0.0',
     title: 'Test cap ' + id,
     description: 'Synthetic capability for ADR-959 command tests.',
     tier: 'full',
@@ -3085,6 +3200,7 @@ function makeRuntimeCap(overrides) {
   return {
     id: 'test-rt',
     role: 'runtime',
+    version: '1.0.0',
     title: 'Test Runtime',
     description: 'A synthetic runtime capability for testing.',
     tier: 'core',
@@ -3848,9 +3964,9 @@ describe('ADR-1016 phase 5a: closed-vocab set exports', () => {
 // ─── 25. ADR-857 phase 5e: closed ConverterName enum (Part B) ─────────────────
 
 describe('ADR-857 phase 5e: VALID_CONVERTER_NAMES closed enum', () => {
-  test('VALID_CONVERTER_NAMES has exactly 24 entries (15 command/skill + 9 agent converters added in #1173)', () => {
+  test('VALID_CONVERTER_NAMES has exactly 25 entries (16 command/skill/workflow + 9 agent converters)', () => {
     assert.ok(VALID_CONVERTER_NAMES instanceof Set, 'VALID_CONVERTER_NAMES must be a Set');
-    assert.strictEqual(VALID_CONVERTER_NAMES.size, 24, 'VALID_CONVERTER_NAMES must have exactly 24 entries, got: ' + VALID_CONVERTER_NAMES.size);
+    assert.strictEqual(VALID_CONVERTER_NAMES.size, 25, 'VALID_CONVERTER_NAMES must have exactly 25 entries, got: ' + VALID_CONVERTER_NAMES.size);
   });
 
   test('VALID_CONVERTER_NAMES contains all expected converter names', () => {
@@ -3871,6 +3987,7 @@ describe('ADR-857 phase 5e: VALID_CONVERTER_NAMES closed enum', () => {
       'convertClaudeCommandToOpencodeSkill',
       'convertClaudeCommandToTraeSkill',
       'convertClaudeCommandToWindsurfSkill',
+      'convertClaudeCommandToWindsurfWorkflow',
       // agent converters (#1173 — descriptor-driven agent conversion wiring)
       'convertClaudeAgentToCopilotAgent',
       'convertClaudeAgentToAntigravityAgent',
@@ -5029,5 +5146,63 @@ describe('activationKey validation', () => {
       errors.some((e) => e.includes('activationKey') && e.includes('feature-only')),
       'Error must mention activationKey and feature-only, got: ' + JSON.stringify(errors),
     );
+  });
+});
+
+// ─── ADR-1244 D2: validator extraction generative parity ──────────────────────
+//
+// The validator now lives in gsd-core/bin/lib/capability-validator.cjs and is
+// re-exported by the generator. These assertions guarantee the build-time
+// generator and the runtime overlay share ONE validator implementation — no
+// divergent copy can drift between them, because the generator re-exports the
+// very same object references.
+describe('ADR-1244 D2: validator extraction generative parity', () => {
+  const CORE = [
+    'validateCapability', 'validateCrossCapability', 'validateVersionEnvelope',
+    'validateConsumesGlobal', 'validateAgainstContract', 'validateConfigSliceEntry',
+    'validateRuntimeBody', 'classifyCrossErrors',
+  ];
+
+  test('the runtime validator module exposes the full validator surface', () => {
+    for (const sym of [...CORE, 'SEMVER_RE', 'SEMVER_RANGE_RE', 'POINT_ORDER', 'VALID_LOOP_POINTS', 'VALID_TIERS']) {
+      assert.ok(sym in capValidatorModule, `validator module must export ${sym}`);
+    }
+    assert.strictEqual(typeof capValidatorModule.validateCapability, 'function');
+    assert.ok(capValidatorModule.SEMVER_RE instanceof RegExp);
+  });
+
+  test('every generator-re-exported validator symbol is the SAME object as the validator module (no drift)', () => {
+    const shared = Object.keys(capValidatorModule).filter((k) => Object.prototype.hasOwnProperty.call(generatorModule, k));
+    assert.ok(shared.length >= 20, `expected the generator to re-export the validator surface, got ${shared.length}`);
+    for (const k of shared) {
+      assert.strictEqual(
+        generatorModule[k],
+        capValidatorModule[k],
+        `generator export "${k}" must be the SAME reference as the validator module's (drift detected)`,
+      );
+    }
+  });
+
+  test('core validators are re-exported identically by the generator', () => {
+    for (const sym of CORE) {
+      assert.strictEqual(
+        generatorModule[sym], capValidatorModule[sym],
+        `${sym} must be re-exported by the generator as the validator module's reference`,
+      );
+    }
+  });
+
+  test('the extracted validator runs standalone (no generator/build-time deps required)', () => {
+    // Proves the module is genuinely runtime-callable: a clean require + validate
+    // with no install-profiles/clusters/config-schema machinery present.
+    const { validateCapability } = capValidatorModule;
+    const cap = {
+      id: 'demo', role: 'feature', version: '1.0.0', title: 'Demo', description: 'demo',
+      tier: 'standard', requires: [], runtimeCompat: { supported: ['*'], unsupported: [] },
+      skills: [], agents: [], hooks: [], config: {}, steps: [], contributions: [], gates: [],
+    };
+    assert.deepEqual(validateCapability(cap, 'demo'), []);
+    const { version: _v, ...noVersion } = cap;
+    assert.ok(validateCapability(noVersion, 'demo').some((e) => e.includes('version')));
   });
 });

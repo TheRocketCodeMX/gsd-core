@@ -29,7 +29,14 @@ import coreUtilsMod = require('./core-utils.cjs');
 const { toPosixPath, generateSlugInternal, readSubdirectories } = coreUtilsMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-id.cjs is an export= CommonJS module
 import phaseIdMod = require('./phase-id.cjs');
-const { escapeRegex, normalizePhaseName, phaseMarkdownRegexSource, comparePhaseNum, phaseTokenMatches } = phaseIdMod;
+const {
+  escapeRegex,
+  normalizePhaseName,
+  phaseMarkdownRegexSource,
+  comparePhaseNum,
+  phaseTokenMatches,
+  OPTIONAL_PROJECT_CODE_PREFIX_SOURCE,
+} = phaseIdMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-locator.cjs is an export= CommonJS module
 import phaseLocatorMod = require('./phase-locator.cjs');
 const { findPhaseInternal, getArchivedPhaseDirs } = phaseLocatorMod;
@@ -49,6 +56,9 @@ import { realClock } from './clock.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- uat-predicate.cjs is an export= CommonJS module
 import uatPredicate = require('./uat-predicate.cjs');
 const { evaluateUatPassed } = uatPredicate;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- verification.cjs is an export= CommonJS module
+import verificationMod = require('./verification.cjs');
+const { readVerificationStatus } = verificationMod;
 
 const { planningDir, withPlanningLock } = planningWorkspace;
 const { extractFrontmatter } = frontmatterMod;
@@ -194,7 +204,7 @@ function cmdPhaseNextDecimal(cwd: string, basePhase: string, raw: boolean): void
       const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
       baseExists = dirs.some((d) => phaseTokenMatches(d, normalized));
 
-      const dirPattern = new RegExp(`^(?:[A-Z]{1,6}-)?${escapeRegex(normalized)}\\.(\\d+)`);
+      const dirPattern = new RegExp(`^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}${escapeRegex(normalized)}\\.(\\d+)`);
       for (const dir of dirs) {
         const match = dir.match(dirPattern);
         if (match) decimalSet.add(parseInt(match[1], 10));
@@ -360,7 +370,7 @@ function cmdFindPhase(cwd: string, phase: string, raw: boolean): void {
       if (!match) continue;
 
       const dirMatch =
-        match.match(/^(?:[A-Z]{1,6}-)(\d+[A-Z]?(?:\.\d+)*)-?(.*)/i) ||
+        match.match(new RegExp(`^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}(\\d+[A-Z]?(?:\\.\\d+)*)-?(.*)`, 'i')) ||
         match.match(/^(\d+[A-Z]?(?:\.\d+)*)-?(.*)/i);
       const phaseNumber = dirMatch ? dirMatch[1] : normalized;
       const phaseName = dirMatch && dirMatch[2] ? dirMatch[2] : null;
@@ -908,7 +918,7 @@ function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, ra
       const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
       const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
       const decimalPattern = new RegExp(
-        `^(?:[A-Z]{1,6}-)?${escapeRegex(normalizedBase)}\\.(\\d+)`,
+        `^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}${escapeRegex(normalizedBase)}\\.(\\d+)`,
       );
       for (const dir of dirs) {
         const dm = dir.match(decimalPattern);
@@ -1382,8 +1392,9 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
   let requirementsUpdated = false;
 
   const warnings: string[] = [];
+  const phaseFullDir = path.join(cwd, phaseInfo['directory'] as string);
+
   try {
-    const phaseFullDir = path.join(cwd, phaseInfo['directory'] as string);
     const phaseFiles = fs.readdirSync(phaseFullDir);
 
     for (const file of phaseFiles.filter((f) => f.includes('-UAT') && f.endsWith('.md'))) {
@@ -1417,7 +1428,12 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
   let nextPhaseName: string | null = null;
   let isLastPhase = true;
 
-  withPlanningLock(cwd, () => {
+  const verificationBlocked = withPlanningLock(cwd, () => {
+    const verificationStatus = readVerificationStatus(phaseFullDir);
+    if (verificationStatus.status !== 'passed') {
+      return verificationStatus;
+    }
+
     const runPhaseCompleteTransaction = () => {
       const writes: WriteSpec[] = [];
       let roadmapContent: string | null = null;
@@ -1764,7 +1780,18 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
     } else {
       runPhaseCompleteTransaction();
     }
+    return null;
   });
+
+  if (verificationBlocked) {
+    const nextStep = verificationBlocked.next_command
+      ? ` Next: ${verificationBlocked.next_command}`
+      : '';
+    error(
+      `Phase ${phaseNum} verification is incomplete: ${verificationBlocked.next_action}${nextStep}`,
+      ERROR_REASON.PHASE_VERIFICATION_INCOMPLETE,
+    );
+  }
 
   let autoPruned = false;
   try {
@@ -1825,6 +1852,40 @@ function cmdPhaseUatPassed(
   output({ phase: phaseNum, ...report }, raw);
 }
 
+// #1437 — phase.list-plans: list plan files for a given phase number.
+// Returns the full scan result from scanPhasePlans so callers can read plan
+// paths without re-discovering the phase directory themselves.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- plan-scan.cjs is an export= CommonJS module
+import planScanMod = require('./plan-scan.cjs');
+const { scanPhasePlans } = planScanMod;
+
+function cmdPhaseListPlans(cwd: string, phaseNum: string | undefined, raw: boolean): void {
+  if (!phaseNum) {
+    error('phase number required for phase list-plans');
+  }
+
+  const phaseInfo = findPhaseInternal(cwd, phaseNum!);
+  if (!phaseInfo) {
+    output({ phase: phaseNum, plan_count: 0, has_plans: false, plans: [], phase_dir: null }, raw);
+    return;
+  }
+
+  const phaseDir = path.join(cwd, (phaseInfo as unknown as Record<string, unknown>)['directory'] as string);
+  const scan = scanPhasePlans(phaseDir);
+  const phaseRel = (phaseInfo as unknown as Record<string, unknown>)['directory'] as string;
+
+  // Build absolute-usable relative paths for each plan file.
+  const plans = scan.planFiles.map((f: string) => toPosixPath(path.join(phaseRel, f)));
+
+  output({
+    phase: phaseNum,
+    phase_dir: phaseRel,
+    plan_count: scan.planCount,
+    has_plans: scan.planCount > 0,
+    plans,
+  }, raw);
+}
+
 export = {
   cmdPhasesList,
   cmdPhaseNextDecimal,
@@ -1837,5 +1898,6 @@ export = {
   cmdPhaseRemove,
   cmdPhaseComplete,
   cmdPhaseUatPassed,
+  cmdPhaseListPlans,
   computeDependencyLevels,
 };

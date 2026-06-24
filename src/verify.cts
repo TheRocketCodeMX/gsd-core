@@ -48,7 +48,7 @@ const { getMilestoneInfo, stripShippedMilestones, extractCurrentMilestone } = ro
 import worktreeSafetyMod = require('./worktree-safety.cjs');
 const { inspectWorktreeHealth } = worktreeSafetyMod;
 
-const { planningDir } = planningWorkspace;
+const { planningDir, planningRoot } = planningWorkspace;
 const { extractFrontmatter, parseMustHavesBlock } = frontmatterMod;
 const { writeStateMd } = stateMod;
 const { MODEL_PROFILES } = modelProfilesMod;
@@ -1235,12 +1235,18 @@ function cmdValidateHealth(
     return;
   }
 
-  const planBase = planningDir(cwd);
-  const projectPath = path.join(planBase, 'PROJECT.md');
-  const roadmapPath = path.join(planBase, 'ROADMAP.md');
-  const statePath = path.join(planBase, 'STATE.md');
-  const configPath = path.join(planBase, 'config.json');
-  const phasesDir = path.join(planBase, 'phases');
+  // rootBase always resolves to .planning/ (shared root — PROJECT.md, config.json live here)
+  // wsBase resolves to .planning/workstreams/<ws>/ when GSD_WORKSTREAM is set (STATE.md, ROADMAP.md, phases/)
+  const rootBase = planningRoot(cwd);
+  const wsBase = planningDir(cwd);
+  // planBase is kept as an alias for wsBase for all the internal helpers (collectDiskPhases, etc.)
+  // that are already parameterised on the workstream-aware path.
+  const planBase = wsBase;
+  const projectPath = path.join(rootBase, 'PROJECT.md');
+  const roadmapPath = path.join(wsBase, 'ROADMAP.md');
+  const statePath = path.join(wsBase, 'STATE.md');
+  const configPath = path.join(rootBase, 'config.json');
+  const phasesDir = path.join(wsBase, 'phases');
   const _slashRuntime = resolveRuntime(cwd);
   const slash = (name: string) => formatGsdSlash(name, _slashRuntime) as string;
 
@@ -1262,7 +1268,7 @@ function cmdValidateHealth(
     else info.push(issue);
   };
 
-  if (!fs.existsSync(planBase)) {
+  if (!fs.existsSync(rootBase)) {
     addIssue('error', 'E001', '.planning/ directory not found', `Run ${slash('new-project')} to initialize`);
     output({ status: 'broken', errors, warnings, info, repairable_count: 0 }, raw);
     return;
@@ -1683,11 +1689,21 @@ function cmdValidateHealth(
         }
 
         if (finding['kind'] === 'stale') {
+          // Do not flag the active session's worktree — removing it would be harmful.
+          const worktreePath = finding['path'] as string;
+          const activeCwd = process.cwd();
+          const normalizedWorktree = path.resolve(worktreePath);
+          const normalizedCwd = path.resolve(activeCwd);
+          // Skip if the worktree IS the cwd or is an ancestor of it.
+          const isActiveWorktree =
+            normalizedCwd === normalizedWorktree ||
+            normalizedCwd.startsWith(normalizedWorktree + path.sep);
+          if (isActiveWorktree) continue;
           addIssue(
             'warning',
             'W017',
-            `Stale git worktree: ${finding['path'] as string} (last modified ${finding['ageMinutes'] as number} minutes ago)`,
-            `Run: git worktree remove ${finding['path'] as string} --force`,
+            `Stale git worktree: ${worktreePath} (last modified ${finding['ageMinutes'] as number} minutes ago)`,
+            `Run: git worktree remove ${worktreePath} --force`,
           );
         }
       }
@@ -1727,8 +1743,8 @@ function cmdValidateHealth(
     /* W021 check is advisory — skip on error */
   }
 
-  const milestonesPath = path.join(planBase, 'MILESTONES.md');
-  const milestonesArchiveDir = path.join(planBase, 'milestones');
+  const milestonesPath = path.join(rootBase, 'MILESTONES.md');
+  const milestonesArchiveDir = path.join(rootBase, 'milestones');
   const missingFromRegistry: string[] = [];
   try {
     if (fs.existsSync(milestonesArchiveDir)) {
@@ -1764,7 +1780,7 @@ function cmdValidateHealth(
   }
 
   try {
-    const entries = fs.readdirSync(planBase, { withFileTypes: true });
+    const entries = fs.readdirSync(rootBase, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       if (!entry.name.endsWith('.md')) continue;
@@ -1868,7 +1884,7 @@ function cmdValidateHealth(
             }
             const milestone = getMilestoneInfo(cwd);
             const projectRef = path
-              .relative(cwd, path.join(planningDir(cwd), 'PROJECT.md'))
+              .relative(cwd, path.join(rootBase, 'PROJECT.md'))
               .split(path.sep)
               .join('/');
             let stateContent = `# Session State\n\n`;
@@ -2039,10 +2055,17 @@ function cmdVerifySchemaDrift(
     return;
   }
 
+  // Resolve the phase directory with the canonical phase-token matcher
+  // (phase-id.cjs), not a naive substring test. A bare `.includes(phaseArg)`
+  // lets a non-existent phase silently match a different phase whose directory
+  // name merely contains the requested token (e.g. "1" matching "11-expansion"),
+  // making the drift gate inspect the wrong phase. This mirrors find-phase /
+  // verify phase-completeness, which both use phaseTokenMatches. (#1571)
   let phaseDir: string | null = null;
+  const normalizedPhase = normalizePhaseName(phaseArg);
   const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.isDirectory() && entry.name.includes(phaseArg)) {
+    if (entry.isDirectory() && phaseTokenMatches(entry.name, normalizedPhase)) {
       phaseDir = path.join(phasesDir, entry.name);
       break;
     }
@@ -2194,8 +2217,18 @@ function cmdVerifyCodebaseDrift(cwd: string, raw: boolean): void {
       else if (status === 'D') deleted.push(file);
     }
 
-    const config = loadConfig(cwd);
-    const wf = config?.workflow as Record<string, unknown> | undefined;
+    // loadConfig() returns a flattened object — there is no nested `workflow`
+    // key. Read the raw config.json directly to access workflow-scoped keys,
+    // matching the pattern used in check-command-router.cts:readWorkflowConfig.
+    let wf: Record<string, unknown> | undefined;
+    try {
+      const rawCfg = JSON.parse(
+        fs.readFileSync(path.join(planningDir(cwd), 'config.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      wf = rawCfg['workflow'] as Record<string, unknown> | undefined;
+    } catch {
+      wf = undefined;
+    }
     const threshold =
       Number.isInteger(wf?.drift_threshold) && (wf?.drift_threshold as number) >= 1
         ? (wf?.drift_threshold as number)

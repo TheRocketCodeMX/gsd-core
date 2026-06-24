@@ -113,6 +113,9 @@ GSD stores project settings in `.planning/config.json`. Created during `/gsd-new
     "always_confirm_destructive": true,
     "always_confirm_external_services": true
   },
+  "security": {
+    "injection_blocking": false
+  },
   "project_code": null,
   "agent_skills": {},
   "agent_skills_security": {
@@ -248,7 +251,7 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.max_discuss_passes` | number | `3` | Maximum number of question rounds in discuss-phase before the workflow stops asking. Useful in headless/auto mode to prevent infinite discussion loops. |
 | `workflow.skip_discuss` | boolean | `false` | When `true`, `/gsd-autonomous` bypasses the discuss-phase entirely, writing minimal CONTEXT.md from the ROADMAP phase goal. Useful for projects where developer preferences are fully captured in PROJECT.md/REQUIREMENTS.md. Added in v1.28 |
 | `workflow.text_mode` | boolean | `false` | Replaces AskUserQuestion TUI menus with plain-text numbered lists. Required for Claude Code remote sessions (`/rc` mode) where TUI menus don't render. Can also be set per-session with `--text` flag on discuss-phase. Added in v1.28 |
-| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31. **Branch-divergence note:** when your branch has diverged from `origin/HEAD`, GSD auto-degrades to sequential and prints a warning. See [`worktree.baseRef`](#worktree-settings) to restore parallel execution on a diverged branch. |
+| `workflow.use_worktrees` | boolean | `true` | When `false`, disables git worktree isolation for parallel execution. Users who prefer sequential execution or whose environment does not support worktrees can disable this. Added in v1.31. **Branch-divergence note:** when your branch has diverged from `origin/HEAD`, GSD auto-degrades to sequential and prints a warning. See [`worktree.baseRef`](#worktree-settings) to restore parallel execution on a diverged branch. **Non-Claude note:** git worktree isolation uses Claude Code's `isolation="worktree"` agent primitive, which no other runtime honors. On any non-Claude install (Codex, Cursor, Gemini, Qwen, etc.) a runtime-neutral `.planning/config.json` resolves the runtime to that install's own id and defaults this key to `false`; forcing `use_worktrees: true` on a non-Claude install fails closed before any executor dispatch (#1515, #1521). |
 | `workflow.worktree_skip_hooks` | boolean | `false` | When `true`, executor agents in worktree mode pass `--no-verify` (skipping pre-commit hooks) and post-wave hook validation runs against the merged result instead. Opt-in escape hatch for projects whose hooks cannot run in agent worktrees. Default `false` runs hooks on every commit (#2924). |
 | `workflow.code_review` | boolean | `true` | Enable `/gsd-code-review` and `/gsd-code-review --fix` commands. When `false`, the commands exit with a configuration gate message. Added in v1.34 |
 | `workflow.code_review_depth` | string | `standard` | Default review depth for `/gsd-code-review`: `quick` (pattern-matching only), `standard` (per-file analysis), or `deep` (cross-file with import graphs). Can be overridden per-run with `--depth=`. Added in v1.34 |
@@ -260,7 +263,9 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `workflow.plan_chunked` | boolean | `false` | Enable chunked planning mode. When `true` (or when `--chunked` flag is passed to `/gsd-plan-phase`), the orchestrator splits the single long-lived planner Task into a short outline Task followed by N short per-plan Tasks (~3-5 min each). Each plan is committed individually for crash resilience. If a Task hangs and the terminal is force-killed, rerunning with `--chunked` resumes from the last completed plan. Particularly useful on Windows where long-lived Tasks may hang on stdio. Added in v1.38 |
 | `workflow.code_review_command` | string | (none) | Shell command for external code review integration in `/gsd-ship`. Receives changed file paths via stdin. Non-zero exit blocks the ship workflow. Added in v1.36 |
 | `workflow.tdd_mode` | boolean | `false` | Enable TDD pipeline as a first-class execution mode. When `true`, the planner aggressively applies `type: tdd` to eligible tasks (business logic, APIs, validations, algorithms) and the executor enforces RED/GREEN/REFACTOR gate sequence. An end-of-phase collaborative review checkpoint verifies gate compliance. Added in v1.36 |
+| `workflow.mvp_mode` | boolean | `false` | Persist the MVP-mode flag in config so every phase defaults to MVP framing without requiring `--mvp` on the CLI. Resolved via the precedence chain: `--mvp` CLI flag → ROADMAP.md `**Mode:** mvp` field → this config value → `false`. When `true`, the planner, executor, verifier, and discovery surfaces treat the phase as an MVP vertical slice (UI → API → DB) of one user-visible capability instead of a horizontal layer. |
 | `workflow.human_verify_mode` | string | `'end-of-phase'` | Controls human verification checkpoints. `'end-of-phase'` (default since #3309) suppresses `checkpoint:human-verify` tasks and embeds checks into `<verify><human-check>` blocks for end-of-phase review. `'mid-flight'` restores blocking checkpoint tasks. `checkpoint:decision` and `checkpoint:human-action` are unaffected. See [Checkpoints Reference](../gsd-core/references/checkpoints.md#checkpoint_types). |
+| `workflow.context_guard_mode` | string | `'warn'` | Context exhaustion guard for `execute-phase`. Before each wave, the orchestrator self-assesses context pressure using the degradation signals defined in `context-budget.md`. `'warn'` (default) emits a warning and recommends `/gsd:pause-work` when POOR tier (70%+) is detected. `'auto'` automatically invokes `/gsd:pause-work` before the next wave. `'off'` disables the guard. Set via: `gsd config-set workflow.context_guard_mode auto`. Added in #1452. |
 | `workflow.cross_ai_execution` | boolean | `false` | Delegate phase execution to an external AI CLI instead of spawning local executor agents. Useful for leveraging a different model's strengths for specific phases. Added in v1.36 |
 | `workflow.cross_ai_command` | string | (none) | Shell command template for cross-AI execution. Receives the phase prompt via stdin. Must produce SUMMARY.md-compatible output. Required when `cross_ai_execution` is `true`. Added in v1.36 |
 | `workflow.cross_ai_timeout` | number | `300` | Timeout in seconds for cross-AI execution commands. Prevents runaway external processes. Added in v1.36 |
@@ -271,8 +276,9 @@ All workflow toggles follow the **absent = enabled** pattern. If a key is missin
 | `executor.stall_detect_interval_minutes` | number | `5` | Minutes between executor stall checks while an executor agent is active. The execute-phase orchestrator uses this cadence to inspect recent commits and avoid waiting forever on a silent agent. |
 | `executor.stall_threshold_minutes` | number | `10` | Minutes without executor completion or expected-branch commit activity before execute-phase offers recovery choices for a possible stalled executor. |
 | `workflow.inline_plan_threshold` | number | `3` | Maximum number of tasks in a phase before the planner generates a separate PLAN.md file instead of inlining tasks in the prompt |
-| `workflow.drift_threshold` | number | `3` | Minimum number of new structural elements (new directories, barrel exports, migrations, route modules) introduced during a phase before the post-execute codebase-drift gate takes action. See [#2003](https://github.com/open-gsd/gsd-core/issues/2003). Added in v1.39 |
-| `workflow.drift_action` | string | `warn` | What to do when `workflow.drift_threshold` is exceeded after `/gsd-execute-phase`. `warn` prints a message suggesting `/gsd-map-codebase --paths …`; `auto-remap` spawns `gsd-codebase-mapper` scoped to the affected paths. Added in v1.39 |
+| `workflow.drift_threshold` | number | `3` | Minimum number of new structural elements (new directories, barrel exports, migrations, route modules) before the codebase-drift gate takes action. The gate runs at two points: `plan:pre` (before `/gsd-plan-phase` plans — **non-blocking, warn-only**, so plans are authored against a fresh STRUCTURE.md) and `execute:wave:post` (after `/gsd-execute-phase` — honors `workflow.drift_action`). See [#2003](https://github.com/open-gsd/gsd-core/issues/2003). Added in v1.39 |
+| `workflow.drift_action` | string | `warn` | What to do when `workflow.drift_threshold` is exceeded **at `execute:wave:post`** (after `/gsd-execute-phase`). `warn` prints a message suggesting `/gsd-map-codebase --paths …`; `auto-remap` spawns `gsd-codebase-mapper` scoped to the affected paths. The `plan:pre` pre-check is always warn-only regardless of this setting — it never auto-spawns the mapper at plan entry. Added in v1.39 |
+| `workflow.plan_drift_precheck` | boolean | `true` | Enable the non-blocking codebase-drift pre-check at `plan:pre`, before `/gsd:plan-phase` spawns the planner. Surfaces a stale STRUCTURE.md (drift over `workflow.drift_threshold`) as a warn-only advisory pointing to `/gsd:map-codebase`; never blocks planning, never spawns the mapper. Separate from the `execute:wave:post` gates so autonomous/CI runs can silence the plan-time advisory while keeping execute-time drift detection on. Added in v1.6.0. See [#1592](https://github.com/open-gsd/gsd-core/issues/1592). |
 | `workflow.build_command` | string | (none) | Shell command to build the project in the post-merge build gate (Step A of step 5.6 in execute-phase). When unset, the gate auto-detects: Xcode (`.xcodeproj` present) → `xcodebuild build`, `Makefile` with `build:` target → `make build`, Justfile → `just build`, `Cargo.toml` → `cargo build`, `go.mod` → `go build ./...`, Python → `python -m py_compile`, `package.json` with `build` script → `npm run build`. Runs with a 5-minute timeout; failure increments `WAVE_FAILURE_COUNT`. Added in v1.39 |
 | `workflow.test_command` | string | (none) | Shell command to run the project's test suite in the post-merge test gate (Step B of step 5.6 in execute-phase) and the regression gate. When unset, the gate auto-detects: Xcode (`.xcodeproj` present) → `xcodebuild test`, `Makefile` with `test:` target → `make test`, Justfile → `just test`, `package.json` → `npm test`, `Cargo.toml` → `cargo test`, `go.mod` → `go test ./...`, Python → `python -m pytest`. Runs with a 5-minute timeout; failure increments `WAVE_FAILURE_COUNT`. Added in v1.39 |
 
@@ -550,6 +556,27 @@ Setting the parent object (`agent_skills_security`) directly is not supported; u
 
 ---
 
+## Capability Trust (`capabilities.*`)
+
+Policy for installing and updating third-party capabilities (ADR-1244). These keys govern the trust gate; they have no effect if you only ever use the native first-party capabilities shipped with GSD. They are **policy inputs** read by the `gsd capability` command flow, which passes the resulting decision into the capability lifecycle — `strict_known_registries` gates whether a source may be installed at all; `auto_update` is consulted by the `update`/`outdated` flow (which always re-prompts when a new version's executable surface set changes). The full rationale — including why there is no sandbox — is in [The capability trust model](explanation/capability-trust-model.md).
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `capabilities.strict_known_registries` | array \| null | `null` | Allowlist gating **which sources** third-party capabilities may be installed from. `null` (default) is permissive: external installs (git / npm / tarball) are allowed and each still passes the consent + integrity gate. `[]` (explicit empty array) is lockdown: **all external installs are blocked** — only local-filesystem installs are permitted (managed/enterprise mode). A non-empty list is a **host-based allowlist**: only sources whose host matches an entry (exact host or a subdomain of it — `github.com` matches `api.github.com` but never `evilgithub.com`) are permitted; add the literal token `npm` to permit the npm source kind. Local installs are never "external" and are always allowed. |
+| `capabilities.auto_update` | boolean | `false` | Whether installed third-party capabilities may auto-update. **Off by default.** Even when enabled, GSD re-prompts for explicit consent whenever a new version's executable surface set (hooks / command modules / MCP servers) differs from the installed one — the consent you gave was for a specific surface, not a blank cheque. |
+
+```bash
+# Lock the machine down to local-only capability installs:
+gsd config-set capabilities.strict_known_registries '[]'
+
+# Allow only your org's GitHub + npm:
+gsd config-set capabilities.strict_known_registries '["github.com", "npm"]'
+```
+
+> **Security note:** `strict_known_registries` matching is **host-based, not substring** — a lookalike host like `evilgithub.com` is rejected even when `github.com` is allowed. `integrity` (sha512) pins only the top-level fetched artifact, not an npm package's transitive dependency tree; see the trust-model explanation for that boundary.
+
+---
+
 ## Feature Flags
 
 Toggle optional capabilities via the `features.*` config namespace. Feature flags default to `false` (disabled) — enabling a flag opts into new behavior without affecting existing workflows.
@@ -654,6 +681,41 @@ gsd-tools query config-set features.thinking_partner false
 ```
 
 The `features.*` namespace is a dynamic key pattern — new feature flags can be added without modifying `VALID_CONFIG_KEYS`. Any key matching `features.<name>` is accepted by the config system.
+
+---
+
+## Capability Overlay (installed third-party capabilities)
+
+GSD supports an **installed overlay** of third-party capability manifests that are composed with the frozen first-party registry at runtime via `loadRegistry({ includeInstalled: true })` (ADR-1244; see [`docs/reference/capability-manifest.md`](reference/capability-manifest.md) and [`docs/how-to/import-a-capability-from-a-url.md`](how-to/import-a-capability-from-a-url.md)).
+
+### Install roots
+
+Capability manifests (`capability.json`) are discovered from two scoped roots:
+
+| Scope | Path |
+|-------|------|
+| Global | `$GSD_HOME/.gsd/capabilities/<id>/capability.json` |
+| Project | `<projectRoot>/.gsd/capabilities/<id>/capability.json` |
+
+`GSD_HOME` defaults to your home directory (`~`) when unset. Both roots are scanned on every `loadRegistry` call; neither requires config changes to activate.
+
+### Composition and first-party-wins invariant
+
+Installed overlay capabilities are merged via the same `buildRegistry` pipeline as first-party capabilities, so all derived views (`bySkill`, `byAgent`, `byLoopPoint`, `configKeys`) cover first-party and overlay entries identically. **First-party always wins**: an overlay entry is rejected at load time if its `id`, any owned skill or agent stem, or any federated config key collides with a first-party entry, or if its `id` uses a reserved prefix (`gsd-`, `gsd-core-`, `anthropic-`). Rejected entries emit a warning and are skipped; they never crash the load loop.
+
+### Load-time `engines.gsd` compatibility gate
+
+Each overlay manifest may declare an `engines.gsd` semver range. At load time GSD evaluates this range against the running GSD version. An overlay that does not satisfy the range is **skipped with a warning** — it is never loaded and never crashes the loop. Manifests without an `engines.gsd` field are accepted unconditionally.
+
+### Gate-kind fail-closed policy
+
+If a skipped overlay capability declared a `gate`-kind loop hook, the loop resolver **injects a blocking gate** at that hook point (fail CLOSED). Skipped capabilities whose hooks are `step` or `contribution` kind skip open — the loop proceeds without them.
+
+### Overlay config federation
+
+Config keys declared in an overlay capability's `.config` slice federate into the `loadConfig` return value via the same Federated Config channel as first-party capability keys. They appear as valid keys in `config-schema.cjs` (`isValidConfigKey`) and in the runtime config schema, so overlay capabilities can declare project-local config toggles without editing the central config schema.
+
+> **See also:** [`docs/reference/capability-manifest.md`](reference/capability-manifest.md) for the full `capability.json` schema, [`docs/how-to/import-a-capability-from-a-url.md`](how-to/import-a-capability-from-a-url.md) for installation steps, and [ADR-1244](adr/1244-runtime-capability-registry-overlay.md) for the design record.
 
 ---
 
@@ -771,7 +833,15 @@ These keys live under `workflow.*` — that is where the workflows and installer
 |---------|------|---------|-------------|
 | `workflow.security_enforcement` | boolean | `true` | Enable threat-model-anchored security verification via `/gsd-secure-phase`. When `false`, security checks are skipped entirely |
 | `workflow.security_asvs_level` | number (1-3) | `1` | OWASP ASVS verification level. Level 1 = opportunistic, Level 2 = standard, Level 3 = comprehensive |
-| `workflow.security_block_on` | string | `"high"` | Minimum severity that blocks phase advancement. Options: `"high"`, `"medium"`, `"low"` |
+| `workflow.security_block_on` | string | `"high"` | Minimum threat severity that blocks phase advancement. The auditor counts only open threats at or above this severity toward the blocking gate; `none` disables severity blocking. Options: `"critical"`, `"high"`, `"medium"`, `"low"`, `"none"` |
+
+### Injection blocking (top-level `security.*`)
+
+Distinct from the `workflow.security_*` keys above: the read-injection scanner reads a **top-level** `security` object (not `workflow.security`). Set it with `gsd config-set security.injection_blocking true` — it persists as a nested key (`security.injection_blocking`), never a flat dotted key.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `security.injection_blocking` | boolean | `false` | Opt-in circuit-breaker for the read-injection scanner hook (`gsd-read-injection-scanner.js`, PostToolUse on `Read`/`WebFetch`/`WebSearch`). Default (`false`) is **advisory**: HIGH-confidence injection detections are logged but not blocked. When `true`, a HIGH detection emits `decision: "block"` to halt the agent's next step. Because the hook runs *after* the fetch, blocking does **not** retroactively redact content already in the transcript — it is a circuit-breaker, not a redactor. See the [security model](explanation/security-model.md) and [ADR-1577](adr/1577-untrusted-input-boundary-and-injection-blocking.md). |
 
 ---
 
@@ -1458,7 +1528,7 @@ When `/gsd-new-project` creates a new `config.json`, it reads global defaults an
 
 ## Observability
 
-The Command Routing Hub emits a structured `DispatchEvent` after every dispatch. Default behaviour is **silent on success** and **one structured JSON line to stderr on error**.
+The Command Routing Hub emits a structured `DispatchEvent` after every dispatch — including capability commands (`graphify`, `intel`, `audit-uat`, `audit-open`) since #1646. Default behaviour is **silent on success** and **one structured JSON line to stderr on error**.
 
 ### Stderr error format
 

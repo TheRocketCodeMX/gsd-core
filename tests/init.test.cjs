@@ -981,6 +981,40 @@ describe('cmdInitPhaseOp fallback', () => {
     assert.strictEqual(output.has_plans, false);
   });
 
+  test('fallback resolves drifted project-code-prefixed roadmap heading by bare number (#1455)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase MANIFOLD-117: Prefixed Heading\n**Goal:** Build prefixed phase\n**Plans:** TBD\n'
+    );
+
+    const result = runGsdTools('init phase-op 117', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_dir, null);
+    assert.strictEqual(output.phase_number, '117');
+    assert.strictEqual(output.phase_name, 'Prefixed Heading');
+    assert.strictEqual(output.phase_slug, 'prefixed-heading');
+  });
+
+  test('fallback resolves drifted project-code-prefixed roadmap heading by prefixed ID (#1455)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase MANIFOLD-117: Prefixed Heading\n**Goal:** Build prefixed phase\n**Plans:** TBD\n'
+    );
+
+    const result = runGsdTools('init phase-op MANIFOLD-117', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_dir, null);
+    assert.strictEqual(output.phase_number, 'MANIFOLD-117');
+    assert.strictEqual(output.phase_name, 'Prefixed Heading');
+    assert.strictEqual(output.phase_slug, 'prefixed-heading');
+  });
+
   test('prefers current milestone roadmap entry over archived phase with same number', () => {
     const archiveDir = path.join(
       tmpDir,
@@ -1048,6 +1082,13 @@ describe('cmdInitPhaseOp fallback', () => {
 describe('cmdInitProgress', () => {
   let tmpDir;
 
+  function writePassedVerification(phaseDir, phaseToken) {
+    fs.writeFileSync(
+      path.join(phaseDir, `${phaseToken}-VERIFICATION.md`),
+      ['---', 'status: passed', '---', '', '# Verification', ''].join('\n')
+    );
+  }
+
   beforeEach(() => {
     tmpDir = createFixture();
   });
@@ -1074,6 +1115,7 @@ describe('cmdInitProgress', () => {
     fs.mkdirSync(phase1, { recursive: true });
     fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
     fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+    writePassedVerification(phase1, '01');
 
     // Phase 02: in_progress (has plan, no summary)
     const phase2 = path.join(tmpDir, '.planning', 'phases', '02-api');
@@ -1127,6 +1169,7 @@ describe('cmdInitProgress', () => {
     fs.mkdirSync(phase1, { recursive: true });
     fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
     fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+    writePassedVerification(phase1, '01');
 
     const result = runGsdTools('init progress', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -1135,6 +1178,26 @@ describe('cmdInitProgress', () => {
     assert.strictEqual(output.completed_count, 1);
     assert.strictEqual(output.current_phase, null);
     assert.strictEqual(output.next_phase, null);
+  });
+
+  test('implementation-complete phase without passed verification remains current work', () => {
+    const phase1 = path.join(tmpDir, '.planning', 'phases', '01-setup');
+    fs.mkdirSync(phase1, { recursive: true });
+    fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
+    fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+
+    const result = runGsdTools('init progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.completed_count, 0);
+    assert.strictEqual(output.in_progress_count, 1);
+    assert.strictEqual(output.has_work_in_progress, true);
+    assert.strictEqual(output.current_phase.number, '01');
+    assert.strictEqual(output.current_phase.status, 'executed');
+    assert.strictEqual(output.current_phase.implementation_complete, true);
+    assert.strictEqual(output.current_phase.verification_status, 'missing');
+    assert.strictEqual(output.current_phase.verification_passed, false);
   });
 
   test('paused_at detected from STATE.md', () => {

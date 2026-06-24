@@ -21,7 +21,8 @@
         "config-get-default.test.cjs",
         "config-schema.property.test.cjs",
         "config.test.cjs",
-        "enh-1055-config-intent-descriptor-drive.test.cjs"
+        "enh-1055-config-intent-descriptor-drive.test.cjs",
+        "fix-1628-config-set-validation.test.cjs"
       ],
       "issue": "TBD"
     },
@@ -60,6 +61,7 @@
     },
     "phase": {
       "files": [
+        "fix-1437-phase-list-plans.test.cjs",
         "bug-214-phase-researcher-write-truncation-contract.test.cjs",
         "phase-dependency-levels.test.cjs",
         "phase.test.cjs"
@@ -174,6 +176,14 @@
         "external-job-waiting.test.cjs"
       ],
       "issue": "#1165"
+    },
+    "docs": {
+      "files": [
+        "docs-parity-live-registry.test.cjs",
+        "docs-update.test.cjs",
+        "fix-1464-docs-manifest-validation.test.cjs"
+      ],
+      "issue": "1496"
     }
   }
 }

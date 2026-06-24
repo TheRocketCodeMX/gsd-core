@@ -313,6 +313,29 @@ For browser-backed UAT, use a configured browser MCP server. The current Open GS
 /gsd-verify-work 1                  # UAT for phase 1
 ```
 
+**Coverage-aware UAT routing (#1602).** When a SUMMARY.md carries a `coverage:` frontmatter block, `verify-work` classifies each deliverable deterministically instead of prompting for every prose bullet: deliverables proven by passing tests are auto-passed (recorded with `source: automated`, no prompt) and only judgment-dependent deliverables are presented for human sign-off. SUMMARYs without a `coverage:` block fall back to the previous prose-based extraction unchanged. See the [`coverage:` block reference](#summary-coverage-block) below.
+
+#### SUMMARY `coverage:` block
+
+A SUMMARY.md may carry an optional `coverage:` frontmatter block — a list of per-deliverable entries that joins requirements → tests → verification status:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Stable identifier (`D1`, `D2`…), unique within the SUMMARY |
+| `description` | The deliverable in human-readable form |
+| `requirement` | Optional REQ-ID linking to REQUIREMENTS.md |
+| `verification[].kind` | `unit` \| `integration` \| `e2e` \| `automated_ui` \| `manual_procedural` \| `other` |
+| `verification[].ref` | Test path + descriptor, screenshot ref, or command |
+| `verification[].status` | `pass` \| `fail` \| `unknown` |
+| `human_judgment` | Required boolean. `true` always routes to a human |
+| `rationale` | Required when `human_judgment: true` |
+
+A deliverable is auto-passed **only** when `human_judgment: false`, its `verification` list is non-empty, and every entry's `status` is `pass`. Anything else — `human_judgment: true`, an empty `verification`, a non-`pass` status, or a schema error — is presented to a human (fail-safe). Inspect the classification directly with:
+
+```bash
+node gsd-tools.cjs uat classify-coverage --summary .planning/phases/01-foundation/01-01-SUMMARY.md
+```
+
 ---
 
 ---
@@ -1115,6 +1138,32 @@ Toggle which skills are surfaced — apply a profile, list, or disable a cluster
 /gsd-surface reset                  # Restore install-time profile
 ```
 
+### `gsd capability`
+
+Manage GSD capabilities — first-party (shipped) and third-party overlays. CLI form `gsd capability <subcommand>`. See the [`gsd capability` command reference](reference/gsd-capability-command.md) for the full contract, source-spec forms, and install layout.
+
+| Subcommand | Description |
+|------------|-------------|
+| `install <spec> [--integrity …] [--scope global\|project] [--yes] [--shared-file <rel>]…` | Resolve, verify, consent-gate, and install a capability from a registry / git / npm / tarball / local source |
+| `update [<id> \| --all] [--scope …] [--yes]` | Re-resolve a capability's recorded source and upgrade it (atomic stage-then-swap) |
+| `remove <id> [--purge-data] [--scope …]` | Remove an installed overlay capability's files + marker-isolated shared edits (first-party cannot be removed here) |
+| `list [--json]` | List first-party + installed overlay capabilities as a JSON array |
+| `outdated [--json] [--scope …]` | Light-peek each installed overlay's recorded source and report which have a newer version available (per-source matrix; npm ranges resolve the highest matching version; `pinned` for immutable/explicit git refs or exact npm versions; `manual`/`unknown` for sources that can't be auto-checked) |
+| `disable <id>` / `enable <id>` | Toggle a capability's activation state (same as `capability set <id> --off`/`--on`) |
+| `state` / `set <id> …` | Inspect resolved capability state / set activation + per-hook gates |
+
+```bash
+gsd capability list --json                           # All capabilities as JSON
+gsd capability install ./my-cap --scope project      # Install a local capability into the project
+gsd capability install npm:@org/gsd-cap-x@^1 --yes   # Install from npm, granting executable-surface consent
+gsd capability update my-cap                          # Upgrade from its recorded source
+gsd capability outdated --json                         # Which installed overlays have a newer version?
+gsd capability disable ui                             # Turn a FIRST-PARTY capability off (disable/enable/set are first-party only)
+gsd capability remove my-cap --scope project          # Turn the installed overlay off — remove it from the scope it was installed in
+```
+
+**Programmatic access:** `node gsd-tools.cjs capability <subcommand>` — see [CLI Tools Reference](CLI-TOOLS.md).
+
 ---
 
 ## Brownfield Commands
@@ -1344,6 +1393,8 @@ Execute a trivial task inline — no subagents, no planning overhead. For typo f
 
 Cross-AI peer review of phase plans from external AI CLIs.
 
+Reviewers are prompted to verify the plan's claims against the actual repository source — opening the referenced files and citing `file:line` evidence with the mechanism — rather than reviewing the plan text in isolation. A reviewer that has no file access flags what it cannot verify instead of asserting it, and `file:line`-grounded findings are weighted more heavily during consensus synthesis.
+
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `--phase N` | **Yes** | Phase number to review |
@@ -1459,10 +1510,11 @@ Capture ideas, tasks, notes, and seeds to their appropriate destination. Default
 | `--backlog <description>` | Add to the backlog parking lot using 999.x numbering |
 | `--seed [idea summary]` | Capture a forward-looking idea with trigger conditions |
 | `--list` | List pending todos and select one to work on |
+| `--list-seeds [status]` | List/audit captured seeds, optionally filtered by status (read-only) |
 | `--global` | Use global scope (for note operations) |
 
 **Backlog:** 999.x numbering keeps items outside the active phase sequence; phase directories are created immediately so `/gsd-discuss-phase` and `/gsd-plan-phase` work on them.
-**Seeds:** Preserve full WHY, WHEN to surface, and breadcrumbs — consumed by `/gsd-new-milestone`.
+**Seeds:** Preserve full WHY, WHEN to surface, and breadcrumbs — consumed by `/gsd-new-milestone`. Audit parked seeds anytime with `--list-seeds` (optionally `--list-seeds dormant`).
 
 **Produces:** `.planning/todos/` (default), note files (--note), ROADMAP.md backlog section (--backlog), `.planning/seeds/SEED-NNN-slug.md` (--seed)
 
@@ -1474,6 +1526,8 @@ Capture ideas, tasks, notes, and seeds to their appropriate destination. Default
 /gsd-capture --backlog "GraphQL API layer"         # Add to backlog
 /gsd-capture --seed "Add real-time collaboration when WebSocket infra is in place"
 /gsd-capture --list                                # Browse and act on todos
+/gsd-capture --list-seeds                          # Audit all captured seeds
+/gsd-capture --list-seeds dormant                  # Filter seeds by status
 ```
 
 ---
@@ -1641,6 +1695,16 @@ npm run lint:descriptions
 ```
 
 The check is also run as part of `npm test` via `tests/enh-2789-description-budget.test.cjs`.
+
+---
+
+## Capability commands (third-party)
+
+A capability can ship its own command family by declaring `commands: [{ family, module, router }]` in its `capability.json` (ADR-1244 D7). Once the capability is **active**, running `gsd-tools <family> …` (equivalently the `gsd <family>` wrapper) dispatches to the capability's router. The first-party families `graphify`, `intel`, and `audit-uat`/`audit-open` use exactly this registry-driven seam.
+
+For a **project-scoped** third-party capability, "active" is decided by the **user-owned consent store** (`${GSD_HOME:-~}/.gsd/consent.json`), not by the in-repo ledger. Since #1459, the authoritative project-scope activation gate is a consent record on **this machine**, bound to the project root and the exact bundle content; a forged or cloned in-repo `.gsd-capabilities.json` ledger that *looks* committed activates nothing on its own — see [The capability trust model](explanation/capability-trust-model.md#the-project-scope-trust-boundary). A **global** capability (under your own home) is trusted without a per-project record.
+
+Command dispatch is then gated **twice**. Beyond that primary activation gate, the router module is loaded **only from the capability's own install root** (a bare `.cjs` basename, traversal- and symlink-confined), and dispatch additionally requires a **committed** (non-`_pending`) entry in the per-runtime `.gsd-capabilities.json` ledger — a *secondary* signal that the install actually completed. A capability that is merely present on disk without a committed ledger entry is not command-dispatchable; a project-scoped one is not even *active* without the consent record. (A project ledger lives in the repo tree and is only as trustworthy as the repository — which is precisely why the consent store, not the ledger, is the project-scope activation gate.)
 
 ---
 

@@ -14,6 +14,7 @@ import { execGit, platformWriteSync, platformReadSync } from './shell-command-pr
 import io = require('./io.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- config-loader.cjs is an export= CommonJS module
 import configLoader = require('./config-loader.cjs');
+import { findProjectRoot } from './project-root.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- model-resolver.cjs is an export= CommonJS module
 import modelResolver = require('./model-resolver.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-locator.cjs is an export= CommonJS module
@@ -39,15 +40,20 @@ import { validatePath, loadTrustedGlobalRoots } from './security.cjs';
 import { getGlobalSkillDir, getGlobalSkillDisplayPath, getGlobalSkillsBase } from './runtime-homes.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- frontmatter.cjs is an export= CommonJS module
 import frontmatterMod = require('./frontmatter.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- verification.cjs is an export= CommonJS module
+import verificationMod = require('./verification.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- uat-predicate.cjs is an export= CommonJS module
+import uatPredicateMod = require('./uat-predicate.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- agent-install-check.cjs is an export= CommonJS module
 import agentInstallCheck = require('./agent-install-check.cjs');
 const { checkAgentsInstalled } = agentInstallCheck;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- git-base-branch.cjs is an export= CommonJS module
 import gitBaseBranch = require('./git-base-branch.cjs');
 const { gitWorktreeInfoInternal } = gitBaseBranch;
+import { makeResolution } from './resolution.cjs';
 
 const { output, error } = io;
-const { loadConfig } = configLoader;
+const { loadConfig, loadConfigResolved } = configLoader;
 const { resolveModelInternal, resolveGranularityInternal, assertValidGranularityOverride } = modelResolver;
 const { findPhaseInternal } = phaseLocator;
 const {
@@ -70,6 +76,8 @@ const {
 
 const { determinePhaseStatus } = commandsMod;
 const { extractFrontmatter } = frontmatterMod;
+const { readVerificationStatus } = verificationMod;
+const { evaluateUatPassed } = uatPredicateMod;
 
 // Unused but imported for structural parity
 void stripShippedMilestones;
@@ -83,6 +91,75 @@ function listPhaseSummaryFiles(phaseDir: string): string[] {
 
 function listPhasePlanFiles(phaseDir: string): string[] {
   return (scanPhasePlans(phaseDir) as unknown as Record<string, string[]>)['planFiles'];
+}
+
+interface PhaseCompletionProjection {
+  implementation_complete: boolean;
+  verification_status: string;
+  verification_passed: boolean;
+  phase_complete: boolean;
+  completion_status: string;
+  verification_next_action: string;
+  verification_next_command: string;
+}
+
+function verificationNextCommand(
+  status: string,
+  phaseNumber: string,
+  slashRuntime: string,
+): string {
+  if (status === 'gaps_found') {
+    return `${formatGsdSlash('plan-phase', slashRuntime) as string} ${phaseNumber} --gaps`;
+  }
+  if (status === 'human_needed' || status === 'stale') {
+    return `${formatGsdSlash('verify-work', slashRuntime) as string} ${phaseNumber}`;
+  }
+  if (status === 'missing' || status === 'unknown') {
+    return `${formatGsdSlash('execute-phase', slashRuntime) as string} ${phaseNumber}`;
+  }
+  return '';
+}
+
+function projectCompletionStatus(
+  implementationComplete: boolean,
+  verificationPassed: boolean,
+): string {
+  if (implementationComplete && verificationPassed) return 'complete';
+  if (implementationComplete) return 'executed';
+  return 'incomplete';
+}
+
+function buildPhaseCompletionProjection(
+  cwd: string,
+  phaseNumber: string,
+  phaseDir: string | null,
+  planCount: number,
+  summaryCount: number,
+  slashRuntime: string,
+): PhaseCompletionProjection {
+  const implementationComplete = planCount > 0 && summaryCount >= planCount;
+  const phaseFullDir = phaseDir ? path.join(cwd, phaseDir) : '';
+  const verificationStatus = implementationComplete
+    ? readVerificationStatus(phaseFullDir)
+    : { status: 'not_required', next_action: '', next_command: '' };
+  const projectedVerificationStatus = verificationStatus.status;
+  const projectedVerificationAction = verificationStatus.next_action;
+  const verificationPassed = projectedVerificationStatus === 'passed';
+  const phaseComplete = implementationComplete && verificationPassed;
+
+  return {
+    implementation_complete: implementationComplete,
+    verification_status: projectedVerificationStatus,
+    verification_passed: verificationPassed,
+    phase_complete: phaseComplete,
+    completion_status: projectCompletionStatus(implementationComplete, verificationPassed),
+    verification_next_action: projectedVerificationAction,
+    verification_next_command: verificationNextCommand(
+      projectedVerificationStatus,
+      phaseNumber,
+      slashRuntime,
+    ),
+  };
 }
 
 function getLatestCompletedMilestone(cwd: string): { version: string; name: string } | null {
@@ -800,6 +877,7 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
   }
 
   const config = loadConfig(cwd);
+  const _slashRuntime = resolveRuntime(cwd);
   let phaseInfo = findPhaseInternal(cwd, phase) as unknown as Record<string, unknown> | null;
 
   if (phaseInfo?.['archived']) {
@@ -831,6 +909,23 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     }
   }
 
+  const phaseDir = (phaseInfo?.['directory'] as string | null | undefined) || null;
+  const planCount = (phaseInfo?.['plans'] as unknown[] | undefined)?.length || 0;
+  const summaryCount = (phaseInfo?.['summaries'] as unknown[] | undefined)?.length || 0;
+  const completion = buildPhaseCompletionProjection(
+    cwd,
+    (phaseInfo?.['phase_number'] as string | undefined) || phase,
+    phaseDir,
+    planCount,
+    summaryCount,
+    _slashRuntime,
+  );
+  const uatReport = phaseDir
+    ? evaluateUatPassed(path.join(cwd, phaseDir), {
+        policy: { requireVerification: true },
+      })
+    : null;
+
   const result: Record<string, unknown> = {
     planner_model: resolveModelInternal(cwd, 'gsd-planner'),
     checker_model: resolveModelInternal(cwd, 'gsd-plan-checker'),
@@ -838,11 +933,17 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     commit_docs: config.commit_docs,
 
     phase_found: !!phaseInfo,
-    phase_dir: phaseInfo?.['directory'] || null,
+    phase_dir: phaseDir,
     phase_number: phaseInfo?.['phase_number'] || null,
     phase_name: phaseInfo?.['phase_name'] || null,
 
     has_verification: phaseInfo?.['has_verification'] || false,
+    phase_completion: {
+      ...completion,
+      uat_passed: uatReport?.passed ?? false,
+      uat_blockers: uatReport?.blockers ?? [],
+      ready_to_transition: completion.phase_complete && (uatReport?.passed ?? false),
+    },
   };
 
   output(withProjectRoot(cwd, result), raw);
@@ -1277,6 +1378,14 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     let hasResearch = false;
     let lastActivity: string | null = null;
     let isActive = false;
+    let completion = buildPhaseCompletionProjection(
+      cwd,
+      phaseNum,
+      null,
+      planCount,
+      summaryCount,
+      _slashRuntime,
+    );
 
     try {
       const dirs = _phaseDirEntries.filter(isDirInMilestone);
@@ -1284,6 +1393,7 @@ function cmdInitManager(cwd: string, raw: boolean): void {
 
       if (dirMatch) {
         const fullDir = path.join(phasesDir, dirMatch);
+        const phaseDirRel = toPosixPath(path.relative(cwd, fullDir));
         const phaseFiles = fs.readdirSync(fullDir);
         planCount = listPhasePlanFiles(fullDir).length;
         summaryCount = listPhaseSummaryFiles(fullDir).length;
@@ -1291,8 +1401,17 @@ function cmdInitManager(cwd: string, raw: boolean): void {
         hasResearch = phaseFiles.some(
           (f) => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md',
         );
+        completion = buildPhaseCompletionProjection(
+          cwd,
+          phaseNum,
+          phaseDirRel,
+          planCount,
+          summaryCount,
+          _slashRuntime,
+        );
 
-        if (summaryCount >= planCount && planCount > 0) diskStatus = 'complete';
+        if (completion.phase_complete) diskStatus = 'complete';
+        else if (completion.implementation_complete) diskStatus = 'executed';
         else if (summaryCount > 0) diskStatus = 'partial';
         else if (planCount > 0) diskStatus = 'planned';
         else if (hasResearch) diskStatus = 'researched';
@@ -1319,7 +1438,7 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     }
 
     const roadmapComplete = _checkboxStates.get(phaseNum) || false;
-    if (roadmapComplete && diskStatus !== 'complete') {
+    if (roadmapComplete && completion.phase_complete && diskStatus !== 'complete') {
       diskStatus = 'complete';
     }
 
@@ -1334,6 +1453,7 @@ function cmdInitManager(cwd: string, raw: boolean): void {
       plan_count: planCount,
       summary_count: summaryCount,
       roadmap_complete: roadmapComplete,
+      ...completion,
       last_activity: lastActivity,
       is_active: isActive,
     });
@@ -1349,24 +1469,44 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     }
   }
 
+  function normalizePhaseNumber(value: string): string {
+    return value
+      .split('.')
+      .map((part) => {
+        const match = /^(\d+)([A-Z]?)$/i.exec(part);
+        if (!match) return part;
+        return `${Number(match[1])}${match[2].toUpperCase()}`;
+      })
+      .join('.');
+  }
+
   const completedNums = new Set(
-    phases.filter((p) => p['disk_status'] === 'complete').map((p) => p['number'] as string),
+    phases
+      .filter((p) => p['phase_complete'] === true)
+      .map((p) => normalizePhaseNumber(p['number'] as string)),
   );
+  const phaseMap = new Map(phases.map((p) => [normalizePhaseNumber(p['number'] as string), p]));
 
   const _allCompletedPattern = /-\s*\[x\]\s*.*Phase\s+(\d+[A-Z]?(?:\.\d+)*)[:\s]/gi;
   let _allMatch: RegExpExecArray | null;
   while ((_allMatch = _allCompletedPattern.exec(rawContent)) !== null) {
-    completedNums.add(_allMatch[1]);
+    const phaseNum = normalizePhaseNumber(_allMatch[1]);
+    const phase = phaseMap.get(phaseNum);
+    if (!phase || phase['phase_complete'] === true) {
+      completedNums.add(phaseNum);
+    }
   }
 
-  const phaseMap = new Map(phases.map((p) => [p['number'] as string, p]));
-
   function reaches(from: string, to: string, visited = new Set<string>()): boolean {
-    if (visited.has(from)) return false;
-    visited.add(from);
-    const p = phaseMap.get(from);
+    const normalizedFrom = normalizePhaseNumber(from);
+    const normalizedTo = normalizePhaseNumber(to);
+    if (visited.has(normalizedFrom)) return false;
+    visited.add(normalizedFrom);
+    const p = phaseMap.get(normalizedFrom);
     if (!p || !p['dep_phases'] || (p['dep_phases'] as string[]).length === 0) return false;
-    if ((p['dep_phases'] as string[]).includes(to)) return true;
+    if ((p['dep_phases'] as string[]).some((dep) => normalizePhaseNumber(dep) === normalizedTo)) {
+      return true;
+    }
     return (p['dep_phases'] as string[]).some((dep) => reaches(dep, to, visited));
   }
 
@@ -1381,8 +1521,8 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     ) {
       phase['deps_satisfied'] = true;
     } else {
-      const depNums = (phase['depends_on'] as string).match(/\d+(?:\.\d+)*/g) || [];
-      phase['deps_satisfied'] = depNums.every((n) => completedNums.has(n));
+      const depNums = (phase['depends_on'] as string).match(/\d+[A-Z]?(?:\.\d+)*/gi) || [];
+      phase['deps_satisfied'] = depNums.every((n) => completedNums.has(normalizePhaseNumber(n)));
       phase['dep_phases'] = depNums;
     }
   }
@@ -1416,7 +1556,15 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     if (phase['disk_status'] === 'complete') continue;
     if (/^999(?:\.|$)/.test(phase['number'] as string)) continue;
 
-    if (phase['disk_status'] === 'planned' && phase['deps_satisfied']) {
+    if (phase['disk_status'] === 'executed') {
+      recommendedActions.push({
+        phase: phase['number'],
+        phase_name: phase['name'],
+        action: 'verify',
+        reason: `Implementation complete; verification ${phase['verification_status'] as string}`,
+        command: phase['verification_next_command'],
+      });
+    } else if (phase['disk_status'] === 'planned' && phase['deps_satisfied']) {
       recommendedActions.push({
         phase: phase['number'],
         phase_name: phase['name'],
@@ -1475,7 +1623,7 @@ function cmdInitManager(cwd: string, raw: boolean): void {
   });
 
   const nonBacklogPhases = phases.filter((p) => !/^999(?:\.|$)/.test(p['number'] as string));
-  const completedCount = nonBacklogPhases.filter((p) => p['disk_status'] === 'complete').length;
+  const completedCount = nonBacklogPhases.filter((p) => p['phase_complete'] === true).length;
 
   const sanitizeFlags = (rawVal: unknown): string => {
     const val = typeof rawVal === 'string' ? rawVal : '';
@@ -1509,7 +1657,7 @@ function cmdInitManager(cwd: string, raw: boolean): void {
     phase_count: phases.length,
     completed_count: completedCount,
     in_progress_count: phases.filter((p) =>
-      ['partial', 'planned', 'discussed', 'researched'].includes(p['disk_status'] as string),
+      ['executed', 'partial', 'planned', 'discussed', 'researched'].includes(p['disk_status'] as string),
     ).length,
     recommended_actions: filteredActions,
     waiting_signal: waitingSignal,
@@ -1532,6 +1680,7 @@ function cmdInitProgress(cwd: string, raw: boolean): void {
   }
   const config = loadConfig(cwd);
   const milestone = getMilestoneInfo(cwd) as unknown as Record<string, unknown>;
+  const _slashRuntime = resolveRuntime(cwd);
 
   const phasesDir = path.join(planningDir(cwd), 'phases');
   const phases: Record<string, unknown>[] = [];
@@ -1591,31 +1740,43 @@ function cmdInitProgress(cwd: string, raw: boolean): void {
       const hasResearch = phaseFiles.some(
         (f) => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md',
       );
+      const phaseDirRel = toPosixPath(
+        path.relative(cwd, path.join(planningDir(cwd), 'phases', dir)),
+      );
+      const completion = buildPhaseCompletionProjection(
+        cwd,
+        phaseNumber,
+        phaseDirRel,
+        plans.length,
+        summaries.length,
+        _slashRuntime,
+      );
 
       const status =
-        summaries.length >= plans.length && plans.length > 0
+        completion.phase_complete
           ? 'complete'
-          : plans.length > 0
-            ? 'in_progress'
-            : hasResearch
-              ? 'researched'
-              : 'pending';
+          : completion.implementation_complete
+            ? 'executed'
+            : plans.length > 0
+              ? 'in_progress'
+              : hasResearch
+                ? 'researched'
+                : 'pending';
 
       const phaseInfo: Record<string, unknown> = {
         number: phaseNumber,
         name: phaseName,
-        directory: toPosixPath(
-          path.relative(cwd, path.join(planningDir(cwd), 'phases', dir)),
-        ),
+        directory: phaseDirRel,
         status,
         plan_count: plans.length,
         summary_count: summaries.length,
         has_research: hasResearch,
+        ...completion,
       };
 
       phases.push(phaseInfo);
 
-      if (!currentPhase && (status === 'in_progress' || status === 'researched')) {
+      if (!currentPhase && (status === 'executed' || status === 'in_progress' || status === 'researched')) {
         currentPhase = phaseInfo;
       }
       if (!nextPhase && status === 'pending') {
@@ -1632,7 +1793,15 @@ function cmdInitProgress(cwd: string, raw: boolean): void {
       const checkboxComplete =
         roadmapCheckboxStates.get(num) === true ||
         roadmapCheckboxStates.get(stripped) === true;
-      const status = checkboxComplete ? 'complete' : 'not_started';
+      const completion = buildPhaseCompletionProjection(
+        cwd,
+        num,
+        null,
+        0,
+        0,
+        _slashRuntime,
+      );
+      const status = 'not_started';
       const phaseInfo: Record<string, unknown> = {
         number: num,
         name: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
@@ -1641,9 +1810,11 @@ function cmdInitProgress(cwd: string, raw: boolean): void {
         plan_count: 0,
         summary_count: 0,
         has_research: false,
+        roadmap_complete: checkboxComplete,
+        ...completion,
       };
       phases.push(phaseInfo);
-      if (!nextPhase && !currentPhase && status !== 'complete') {
+      if (!nextPhase && !currentPhase && !checkboxComplete) {
         nextPhase = phaseInfo;
       }
     }
@@ -1672,7 +1843,9 @@ function cmdInitProgress(cwd: string, raw: boolean): void {
     phases,
     phase_count: phases.length,
     completed_count: phases.filter((p) => p['status'] === 'complete').length,
-    in_progress_count: phases.filter((p) => p['status'] === 'in_progress').length,
+    in_progress_count: phases.filter((p) =>
+      ['executed', 'in_progress'].includes(p['status'] as string),
+    ).length,
 
     current_phase: currentPhase,
     next_phase: nextPhase,
@@ -1876,7 +2049,13 @@ function buildAgentSkillsBlock(
   config: Record<string, unknown>,
   agentType: string,
   projectRoot: string,
+  diagnostics?: { warnings: string[] },
 ): string {
+  const warn = (message: string): void => {
+    process.stderr.write(message);
+    if (diagnostics) diagnostics.warnings.push(message.replace(/\n+$/, ''));
+  };
+
   const runtime = (config && (config['runtime'] as string)) || 'claude';
   const globalSkillsBase = getGlobalSkillsBase(runtime);
 
@@ -1886,7 +2065,13 @@ function buildAgentSkillsBlock(
   if (!skillPaths) return '';
 
   if (typeof skillPaths === 'string') skillPaths = [skillPaths];
-  if (!Array.isArray(skillPaths) || skillPaths.length === 0) return '';
+  if (!Array.isArray(skillPaths)) {
+    warn(
+      `[agent-skills] WARNING: Agent "${agentType}" has a malformed agent_skills value (expected string or array, got ${typeof skillPaths}) — ignoring\n`,
+    );
+    return '';
+  }
+  if (skillPaths.length === 0) return '';
 
   // Hoist trusted roots computation before the loop: loadTrustedGlobalRoots does
   // realpathSync I/O and should run at most once per call, not once per failing skill.
@@ -1898,12 +2083,15 @@ function buildAgentSkillsBlock(
   // Skill-tool directive ({ kind: 'directive', name }) for plugin-provided namespaced skills.
   const validEntries: Array<{ kind: 'include'; ref: string; display: string } | { kind: 'directive'; name: string }> = [];
   for (const skillPath of skillPaths) {
-    if (typeof skillPath !== 'string') continue;
+    if (typeof skillPath !== 'string') {
+      warn(`[agent-skills] WARNING: Ignoring non-string skill entry (${typeof skillPath}) — skipping\n`);
+      continue;
+    }
 
     if (skillPath.startsWith('global:')) {
       const skillName = skillPath.slice(7);
       if (!skillName) {
-        process.stderr.write(
+        warn(
           `[agent-skills] WARNING: "global:" prefix with empty skill name — skipping\n`,
         );
         continue;
@@ -1911,7 +2099,7 @@ function buildAgentSkillsBlock(
       // Accept: one or more [A-Za-z0-9_-]+ segments joined by single colons.
       // Rejects: empty segments (::), leading/trailing colon, dots, slashes, backslashes.
       if (!/^[A-Za-z0-9_-]+(:[A-Za-z0-9_-]+)*$/.test(skillName)) {
-        process.stderr.write(
+        warn(
           `[agent-skills] WARNING: Invalid global skill name "${skillName}" — skipping\n`,
         );
         continue;
@@ -1923,7 +2111,7 @@ function buildAgentSkillsBlock(
           // Emit a natural-language Skill-tool directive (not a @-include).
           validEntries.push({ kind: 'directive', name: skillName });
         } else {
-          process.stderr.write(
+          warn(
             `[agent-skills] WARNING: Plugin-namespaced skill "global:${skillName}" requires a Skill-tool-capable runtime (claude) — skipping on runtime "${runtime}"\n`,
           );
         }
@@ -1931,7 +2119,7 @@ function buildAgentSkillsBlock(
       }
       // Non-namespaced bare name: attempt filesystem resolution as before.
       if (globalSkillsBase === null) {
-        process.stderr.write(
+        warn(
           `[agent-skills] WARNING: Runtime "${runtime}" does not use a skills directory — "global:${skillName}" is not supported on this runtime\n`,
         );
         continue;
@@ -1940,7 +2128,7 @@ function buildAgentSkillsBlock(
       const globalSkillMd = path.join(globalSkillDir, 'SKILL.md');
       const displayPath = getGlobalSkillDisplayPath(runtime, skillName);
       if (!fs.existsSync(globalSkillMd)) {
-        process.stderr.write(
+        warn(
           `[agent-skills] WARNING: Global skill not found at "${displayPath}/SKILL.md" — skipping\n`,
         );
         continue;
@@ -1952,11 +2140,13 @@ function buildAgentSkillsBlock(
           return Boolean(rootCheck['safe']);
         });
         if (!acceptedViaTrustedRoot) {
-          process.stderr.write(
+          warn(
             `[agent-skills] WARNING: Global skill "${skillName}" failed path check (symlink escape?) — skipping\n`,
           );
           continue;
         }
+        // Intentionally a direct stderr write, NOT warn(): this is an acceptance
+        // trace, not a skip, so it must not land in the diagnostics warnings[].
         process.stderr.write(`[agent-skills] NOTE: Global skill "${skillName}" accepted via trusted_global_roots (resolves outside the default skills dir)\n`);
       }
       validEntries.push({ kind: 'include', ref: `${globalSkillDir}/SKILL.md`, display: displayPath });
@@ -1965,7 +2155,7 @@ function buildAgentSkillsBlock(
 
     const pathCheck = validatePath(skillPath, projectRoot) as unknown as Record<string, unknown>;
     if (!pathCheck['safe']) {
-      process.stderr.write(
+      warn(
         `[agent-skills] WARNING: Skipping unsafe path "${skillPath}": ${pathCheck['error'] as string}\n`,
       );
       continue;
@@ -1973,7 +2163,7 @@ function buildAgentSkillsBlock(
 
     const skillMdPath = path.join(projectRoot, skillPath, 'SKILL.md');
     if (!fs.existsSync(skillMdPath)) {
-      process.stderr.write(
+      warn(
         `[agent-skills] WARNING: Skill not found at "${skillPath}/SKILL.md" — skipping\n`,
       );
       continue;
@@ -1982,7 +2172,12 @@ function buildAgentSkillsBlock(
     validEntries.push({ kind: 'include', ref: `${skillPath}/SKILL.md`, display: skillPath });
   }
 
-  if (validEntries.length === 0) return '';
+  if (validEntries.length === 0) {
+    warn(
+      `[agent-skills] WARNING: Agent "${agentType}" has ${skillPaths.length} configured skill path(s) but none resolved to a valid skill — all were skipped (see warnings above)\n`,
+    );
+    return '';
+  }
 
   const lines = validEntries.map((entry) => {
     if (entry.kind === 'directive') {
@@ -1992,6 +2187,9 @@ function buildAgentSkillsBlock(
   }).join('\n');
   return `<agent_skills>\nRead these user-configured skills:\n${lines}\n</agent_skills>`;
 }
+
+/** Reason enum for agent-skills diagnostic (#1415, ADR-1411 P2). */
+type AgentSkillsReason = 'resolved' | 'not_configured' | 'configured_empty' | 'configured_unresolved';
 
 function cmdAgentSkills(
   cwd: string,
@@ -2004,29 +2202,87 @@ function cmdAgentSkills(
     return;
   }
 
-  const config = loadConfig(cwd);
+  // Anchor to project root before loading config (#1415/#1366 cwd-drift fix).
+  const projectRoot = findProjectRoot(cwd);
+  const { config, source, degraded } = loadConfigResolved(projectRoot);
+  const diagnostics = { warnings: [] as string[] };
   const block = buildAgentSkillsBlock(
     config,
     agentType,
-    cwd,
+    projectRoot,
+    diagnostics,
   );
 
+  // Compute configured + reason for diagnostic output.
+  const agentSkillsMap = (config && config['agent_skills'] && typeof config['agent_skills'] === 'object')
+    ? config['agent_skills'] as Record<string, unknown>
+    : {};
+  const configured = Object.prototype.hasOwnProperty.call(agentSkillsMap, agentType);
+
+  let reason: AgentSkillsReason;
+  let skillPaths: unknown = configured ? agentSkillsMap[agentType] : [];
+  if (!configured) {
+    reason = 'not_configured';
+    skillPaths = [];
+  } else {
+    // Normalize paths to array
+    if (typeof skillPaths === 'string') skillPaths = [skillPaths];
+    if (!Array.isArray(skillPaths)) skillPaths = [];
+    const pathsArr = skillPaths as unknown[];
+    // Fix 3: treat "" (empty string) as configured_empty — all-blank entries = no meaningful paths.
+    // An array of all empty/blank strings has length > 0 but zero meaningful paths.
+    const nonBlankPaths = pathsArr.filter(p => typeof p === 'string' && p.trim().length > 0);
+    if (pathsArr.length === 0 || nonBlankPaths.length === 0) {
+      // configured with empty array / "" / all-blank entries
+      reason = 'configured_empty';
+      // Reflect zero meaningful paths in the normalized array used for skills_count
+      skillPaths = [];
+      try {
+        process.stderr.write(
+          `[agent-skills] WARNING: Agent "${agentType}" is configured in agent_skills but has no skill paths — skills_count will be 0\n`
+        );
+      } catch { /* stderr might be closed */ }
+    } else if (!block) {
+      // configured with paths but all failed to resolve (warnings already emitted by buildAgentSkillsBlock)
+      reason = 'configured_unresolved';
+    } else {
+      reason = 'resolved';
+    }
+  }
+
+  const normalizedPaths = Array.isArray(skillPaths) ? skillPaths : [];
+
   if (jsonMode) {
-    const skillPaths =
-      (config && config.agent_skills && (config.agent_skills as Record<string, unknown>)[agentType]) || [];
-    const normalizedPaths = Array.isArray(skillPaths)
-      ? skillPaths
-      : skillPaths
-        ? [skillPaths]
-        : [];
-    output({ agent_type: agentType, block: block || '', skills_count: normalizedPaths.length }, raw);
+    // Build the Resolution<AgentSkillsValue> envelope and embed .value additively.
+    // Flat fields are retained unchanged for back-compat; value formalises the
+    // Resolution convention (ADR-1411 P3, #1416). source/degraded remain
+    // config-provenance extras, outside the Resolution<T> envelope.
+    const resolution = makeResolution(
+      { block: block || '', skills_count: normalizedPaths.length },
+      { configured, reason, warnings: diagnostics.warnings },
+    );
+    output({
+      agent_type: agentType,
+      block: block || '',
+      skills_count: normalizedPaths.length,
+      warnings: diagnostics.warnings,
+      configured,
+      reason,
+      source,
+      degraded,
+      value: resolution.value,
+    }, raw);
     return;
   }
 
-  if (block) {
-    process.stdout.write(block);
-  }
-  process.exit(0);
+  // #1400: emit the raw block via the synchronous-flush output() helper (the same
+  // one the --json branch uses) rather than process.stdout.write + process.exit(0).
+  // When stdout is a pipe/file (how workflows consume this via command
+  // substitution) the async stdout buffer is torn down by process.exit() before
+  // it drains — on Windows this reliably truncates the write to 0 bytes, so every
+  // ${AGENT_SKILLS_*} substitution expands empty. output() writes every byte with
+  // writeAllSync and returns, letting the event loop drain naturally.
+  output(block || '', true, block || '');
 }
 
 interface SkillEntry {
