@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-06-24
+
+### Added
+
+- Archetype-driven strategy flow + Mode-uniform adaptivity: new `project.*` query verbs, `strategy-flow.md` selection policy + `## Strategy Plan`/skip-ledger, a strategy auto-advance driver for hands-off `--auto`, mechanical brownfield enforcement (planner→plan-checker→verifier characterization gate), design ingestion (`design-ingestion.md`) + design-aware per-phase UI gate, and the frontend-architecture/security-strategy/legacy-inventory skills. (#1)
+
 ## [1.11.1] - 2026-06-14
 
 ### Fixed
