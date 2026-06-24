@@ -141,6 +141,11 @@ jobs:
             echo "dropped_oneline=" >> "$GITHUB_OUTPUT"
           fi
 
+
+      - name: Install dependencies and build
+        if: steps.check.outputs.next_exists == 'true'
+        run: npm ci --silent && npm run build:lib
+
       - name: Sync next's version to main's released version
         if: steps.check.outputs.next_exists == 'true'
         run: |
