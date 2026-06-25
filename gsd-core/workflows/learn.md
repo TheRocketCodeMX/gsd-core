@@ -74,14 +74,21 @@ The `--lean` is read from the learner's beat-5 calibration choice (did they reac
 
 ## Step 5: Visual companion (optional)
 
-Only when a beat genuinely benefits from seeing it. Launch the vendored local server and write an HTML fragment for the beat:
+The companion is a vendored, pure-Node local server (zero install — just Node + the learner's existing browser, exactly like superpowers). **You generate the HTML yourself; there are no external rendering tools.** Use it only when a beat genuinely benefits from seeing it (a diagram, code side-by-side), or when the learner asks to *see* it or says they don't get it.
+
+**Start the server once per session (idempotent — same `--project-dir` reuses the port):**
 
 ```bash
-bash "${_GSD_RUNTIME_ROOT}/gsd-core/visual/start-server.sh" --project-dir "$(pwd)" 2>/dev/null || echo "VISUAL_UNAVAILABLE"
+bash "${_GSD_RUNTIME_ROOT}/gsd-core/visual/start-server.sh" --project-dir "$(pwd)" --open 2>/dev/null || echo "VISUAL_UNAVAILABLE"
 ```
 
-- On success it prints a JSON line with a `url` and a `content` dir. Write the beat's HTML fragment into the content dir; for a concept diagram, pipe a graphviz DOT string through `gsd-core/visual/render-diagram.sh <out.svg>` and embed the SVG. Tell the learner the URL.
-- On **any** failure (`VISUAL_UNAVAILABLE`, headless, no browser, `GRAPHVIZ_MISSING` from the renderer), fall back to an ASCII sketch + prose inline and continue. The visual is never required.
+On success it prints a JSON line with a `url` and a `screen_dir`. Then, to show a beat:
+
+1. **Write an HTML *fragment*** (content only — NO `<!DOCTYPE>`/`<html>`; the server frames it, injects the theme CSS + reload client) into `screen_dir`, using a **fresh semantic filename you never reuse** (`test-pyramid.html`, `fake-vs-mock.html`, `compute-ladder-v2.html`). Use your file-write tool, never `cat`/heredoc. The server auto-detects the newest file and reloads the browser.
+2. **Draw diagrams as hand-authored inline `<svg>`** (the test pyramid, the hexagon's ports/adapters, the compute ladder) — no graphviz, no tools. **Code-both-ways** uses the frame's built-in `<div class="split">…</div>` (two columns); other ready classes: `.options`, `.pros-cons`, `.mockup`, `.subtitle`, `.cards`. Arbitrary HTML/CSS and inline `<svg>` render unfiltered.
+3. **Tell the learner the URL** (every time, not just the first), give a one-line summary of what's on screen, and continue the dialogue in the terminal.
+
+**Graceful fallback:** if the start line prints `VISUAL_UNAVAILABLE`, or the environment is headless/no-browser (the server still prints a URL to open manually), or the learner prefers text, **render the same thing as an ASCII sketch + prose inline and continue**. The visual is never required — terminal is always sufficient.
 
 ## Step 6: Continue or close
 
