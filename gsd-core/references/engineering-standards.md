@@ -13,6 +13,8 @@ Shared reference injected into the producing agents (`gsd-planner`, `gsd-phase-r
 
 **Simplicity operates *within* the chosen architecture, never *against* it.** If the architecture genuinely no longer fits the need, raise it as a promotion trigger (`recommend-architecture` / `new-milestone`) — never quietly under-build around it. Proportionality both ways: don't impose ceremony on a one-sentence diff; don't skip the bar on a complex one. Complexity = essential (the job, irreducible — Brooks) + accidental (mess, optional). Remove only the mess.
 
+**A third failure axis — source-fidelity (whenever a source of truth exists).** When the project has a provided design, legacy code, a vibe-coded prototype, or an external dependency, that source is authoritative on its own axis (the full rule: `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence). Two distinct failures live here, and a model told only "be senior" defaults *toward* the first: **over-invention / fidelity-loss** — adding structure a source doesn't have (a design shows one address input; the build invents four required fields street/city/state/zip) is an **over-engineering** failure; **blind reproduction** — copying a legacy schema verbatim instead of reworking it to the chosen rung while preserving behavior is an **under-engineering** failure. Matching a source's *observable* shape exactly — not generalizing it, not elaborating it, and not copying its internals — is the senior move. "Be senior" never means "add more structure" against a source.
+
 ## The contract (behaviors — most load-bearing last)
 
 1. **Understand before you change.** Read the real code paths, the tests-as-spec, and — for this subdomain — the DOMAIN-MODEL classification and the ADR rung, before deciding or writing. Most defects are acting on an incomplete mental model, or building to the wrong structure.
@@ -38,9 +40,9 @@ Prose against shortcuts is *weak alone* — frontier agents still write "make ve
 
 ## Anti-patterns (both directions)
 
-- **Under-engineering:** patching around a missing-but-needed abstraction instead of building it; thin CRUD / transaction-script over a domain the ADR marked rich; "keeping it simple" by violating the chosen architecture; happy-path-only; skipping edge cases.
-- **Over-engineering:** hexagonal/ports/CQRS with no ADR mandate; abstracting on the first or second similarity; speculative generality and config-for-imagined-futures.
-- **Both:** adjective-prompting your own output ("I'll write clean code") instead of doing the behaviors; mixing a refactor and a behavior change in one commit; re-implementing logic the codebase already has; "make it pass" hacks.
+- **Under-engineering:** patching around a missing-but-needed abstraction instead of building it; thin CRUD / transaction-script over a domain the ADR marked rich; "keeping it simple" by violating the chosen architecture; happy-path-only; skipping edge cases; **blindly reproducing a legacy schema/structure instead of reworking it (under characterization tests) to the chosen rung.**
+- **Over-engineering:** hexagonal/ports/CQRS with no ADR mandate; abstracting on the first or second similarity; speculative generality and config-for-imagined-futures; **inventing user-facing fields/screens/flows a provided design doesn't have (fidelity-loss) — generalizing a source's specific shape into a "richer" one nobody asked for.**
+- **Both:** adjective-prompting your own output ("I'll write clean code") instead of doing the behaviors; mixing a refactor and a behavior change in one commit; re-implementing logic the codebase already has; "make it pass" hacks; **building from an abstraction (DOMAIN-MODEL/UI-SPEC/PLAN) when the literal source is available — re-ground in the source.**
 
 *Basis: Ousterhout (A Philosophy of Software Design — deep modules, complexity is incremental); Metz ("the wrong abstraction"); Dodds (AHA); Thomas (DRY = knowledge); Beck (Tidy First, two hats); Fowler (YAGNI, cost-of-carry, "internal quality is cheaper at every horizon"); Brooks (essential vs accidental complexity); Anthropic/OpenAI/DeepMind on agent prompting, reward-hacking, and verification. Full citations in the research corpus.*
 

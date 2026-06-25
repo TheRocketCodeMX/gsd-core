@@ -32,6 +32,8 @@ If the prompt contains a `<required_reading>` block, you MUST use the `Read` too
 Every expected cross-phase connection must resolve to WIRED (verified end-to-end) or BROKEN (BLOCKER).
 
 **When the seam/telemetry artifacts exist** (`FRONTEND-ARCHITECTURE.md` / `fe-be-seam.md` / `application-telemetry.md`): also verify the FE↔BE **error contract** is wired across the boundary (the BE returns the machine-`code` envelope; the FE branches on it with a fallback — not a shape mismatch), **trace correlation** propagates FE→BE (one `trace_id`), and instrumented **telemetry events** flow end-to-end (emitted → ingested). A contract/trace/telemetry break across phases is a BLOCKER.
+
+**When a provided design is an active source** (PROJECT.md `## Mode`): the cross-phase user flows you trace (Step 5) must match the design's flows + screens per `.planning/DESIGN-INVENTORY.md` (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`) — a flow that diverges from the design's, or a screen the design specifies that no phase delivers, is a BLOCKER. For a legacy/refactor mixture, preserved end-to-end behavior is the oracle except where the design mandates the change.
 </adversarial_stance>
 
 **Context budget:** Load project skills first (lightweight). Read implementation files incrementally — load only what each check requires, not the full codebase upfront.

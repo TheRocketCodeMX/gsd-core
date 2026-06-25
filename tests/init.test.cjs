@@ -1210,6 +1210,54 @@ describe('cmdInitNewProject', () => {
     assert.strictEqual(output.has_package_file, false);
     assert.strictEqual(output.is_brownfield, false);
     assert.strictEqual(output.needs_codebase_map, false);
+    // Design axis: a clean greenfield has no design hint (false-positive guard baseline).
+    assert.strictEqual(output.has_design_hint, false);
+    assert.strictEqual(output.design_pointer, null);
+    assert.strictEqual(output.design_hint_source, null);
+    assert.strictEqual(output.design_dismissed, false);
+  });
+
+  describe('provided-design detection (hint, not lock)', () => {
+    test('--design arg is the strongest hint (source: arg)', () => {
+      const output = JSON.parse(runGsdTools('init new-project --design https://figma.com/file/abc', tmpDir).output);
+      assert.strictEqual(output.has_design_hint, true);
+      assert.strictEqual(output.design_pointer, 'https://figma.com/file/abc');
+      assert.strictEqual(output.design_hint_source, 'arg');
+    });
+
+    test('a .fig export on disk is detected (source: design-export)', () => {
+      fs.writeFileSync(path.join(tmpDir, 'app.fig'), '');
+      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
+      assert.strictEqual(output.has_design_hint, true);
+      assert.strictEqual(output.design_hint_source, 'design-export');
+    });
+
+    test('a tokens.json is detected (source: tokens-file)', () => {
+      fs.writeFileSync(path.join(tmpDir, 'tokens.json'), '{}');
+      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
+      assert.strictEqual(output.has_design_hint, true);
+      assert.strictEqual(output.design_hint_source, 'tokens-file');
+    });
+
+    test('a designs/ dir is the weak hint (source: designs-dir)', () => {
+      fs.mkdirSync(path.join(tmpDir, 'designs'));
+      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
+      assert.strictEqual(output.has_design_hint, true);
+      assert.strictEqual(output.design_hint_source, 'designs-dir');
+    });
+
+    test('--no-design dismisses (no prompt) even with an artifact present', () => {
+      fs.writeFileSync(path.join(tmpDir, 'app.fig'), '');
+      const output = JSON.parse(runGsdTools('init new-project --no-design', tmpDir).output);
+      assert.strictEqual(output.design_dismissed, true);
+      assert.strictEqual(output.has_design_hint, false);
+    });
+
+    test('a design-system dep alone is NOT a hint (no false positive)', () => {
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"dependencies":{"tailwindcss":"^3"}}');
+      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
+      assert.strictEqual(output.has_design_hint, false);
+    });
   });
 
   test('brownfield with package.json detected', () => {
