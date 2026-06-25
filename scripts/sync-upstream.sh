@@ -5,7 +5,7 @@
 # Why: cherry-picking from `upstream` (open-gsd/gsd-core) reintroduces the upstream
 # coordinate (@opengsd/gsd-core, open-gsd/gsd-core, the cache slug, the encoded npm badge).
 # This script rewrites all six forms back to ours in one pass. The legacy migration package
-# refs (the get-shit-done-* and gsd-sdk packages under the old scope) are NOT touched — the
+# refs (the get-shit-done-* and gsd-sdk packages under the old scope) are NOT touched — the gsd-allow-legacy-name
 # patterns only match the gsd-core coordinate, so install-migration code is preserved.
 #
 # Usage:

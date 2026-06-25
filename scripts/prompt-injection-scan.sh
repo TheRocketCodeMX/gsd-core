@@ -75,6 +75,9 @@ ALLOWLIST=(
   'tests/verify.test.cjs'
   'gsd-core/bin/lib/security.cjs'
   'hooks/gsd-prompt-guard.js'
+  # The untrusted-input boundary reference quotes injection phrases ("ignore
+  # previous instructions", "you are now…") to teach agents to recognize them.
+  'gsd-core/references/untrusted-input-boundary.md'
   'hooks/gsd-read-injection-scanner.js'
   'tests/read-injection-scanner.test.cjs'
   'tests/security-prompt-injection.test.cjs'

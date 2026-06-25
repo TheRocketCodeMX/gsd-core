@@ -59,14 +59,14 @@ const LEGACY_CACHE_FILENAMES = [
 /**
  * Legacy runtime directory names left inside a runtime config dir by a
  * superseded install. The current fork installs its runtime under `gsd-core/`;
- * the pre-rename upstream used `get-shit-done/`. When a user migrates, the
+ * the pre-rename upstream used `get-shit-done/`. When a user migrates, the // gsd-allow-legacy-name
  * file-level migration deletes the OLD dir's files but leaves the emptied
  * directory tree behind — harmless, but untidy. We prune such a dir ONLY when
  * it contains zero files (a strict emptiness guard, re-checked at apply time),
  * so we can never delete a directory that still holds user-authored content.
  * NEVER list 'gsd-core' here — that is the CURRENT runtime dir.
  */
-const LEGACY_RUNTIME_DIR_NAMES = ['get-shit-done'];
+const LEGACY_RUNTIME_DIR_NAMES = ['get-shit-done']; // gsd-allow-legacy-name
 
 /**
  * Subtrees within a configDir that GSD actively scans for old-package content.
@@ -163,7 +163,7 @@ function fileContainsOldPackageSignal(absPath, fsMod) {
  *   - 'content-references-old-package': a code file whose content contains
  *     the old package name signal (hooks/ and commands/ subtrees only).
  *   - 'legacy-shared-cache': the old package's shared update-check cache file.
- *   - 'empty-legacy-runtime-dir': a superseded runtime dir (e.g. get-shit-done/)
+ *   - 'empty-legacy-runtime-dir': a superseded runtime dir (e.g. get-shit-done/) // gsd-allow-legacy-name
  *     left empty after a migration deleted its files.
  *
  * @param {string[]} configDirs - absolute paths to runtime config dirs to scan

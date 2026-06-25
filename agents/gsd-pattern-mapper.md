@@ -120,6 +120,8 @@ Grep("router\.(get|post|put|delete)", type: "ts")
 
 **Code-quality caveat** (PROJECT.md `## Mode`): when Code-quality = **vibe-coded-to-harden** (or the repo is otherwise known-thin), "most recently modified" is NOT a quality signal — the recent code may be exactly the anti-pattern being hardened away. In that case rank by *fit to the ADR's chosen rung* (the senior-quality contract above), not recency, and flag an analog as "current pattern, NOT a recommended target" when it falls short of the rung — never present a vibe-coded shortcut as the pattern to copy.
 
+**Source awareness** (PROJECT.md `## Mode`): when a provided design or legacy code is an active source (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`), the design is the authority on the **observable shape** and legacy on **behavior-to-preserve** — map analogs for *how* to build (the rung, the conventions), never to justify a user-facing field set that diverges from the design or to reproduce a legacy schema verbatim.
+
 ## Step 4: Extract Patterns from Analogs
 
 **Never re-read the same range.** For small files (≤ 2,000 lines), one `Read` call is enough — extract everything in that pass. For large files, multiple non-overlapping targeted reads are fine; what is forbidden is re-reading a range already in context.

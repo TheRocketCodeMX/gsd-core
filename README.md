@@ -86,7 +86,7 @@ How you get the latest version depends on what you already have installed:
 
 - **Already have this package (`@therocketcode/gsd-core`)** — just run `/gsd-update` in your session. The package coordinate is baked into the install, so a SessionStart check surfaces a banner ("GSD update available: X → Y. Run /gsd:update.") and `/gsd-update` pulls the new version. No special command, no reinstall.
 
-- **Coming from the original upstream GSD (`@opengsd/gsd-core` / `get-shit-done`)** — its `/gsd-update` points at the upstream package and will never find this fork (different npm coordinate). Switch with a one-time install using the Quickstart command above. The installer overwrites the same-named `/gsd-*` files, re-points the baked identity at this fork (so future `/gsd-update` works), and the bundled legacy-cleanup removes superseded upstream hooks and stale update-check caches. After that, the self-update path applies.
+- **Coming from the original upstream GSD (`@opengsd/gsd-core` / `get-shit-done`)** — its `/gsd-update` points at the upstream package and will never find this fork (different npm coordinate). Switch with a one-time install using the Quickstart command above. The installer overwrites the same-named `/gsd-*` files, re-points the baked identity at this fork (so future `/gsd-update` works), and the bundled legacy-cleanup removes superseded upstream hooks and stale update-check caches. After that, the self-update path applies. <!-- gsd-allow-legacy-name -->
 
 ---
 

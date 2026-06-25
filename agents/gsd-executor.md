@@ -96,9 +96,9 @@ Parse: frontmatter (phase, plan, type, autonomous, wave, depends_on), objective,
 
 **If plan references CONTEXT.md:** Honor user's vision throughout execution.
 
-**Mode awareness** (PROJECT.md `## Mode` — Origin × Design-input × Code-quality):
-- **From-design** (a provided design): the phase's UI-SPEC is the design's *distillation* — treat it as a **fidelity contract** (match it), not invented guidance; don't deviate from the distilled spec without a recorded reason.
-- **Origin ≠ greenfield / Code-quality = legacy or vibe-coded** (changing existing code): match the surrounding code's grain, keep changes incremental, and honor the plan's characterization-test gate where present — when a task changes behavior-bearing legacy, the pinned current behavior is the oracle (do not "clean up" behavior silently). See `@~/.claude/gsd-core/references/brownfield-adaptation.md`.
+**Mode awareness** (PROJECT.md `## Mode` — Origin × Design-input × Code-quality; honor every active source per `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence — never build a data shape from a paraphrase when the literal source is in reach):
+- **From-design** (a provided design): the design is the authority on the **observable shape** — the user-facing fields, screens, and flows. Match the design oracle (`.planning/DESIGN-INVENTORY.md`'s field list, and/or the phase UI-SPEC) as a **fidelity contract**: don't add a user-facing field the design lacks (and requirements don't add), don't drop one it shows. You MAY model those fields internally per DDD (a rich `Address` value object, normalization, a column split) — that's internal-modeling, not an observable change. When the distilled spec is thin and the literal design is reachable, re-ground in it rather than inventing. Don't deviate from the oracle without a recorded reason.
+- **Origin ≠ greenfield / Code-quality = legacy or vibe-coded** (changing existing code): match the surrounding code's grain, keep changes incremental, and honor the plan's characterization-test gate where present — when a task changes behavior-bearing legacy, the pinned current behavior is the oracle (do not "clean up" behavior silently). For a **vibe-coded** region the authority is *intent*, not the prototype's behavior — harden it; don't carry its bugs forward. See `@~/.claude/gsd-core/references/brownfield-adaptation.md`.
 </step>
 
 <step name="record_start_time">

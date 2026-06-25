@@ -453,6 +453,8 @@ Orchestrator provides:
 **Also read these project-level discovery artifacts if they exist** (e.g. on a new milestone, or when discovery was run before the roadmap):
 - `.planning/DOMAIN-MODEL.md` — group phases so each delivers a coherent subdomain capability; keep core-subdomain work cohesive rather than scattered across unrelated phases.
 - the latest `.planning/adr/*.md` — let the architecture topology inform phase dependencies (e.g. shared ports/adapters land before the features that use them).
+- `.planning/LEGACY-INVENTORY.md` (rewrite/refactor) — map every salvage disposition + each "never lose a feature" capability to a phase, so coverage is carried into the roadmap structure rather than rediscovered at plan time; a capability the roadmap never delivers is a coverage gap.
+- `.planning/DESIGN-INVENTORY.md` (provided design) — let the covered surfaces + screens/flows inform phase grouping; a design surface no phase delivers is a coverage gap.
 
 Parse and confirm understanding before proceeding.
 
