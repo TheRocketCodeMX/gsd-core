@@ -109,9 +109,15 @@ Cross-project (user-global) so progress follows the developer, mirroring `USER-P
 
 Reuse the superpowers mechanism (tiny local Node server watching a content dir + WebSocket reload + graphviz for diagrams) — copied in, coordinate-rewritten, not depended upon. The browser is used only for nodes flagged `diagram` or `code`: the pyramid/diamond emerging from an architecture, the hexagon's ports/adapters, the compute ladder, code-both-ways side-by-side, the over↔under spectrum slider. The terminal carries the Socratic dialogue. HTML is generated per node (and per the learner's answer), never pre-baked. Fully optional — the feature is complete and useful terminal-only.
 
-## 11. The build wedge
+## 11. Scope: all ten tracks at once (with Testing as the validation focus)
 
-**Testing track first, all 18 nodes, end to end.** It is the highest-value gap the learner named ("nobody tells you *what* to test or *how*"), the deepest set of references, and it exercises every part of the engine: the catalog graph (prereq chains like `test-doubles → test-sociable-vs-solitary → test-fake-at-ports`), the coach, profile personalization, code-both-ways, the calibration mirror, and the visual layer (pyramid/diamond). Once Testing teaches well, the other nine tracks are content in the same catalog — the engine does not change.
+**v1 ships all 84 nodes across all ten tracks** — not a single-track wedge. The wedge instinct comes from *building* products (each slice is real work); it does not apply here because:
+
+- **The content already exists** — the references, for every domain. There is no per-track authoring.
+- **The engine is track-agnostic** — the five-beat pattern teaches any node the same way (every reference shares the floor/rungs/tells/evidence skeleton). Building it once covers all 84.
+- **The prerequisite graph is already cross-wired** — `test-shape-follows-arch → arch-when-to-use`, `test-fake-at-ports → arch-hexagonal`, `seam-cors-csrf → sec-authn`. Shipping one track alone would leave those edges dangling at un-built tracks. The cross-links *require* the tracks to ship together.
+
+What Testing-first legitimately buys is a **development-time validation focus, not a shipping gate**: the Testing track is the deepest set of references and the learner's highest-value gap, so it's where we tune the five-beat pattern until the teaching quality is right. Once the pattern teaches Testing well, it teaches every track well — same engine, same skeleton. So: build the engine, validate it hard against Testing, ship all ten tracks together.
 
 ## 12. Out of scope (v1)
 
@@ -128,4 +134,4 @@ Reuse the superpowers mechanism (tiny local Node server watching a content dir +
 - **84 nodes, 10 tracks, cross-linked not duplicated** — granularity matches the material (deep in Testing/Architecture/Security; tight in Code Quality).
 - **Catalog is machine-checked** — a dangling source/prereq is a build failure.
 - **Visual layer is optional** — terminal-complete; browser only where visual genuinely wins.
-- **Testing track is the wedge.**
+- **All ten tracks ship in v1** — the content exists, the engine is track-agnostic, and the prereq graph is cross-wired; a single-track release would dangle its edges. Testing is the *validation focus* during the build, not a scope gate.
