@@ -175,6 +175,6 @@ Source skill: `engineering-standards.md`
 
 ## Consumes / produces
 
-- **Consumed by** `gsd-core/workflows/learn.md` (selection + sequencing) and `agents/gsd-learning-coach.md` (reads the cited source section to render the five beats). Personalized via `~/.claude/gsd-core/USER-PROFILE.md`; progress tracked in `~/.claude/gsd-core/LEARNING-PROGRESS.md`.
+- **Consumed inline by** the `/gsd:learn` skill / `gsd-core/workflows/learn.md` — the **main agent** reads this catalog as the index, then loads the cited source section on demand to teach the node through the five beats (no subagent; teaching is conversational and cross-concept). Personalized via `~/.claude/gsd-core/USER-PROFILE.md`; progress tracked in `~/.claude/gsd-core/LEARNING-PROGRESS.md`.
 - **Pairs with** `teaching-pattern.md` (the five-beat doctrine — *how* a node is taught) the way `engineering-standards.md` pairs with the build agents.
 - **Produces** nothing at runtime — it is the static curriculum graph; the lessons it drives are ephemeral (rendered per session), the progress is the only persisted state.

@@ -2,7 +2,7 @@
 
 **Goal:** Give developers a coherent, high-bar way to *learn* the engineering concepts the GSD framework enforces — each concept taught **concept-first (what it is, clearly), then application (when/why/how-it-fits)** — sourced entirely from the skills, in one consistent voice.
 
-**Architecture:** A five-beat teaching engine renders concept nodes from a machine-checked catalog (`learn-catalog.md`). A `/gsd:learn` workflow orchestrates selection and the interactive loop; a `gsd-learning-coach` subagent reads each concept's source reference section and returns a structured lesson; personalization comes from the existing `USER-PROFILE.md`; an optional browser layer (reused from the superpowers mechanism) renders the genuinely-visual beats.
+**Architecture:** `/gsd:learn` is an **inline skill the main agent runs** — not a subagent pipeline. Teaching is conversational and cross-concept (a learner asks about architecture, then testing, then how they connect), so the lesson must live in one context where the agent holds every concept at once and synthesizes across them live. The skill reads the machine-checked catalog (`learn-catalog.md`), loads only the source section(s) for the concept(s) in play, teaches through the five-beat pattern personalized by the existing `USER-PROFILE.md`, and tracks progress. An optional browser layer (reused from the superpowers mechanism) renders the genuinely-visual beats. **No subagents** — they would isolate each concept and defeat the cross-concept teaching that is the point.
 
 **Status:** Design approved (brainstorming). This spec feeds the implementation plan. Build wedge = the Testing track, end to end.
 
@@ -42,25 +42,26 @@ The catalog is the single source of *what is teachable* and *where its truth liv
 |---|---|---|
 | `skills/gsd-learn/SKILL.md` | the skill surface (objective, execution_context, flags) | new |
 | `commands/gsd/learn.md` | command registration, argument-hint, routing | new |
-| `gsd-core/workflows/learn.md` | orchestrator: load → select → teach loop → record | new |
-| `gsd-core/references/teaching-pattern.md` | the five-beat doctrine (how the coach teaches) | new |
+| `gsd-core/workflows/learn.md` | the inline teaching procedure the skill follows: load → select → teach → record | new |
+| `gsd-core/references/teaching-pattern.md` | the five-beat doctrine (how the main agent teaches a node) | new |
 | `gsd-core/references/learn-catalog.md` | the concept graph | **created** |
-| `agents/gsd-learning-coach.md` | reads a node's source section + profile → returns a structured five-beat lesson | new |
 | `~/.claude/gsd-core/LEARNING-PROGRESS.md` | per-user, cross-project progress state | new (runtime) |
 | `gsd-core/bin/gsd-tools.cjs` + `src/*.cts` | a `learn` query handler (catalog read, progress read/write) | extend |
 | `docs/INVENTORY.md` + `docs/INVENTORY-MANIFEST.json` | registration (+counts) | extend |
 | `.changeset/*.md` | release fragment (type: Added) | new |
 | `tests/learn-catalog-*.test.cjs` | catalog completeness + graph-acyclicity tests | new |
 
-## 5. Data flow
+## 5. Data flow (all inline, one context)
 
-1. **`/gsd:learn`** (workflow, main thread) loads the catalog, `USER-PROFILE.md`, and `LEARNING-PROGRESS.md`.
-2. **Selects** the concept(s) — by argument, by resume, or by walking prerequisite edges (§6).
-3. **Spawns `gsd-learning-coach`** per concept. The coach reads *only that node's cited source section* + the profile, and returns a **structured lesson object**: the five beats pre-rendered, the code-both-ways pair, 2–3 comprehension questions with expected discriminators, and an optional graphviz spec. Heavy reference reads stay out of the main thread.
-4. **Delivers it interactively** (main thread): renders beats 1–4; optionally opens the browser for `Visual` assets; runs beat 5 via `AskUserQuestion` and greps the learner's repo for their own example.
-5. **Records** completion + the **calibration lean** (did the learner over- or under-engineer the drill) to `LEARNING-PROGRESS.md`.
+1. **Invoke** `/gsd:learn` → the main agent loads the catalog, `USER-PROFILE.md`, and `LEARNING-PROGRESS.md` (all small).
+2. **Select** the concept(s) — by argument, by resume, or by walking prerequisite edges (§6).
+3. **Load on demand** *only* the source section(s) for the concept(s) in play (the catalog's `Source` pointers; read the section, not the whole file — per `context-budget.md`). The agent now holds the concept(s) in its own context.
+4. **Teach inline** through the five beats, conversationally — render beats 1–4, optionally open the browser for `Visual` assets, run beat 5 via `AskUserQuestion`, and grep the learner's repo for their own example.
+5. **Record** completion + the **calibration lean** (over/under/on-target) to `LEARNING-PROGRESS.md`.
 
-The orchestrator/coach split mirrors the existing GSD pattern (workflow routes; subagent does the heavy read). Per `universal-anti-patterns.md`, the workflow never reads agent definitions and never inlines large references into the coach prompt — it passes the node ID and the coach reads from disk.
+**Cross-concept teaching is the reason it's inline.** When the learner asks "how do architecture and testing fit together?", the agent loads *both* relevant nodes (`arch-when-to-use` and `test-shape-follows-arch`, which the catalog already links by prerequisite) and teaches the connection live — *"the test shape isn't a choice; it falls out of the architecture you just learned"* — in one continuous context. A subagent-per-concept design could not do this; it would return two isolated lessons that never meet. The agent also follows arbitrary follow-ups ("wait, why a fake and not a mock here?") without spawning anything, because every concept it has touched this session is still in context.
+
+Context stays bounded by reading **per-section, on demand** (the catalog is the index; references are read only when a concept is actually taught), not by farming reads out to subagents.
 
 ## 6. Entry modes
 
@@ -121,6 +122,7 @@ Reuse the superpowers mechanism (tiny local Node server watching a content dir +
 
 ## 13. Decisions locked during design
 
+- **Inline skill, not subagents** — teaching is conversational and cross-concept; the lesson must live in one context so the agent can connect concepts live and follow arbitrary follow-ups. Subagents would isolate each concept and defeat the purpose. (We build with subagents; we teach inline.)
 - **Concept first, then calibration** — both halves, in order. (Not calibration-only — that was the corrected misread.)
 - **Render the references; don't re-author** — one source of truth per concept; coherence is the product.
 - **84 nodes, 10 tracks, cross-linked not duplicated** — granularity matches the material (deep in Testing/Architecture/Security; tight in Code Quality).
