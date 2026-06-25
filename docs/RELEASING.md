@@ -52,6 +52,6 @@ npm run test:unit && npm run check:identity-drift && npm run lint
 # then release via the lightweight flow above (bump version, publish)
 ```
 
-`scripts/sync-upstream.sh` rewrites all six coordinate forms (`@opengsd/gsd-core`, its regex-escaped variant, `open-gsd/gsd-core` + escaped, the `opengsd-gsd-core` cache slug, and the `%40opengsd%2Fgsd-core` npm badge). Legacy `@opengsd/get-shit-done-*` / `@opengsd/gsd-sdk` migration refs are deliberately left intact.
+`scripts/sync-upstream.sh` rewrites all six coordinate forms (`@opengsd/gsd-core`, its regex-escaped variant, `open-gsd/gsd-core` + escaped, the `opengsd-gsd-core` cache slug, and the `%40opengsd%2Fgsd-core` npm badge). Legacy `@opengsd/get-shit-done-*` / `@opengsd/gsd-sdk` migration refs are deliberately left intact. <!-- gsd-allow-legacy-name -->
 
 > Never fast-forward `main` to `upstream/main` — it would drop our branding and skills. Always cherry-pick or rebase our commits onto the new base. See `docs/MAINTAINING-FORK.md`.
