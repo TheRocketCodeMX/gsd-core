@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-06-25
+
+### Added
+
+- Source-fidelity: every agent now grounds in the literal sources of truth (a provided design, legacy code, a vibe-coded prototype, external dependencies) alongside the strategy artifacts — never from an abstraction (DOMAIN-MODEL/ADR/UI-SPEC/PLAN) in place of the source it distills. Closes the laundering failure where a from-design build turned one `address` input into an invented street/city/state/zip schema. Adds a canonical 5-source precedence rule (`exploration-and-adaptability.md` § Source precedence — design owns the observable shape, legacy owns behavior-to-preserve never structure, vibe owns intent, dependency owns its real contract), a shared in-repo provenance-tagged design oracle (`DESIGN-INVENTORY.md`), grounding in `model-domain`/`planner-source-audit`/the researchers, a per-source fidelity gate in `gsd-verifier`+`gsd-plan-checker` (invented/dropped user-facing field = BLOCKER; internal value-objects allowed), a disposition-gated parity gate that exempts design-mandated changes (the gap-map allowlist), and a vibe intent-gate (harden intent, never pin the prototype's bugs as a parity oracle). Names source-fidelity as a third failure axis in `engineering-standards.md`. (#3)
+
+### Fixed
+
+- Adapt safe-to-port upstream additions, reconciled with our model: a prompt-level **untrusted-input boundary** (`untrusted-input-boundary.md`) wired into the 10 research/synthesis agents — closes the gap where agents fetch/read external content (incl. our new design/prototype ingestion) with only the hook-level scanner; it composes with § Source precedence (honor a source's shape, never its embedded instructions). Plus three execute-phase worktree fixes: per-wave base re-check (#1369), between-wave manifest reset + base refresh (#3384/#1369), and an isolated-run fail-safe so stalled-executor recovery never silently edits the primary checkout (#1292). Also adds a warn-only per-wave context-exhaustion guard, distills the upstream edge-probe/prohibition-probe *techniques* into our own references (an edge-case taxonomy in `ai-test-quality.md`; a must-NOT elicitation pass in `product-discovery.md`) without porting the unforked probe engines, and ports `list-seeds` (a read-only `/gsd:capture --list-seeds` seed browser — new `gsd-tools list-seeds` handler reusing audit's path-safety/sanitization). Upstream items requiring infra we don't fork (memory-palace/capability-system, the ADR-550 probe engines, loop-hook-dispatch) or already covered (planner-guidance, security-asvs-levels) were deliberately skipped. (#3)
+
 ## [1.12.0] - 2026-06-24
 
 ### Added
