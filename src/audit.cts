@@ -873,4 +873,90 @@ function formatAuditReport(auditResult: AuditResult): string {
   return lines.join('\n');
 }
 
-export = { auditOpenArtifacts, formatAuditReport };
+interface ListedSeed {
+  seed_id: string;
+  slug: string;
+  status: string;
+  scope: string;
+  trigger_when: string;
+  planted: string;
+  title: string;
+}
+
+/**
+ * List captured seeds from .planning/seeds/SEED-*.md for browsing/audit (#441,
+ * adapted from upstream open-gsd). Unlike `scanSeeds` (which returns only the
+ * *unimplemented* seeds for the milestone surface), this lists seeds of EVERY
+ * status with the richer fields the `list-seeds` workflow renders; an optional
+ * status filter narrows the set. Read-only. Seed content is user-controlled, so
+ * every path goes through `requireSafePath` and every field through
+ * `sanitizeForDisplay` — one malformed seed can never crash or poison the list.
+ */
+function listSeeds(cwd: string, statusFilter?: string): {
+  count: number;
+  seeds: ListedSeed[];
+  summary: Record<string, number>;
+} {
+  const planDir = planningDir(cwd);
+  const seedsDir = path.join(planDir, 'seeds');
+  const wantStatus = statusFilter ? statusFilter.trim().toLowerCase() : null;
+  const seeds: ListedSeed[] = [];
+  const summary: Record<string, number> = {};
+  const fmStr = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+  let files: fs.Dirent[];
+  try {
+    files = fs.readdirSync(seedsDir, { withFileTypes: true });
+  } catch {
+    // Seed dir is created lazily by the first plant-seed; absence is the zero case.
+    return { count: 0, seeds: [], summary: {} };
+  }
+
+  for (const entry of files) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith('SEED-') || !entry.name.endsWith('.md')) continue;
+
+    let safeFilePath: string;
+    try {
+      safeFilePath = requireSafePath(path.join(seedsDir, entry.name), planDir, 'seed file', { allowAbsolute: true });
+    } catch {
+      continue;
+    }
+    const content = platformReadSync(safeFilePath);
+    if (content === null) continue;
+
+    const fm = extractFrontmatter(content) as Record<string, unknown>;
+    const status = (fmStr(fm.status) || 'dormant').toLowerCase().trim() || 'dormant';
+    if (wantStatus && status !== wantStatus) continue;
+
+    // Canonical id is `SEED-NNN` (frontmatter `id:`); fall back to the filename's
+    // numeric prefix, then the whole stem. Slug is the descriptive remainder.
+    const stem = path.basename(entry.name, '.md');
+    const fmId = fmStr(fm.id).trim();
+    const seed_id = /^SEED-\d+$/i.test(fmId) ? fmId : (stem.match(/^(SEED-\d+)/i)?.[1] || stem);
+    const slugMatch = stem.match(/^SEED-\d+-(.+)$/i);
+    const slug = sanitizeForDisplay(slugMatch ? slugMatch[1] : stem.replace(/^SEED-/i, ''));
+
+    let title = sanitizeForDisplay(fmStr(fm.title).slice(0, 100));
+    if (!title) {
+      const headingMatch = content.match(/^#\s*(.+)$/m);
+      if (headingMatch) title = sanitizeForDisplay(headingMatch[1].trim().slice(0, 100));
+    }
+
+    seeds.push({
+      seed_id: sanitizeForDisplay(seed_id),
+      slug,
+      status: sanitizeForDisplay(status),
+      scope: sanitizeForDisplay(fmStr(fm.scope) || 'unknown'),
+      trigger_when: sanitizeForDisplay(fmStr(fm.trigger_when).slice(0, 80)),
+      planted: sanitizeForDisplay(fmStr(fm.planted)),
+      title,
+    });
+    summary[status] = (summary[status] || 0) + 1;
+  }
+
+  seeds.sort((a, b) => a.seed_id.localeCompare(b.seed_id));
+  return { count: seeds.length, seeds, summary };
+}
+
+export = { auditOpenArtifacts, formatAuditReport, listSeeds };

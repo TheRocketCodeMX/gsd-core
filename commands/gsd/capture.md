@@ -1,7 +1,7 @@
 ---
 name: gsd:capture
 description: Capture ideas, tasks, notes, and seeds to their destination
-argument-hint: "[--note | --backlog | --seed | --list] [text]"
+argument-hint: "[--note | --backlog | --seed | --list | --list-seeds] [text]"
 allowed-tools:
   - Read
   - Write
@@ -21,6 +21,7 @@ Mode routing:
 - **--backlog**: Add an idea to the backlog parking lot (999.x numbering) → add-backlog workflow
 - **--seed**: Capture a forward-looking idea with trigger conditions → plant-seed workflow
 - **--list**: List pending todos and select one to work on → check-todos workflow
+- **--list-seeds [status]**: Browse/audit captured seeds (read-only), optionally filtered by status → list-seeds workflow
 </objective>
 
 <routing>
@@ -32,6 +33,7 @@ Mode routing:
 | --backlog | ROADMAP.md backlog section (999.x) | add-backlog |
 | --seed | .planning/seeds/SEED-NNN-slug.md | plant-seed |
 | --list | Interactive todo browser + action router | check-todos |
+| --list-seeds | Read-only seed browser (.planning/seeds/) + optional status filter | list-seeds |
 
 </routing>
 
@@ -41,6 +43,7 @@ Mode routing:
 @~/.claude/gsd-core/workflows/add-backlog.md
 @~/.claude/gsd-core/workflows/plant-seed.md
 @~/.claude/gsd-core/workflows/check-todos.md
+@~/.claude/gsd-core/workflows/list-seeds.md
 @~/.claude/gsd-core/references/ui-brand.md
 </execution_context>
 

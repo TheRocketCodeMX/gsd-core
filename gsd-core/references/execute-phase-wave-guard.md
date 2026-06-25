@@ -1,3 +1,19 @@
+# Wave-start preflight guards
+
+Run both checks at the start of every wave, before spawning the wave's agents.
+
+0. **Context-exhaustion guard (#1452) — warn-only by design:**
+
+   Before spawning this wave's agents, self-assess context pressure using the degradation
+   signals in `@~/.claude/gsd-core/references/context-budget.md` (POOR-tier tells: increasing
+   vagueness, skipped steps, silent partial completion).
+   - **DEGRADING (≈50–70%):** emit `⚠ Context pressure DEGRADING — switching to frontmatter-only reads for remaining waves.` then continue.
+   - **POOR (≈70%+):** emit `🛑 Context pressure POOR — run /gsd:pause-work to checkpoint before this wave, then resume in a fresh session.` then continue — the user decides.
+
+   This guard is **heuristic** (no programmatic context-% API exists) and is deliberately
+   **warn-only**: it never auto-halts a wave, because auto-halting on a misjudged heuristic
+   would be worse than a false warning. Use your read of the degradation signals, not a token count.
+
 0.5. **Inter-wave worktree base re-check (wave N+1 guard — #1369):**
 
    After Wave N merges and tracking commits advance orchestrator HEAD, Claude Code's

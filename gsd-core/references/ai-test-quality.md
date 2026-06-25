@@ -14,6 +14,16 @@ For each public behavior in scope, enumerate — before writing a line of test c
 - illegal states / illegal transitions (state machines especially);
 - clock/concurrency cases wherever the strategy flags them.
 
+**Enumerate edges systematically — don't free-associate.** Walk each in-scope behavior through this closed checklist (the classic QA techniques — Boundary-Value Analysis, Equivalence Partitioning, the Category-Partition method, Metamorphic Relations — the failure mode is never "too few categories," it's *no taxonomy applied at all*). Each category that fits the behavior's data shape becomes an inventory row above:
+- **boundary** — exactly at each min/max/threshold, and one step either side.
+- **adjacency / touching** — when two things are exactly equal or just touch: merge, collide, or separate?
+- **empty / degenerate** — empty, single-element, or null input.
+- **encoding** — whose length/equality: bytes, code points, grapheme clusters, or normalized form?
+- **ordering / stability** — when elements compare equal, is output order specified and stable?
+- **precision / overflow** — where precision loss, overflow, or rounding can occur, and the exact contract (half-up vs half-to-even; ceil/floor/truncate)?
+- **idempotency** — what happens if it runs twice on the same input?
+- **concurrency / effect-ordering** — if interrupted or run in parallel, what is guaranteed?
+
 Tests map **1:1 to inventory rows** — every row gets a test; every test cites its row. A suite whose inventory is ≥80% happy-path rows is rejected at the plan-approval step, before generation. The inventory is the plan; "write some tests for this file" is not.
 
 ## B. Forbidden patterns (greppable — check before running the suite)

@@ -175,7 +175,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 
 ---
 
-## Workflows (97 shipped)
+## Workflows (98 shipped)
 
 Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that commands reference internally; most are not read directly by end users. Rows below map each workflow file to its role (derived from the `<purpose>` block) and, where applicable, to the command that invokes it.
 
@@ -244,6 +244,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `plan-phase.md` | Create executable PLAN.md files with integrated research and verification loop. | `/gsd-plan-phase`, `/gsd-quick` |
 | `plan-review-convergence.md` | Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. | `/gsd-plan-review-convergence` |
 | `plant-seed.md` | Capture a forward-looking idea as a structured seed file with trigger conditions. | `/gsd-capture --seed` |
+| `list-seeds.md` | Browse/audit captured seeds (read-only) with an optional status filter; renders id/status/scope/trigger/title via the `list-seeds` tool. | `/gsd-capture --list-seeds` |
 | `pr-branch.md` | Create a clean branch for pull requests by filtering `.planning/` commits. | `/gsd-pr-branch` |
 | `profile-user.md` | Orchestrate the full developer profiling flow — consent, session scan, profile generation. | `/gsd-profile-user` |
 | `progress.md` | Progress rendering — project context, position, and next-action routing. | `/gsd-progress` |

@@ -479,7 +479,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
 
 **For each wave:**
 
-0.5. **Wave base re-check (#1369):** @~/.claude/gsd-core/references/execute-phase-wave-guard.md
+0. **Wave-start guards (context budget + worktree base re-check, #1452/#1369):** @~/.claude/gsd-core/references/execute-phase-wave-guard.md
 
 1. **Intra-wave files_modified overlap check (BEFORE spawning):**
 

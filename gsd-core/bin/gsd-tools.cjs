@@ -376,7 +376,7 @@ async function main() {
   // discovery; previously it was a partial subset that didn't include
   // phase / roadmap / milestone / progress / etc.
   const TOP_LEVEL_USAGE = 'Usage: gsd-tools <command> [args] [--raw] [--pick <field>] [--cwd <path>] [--ws <name>] [--json-errors]\n' +
-    'Commands: agent, agent-skills, audit-open, audit-uat, check, check-commit, commit, commit-to-subrepo, ' +
+    'Commands: agent, agent-skills, audit-open, audit-uat, check, check-commit, commit, commit-to-subrepo, list-seeds, ' +
     'config-ensure-section, config-get, config-new-project, config-path, config-set, migrate-config, ' +
     'current-timestamp, detect-custom-files, docs-init, effort, extract-messages, find-phase, ' +
     'from-gsd2, frontmatter, gap-analysis, generate-claude-md, generate-claude-profile, ' +
@@ -1077,6 +1077,14 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
         // form (third arg) which core.output emits verbatim.
         core.output(null, true, formatAuditReport(result));
       }
+      break;
+    }
+
+    case 'list-seeds': {
+      // Read-only browse/audit of .planning/seeds/SEED-*.md (all statuses, richer
+      // fields than audit's scanSeeds). Optional status filter is args[1].
+      const { listSeeds } = require('./lib/audit.cjs');
+      core.output(listSeeds(cwd, args[1]), raw);
       break;
     }
 
