@@ -56,7 +56,7 @@ Full roster at `agents/gsd-*.md`. The "Primary doc" column flags whether [`docs/
 
 ---
 
-## Commands (76 shipped)
+## Commands (77 shipped)
 
 Full roster at `commands/gsd/*.md`. The groupings below mirror `docs/COMMANDS.md` section order; each row carries the command name, a one-line role derived from the command's frontmatter `description:`, and a link to the source file. `tests/command-count-sync.test.cjs` locks the count against the filesystem.
 
@@ -133,6 +133,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 |---------|------|--------|
 | `/gsd-progress` | Check project progress, show context, and route to next action; use `--next` to advance automatically or `--do` to run a freeform task. | [commands/gsd/progress.md](../commands/gsd/progress.md) |
 | `/gsd-capture` | Capture ideas, tasks, notes, and seeds — todo (default), `--note`, `--backlog`, `--seed`, or `--list` pending todos. | [commands/gsd/capture.md](../commands/gsd/capture.md) |
+| `/gsd-learn` | Learn the engineering concepts GSD enforces — concept first, then when/why — inline, profile-personalized, with an optional in-browser visual layer. | [commands/gsd/learn.md](../commands/gsd/learn.md) |
 | `/gsd-stats` | Display project statistics — phases, plans, requirements, git metrics, timeline. | [commands/gsd/stats.md](../commands/gsd/stats.md) |
 | `/gsd-pause-work` | Create context handoff when pausing work mid-phase. | [commands/gsd/pause-work.md](../commands/gsd/pause-work.md) |
 | `/gsd-resume-work` | Resume work from previous session with full context restoration. | [commands/gsd/resume-work.md](../commands/gsd/resume-work.md) |
@@ -175,7 +176,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 
 ---
 
-## Workflows (98 shipped)
+## Workflows (99 shipped)
 
 Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that commands reference internally; most are not read directly by end users. Rows below map each workflow file to its role (derived from the `<purpose>` block) and, where applicable, to the command that invokes it.
 
@@ -185,6 +186,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `add-phase.md` | Add a new integer phase to the end of the current milestone in the roadmap. | `/gsd-phase` (default) |
 | `add-tests.md` | Generate unit and E2E tests for a completed phase based on its artifacts. | `/gsd-add-tests` |
 | `add-todo.md` | Capture an idea or task that surfaces during a session as a structured todo. | `/gsd-capture` (default) |
+| `learn.md` | Inline five-beat teaching of the concept catalog (concept → how → when → why → practice); personalized, standalone, optional visual. | `/gsd-learn` |
 | `ai-integration-phase.md` | Orchestrate framework selection → AI research → domain research → eval planning into AI-SPEC.md. | `/gsd-ai-integration-phase` |
 | `analyze-dependencies.md` | Analyze ROADMAP.md phases for file overlap and semantic dependencies; suggest `Depends on` edges. | `/gsd-manager --analyze-deps` |
 | `audit-fix.md` | Autonomous audit-to-fix pipeline — run audit, parse, classify, fix, test, commit. | `/gsd-audit-fix` |
@@ -283,7 +285,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (96 shipped)
+## References (98 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -292,6 +294,8 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | Reference | Role |
 |-----------|------|
 | `checkpoints.md` | Checkpoint type definitions and interaction patterns. |
+| `learn-catalog.md` | The `/gsd-learn` concept graph — 84 nodes/10 tracks, each with its source reference, prerequisites, and visual flag. |
+| `teaching-pattern.md` | The five-beat teaching doctrine for `/gsd-learn` (concept → how → when → why → practice). |
 | `gates.md` | 4 canonical gate types (Confirm, Quality, Safety, Transition) wired into plan-checker and verifier. |
 | `model-profiles.md` | Per-agent model tier assignments. |
 | `model-profile-resolution.md` | Model resolution algorithm documentation. |
@@ -439,7 +443,7 @@ The `gsd-planner` agent is decomposed into a core agent plus reference modules t
 
 ---
 
-## CLI Modules (92 shipped)
+## CLI Modules (93 shipped)
 
 Full listing: `gsd-core/bin/lib/*.cjs`.
 
@@ -447,6 +451,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 |--------|----------------|
 | `active-workstream-store.cjs` | Workstream source precedence and selection (CLI `--ws` > `GSD_WORKSTREAM` env > stored pointer); name validation and environment propagation |
 | `adr-parser.cjs` | ADR decision parser for plan-phase ingest express path; normalizes section synonyms, parses status/decision/scope fences, and enforces status rejection gates |
+| `learn.cjs` | `/gsd:learn` backing — parses the concept catalog into a node graph and owns the user-global learning-progress state (catalog, node, progress-read, progress-update, next) |
 | `agent-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools agent` |
 | `artifacts.cjs` | Canonical artifact registry — known `.planning/` root file names; used by `gsd-health` W019 lint |
 | `audit.cjs` | Audit dispatch, audit open sessions, audit storage helpers |

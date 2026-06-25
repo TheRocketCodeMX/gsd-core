@@ -102,7 +102,7 @@ Cross-project (user-global) so progress follows the developer, mirroring `USER-P
 ## 9. Error & edge handling
 
 - **Runs standalone — no project required.** The curriculum (references), profile, and progress all live in `~/.claude/gsd-core/`, so `/gsd:learn` works in an empty directory or on a fresh machine. The full lesson (concept → how → when → why → practice on a constructed scenario) needs no repo. A junior who has never touched a codebase gets the complete lesson.
-- **No profile yet** → neutral defaults (concise depth, example-then-principle) + a one-line offer to run `/gsd:profile`.
+- **No profile yet** → neutral defaults (concise depth, example-then-principle) + a one-line offer to run `/gsd:profile-user`.
 - **Browser unavailable / headless** → graceful terminal-only render; `Visual` beats degrade to an ASCII sketch + prose.
 - **Unmet prerequisites** → offer the prereq chain; respect an explicit override.
 - **Catalog integrity** → `tests/learn-catalog-*.test.cjs` enforces the completeness contract: every `Source` resolves to a real reference section, every `Prereqs` ID exists, the graph is acyclic, no cross-track duplication. A drift here fails CI.

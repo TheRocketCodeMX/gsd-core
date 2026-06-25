@@ -31,7 +31,7 @@ gsd_run learn progress-read
 RESPONSE_LANG=$(gsd_run query config-get response_language 2>/dev/null || true)
 ```
 
-- If a profile exists, read `Learning Style` and `Explanation Depth` and apply them per `teaching-pattern.md` (order within a beat; depth). If `NO_PROFILE`, use neutral defaults (concise depth, example-then-principle) and offer once: "Run `/gsd:profile` so I can tailor this to how you learn."
+- If a profile exists, read `Learning Style` and `Explanation Depth` and apply them per `teaching-pattern.md` (order within a beat; depth). If `NO_PROFILE`, use neutral defaults (concise depth, example-then-principle) and offer once: "Run `/gsd:profile-user` so I can tailor this to how you learn."
 - If `RESPONSE_LANG` is non-empty, all user-facing prose is in that language; technical terms, code, file paths, and node ids stay in English.
 
 **Text mode:** set `TEXT_MODE=true` if `--text` is in `$ARGUMENTS`. When active, replace every `AskUserQuestion` below with a plain-text numbered list.
