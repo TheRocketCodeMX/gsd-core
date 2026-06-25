@@ -6,6 +6,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { cleanup } = require('./helpers.cjs');
 
 const TOOLS_PATH = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
 
@@ -68,14 +69,14 @@ describe('learn progress', () => {
     assert.match(fileText, /# Learning Progress/);
     assert.match(fileText, /```json/);
 
-    fs.rmSync(dir, { recursive: true, force: true });
+    cleanup(dir);
   });
 
   test('progress-update without --id returns an error shape', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-learn-'));
     const r = runLearn(['progress-update', '--status', 'completed'], { GSD_LEARN_PROGRESS_DIR: dir });
     assert.match(r.error, /--id required/);
-    fs.rmSync(dir, { recursive: true, force: true });
+    cleanup(dir);
   });
 });
 
@@ -85,7 +86,7 @@ describe('learn next', () => {
     const n = runLearn(['next'], { GSD_LEARN_PROGRESS_DIR: dir });
     assert.ok(n.id, 'returns a node id');
     assert.equal(n.prereq_chain.filter(Boolean).length, 0, 'an entry node (no prereqs) comes first');
-    fs.rmSync(dir, { recursive: true, force: true });
+    cleanup(dir);
   });
 
   test('next skips completed nodes and respects prereqs', () => {
@@ -95,6 +96,6 @@ describe('learn next', () => {
     runLearn(['progress-update', '--id', first.id, '--status', 'completed', '--lean', 'on-target'], env);
     const second = runLearn(['next'], env);
     assert.notEqual(second.id, first.id, 'a completed node is not re-suggested');
-    fs.rmSync(dir, { recursive: true, force: true });
+    cleanup(dir);
   });
 });

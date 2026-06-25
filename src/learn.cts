@@ -108,7 +108,8 @@ function readProgress(): Progress {
   const m = text.match(/```json\s*([\s\S]*?)```/);
   if (!m) return emptyProgress();
   try {
-    return { ...emptyProgress(), ...JSON.parse(m[1]) };
+    const parsed = JSON.parse(m[1]) as Partial<Progress>;
+    return { ...emptyProgress(), ...parsed };
   } catch {
     return emptyProgress();
   }
