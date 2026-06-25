@@ -72,6 +72,16 @@ score: N/M must-haves verified
 
 **Anti-patterns:** {N} found ({blockers} blockers, {warnings} warnings)
 
+## Mode & Source Fidelity
+
+Record the per-source gate verdicts so they are auditable, not buried in prose (omit a row only when its source is absent). See `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence.
+
+| Gate | Applies when | Verdict | Evidence |
+|------|--------------|---------|----------|
+| Design-fit | `## Mode` records a provided design AND the phase creates/changes any field that backs a covered surface (schema column, DTO/contract, or UI field — not only UI phases) | ✓ PASS / 🛑 BLOCKER (invented or dropped user-facing field vs the oracle) / N/A — no field backs a covered surface | {diff of built field names (migration/model/DTO/UI) vs `.planning/DESIGN-INVENTORY.md` user-facing fields + `Backs` column / UI-SPEC} |
+| Mode-fit (parity) | Origin = rewrite-refactor, *preserve/refactor* regions | ✓ PASS / 🛑 BLOCKER (behavior drift, no recorded design-delta) / N/A | {characterization/parity evidence} |
+| Mode-fit (vibe intent) | Code-quality = vibe-coded-to-harden | ✓ PASS / 🛑 BLOCKER (intent lost / not hardened to rung) / N/A | {intent preserved + hardened, not bug-parity} |
+
 ## Human Verification Required
 
 {If no human verification needed:}

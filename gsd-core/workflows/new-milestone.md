@@ -186,6 +186,7 @@ This is the **warm-start** strategy recommender (the new-project Step 7.6 equiva
 - **new bounded context / domain shift** → `/gsd:model-domain` + `/gsd:recommend-architecture`
 - **deploy target / data layer / pipeline change** → `/gsd:infrastructure-strategy` / `/gsd:cicd-strategy`
 - **rewrite/refactor of an existing area** → `/gsd:legacy-inventory` first (requirements = design ∪ old-behavior)
+- **ships to a provided design / new designed surface** → record `## Mode` Design-input and run `/gsd:model-domain` (or `/gsd:frontend-architecture` for a frontend surface) so `.planning/DESIGN-INVENTORY.md` (the field oracle) is written before the milestone's roadmap locks; derive requirements from design ∪ vision (lift its literal user-facing fields, never generalize)
 - **production-readiness / hardening** (a working app → production-grade) → the **hardening playlist** (members defined once in `strategy-flow.md`'s Overlays — characterize → seam → secure → observe → CI gate; don't restate them here)
 
 **Re-surface ledgered skips:** if `## Strategy Plan`'s skip-ledger records a step that this milestone's scope now makes relevant (e.g. a previously-skipped `frontend-architecture` and this milestone adds a frontend), re-offer it. If nothing applies, note "strategy artifacts still fit this milestone" and continue. The strategy decisions are project-wide and must stay valid as scope evolves.

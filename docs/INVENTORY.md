@@ -175,7 +175,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 
 ---
 
-## Workflows (97 shipped)
+## Workflows (98 shipped)
 
 Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that commands reference internally; most are not read directly by end users. Rows below map each workflow file to its role (derived from the `<purpose>` block) and, where applicable, to the command that invokes it.
 
@@ -244,6 +244,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `plan-phase.md` | Create executable PLAN.md files with integrated research and verification loop. | `/gsd-plan-phase`, `/gsd-quick` |
 | `plan-review-convergence.md` | Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. | `/gsd-plan-review-convergence` |
 | `plant-seed.md` | Capture a forward-looking idea as a structured seed file with trigger conditions. | `/gsd-capture --seed` |
+| `list-seeds.md` | Browse/audit captured seeds (read-only) with an optional status filter; renders id/status/scope/trigger/title via the `list-seeds` tool. | `/gsd-capture --list-seeds` |
 | `pr-branch.md` | Create a clean branch for pull requests by filtering `.planning/` commits. | `/gsd-pr-branch` |
 | `profile-user.md` | Orchestrate the full developer profiling flow — consent, session scan, profile generation. | `/gsd-profile-user` |
 | `progress.md` | Progress rendering — project context, position, and next-action routing. | `/gsd-progress` |
@@ -282,7 +283,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (93 shipped)
+## References (96 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -310,6 +311,7 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | `frontend-architecture.md` | The FE half of the architecture doctrine — floor/rungs/triggers, state management, rendering, design-system + insulation; the FE side of the seam. |
 | `fe-be-seam.md` | The frontend↔backend contract + error contract (machine-code + trace-id + fault-masking; HTTP/gRPC/event bindings) + CORS/CSRF-by-auth + the responsibility split. |
 | `application-telemetry.md` | App-level logging (incl. dev/prod policy), FE↔BE trace correlation without duplication, and product-analytics taxonomy; distinct from infra's ops floor. |
+| `untrusted-input-boundary.md` | Prompt-level injection-defense boundary for agents that fetch/read external content — treat fetched/source text as untrusted data, never instructions; composes with § Source precedence (honor a source's shape, never its embedded commands). |
 | `security-posture.md` | App-wide security posture — ASVS-by-context, the data-protection floor + trigger-rungs, the regime master-switch, authz model + auth methods, the threat-model parent. |
 | `ui-brand.md` | Visual output formatting patterns. |
 | `common-bug-patterns.md` | Common bug patterns for code review and verification. |
@@ -347,6 +349,8 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | `executor-examples.md` | Worked examples for the gsd-executor agent. |
 | `doc-conflict-engine.md` | Shared conflict-detection contract for ingest/import workflows. |
 | `execute-mvp-tdd.md` | Runtime gate semantics for execute-phase under MVP+TDD — pre-task failing-test verification, end-of-phase blocking review. |
+| `execute-phase-wave-guard.md` | Per-wave worktree base re-check (#1369) — re-degrade to sequential when wave merges advance HEAD past the worktree fork base, avoiding base-mismatch halts. |
+| `execute-phase-between-wave-reset.md` | Between-wave manifest reset + worktree base refresh (#3384, #1369) — unset the consumed wave manifest and re-assert the live-HEAD fork base before the next wave. |
 | `mvp-concepts.md` | Cross-reference index for the six MVP-related reference files; maps each file to its purpose and which workflow loads it. |
 | `verify-mvp-mode.md` | UAT framing rules for MVP-mode phases — user-flow-first ordering, deferred technical checks, user-story-format guard. |
 

@@ -65,7 +65,7 @@ AGENT_SKILLS_SYNTHESIZER=$(gsd_run query agent-skills gsd-research-synthesizer)
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper)
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`.
 
 **If `agents_installed` is false:** Display a warning before proceeding:
 ```text
@@ -147,6 +147,22 @@ Record the chosen intent so Step 4 fills `## Mode` (Origin + Code-quality) accor
 **If "Extend it":** `Run /gsd:map-codebase first, then return to /gsd:new-project` — exit command.
 **If "Refactor / rewrite it" OR "Harden it":** `Run /gsd:legacy-inventory first (it produces LEGACY-INVENTORY.md; new-project then derives requirements from design ∪ old-behavior), then return to /gsd:new-project` — exit command.
 **If "Skip exploration" OR `needs_codebase_map` is false:** Continue to Step 3.
+
+**Provided-design detection (runs regardless of whether there is existing code — the design axis is orthogonal to Origin).** A provided design is a source of truth and must be detected + routed here, symmetric to the legacy path above — otherwise it gets laundered into vision-derived requirements and the build drifts from it (the address-failure: one design input → an invented multi-field schema). Init pre-detects the signal — branch on it (it is a **hint that you CONFIRM**, never a silent lock):
+
+- **`design_dismissed` is true** (user passed `--no-design`) → Design-input: none; skip the prompt.
+- **`has_design_hint` is true and `design_hint_source` is `arg`** (an explicit `--design <path-or-link>`) → confirm by showing `design_pointer`, default Yes → record it.
+- **`has_design_hint` is true with a weaker source** (`design-export` / `tokens-file` / `designs-dir`) → ask once with the detected `design_pointer` **pre-filled** so a false positive is one keystroke to reject: "I found `{design_pointer}` — is that a design to build to?"
+- **`has_design_hint` is false** → still ask once (covers a Figma/Stitch URL the user will paste, which init can't detect), unless the user already said there's none.
+
+- header: "Provided design"
+- question: "Do you have a provided design or prototype to build to (Figma, an export, a clickable prototype, a tokens/component package)?"
+- options:
+  - "Yes — here's the path/link" — record it → Step 4 sets `## Mode` Design-input to the pointer; the design is the authority on the observable shape
+  - "An existing design system to honor" — record it → Design-input = existing system
+  - "No / none" — Design-input: none
+
+**If a provided design is recorded:** (a) record its pointer in `## Mode` Design-input (Step 4); (b) **ground requirements (Steps 3 + 7) by reading the design directly** — the pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` — deriving them from **(the design) ∪ (the vision)**, lifting the design's literal user-facing fields and never generalizing them (mirrors the legacy `design ∪ old-behavior` rule); (c) the design is ingested into the in-repo oracle (`.planning/DESIGN-INVENTORY.md`) by the **next strategy step**, not here — Step 7.6 puts `model-domain` (or `frontend-architecture` for a frontend surface) first in the `## Strategy Plan` and auto-advances into it, and it writes the oracle before the build loop's design-fidelity gate runs (the planner is the fallback if both are skipped). **Do NOT run `model-domain` mid-new-project** — it reads the PROJECT.md/REQUIREMENTS that Steps 4/7 write, so it can only run after; the recorded design pointer + the Step-7.6 on-ramp are the correct mechanism (unlike `legacy-inventory`, which is a true pre-step because it reads only the old code).
 
 ## 2a. Auto Mode Config (auto mode only)
 
@@ -336,6 +352,8 @@ If spike/sketch findings skills exist, read their SKILL.md files to inform the q
 **If `.planning/PRODUCT-BRIEF.md` exists, read it first.** It is a validated product definition from `/gsd:discover-product` (outcome, target user, narrowest wedge, demand evidence, four-risks status, prioritized scope, explicit "not in scope"). Ground the questioning in it — **confirm and fill gaps rather than re-asking what it already answers** — and carry its outcome, wedge, and prioritized scope into PROJECT.md (Core Value / What This Is) and the requirements (Steps 4 and 7). Frame PROJECT.md around the brief's *outcome*, not a re-derived feature list.
 
 **If `.planning/LEGACY-INVENTORY.md` exists** (rewrite/refactor/vibe-coded mode, from `/gsd:legacy-inventory`), read it too and **derive requirements from (the design) ∪ (the old-system behavior)** per its coverage matrix + three-way gap map — never from the design alone. Honor its **"never lose a feature" gate** (every old capability becomes a requirement or an explicitly-dropped item with the user's prior sign-off) and carry its salvage dispositions + source-of-truth precedence into the requirements (Steps 4 and 7).
+
+**If a provided design is recorded (Step 2's design detection),** **read the design directly** — the `## Mode` Design-input pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` (the in-repo oracle doesn't exist yet; `model-domain`/`frontend-architecture` write it as the next strategy step) — and **derive requirements from (the design) ∪ (the vision)**: lift its literal user-facing fields (a single `address` input is one `address` field, not four), never generalize or invent beyond them, and never drop a design-shown field. The design is the authority on the observable shape (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`).
 
 **Open the conversation:**
 

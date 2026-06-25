@@ -479,6 +479,8 @@ increases monotonically across waves. `{status}` is `complete` (success),
 
 **For each wave:**
 
+0. **Wave-start guards (context budget + worktree base re-check, #1452/#1369):** @~/.claude/gsd-core/references/execute-phase-wave-guard.md
+
 1. **Intra-wave files_modified overlap check (BEFORE spawning):**
 
    Before spawning any agents for this wave, inspect the `files_modified` list of all plans
@@ -740,7 +742,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
    for activity. If no completion signal, no SUMMARY.md, and no expected-branch
    commits appear for `${EXECUTOR_STALL_THRESHOLD_MINUTES}` minutes, pause and
    ask for one recovery path: `continue waiting`, `kill and retry`, or
-   `kill and switch to inline execution`.
+   `kill and switch to inline execution`. **#1292 fail-safe:** in a worktree-isolated run (`USE_WORKTREES != "false"`) inline execution edits the PRIMARY checkout — never default to it (explicit confirm only); prefer `kill and retry` in a fresh worktree.
 
    **This fallback applies automatically to all runtimes.** Claude Code's Agent() normally
    returns synchronously, but the fallback ensures resilience if it doesn't.
@@ -983,6 +985,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
     - `## Cross-Plan Wiring Gap` with plan/link/from/pattern rows
     - Options: investigate+fix before continue, or continue with cascade risk
     Skip key-links that reference files in the CURRENT (upcoming) wave.
+7c. **Between-wave reset (#3384, #1369):** @~/.claude/gsd-core/references/execute-phase-between-wave-reset.md
 8. **Execute checkpoint plans between waves** — see `<checkpoint_handling>`.
 9. **Proceed to next wave.**
 </step>
@@ -1412,6 +1415,7 @@ Read these files before verification:
 - {phase_dir}/*-PLAN.md (All plans — understand intent, check must_haves)
 - {phase_dir}/*-SUMMARY.md (All summaries — cross-reference claimed vs actual)
 - .planning/REQUIREMENTS.md (Requirement traceability)
+- .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle — REQUIRED input for the Design-fit check when `## Mode` records a provided design; diff the built observable shape against these, never the raw design)
 ${CONTEXT_WINDOW >= 500000 ? `- {phase_dir}/*-CONTEXT.md (User decisions — verify they were honored)
 - {phase_dir}/*-RESEARCH.md (Known pitfalls — check for traps)
 - Prior VERIFICATION.md files from earlier phases (regression check)

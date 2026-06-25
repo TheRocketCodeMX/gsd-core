@@ -43,6 +43,8 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 
 **Brownfield mode (existing architecture).** Greenfield (recommend the target from scratch) is the default. Trigger brownfield when the `## Mode` block (cat'd in Step 2) records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — existing code / `map-codebase` maps are present: **assess the current topology first and recommend an evolution path** — never impose a from-scratch ideal on the running system (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`). When `## Mode` Code-quality = vibe-coded-to-harden, treat the existing topology as *under-engineered by default* — the meta-tell (Step 5) should expect missing seams/tests and recommend raising rungs, not honoring the prototype's shortcuts as intentional.
 
+**Design-provided mode.** When `query project mode` reports a provided design, the design's structural facts (entity/field shapes, screens→module mapping) are already lifted into `DOMAIN-MODEL.md` / `DESIGN-INVENTORY.md` by `model-domain`; consume them for the module map (Step 4.5) and the seam (Step 5.5) — the design is the authority on the **observable** structure. If `DOMAIN-MODEL.md` is thin and a provided design exists, read it per `@~/.claude/gsd-core/references/design-ingestion.md` before deciding the module map rather than inventing one. DDD still owns the *internal* rung per subdomain (§ Source precedence) — don't let the design's screen count dictate the persistence schema or the Axis-A rung.
+
 ```bash
 ls .planning/codebase/ARCHITECTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```

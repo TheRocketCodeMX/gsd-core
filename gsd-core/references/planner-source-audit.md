@@ -16,14 +16,24 @@ RESEARCH  | —       | Rate limiting on auth routes | 01    | COVERED   |
 RESEARCH  | —       | Refresh token rotation       | NONE  | ⚠ MISSING | No plan covers this
 CONTEXT   | D-01    | Use jose library for JWT     | 02    | COVERED   |
 CONTEXT   | D-04    | 15min access / 7day refresh  | 02    | COVERED   |
+DESIGN    | address | one address input (design)   | 02    | COVERED   |
 ```
 
-### Four Source Types
+### Five Source Types
 
 1. **GOAL** — The `goal:` field from ROADMAP.md for this phase. The primary success condition.
 2. **REQ** — Every REQ-ID in `phase_req_ids`. Cross-reference REQUIREMENTS.md for descriptions.
 3. **RESEARCH** — Technical approaches, discovered constraints, and features identified in RESEARCH.md. Exclude items explicitly marked "out of scope" or "future work" by the researcher.
 4. **CONTEXT** — Every D-XX decision from CONTEXT.md `<decisions>` section.
+5. **DESIGN** — *Only when PROJECT.md `## Mode` records a provided design (`gsd-tools query project mode` → `has_provided_design: true`).* The literal design is a source of truth, not just the abstractions above — re-ground the plan's data shape/contract/screens in the design **oracle** (`.planning/DESIGN-INVENTORY.md`'s user-facing-field list, or the phase UI-SPEC), per `@~/.claude/gsd-core/references/design-ingestion.md` and `exploration-and-adaptability.md` § Source precedence. If no oracle exists yet (model-domain was skipped), ingest the design slice this phase needs and record `.planning/DESIGN-INVENTORY.md` (from `gsd-core/templates/design-inventory.md`) before finalizing — so the plan, and the downstream gate, have an in-repo oracle to check.
+
+### Design fidelity (the address-failure guard)
+
+When DESIGN is an active source, audit the plan's **observable shape** against the oracle — this is what prevents "one `address` input" becoming an invented `street/city/state/zip`:
+- A planned **user-facing** field present in **neither the design nor requirements** is an **invention → ⚠ gap** (don't finalize). The design is the authority on the observable field set: don't add fields it lacks, don't drop fields it shows.
+- DDD/strategy owns only the **internal** modeling of those fields — a rich value object, normalization, or a column split that doesn't change the captured/observable shape is **fine**, not a gap.
+- A field the **requirements** need but the design under-showed is **kept** (it's design ∪ requirements), tagged `source: requirement` in the oracle — never silently dropped.
+`gsd-plan-checker` re-checks this at plan time and `gsd-verifier` at build time; surfacing it here stops the drift before execution burns context.
 
 ### What is NOT a Gap
 

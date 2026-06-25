@@ -926,7 +926,7 @@ Planner prompt:
 - {verification_path} (Verification Gaps - if --gaps)
 - {uat_path} (UAT Gaps - if --gaps)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews)
-- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists)
+- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists) and `.planning/DESIGN-INVENTORY.md` (the design field oracle, if exists). **From-design:** when `## Mode` records a provided design, the design is the authority on the observable shape — match the oracle's user-facing fields (don't invent/drop; internal value-objects are fine; see `planner-source-audit.md`'s DESIGN source). If a provided design exists but no oracle file is present yet, ingest the design slice this phase needs and write `.planning/DESIGN-INVENTORY.md` before finalizing the data shape.
 - {SPIKE_FINDINGS_PATH} (Spike Findings — validated patterns, constraints, landmines from experiments, if exists)
 - {SKETCH_FINDINGS_PATH} (Sketch Findings — validated design decisions, CSS patterns, visual direction, if exists)
 - {API_SURFACE_PATH} (API Surface — HINT ONLY, if intel.enabled; see <intel_surface_hint> below)
@@ -1271,6 +1271,7 @@ Checker prompt:
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
 - {research_path} (Technical Research — includes Validation Architecture)
+- .planning/DESIGN-INVENTORY.md and {PHASE_DIR}/*-UI-SPEC.md (the design oracle — REQUIRED input for the design-fidelity check when `## Mode` records a provided design)
 </files_to_read>
 
 ${AGENT_SKILLS_CHECKER}

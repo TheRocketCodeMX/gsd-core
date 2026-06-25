@@ -46,14 +46,15 @@ Each explorer returns load-bearing claims with `file:line` citations + an **hone
 
 ## Step 4: Three-way gap map
 
-Reconcile **design (intended) × old-code (actually built) × requirements (planned)** into four buckets:
-- **in old, not in design** → missed requirement or intentional drop? (the dangerous bucket — signing/messaging/admin hide here)
-- **in design, not in old** → genuinely new
-- **in both** → salvage-candidate
-- **in neither, but needed** → gap
-**"Never lose a feature" gate:** every capability in the matrix must land in a requirement OR be explicitly dropped with the user's sign-off (AskUserQuestion). Without a new design, the map is two-way (old-behavior × new-structure).
+Reconcile **design (intended) × old-code (actually built) × requirements (planned)** into the buckets in `@~/.claude/gsd-core/templates/legacy-inventory.md`'s gap-map table, and fill the **Parity disposition** column for each capability — it is the allowlist the build-loop gates read:
+- **in old, not in design** → missed requirement or intentional drop? (the dangerous bucket — signing/messaging/admin hide here) → `preserve` if kept, else `dropped`
+- **in design, not in old** → genuinely new → `new`
+- **in both, behavior preserved** → salvage-candidate the design keeps as-is → `preserve`
+- **in both, design changes this** → the new design reworks its flow/UX → `design-delta` (parity-exempt; design-fidelity governs it — a design-mandated change is not behavior drift)
+- **in neither, but needed** → gap → `new`
+**"Never lose a feature" gate:** every capability in the matrix must land in a requirement OR be explicitly dropped with the user's sign-off (AskUserQuestion). Without a new design, the map is two-way (old-behavior × new-structure) and there is no `design-delta`; vibe-coded regions are tagged `harden-intent`.
 
-**Source-of-truth precedence (apply to every conflict, no oscillation):** locked design wins on UX/scope/structure; the canonical spec (role bible / domain spec) wins on domain facts (roles, entities); the old code is the authority on what was actually built + hidden behavior (wins on "is this real?") — never on quality/structure.
+**Source-of-truth precedence (apply to every conflict, no oscillation):** the canonical statement is `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence — locked design wins on observable shape/UX/scope; the canonical spec on domain facts (roles, entities); the old code is the authority on what was actually built + hidden behavior (wins on "is this real?") — never on quality/structure.
 
 ## Step 5: Salvage dispositions + characterization gates
 

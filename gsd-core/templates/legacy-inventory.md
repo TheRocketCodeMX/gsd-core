@@ -28,14 +28,17 @@
 
 ## Three-way gap map (design × old-code × requirements)
 
-| Bucket | Items | Decision |
-|---|---|---|
-| **In old, not in design** (the dangerous bucket) | [capabilities the old app has that the design under-shows] | [keep = missed requirement / drop with sign-off] |
-| **In design, not in old** | [genuinely new] | build |
-| **In both** | [salvage-candidates] | see dispositions |
-| **In neither, but needed** | [gaps] | build |
+The **Parity disposition** column is the machine-readable allowlist the build-loop gates read (`gsd-plan-checker`, `gsd-verifier`): `preserve` → behavior-parity required · `design-delta` → parity-EXEMPT, design-fidelity required instead (design wins on shape; a design-mandated change is not drift) · `harden-intent` → vibe region: harden the intent, no behavior-parity · `new` → no old behavior · `dropped` → recorded drop.
 
-*(Without a new design: two-way — old-behavior × new-structure.)*
+| Bucket | Items | Decision | Parity disposition |
+|---|---|---|---|
+| **In old, not in design** (the dangerous bucket) | [capabilities the old app has that the design under-shows] | [keep = missed requirement / drop with sign-off] | preserve (if kept) / dropped |
+| **In design, not in old** | [genuinely new] | build | new — design-fidelity only |
+| **In both — behavior preserved** | [salvage-candidates the design keeps as-is] | see dispositions | preserve |
+| **In both — design changes this** | [salvage-candidates whose flow/UX the new design reworks] | build to the design | design-delta (parity-exempt) |
+| **In neither, but needed** | [gaps] | build | new — design-fidelity only |
+
+*(Without a new design: two-way — old-behavior × new-structure; dispositions are `preserve` / `harden-intent` / `new` / `dropped` — there is no `design-delta`.)*
 
 ## Salvage dispositions (per subsystem — default Rebuild)
 
@@ -55,4 +58,4 @@ FE is always rewritten to the new design. BE logic salvaged = adapted onto the *
 
 ## Source-of-truth precedence (for the conflicts found)
 
-Locked design wins on UX/scope/structure · canonical spec wins on domain facts (roles/entities) · old code is the authority on actual + hidden behavior (never on quality/structure). [Record the conflicts resolved by this rule.]
+Resolve every conflict by `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence (canonical): the locked design wins on **observable shape** (UX/scope/user-facing fields — *not* the internal/persistence structure, which is DDD's); the canonical spec on domain facts (roles/entities); the old code is the authority on actual + hidden behavior (never on quality/structure). [Record the conflicts resolved by this rule.]

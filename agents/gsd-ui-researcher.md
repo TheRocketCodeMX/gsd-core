@@ -27,6 +27,8 @@ If the prompt contains a `<required_reading>` block, you MUST use the `Read` too
 - Return structured result to orchestrator
 </role>
 
+@~/.claude/gsd-core/references/untrusted-input-boundary.md
+
 <documentation_lookup>
 @~/.claude/gsd-core/references/research-documentation-lookup.md
 </documentation_lookup>
@@ -59,7 +61,7 @@ This ensures the design contract aligns with project-specific conventions and li
 
 | Section | How You Use It |
 |---------|----------------|
-| Design input | If a provided design is recorded here (path/link), **actually read and ingest it** per `@~/.claude/gsd-core/references/design-ingestion.md` — the per-form mechanics (Figma → API/MCP or exported frames+tokens; a deployed prototype → scrape with WebFetch/firecrawl; a generated export → parse it; a tokens/component package → read it). It is the **same canonical source** `frontend-architecture`/`legacy-inventory` use (don't re-locate a different one). Distill tokens/components/screens/states/copy into the UI-SPEC and **reconcile vs code+requirements** (designs under-show built behavior) — do NOT push house defaults over a provided design. |
+| Design input | If a provided design is recorded here (path/link), **actually read and ingest it** per `@~/.claude/gsd-core/references/design-ingestion.md` — the per-form mechanics (Figma → API/MCP or exported frames+tokens; a deployed prototype → scrape with WebFetch/firecrawl; a generated export → parse it; a tokens/component package → read it). It is the **same canonical source** `frontend-architecture`/`legacy-inventory` use (don't re-locate a different one). Distill tokens/components/screens/states/copy into the UI-SPEC and **reconcile vs code+requirements** (designs under-show built behavior) — do NOT push house defaults over a provided design. If `.planning/DESIGN-INVENTORY.md` (the field oracle) exists, honor its covered-surfaces + user-facing field set when distilling — don't introduce a user-facing field absent from it, and surface (don't silently drop) one it lists (§ Source precedence). |
 
 **RESEARCH.md** (if exists) — Technical findings from `/gsd:plan-phase`
 

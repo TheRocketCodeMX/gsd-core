@@ -273,22 +273,22 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
 
   // ── empty-legacy-runtime-dir (#1.7.3) ──────────────────────────────────────
 
-  test('flags an EMPTY legacy get-shit-done runtime dir', () => {
+  test('flags an EMPTY legacy get-shit-done runtime dir', () => { // gsd-allow-legacy-name
     // Empty directory tree left behind after a migration deleted its files.
-    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'workflows'), { recursive: true });
-    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'workflows'), { recursive: true }); // gsd-allow-legacy-name
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'bin'), { recursive: true }); // gsd-allow-legacy-name
 
     const plan = planLegacyCleanup([configDir], { homeDir });
-    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done'));
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done')); // gsd-allow-legacy-name
     assert.ok(entry, 'expected empty legacy runtime dir to appear in plan');
     assert.equal(entry.reason, 'empty-legacy-runtime-dir');
   });
 
-  test('does NOT flag a legacy get-shit-done dir that still contains a file', () => {
-    writeFile(path.join(configDir, 'get-shit-done', 'workflows', 'leftover.md'), '# still here');
+  test('does NOT flag a legacy get-shit-done dir that still contains a file', () => { // gsd-allow-legacy-name
+    writeFile(path.join(configDir, 'get-shit-done', 'workflows', 'leftover.md'), '# still here'); // gsd-allow-legacy-name
 
     const plan = planLegacyCleanup([configDir], { homeDir });
-    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done'));
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done')); // gsd-allow-legacy-name
     assert.equal(entry, undefined, 'a non-empty legacy runtime dir must never be flagged');
   });
 
@@ -408,7 +408,7 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
   // ── empty-legacy-runtime-dir apply (#1.7.3) ────────────────────────────────
 
   test('apply removes an EMPTY legacy runtime dir (recursively) and reports it removed', () => {
-    const legacyDir = path.join(configDir, 'get-shit-done');
+    const legacyDir = path.join(configDir, 'get-shit-done'); // gsd-allow-legacy-name
     fs.mkdirSync(path.join(legacyDir, 'workflows'), { recursive: true });
     fs.mkdirSync(path.join(legacyDir, 'bin'), { recursive: true });
 
@@ -425,7 +425,7 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
   test('apply re-verify guard: a legacy dir that gained a file after planning is NOT deleted', () => {
     // Hand-craft a plan entry pointing at a dir that is NOT empty, to exercise
     // the apply-time re-verification guard directly (defends against TOCTOU).
-    const legacyDir = path.join(configDir, 'get-shit-done');
+    const legacyDir = path.join(configDir, 'get-shit-done'); // gsd-allow-legacy-name
     const survivor  = path.join(legacyDir, 'workflows', 'appeared-after-scan.md');
     writeFile(survivor, '# created between scan and apply');
 
