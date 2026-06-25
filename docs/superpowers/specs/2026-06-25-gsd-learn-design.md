@@ -20,15 +20,17 @@ The two halves, in order, are non-negotiable:
 
 ## 2. The teaching pattern (the engine)
 
-Every node is taught through five beats — the doctrine analog of `engineering-standards.md`, recorded in a new reference `teaching-pattern.md`. Each beat's content is *derived from the node's `Source` section*, never invented:
+Every node is taught through five beats — the doctrine analog of `engineering-standards.md`, recorded in a new reference `teaching-pattern.md`. Each beat's content is *derived from the node's `Source` section*, never invented. The arc is **what it is → how to build it → when to build it (and when not) → why → make it yours**:
 
-1. **Concept** — what it actually is, defined once and clearly; names and dispels the common confusions (e.g. hexagonal = clean = onion; mock ≠ spy ≠ stub ≠ fake ≠ dummy). → the skill's definitions.
-2. **When to use what** — the calibration: floor, rungs, triggers, both-direction tells. → the skill's decision rules.
-3. **Why** — the justification and the real evidence (K8s at 8–13% utilization; flakiness across 4.2M tests; the wrong abstraction costing more than duplication). → the skill's basis.
-4. **How the framework builds with it** — how it shows up in GSD's own build flow, coherent with neighboring concepts. → the skill's consumes/produces + gates.
-5. **Apply** — code both ways (scalable-vs-not / secure-vs-not), then *the learner's own repo* (grep for a real instance), then a short comprehension check.
+1. **Concept** — what it actually is, defined once and clearly; names and dispels the common confusions (hexagonal = clean = onion; mock ≠ spy ≠ stub ≠ fake ≠ dummy). → the skill's definitions.
+2. **How to implement it** — the concrete construction, with the reference's real code: where it lives, how it's wired, the pattern (e.g. the fake-at-ports + contract suite from `test-doubles.md`). This is *production* — how you build the right thing yourself, not the framework's API syntax (the internet covers that). → the skill's code/patterns.
+3. **When to use what** — the calibration: floor / rungs / triggers / both-direction tells, taught through the **good-vs-bad contrast** (the over- and under-engineered versions beside the calibrated one). Beat 2 teaches *how*; this teaches *when, and when not*. → the skill's decision rules.
+4. **Why** — *universal first*: the engineering justification + real evidence (mocking-the-wrong-seam is brittle; agents reward-hack their own tests; K8s at 8–13% utilization). *Then the coherence capstone*: "and this is why the framework holds you to it" — kept subordinate, so a learner who never uses GSD still gets full value. → the skill's basis + gates.
+5. **Practice + check** — a "now you try" drill on a **constructed scenario** the agent invents (no repo required); the learner answers, the agent confirms and feeds the calibration mirror. *Optional bonus when the learner is in a relevant project:* grep their code for a real instance and show it.
 
-Beat 1 is the foundation; 2–4 are the calibration on top; 5 makes it stick. The depth and ordering *within* a beat are personalized (§5).
+**Two distinctions this pattern keeps separate (earlier drafts conflated them):**
+- *Production vs recognition* — beat 2 (how to build it) is a different skill from beat 3 (recognizing good-vs-bad). Seeing that a fake beats a mock ≠ being able to write the fake. Both are taught.
+- *Application vs calibration* — they are not rivals. Calibration is the higher-value, more-unique goal (the internet is saturated with how-to and weak on when); but it is taught *through* concrete construction and contrast, never as abstract preaching. Beat 1 is the foundation; 2 is production; 3 is calibration; 4 is justification; 5 makes it stick. Depth and ordering *within* a beat are personalized (§5).
 
 ## 3. The concept catalog
 
@@ -56,7 +58,7 @@ The catalog is the single source of *what is teachable* and *where its truth liv
 1. **Invoke** `/gsd:learn` → the main agent loads the catalog, `USER-PROFILE.md`, and `LEARNING-PROGRESS.md` (all small).
 2. **Select** the concept(s) — by argument, by resume, or by walking prerequisite edges (§6).
 3. **Load on demand** *only* the source section(s) for the concept(s) in play (the catalog's `Source` pointers; read the section, not the whole file — per `context-budget.md`). The agent now holds the concept(s) in its own context.
-4. **Teach inline** through the five beats, conversationally — render beats 1–4, optionally open the browser for `Visual` assets, run beat 5 via `AskUserQuestion`, and grep the learner's repo for their own example.
+4. **Teach inline** through the five beats, conversationally — render beats 1–4, optionally open the browser for `Visual` assets, and run beat 5 via `AskUserQuestion` on a constructed scenario (no repo required). *If* the learner is in a relevant project, optionally grep it for a real instance as a personalized bonus.
 5. **Record** completion + the **calibration lean** (over/under/on-target) to `LEARNING-PROGRESS.md`.
 
 **Cross-concept teaching is the reason it's inline.** When the learner asks "how do architecture and testing fit together?", the agent loads *both* relevant nodes (`arch-when-to-use` and `test-shape-follows-arch`, which the catalog already links by prerequisite) and teaches the connection live — *"the test shape isn't a choice; it falls out of the architecture you just learned"* — in one continuous context. A subagent-per-concept design could not do this; it would return two isolated lessons that never meet. The agent also follows arbitrary follow-ups ("wait, why a fake and not a mock here?") without spawning anything, because every concept it has touched this session is still in context.
@@ -99,6 +101,7 @@ Cross-project (user-global) so progress follows the developer, mirroring `USER-P
 
 ## 9. Error & edge handling
 
+- **Runs standalone — no project required.** The curriculum (references), profile, and progress all live in `~/.claude/gsd-core/`, so `/gsd:learn` works in an empty directory or on a fresh machine. The full lesson (concept → how → when → why → practice on a constructed scenario) needs no repo. A junior who has never touched a codebase gets the complete lesson.
 - **No profile yet** → neutral defaults (concise depth, example-then-principle) + a one-line offer to run `/gsd:profile`.
 - **Browser unavailable / headless** → graceful terminal-only render; `Visual` beats degrade to an ASCII sketch + prose.
 - **Unmet prerequisites** → offer the prereq chain; respect an explicit override.
@@ -129,6 +132,8 @@ What Testing-first legitimately buys is a **development-time validation focus, n
 ## 13. Decisions locked during design
 
 - **Inline skill, not subagents** — teaching is conversational and cross-concept; the lesson must live in one context so the agent can connect concepts live and follow arbitrary follow-ups. Subagents would isolate each concept and defeat the purpose. (We build with subagents; we teach inline.)
+- **Five beats: concept → how to implement → when (calibration) → why → practice+check.** Production (beat 2) and recognition (beat 3) are distinct skills, both taught; application and calibration are not rivals — calibration is taught *through* construction and contrast, never as abstract preaching; the framework-why (beat 4) is a subordinate coherence capstone, never the core.
+- **Runs standalone** — no repo or GSD project required; the practice drill uses a constructed scenario, and "show it in your own code" is an optional bonus only.
 - **Concept first, then calibration** — both halves, in order. (Not calibration-only — that was the corrected misread.)
 - **Render the references; don't re-author** — one source of truth per concept; coherence is the product.
 - **84 nodes, 10 tracks, cross-linked not duplicated** — granularity matches the material (deep in Testing/Architecture/Security; tight in Code Quality).
