@@ -1088,6 +1088,29 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
+    case 'learn': {
+      // /gsd:learn backing: read the concept catalog (index) and the user-global
+      // learning-progress state. Teaching itself is inline in the agent; this only
+      // owns the catalog graph + the persisted progress (state-safe writes).
+      const learn = require('./lib/learn.cjs');
+      const sub = args[1];
+      if (sub === 'catalog') {
+        core.output(learn.cmdCatalog(), raw);
+      } else if (sub === 'node') {
+        if (!args[2]) error('learn node requires a node id', ERROR_REASON.USAGE);
+        core.output(learn.cmdNode(args[2]), raw);
+      } else if (sub === 'progress-read') {
+        core.output(learn.cmdProgressRead(), raw);
+      } else if (sub === 'progress-update') {
+        core.output(learn.cmdProgressUpdate(args.slice(2)), raw);
+      } else if (sub === 'next') {
+        core.output(learn.cmdNext(), raw);
+      } else {
+        error('Unknown learn subcommand. Available: catalog, node, progress-read, progress-update, next', ERROR_REASON.USAGE);
+      }
+      break;
+    }
+
     case 'uat': {
       const subcommand = args[1];
       const uat = require('./lib/uat.cjs');

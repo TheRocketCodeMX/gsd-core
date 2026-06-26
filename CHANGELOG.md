@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-06-26
+
+### Added
+
+- Add /gsd-learn: an inline, profile-personalized teacher for the 84 engineering concepts GSD enforces — concept first, then when/why/how — with an optional zero-install in-browser visual layer, runnable standalone with no repo. (#7)
+
 ## [1.13.0] - 2026-06-25
 
 ### Added

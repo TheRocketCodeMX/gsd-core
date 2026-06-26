@@ -67,6 +67,7 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'explore',
     'graphify',
     'ns-ideate',
+    'learn',
   ]),
 
   workspace_state: Object.freeze([
