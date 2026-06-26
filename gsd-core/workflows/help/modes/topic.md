@@ -24,6 +24,7 @@ Emit a section from the full reference for the topic in `$ARGUMENTS`. Read `work
 | `sketch` | The `/gsd:sketch` and `/gsd:sketch --wrap-up` blocks under `### Spiking & Sketching` |
 | `spike-sketch`, `experiments` | `### Spiking & Sketching` |
 | `capture`, `notes`, `todos` | `### Capturing Ideas, Notes, and Todos` |
+| `learn`, `learning`, `concepts` | `### Learning` |
 | `verify`, `verify-work`, `uat` | `### User Acceptance Testing` plus the `/gsd:audit-uat` block |
 | `ship`, `pr` | `### Ship Work` plus the `/gsd:pr-branch` block |
 | `review`, `peer-review` | The `/gsd:review` block under `### Ship Work` |

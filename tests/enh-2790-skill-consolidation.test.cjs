@@ -25,6 +25,7 @@ const KNOWN_SKILLS = new Set([
   'autonomous.md',
   'capture.md',
   'cleanup.md',
+  'learn.md',
   'code-review.md',
   'complete-milestone.md',
   'config.md',
