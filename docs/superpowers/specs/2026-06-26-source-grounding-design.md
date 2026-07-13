@@ -35,7 +35,7 @@
 
 **M2 · Planner distills a `## Grounding` block into PLAN.md (once).** The planner already reads every source (`plan-phase.md:858/923`). It emits a structured, **subdomain-keyed** grounding block: e.g. `core:matching → ADR rung: Domain Model`, `core:matching → test level: small`, `DESIGN-INVENTORY: address = single input (design)`. The executor inherits it **for free** because the plan is its unconditional primary grounding (`execute-phase.md:643`) — unlike `canonical_refs`, which it skips below 500k. Ground once, propagate via the plan.
 
-**M3 · Extend `decision-coverage-plan` to gate the sources (BLOCKING).** Add `grounding` to `DESIGNATED_HEADINGS_RE`; parse `<canonical_refs>` as a second required list; mirror the existing coverage loop so an **uncited required source blocks the plan** exactly like an uncovered `D-NN` (`plan-phase.md:1567`, `exit 1`). For the **3 strong artifacts** (DESIGN-INVENTORY, DOMAIN-MODEL, TEST-STRATEGY) the value sits in a controlled-vocabulary **table column**, so the gate **cross-checks the cited value against the doc** (subdomain-keyed) — not just "was it mentioned." The **ADR is medium** — needs a small purpose-built Axis-A table parser to extract the rung (the shipped `adr-parser` doesn't); until then it's mention-level. The symmetric `decision-coverage-verify` already exists as the back-end gate (`verify-phase.md:218`).
+**M3 · Extend `decision-coverage-plan` to gate the sources (BLOCKING).** Add `grounding` to `DESIGNATED_HEADINGS_RE`; parse `<canonical_refs>` as a second required list; mirror the coverage loop so an **uncited required source blocks the plan** like an uncovered `D-NN` (`plan-phase.md:1567`, `exit 1`). **All 10 sources are force-read** — the gate cross-checks each cited value against that file's table, using the per-source high-entropy cell in §8. One small extractor per artifact (~10). The symmetric `decision-coverage-verify` already exists as the back-end gate (`verify-phase.md:218`).
 
 ### Supports (salience + hygiene — not the enforcement)
 
@@ -92,12 +92,27 @@ Run `plan-phase` → assert the `## Grounding` block cites the counter-instincti
 
 ## 8. Build-validated implementation notes (v3 — post deep-validation, 8 agents)
 
-**Citation gate — precise scope (from the linchpin analysis):**
-- **Forced-read enforcement lands on ADR-rung + DESIGN-INVENTORY** — the only two cells high-entropy enough that guessing fails. ADR rung is a *compound set* (`Domain Model + Hexagonal`) → **set-equality** compare per subdomain. DESIGN-INVENTORY → key by **(Field, Surface)** and compare **Source enum + Captured-shape** together. These are exactly your two original failures (calibration + the address bug).
-- **DOMAIN-MODEL-Type and TEST-STRATEGY-level are coverage citations, not forced-read** (3 values each, and test-level is derivable from the rung). Cite them for completeness; don't claim they force reading. (They're largely implied by the ADR anyway.)
-- **Three non-negotiable parser guards or the gate is theater:** (1) **reject `[...]` placeholder cells** (a lazy planner citing an unfilled template must fail); (2) **set-equality on ADR / leading-token on test-strategy** (compound cells); (3) **(Field, Surface) keying for DESIGN-INVENTORY**.
-- **Citation line format:** `- <ARTIFACT> · <key> → <value>` using `·`(U+00B7)/`→`(U+2192) separators — safe against subdomain colons/spaces and GFM rows. Parse regex + per-artifact compare defined in the linchpin analysis.
-- **Residual risk (name into the plan):** subdomain keys are free text across the three docs → cross-artifact key-join relies on naming consistency (casefold handles case, not renames). A canonical subdomain registry is future hardening, not v1.
+**Citation gate — force-read ALL 10 sources, each via a high-entropy cell.**
+Every active source must be cited in the plan's `## Grounding` block, and the cited value is the **project-specific decision that exists only in that file** — so passing the cross-check requires having read it. The naive cell fails for the low-cardinality docs (a planner can guess "Core" / "small"), so each source cites a value made un-guessable (a compound value, or paired with a free-text cell). Per-source citation target:
+
+| Source | Cite this (high-entropy, un-guessable) | Keyed by |
+|---|---|---|
+| DOMAIN-MODEL | complexity rating **+ which signals fired** (not just Core/Supporting/Generic) | subdomain |
+| ADR | the rung as a **compound set** (`Domain Model + Hexagonal`) | subdomain |
+| TEST-STRATEGY | the specific **"what to unit-test" item(s)** (not the small/medium/large token) | subdomain |
+| SECURITY-STRATEGY | derived **ASVS level + authz model + a triggered control** | app / resource |
+| FRONTEND-ARCHITECTURE | chosen **state rung + rendering strategy** | app / feature |
+| INFRA-STRATEGY | **compute rung + promotion trigger** | component |
+| CICD-STRATEGY | **deploy-ladder rung + PR-gate test-tier mapping** | pipeline |
+| PRODUCT-BRIEF | **outcome metric + wedge + a must-NOT** | product |
+| DESIGN-INVENTORY | field **provenance (Source enum + captured shape)** | (field, surface) |
+| LEGACY-INVENTORY | **salvage disposition + parity disposition** | subsystem / region |
+
+Uniform rule: cite the decision only that file holds, keyed to its unit; the script cross-checks it against the file's table. **Cost: one small extractor per artifact (~10 parsers)** — that is the price of enforcing all ten, and the whole point.
+
+- **Three non-negotiable parser guards or the gate is theater:** (1) **reject `[...]` placeholder cells** (a lazy planner citing an unfilled template must fail); (2) **set-equality on compound cells** (ADR rung), never substring; (3) **(Field, Surface) keying for DESIGN-INVENTORY**.
+- **Citation line format:** `- <ARTIFACT> · <key> → <value>` using `·`(U+00B7)/`→`(U+2192) — safe against subdomain colons/spaces and GFM rows.
+- **Residual risk:** subdomain/component keys are free text → cross-artifact join relies on naming consistency (casefold handles case, not renames). A canonical subdomain registry is future hardening, not v1.
 
 **Gate wiring (`decision-coverage-plan` extension):**
 - Add `grounding` to `DESIGNATED_HEADINGS_RE` (`check-command-router.cjs:111`) + the frontmatter key loop (`:150`) — otherwise `## Grounding` citations are *not scanned* and would report false-uncovered.
@@ -127,6 +142,6 @@ Run `plan-phase` → assert the `## Grounding` block cites the counter-instincti
 - **Ground once at plan-time; gate the plan** — not force-re-read at every agent (executor rides the plan; required_reading has no teeth).
 - Reuse `canonical_refs` (resolver populates it), `decision-coverage-plan` (extend to gate sources), `generate-claude-md` (path-list index), `artifacts.cjs` (register). No parallel systems.
 - Ambient index = **plain path-list**, never `@`-link-mode (Claude-only + byte-unsafe).
-- Citations **subdomain-keyed**; real cross-check on DESIGN-INVENTORY/DOMAIN-MODEL/TEST-STRATEGY, custom parser for ADR, mention-coverage as the floor.
+- **Force-read all 10 sources** (7 strategy + PRODUCT-BRIEF/DESIGN-INVENTORY/LEGACY-INVENTORY), each cited via a high-entropy (un-guessable) cell keyed to its unit; one cross-check extractor per artifact. 3 parser guards (reject `[...]`, set-equality, field+surface).
 - Drop phase-scoping for v1.
 - Realistic proof = planted-discrepancy fixture + ablation + negative gate test.
