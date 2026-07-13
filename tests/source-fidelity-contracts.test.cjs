@@ -1,4 +1,4 @@
-// allow-test-rule: source-text-is-the-product
+// allow-test-rule: source-text-is-the-product — see TheRocketCodeMX/gsd-core#3
 // Reads .md product files whose deployed text IS what the runtime loads.
 
 'use strict';

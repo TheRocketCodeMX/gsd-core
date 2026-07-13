@@ -1,4 +1,4 @@
-// allow-test-rule: integration-test-input
+// allow-test-rule: integration-test-input — see #935
 /**
  * The /gsd:update workflow's "What's New" preview calls
  *   <configDir>/scripts/changeset/cli.cjs extract ...
