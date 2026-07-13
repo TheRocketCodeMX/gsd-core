@@ -126,12 +126,13 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     return;
   }
   const required = groundingLib.resolveRequiredSources(projectDir).required;
-  if (required.length === 0) {
+  const planText = loadPlanContents(phaseDir).join('\n');
+  const cites = groundingLib.parseGroundingBlock(planText);
+  const sourceCites = cites.filter((c) => c.artifact === 'SOURCE');
+  if (required.length === 0 && sourceCites.length === 0) {
     output({ passed: true, total: 0, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
     return;
   }
-  const planText = loadPlanContents(phaseDir).join('\n');
-  const cites = groundingLib.parseGroundingBlock(planText);
   const problems: string[] = [];
   for (const src of required) {
     const matches = cites.filter((c) => c.artifact === src.artifact);
@@ -142,6 +143,11 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
       const why = groundingLib.crossCheck(src.artifact, matches[0].key, matches[0].value, srcText).reason;
       problems.push(`${src.artifact}: citation does not match the source (${why})`);
     }
+  }
+  // Source-direct citations (SOURCE · fact → path:line) are verified against the real file.
+  for (const c of sourceCites) {
+    const res = groundingLib.checkSourceCitation(projectDir, c.key, c.value);
+    if (!res.ok) problems.push(`SOURCE: ${res.reason}`);
   }
   const passed = problems.length === 0;
   output({ passed, total: required.length, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);

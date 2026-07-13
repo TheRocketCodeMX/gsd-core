@@ -26,6 +26,12 @@ One sentence that drives prioritization when tradeoffs arise.]
 - **Code-quality baseline:** [clean | legacy-debt | vibe-coded-to-harden]
 - **Combination:** [the named combination, e.g. "greenfield-rewrite + new-design + salvageable-old-code"]
 
+## Sources
+
+<!-- The literal sources this project grounds in — their LOCATIONS, so agents can explore them DIRECTLY (not just the distilled inventories). Recorded by the entry point / whenever a source is added. Read by `gsd_run query grounding required` (the `sources` field). Each line: - <kind> · <path-or-url> [— <note>]. Kinds: design · legacy · vibe · context-app. The provided design is also mirrored in ## Mode's Design input line. -->
+
+- (none yet)
+
 ## Strategy Plan
 
 <!-- The archetype-tailored strategy path for this project — written by new-project / new-milestone from the archetype + Mode, per strategy-flow.md. The recommended steps to run before/around the build loop; refreshed at milestone boundaries. Each step's status: recommended | done | skipped. -->

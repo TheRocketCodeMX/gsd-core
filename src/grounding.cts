@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 interface RequiredSource { id: string; path: string; artifact: string; }
-interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; }
+interface LiteralSource { kind: string; path: string; note: string; }
+interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; sources: LiteralSource[]; }
 
 // Strategy step id → (artifact tag, relative .planning path or 'adr' dir → newest *.md).
 const STEP_ARTIFACTS: Record<string, { artifact: string; rel: string }> = {
@@ -31,6 +32,19 @@ function parseStrategyPlan(projectText: string): { steps: Record<string, string>
   return { steps, skipped };
 }
 
+// Parse "## Sources" → the literal-source location registry.
+// Line form: - <kind> · <path-or-url> [— <note>]   (kind ∈ design/legacy/vibe/context-app)
+function parseSources(projectText: string): LiteralSource[] {
+  const out: LiteralSource[] = [];
+  const sec = projectText.match(/##\s+Sources([\s\S]*?)(?:\n##\s|\s*$)/);
+  if (!sec) return out;
+  for (const line of sec[1].split('\n')) {
+    const m = line.match(/^-\s+([a-z][a-z-]+)\s+·\s+(.+?)(?:\s+—\s+(.+?))?\s*$/i);
+    if (m) out.push({ kind: m[1].toLowerCase(), path: m[2].trim(), note: (m[3] || '').trim() });
+  }
+  return out;
+}
+
 function newestAdr(planningDir: string): string | null {
   const adrDir = path.join(planningDir, 'adr');
   if (!fs.existsSync(adrDir)) return null;
@@ -45,8 +59,10 @@ function resolveRequiredSources(cwd: string): ResolveResult {
   const projectPath = path.join(planning, 'PROJECT.md');
   const required: RequiredSource[] = [];
   const pending: string[] = [];
-  if (!fs.existsSync(projectPath)) return { required, skipped: [], pending };
-  const { steps, skipped } = parseStrategyPlan(fs.readFileSync(projectPath, 'utf8'));
+  if (!fs.existsSync(projectPath)) return { required, skipped: [], pending, sources: [] };
+  const projectText = fs.readFileSync(projectPath, 'utf8');
+  const { steps, skipped } = parseStrategyPlan(projectText);
+  const sources = parseSources(projectText);
   for (const [step, status] of Object.entries(steps)) {
     const map = STEP_ARTIFACTS[step];
     if (!map) continue;
@@ -63,11 +79,25 @@ function resolveRequiredSources(cwd: string): ResolveResult {
     const p = path.join(planning, rel);
     if (fs.existsSync(p)) required.push({ id: rel.replace('.md', '').toLowerCase(), path: p, artifact });
   }
-  return { required, skipped, pending };
+  return { required, skipped, pending, sources };
+}
+
+// A source-direct citation ("SOURCE · <fact> → <path>:<line>") is verified by
+// reading the real file and confirming the fact appears — you can't cite it
+// without having opened the file. Line number is advisory (drifts); the fact must be present.
+function checkSourceCitation(cwd: string, fact: string, pathLine: string): { ok: boolean; reason: string } {
+  const m = pathLine.match(/^(.*?):(\d+)$/);
+  const rel = (m ? m[1] : pathLine).trim();
+  const filePath = path.isAbsolute(rel) ? rel : path.join(cwd, rel);
+  if (!fs.existsSync(filePath)) return { ok: false, reason: `source file not found: ${rel}` };
+  const text = fs.readFileSync(filePath, 'utf8').toLowerCase();
+  return text.includes(fact.trim().toLowerCase())
+    ? { ok: true, reason: '' }
+    : { ok: false, reason: `cited fact "${fact}" not found in ${rel}` };
 }
 
 // --- citation parsing + cross-check ---
-const CITE_RE = /^-\s+(DOMAIN-MODEL|ADR|TEST-STRATEGY|SECURITY-STRATEGY|FRONTEND-ARCHITECTURE|INFRA-STRATEGY|CICD-STRATEGY|DESIGN-INVENTORY|LEGACY-INVENTORY|PRODUCT-BRIEF)\s+·\s+(.+?)\s+→\s+(.+?)\s*$/;
+const CITE_RE = /^-\s+(DOMAIN-MODEL|ADR|TEST-STRATEGY|SECURITY-STRATEGY|FRONTEND-ARCHITECTURE|INFRA-STRATEGY|CICD-STRATEGY|DESIGN-INVENTORY|LEGACY-INVENTORY|PRODUCT-BRIEF|SOURCE)\s+·\s+(.+?)\s+→\s+(.+?)\s*$/;
 
 function parseGroundingBlock(planText: string): Array<{ artifact: string; key: string; value: string }> {
   const out: Array<{ artifact: string; key: string; value: string }> = [];
@@ -138,4 +168,4 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
   return { ok: true, reason: 'mention-coverage (no scripted cross-check yet)' };
 }
 
-export = { resolveRequiredSources, parseStrategyPlan, parseGroundingBlock, crossCheck };
+export = { resolveRequiredSources, parseStrategyPlan, parseSources, parseGroundingBlock, crossCheck, checkSourceCitation };
