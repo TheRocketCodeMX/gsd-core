@@ -138,8 +138,9 @@ Write to `.planning/adr/NNNN-architecture.md`. Capture *why* and trade-offs, not
 ## Step 7: Commit
 
 ```bash
+gsd_run project strategy-done recommend-architecture 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: record architecture decision (ADR-NNNN)" --files .planning/adr/NNNN-architecture.md
+  gsd_run query commit "docs: record architecture decision (ADR-NNNN)" --files .planning/adr/NNNN-architecture.md .planning/PROJECT.md
 else
   echo "ADR written but not committed (commit_docs is false)."
 fi

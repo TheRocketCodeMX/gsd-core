@@ -119,8 +119,9 @@ Write to `.planning/CICD-STRATEGY.md`.
 ## Step 10: Commit
 
 ```bash
+gsd_run project strategy-done cicd-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add CI/CD strategy (pipeline follows test strategy)" --files .planning/CICD-STRATEGY.md
+  gsd_run query commit "docs: add CI/CD strategy (pipeline follows test strategy)" --files .planning/CICD-STRATEGY.md .planning/PROJECT.md
 else
   echo "CICD-STRATEGY.md written but not committed (commit_docs is false)."
 fi

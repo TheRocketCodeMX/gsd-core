@@ -3,7 +3,7 @@ import path from 'node:path';
 
 interface RequiredSource { id: string; path: string; artifact: string; }
 interface LiteralSource { kind: string; path: string; note: string; }
-interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; sources: LiteralSource[]; }
+interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; sources: LiteralSource[]; warnings: string[]; }
 
 // Strategy step id → (artifact tag, relative .planning path or 'adr' dir → newest *.md).
 const STEP_ARTIFACTS: Record<string, { artifact: string; rel: string }> = {
@@ -59,7 +59,8 @@ function resolveRequiredSources(cwd: string): ResolveResult {
   const projectPath = path.join(planning, 'PROJECT.md');
   const required: RequiredSource[] = [];
   const pending: string[] = [];
-  if (!fs.existsSync(projectPath)) return { required, skipped: [], pending, sources: [] };
+  const warnings: string[] = [];
+  if (!fs.existsSync(projectPath)) return { required, skipped: [], pending, sources: [], warnings };
   const projectText = fs.readFileSync(projectPath, 'utf8');
   const { steps, skipped } = parseStrategyPlan(projectText);
   const sources = parseSources(projectText);
@@ -71,6 +72,14 @@ function resolveRequiredSources(cwd: string): ResolveResult {
       if (p && fs.existsSync(p)) required.push({ id: step, path: p, artifact: map.artifact });
     } else if (status === 'recommended') {
       pending.push(step);
+      // Inconsistency surface (issue #21 P0-1c): the artifact exists on disk but the
+      // Strategy Plan row was never flipped to `done` — the step ran but skipped its
+      // `project strategy-done` wrap-up, so the gate is under-requiring. Warn loudly
+      // so orchestrators can flip the row instead of trusting a vacuous pass.
+      const p = map.rel === 'adr' ? newestAdr(planning) : path.join(planning, map.rel);
+      if (p && fs.existsSync(p)) {
+        warnings.push(`unflipped: ${step} — artifact exists (${path.basename(p)}) but Strategy Plan status is still 'recommended'; run \`project strategy-done ${step}\``);
+      }
     }
   }
   // DESIGN-INVENTORY / LEGACY-INVENTORY are oracles (not Strategy-Plan steps): require if present.
@@ -79,7 +88,7 @@ function resolveRequiredSources(cwd: string): ResolveResult {
     const p = path.join(planning, rel);
     if (fs.existsSync(p)) required.push({ id: rel.replace('.md', '').toLowerCase(), path: p, artifact });
   }
-  return { required, skipped, pending, sources };
+  return { required, skipped, pending, sources, warnings };
 }
 
 // A source-direct citation ("SOURCE · <fact> → <path>:<line>") is verified by

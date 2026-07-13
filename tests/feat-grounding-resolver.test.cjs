@@ -41,4 +41,36 @@ describe('grounding resolver', () => {
     assert.equal(r.required.length, 0, 'nothing required when nothing was run');
     cleanup(dir);
   });
+
+  test('artifact on disk but status still recommended → unflipped warning (issue #21)', () => {
+    // The step ran (DOMAIN-MODEL.md exists) but never flipped its Strategy Plan
+    // row to `done` — the gate would under-require. resolveRequiredSources must
+    // surface the inconsistency instead of silently returning a smaller set.
+    const dir = mkProject({
+      'PROJECT.md': '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| model-domain | recommended |\n| testing-strategy | recommended |\n',
+      'DOMAIN-MODEL.md': '## Subdomains\n| Subdomain | Type |\n|---|---|\n| pricing | Core |\n',
+    });
+    const r = grounding.resolveRequiredSources(dir);
+    assert.equal(r.required.length, 0, 'recommended is still not required');
+    assert.ok(Array.isArray(r.warnings), 'resolver exposes a warnings field');
+    assert.ok(
+      r.warnings.some((w) => /^unflipped: model-domain\b/.test(w)),
+      `expected an "unflipped: model-domain" warning, got: ${JSON.stringify(r.warnings)}`,
+    );
+    assert.ok(
+      !r.warnings.some((w) => /testing-strategy/.test(w)),
+      'a recommended step with NO artifact on disk is pending, not unflipped',
+    );
+    cleanup(dir);
+  });
+
+  test('done steps and clean pending steps produce no warnings', () => {
+    const dir = mkProject({
+      'PROJECT.md': '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| model-domain | done |\n| security-strategy | recommended |\n',
+      'DOMAIN-MODEL.md': '## Subdomains\n| Subdomain | Type |\n|---|---|\n| pricing | Core |\n',
+    });
+    const r = grounding.resolveRequiredSources(dir);
+    assert.deepEqual(r.warnings, [], 'consistent plan → no warnings');
+    cleanup(dir);
+  });
 });

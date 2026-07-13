@@ -90,6 +90,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/testing-strategy.md`
 - `src/project-command-router.cts`
 - `src/project.cts`
+- `tests/feat-project-strategy-done.test.cjs`
 - `tests/project-query-verbs.test.cjs`
 - `tests/strategy-config-and-marker-contracts.test.cjs`
 

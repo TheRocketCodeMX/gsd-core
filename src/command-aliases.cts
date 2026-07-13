@@ -607,6 +607,14 @@ export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
     ],
     "subcommand": "strategy-skipped",
     "mutation": false
+  },
+  {
+    "canonical": "project.strategy-done",
+    "aliases": [
+      "project strategy-done"
+    ],
+    "subcommand": "strategy-done",
+    "mutation": true
   }
 ];
 // FORK:strategy END
