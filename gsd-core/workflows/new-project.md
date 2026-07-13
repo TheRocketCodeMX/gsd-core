@@ -65,7 +65,7 @@ AGENT_SKILLS_SYNTHESIZER=$(gsd_run query agent-skills gsd-research-synthesizer)
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper)
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `project_path`, `project_root`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`. (This is the full key set `init.new-project` emits — do not expect others.)
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `project_root`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`. (This is the key set `init.new-project` actually emits — do not expect others.)
 
 **If `agents_installed` is false:** Display a warning before proceeding:
 ```text
@@ -1541,7 +1541,7 @@ This ensures new projects get the default GSD workflow-enforcement guidance and 
 **Commit roadmap (after approval or auto mode):**
 
 ```bash
-gsd_run query commit "docs: create roadmap ([N] phases)" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md .planning/PROJECT.md "$INSTRUCTION_FILE"
+gsd_run query commit "docs: create roadmap ([N] phases)" --files .planning/PROJECT.md .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"
 ```
 
 ## 9. Done
