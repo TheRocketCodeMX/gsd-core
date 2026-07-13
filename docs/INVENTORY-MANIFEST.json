@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-25",
+  "generated": "2026-07-13",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -255,6 +255,7 @@
       "gates.md",
       "git-integration.md",
       "git-planning-commit.md",
+      "grounding-citations.md",
       "infrastructure-strategy.md",
       "ios-scaffold.md",
       "learn-catalog.md",
@@ -263,6 +264,7 @@
       "model-profiles.md",
       "mvp-concepts.md",
       "phase-argument-parsing.md",
+      "plan-phase-coverage-gate.md",
       "planner-antipatterns.md",
       "planner-chunked.md",
       "planner-gap-closure.md",
@@ -345,6 +347,7 @@
       "frontmatter.cjs",
       "gap-checker.cjs",
       "graphify.cjs",
+      "grounding.cjs",
       "gsd2-import.cjs",
       "init-command-router.cjs",
       "init.cjs",
@@ -419,6 +422,7 @@
       "gsd-cursor-post-tool.js",
       "gsd-cursor-session-start.js",
       "gsd-graphify-update.sh",
+      "gsd-grounding-index-refresh.js",
       "gsd-phase-boundary.sh",
       "gsd-prompt-guard.js",
       "gsd-read-guard.js",

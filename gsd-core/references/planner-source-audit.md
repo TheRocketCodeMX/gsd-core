@@ -81,3 +81,7 @@ The planner's only legitimate reasons to split or flag a feature are **constrain
 - ✗ "This is a challenging feature that might be better left to a future phase"
 
 If a feature has none of the three legitimate constraints (context cost, missing information, dependency conflict), it gets planned. Period.
+
+## Fill the plan's `## Grounding` block (blocking gate)
+
+Every PLAN.md carries a `## Grounding` block — the proof the plan grounded in the project's active strategy sources. Get the required set with `gsd_run query grounding required` (the `done` strategy steps + present DESIGN/LEGACY-INVENTORY, per the `## Strategy Plan`; skipped/not-yet-run steps are exempt). Write **one line per required source**, citing the decision that exists only in that file (the ADR rung per subdomain, etc.), per `@~/.claude/gsd-core/references/grounding-citations.md`. `check.grounding-plan` cross-checks each citation against the source file and **blocks the plan (`exit 1`)** on any missing or mismatched required source — so you cannot fake it from memory. When the phase grounds in a literal source file (exported design, legacy/vibe/additional-app code), add a source-direct citation with `file:line`.

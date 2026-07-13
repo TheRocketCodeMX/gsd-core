@@ -34,8 +34,9 @@ describe('generate-claude-md', () => {
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.action, 'created');
-    assert.strictEqual(output.sections_total, 6);
+    assert.strictEqual(output.sections_total, 7);
     assert.ok(output.sections_generated.includes('workflow'));
+    assert.ok(output.sections_generated.includes('sources'), 'Sources of Truth section is managed');
 
     const claudePath = path.join(tmpDir, 'CLAUDE.md');
     const content = fs.readFileSync(claudePath, 'utf-8');

@@ -232,6 +232,13 @@ Codebase context will be gathered during plan-phase research.
 
 </code_context>
 
+<canonical_refs>
+## Canonical References
+
+{Even with discuss skipped, list the active strategy sources so the planner still grounds and the grounding gate has a required set. Populate from `gsd_run query grounding required`: the done strategy artifacts (`.planning/adr/*`, `DOMAIN-MODEL.md`, `TEST-STRATEGY.md`, SECURITY/FE/INFRA/CICD), `DESIGN-INVENTORY.md`, `LEGACY-INVENTORY.md`, and any `## Sources` literal-source locations. These MUST be read and cited in each plan's `## Grounding` block. If none exist yet, write "(none — build to the engineering-standards floor)".}
+
+</canonical_refs>
+
 <specifics>
 ## Specific Ideas
 

@@ -74,6 +74,7 @@
     "hooks.context_warnings",
     "hooks.workflow_guard",
     "workflow.context_coverage_gate",
+    "workflow.grounding_gate",
     "statusline.show_last_command",
     "statusline.context_position",
     "workflow.ui_review",

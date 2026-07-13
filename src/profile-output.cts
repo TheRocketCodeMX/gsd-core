@@ -483,6 +483,37 @@ function generateWorkflowSection(cwd: string): SectionResult {
   };
 }
 
+// The ambient "Sources of Truth" section — a plain path-list (cross-CLI safe; NOT
+// @-imports, which only Claude expands) of the project's active strategy sources +
+// registered literal sources, plus the memory-override mandate. Fed by the grounding
+// resolver so it stays current with the ## Strategy Plan / ## Sources.
+function generateSourcesSection(cwd: string): SectionResult {
+  const lines: string[] = [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const g = require('./grounding.cjs') as {
+      resolveRequiredSources: (c: string) => {
+        required: Array<{ path: string; artifact: string }>;
+        sources: Array<{ kind: string; path: string; note: string }>;
+      };
+    };
+    const r = g.resolveRequiredSources(cwd);
+    for (const req of r.required) {
+      const rel = path.relative(cwd, req.path) || req.path;
+      lines.push(`- ${req.artifact} — \`${rel}\``);
+    }
+    for (const s of r.sources) {
+      lines.push(`- ${s.kind} (literal source) — \`${s.path}\`${s.note ? ' — ' + s.note : ''}`);
+    }
+  } catch {
+    /* grounding lib unavailable — emit the floor note */
+  }
+  const body = lines.length
+    ? 'Read and cite these before planning or editing — they are authoritative for THIS project and override your memory/training:\n\n' + lines.join('\n')
+    : 'No active strategy sources yet — build to the engineering-standards floor.';
+  return { content: body, source: 'grounding required', linkPath: null, hasFallback: false };
+}
+
 /**
  * Discover project skills from standard directories and extract frontmatter
  * (name + description) for each. Returns a table summary for CLAUDE.md so
@@ -1052,12 +1083,13 @@ function cmdGenerateClaudeProfile(cwd: string, options: CmdGenerateClaudeProfile
 }
 
 function cmdGenerateClaudeMd(cwd: string, options: CmdGenerateClaudeMdOptions, raw: boolean): void {
-  const MANAGED_SECTIONS = ['project', 'stack', 'conventions', 'architecture', 'skills', 'workflow'];
+  const MANAGED_SECTIONS = ['project', 'stack', 'conventions', 'architecture', 'sources', 'skills', 'workflow'];
   const generators: Record<string, (cwd: string) => SectionResult> = {
     project: generateProjectSection,
     stack: generateStackSection,
     conventions: generateConventionsSection,
     architecture: generateArchitectureSection,
+    sources: generateSourcesSection,
     skills: generateSkillsSection,
     workflow: generateWorkflowSection,
   };
@@ -1066,6 +1098,7 @@ function cmdGenerateClaudeMd(cwd: string, options: CmdGenerateClaudeMdOptions, r
     stack: '## Technology Stack',
     conventions: '## Conventions',
     architecture: '## Architecture',
+    sources: '## Sources of Truth',
     skills: '## Project Skills',
     workflow: '## GSD Workflow Enforcement',
   };
@@ -1100,6 +1133,9 @@ function cmdGenerateClaudeMd(cwd: string, options: CmdGenerateClaudeMdOptions, r
     );
     if (!options.output && effectiveRuntime === 'codex') {
       configClaudeMdPath = './AGENTS.md';
+    } else if (!options.output && effectiveRuntime === 'gemini') {
+      // Gemini's ambient project-instruction file is GEMINI.md (it does not read CLAUDE.md).
+      configClaudeMdPath = './GEMINI.md';
     }
   } catch { /* use default */ }
 

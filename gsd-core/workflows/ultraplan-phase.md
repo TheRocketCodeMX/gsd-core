@@ -107,6 +107,13 @@ Build the ultraplan prompt from GSD context.
 3. Read RESEARCH.md if it exists (`research_path` is not null) — extract a concise
    summary of technical findings. Including this reduces redundant cloud research.
 
+4. **Grounding (do NOT skip — the cloud planner is isolated from plan-phase, so the
+   grounding must be carried in the prompt).** Resolve the active sources with
+   `gsd_run query grounding required` and read each: the strategy decisions (ADR rung
+   per subdomain, TEST-STRATEGY levels, SECURITY/FE/INFRA/CICD posture), plus
+   `CONTEXT.md`, `DESIGN-INVENTORY.md`, `LEGACY-INVENTORY.md`, and this phase's
+   `UI-SPEC.md` / `AI-SPEC.md` when present. Summarize the decisions the plan must honor.
+
 Construct the prompt:
 
 ```text
@@ -123,6 +130,10 @@ Plan phase {phase_number}: {phase_name}
 ## Existing Research
 
 {research summary, or "No RESEARCH.md found — research from scratch."}
+
+## Grounding (honor these — the plan MUST include a `## Grounding` block citing them)
+
+{summary of the active strategy sources' decisions from step 4 — the ADR rung per subdomain, TEST-STRATEGY levels, SECURITY/FE/INFRA/CICD posture, DESIGN-INVENTORY fields, UI-SPEC/AI-SPEC contracts. Or "No strategy artifacts yet — build to the engineering-standards floor." The imported PLAN.md is checked by `check.grounding-plan` on import, so it must cite every active (done) source.}
 
 ## Output Format
 
