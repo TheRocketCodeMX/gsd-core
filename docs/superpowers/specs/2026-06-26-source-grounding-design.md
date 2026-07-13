@@ -31,7 +31,13 @@
 
 ### Core (the enforcement — "ground once, gate the plan")
 
-**M1 · Deterministic source resolver → populates `canonical_refs`.** A `gsd-tools` verb globs the mechanical source-classes — the ROADMAP `Canonical refs:` line + the fixed `.planning/{DOMAIN-MODEL,TEST-STRATEGY,SECURITY-STRATEGY,INFRA-STRATEGY,CICD-STRATEGY,FRONTEND-ARCHITECTURE,LEGACY-INVENTORY,DESIGN-INVENTORY}.md`, `.planning/adr/*.md`, `PRODUCT-BRIEF.md` — plus the design/legacy/vibe pointers from the `## Mode` block. `discuss-phase` uses this to seed `<canonical_refs>` deterministically (LLM only *appends* user-referenced docs). Fixes the lossy accumulator that drops artifacts today.
+**M1 · Strategy-Plan-driven source resolver → populates `canonical_refs`.** *(This is the flow correction.)* The required source set is **not a static 10 and not a naive glob** — it is whatever the project's **`## Strategy Plan`** says is `done`. The entry point (new-project/new-milestone) derives the archetype and writes the Strategy Plan (each step `recommended | done | skipped`) + a skip-ledger; each strategy skill then runs the canonical chain and flips its step to `done`, producing its artifact incrementally. So the resolver computes the required set by **reusing the existing readers** — `gsd_run query project strategy-plan` (statuses) + `project strategy-skipped <skill>` (the ledger):
+- steps marked **`done`** → their artifact is **required-to-ground**;
+- **ledgered skips** → **excluded** (note-once, never required, never blocked) — exactly as the enforcement agents already treat them;
+- **recommended-but-not-done** → follows the chain's **missing-input rule** (warn + documented fallback, do **not** hard-block a phase you can legitimately build before a later strategy step runs);
+- plus the design/legacy/vibe pointers from `## Mode`.
+
+`discuss-phase` seeds `<canonical_refs>` from this deterministically (LLM only *appends* user-referenced docs). It composes with the missing-input + skip-ledger machinery the chain (`strategy-chain.md`) already exposes to the enforcement agents — so this is *less* new code, sitting on existing wiring, not a parallel path.
 
 **M2 · Planner distills a `## Grounding` block into PLAN.md (once).** The planner already reads every source (`plan-phase.md:858/923`). It emits a structured, **subdomain-keyed** grounding block: e.g. `core:matching → ADR rung: Domain Model`, `core:matching → test level: small`, `DESIGN-INVENTORY: address = single input (design)`. The executor inherits it **for free** because the plan is its unconditional primary grounding (`execute-phase.md:643`) — unlike `canonical_refs`, which it skips below 500k. Ground once, propagate via the plan.
 
@@ -92,8 +98,8 @@ Run `plan-phase` → assert the `## Grounding` block cites the counter-instincti
 
 ## 8. Build-validated implementation notes (v3 — post deep-validation, 8 agents)
 
-**Citation gate — force-read ALL 10 sources, each via a high-entropy cell.**
-Every active source must be cited in the plan's `## Grounding` block, and the cited value is the **project-specific decision that exists only in that file** — so passing the cross-check requires having read it. The naive cell fails for the low-cardinality docs (a planner can guess "Core" / "small"), so each source cites a value made un-guessable (a compound value, or paired with a free-text cell). Per-source citation target:
+**Citation gate — force-read every `done` source (up to all 10), each via a high-entropy cell.**
+The **required set is the Strategy Plan's `done` steps** (M1) — the 10 below is the full-stack *ceiling*; a CLI or prototype has far fewer, and **ledgered skips are exempt** (never cited, never blocked). Every *required* source must be cited in the plan's `## Grounding` block, and the cited value is the **project-specific decision that exists only in that file** — so passing the cross-check requires having read it. The naive cell fails for the low-cardinality docs (a planner can guess "Core" / "small"), so each source cites a value made un-guessable (a compound value, or paired with a free-text cell). Per-source citation target:
 
 | Source | Cite this (high-entropy, un-guessable) | Keyed by |
 |---|---|---|
@@ -142,6 +148,6 @@ Uniform rule: cite the decision only that file holds, keyed to its unit; the scr
 - **Ground once at plan-time; gate the plan** — not force-re-read at every agent (executor rides the plan; required_reading has no teeth).
 - Reuse `canonical_refs` (resolver populates it), `decision-coverage-plan` (extend to gate sources), `generate-claude-md` (path-list index), `artifacts.cjs` (register). No parallel systems.
 - Ambient index = **plain path-list**, never `@`-link-mode (Claude-only + byte-unsafe).
-- **Force-read all 10 sources** (7 strategy + PRODUCT-BRIEF/DESIGN-INVENTORY/LEGACY-INVENTORY), each cited via a high-entropy (un-guessable) cell keyed to its unit; one cross-check extractor per artifact. 3 parser guards (reject `[...]`, set-equality, field+surface).
+- **Force-read every `done` source per the `## Strategy Plan`** (up to all 10; ledgered skips exempt/note-once; recommended-not-done → missing-input warn, not block). The resolver reuses `project strategy-plan` / `strategy-skipped`. Each required source cited via a high-entropy cell; one cross-check extractor per artifact; 3 parser guards (reject `[...]`, set-equality, field+surface).
 - Drop phase-scoping for v1.
 - Realistic proof = planted-discrepancy fixture + ablation + negative gate test.
