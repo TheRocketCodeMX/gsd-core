@@ -483,6 +483,7 @@ function generateWorkflowSection(cwd: string): SectionResult {
   };
 }
 
+// FORK:grounding BEGIN
 // The ambient "Sources of Truth" section — a plain path-list (cross-CLI safe; NOT
 // @-imports, which only Claude expands) of the project's active strategy sources +
 // registered literal sources, plus the memory-override mandate. Fed by the grounding
@@ -513,6 +514,7 @@ function generateSourcesSection(cwd: string): SectionResult {
     : 'No active strategy sources yet — build to the engineering-standards floor.';
   return { content: body, source: 'grounding required', linkPath: null, hasFallback: false };
 }
+// FORK:grounding END
 
 /**
  * Discover project skills from standard directories and extract frontmatter
@@ -1133,9 +1135,11 @@ function cmdGenerateClaudeMd(cwd: string, options: CmdGenerateClaudeMdOptions, r
     );
     if (!options.output && effectiveRuntime === 'codex') {
       configClaudeMdPath = './AGENTS.md';
+// FORK:identity BEGIN
     } else if (!options.output && effectiveRuntime === 'gemini') {
       // Gemini's ambient project-instruction file is GEMINI.md (it does not read CLAUDE.md).
       configClaudeMdPath = './GEMINI.md';
+// FORK:identity END
     }
   } catch { /* use default */ }
 
