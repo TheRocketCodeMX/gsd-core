@@ -1,90 +1,100 @@
-# Source Grounding Enforcement — Design Spec
+# Source Grounding Enforcement — Design Spec (v2, post-validation)
 
-**Goal:** Guarantee that GSD's producing agents actually **read and honor** the project's strategy artifacts and sources of truth (design/legacy/vibe/dependency) instead of leaning on memory or abstractions — by making grounding **ambient, hard-read, mechanically verified, and memory-overriding**, reusing existing machinery rather than inventing a parallel system.
+**Goal:** Guarantee GSD's producing agents actually **read and honor** the project's strategy artifacts and sources of truth (design/legacy/vibe/dependency) instead of leaning on memory or abstractions — by **grounding once at plan-time, gating the plan mechanically, and making the source set ambient** — reusing existing machinery (`canonical_refs`, `decision-coverage-plan`, `generate-claude-md`, `artifacts.cjs`) rather than inventing a parallel system.
 
-**Origin:** Real observed failure — agents sometimes build from memory/abstractions when reading the strategy/design is fundamental. Three-map exploration (2026-06-26) confirmed the root cause: the framework's creed is "forcing functions, not vibes," yet grounding is the one thing enforced almost entirely by vibes.
+**Origin:** Real observed failure — agents build from memory/abstractions when reading the strategy/design is fundamental. Root cause (3-map exploration, 2026-06-26): the framework's creed is "forcing functions, not vibes," yet grounding is the one thing enforced almost entirely by vibes.
+
+**This is v2** — a 4-agent validation pass corrected the v1 five-layer plan (see §2). Key change: **ground once at plan-time and gate the plan**, not force-re-read at every agent.
 
 ---
 
-## 1. The gap (from the exploration)
+## 1. The gap (from exploration)
 
-- **Injection:** STATE/ROADMAP/REQ/CONTEXT/RESEARCH are auto-injected into producing agents; the strategy/design artifacts (DOMAIN-MODEL, ADR, TEST/SECURITY/FE/INFRA/CICD-STRATEGY, DESIGN-INVENTORY, the literal design) arrive only as **soft path-strings** in `<files_to_read>` with "MANDATORY" prose. The one hard-read mechanism (`mandatory-initial-read.md`) covers only *framework references*, never `.planning` docs.
-- **Enforcement:** The only mechanical read-receipt is a grep for CONTEXT `D-NN` decision IDs (`decision-coverage-plan`). Design has a *conditional* LLM oracle-diff. ADR/TEST-STRATEGY/etc. have only a subjective "did the LLM notice a contradiction?" — which cannot catch "the producer never read it" when the omission isn't a visible contradiction.
-- **Budget bias:** `context-budget.md` / `universal-anti-patterns.md` push agents toward "frontmatter only, don't read bodies"; below the 500k profile the executor's list drops even CONTEXT/RESEARCH — structurally under-grounded.
-- **Ambient index already exists but is thin/stale/2-runtime:** `generate-claude-md` writes a marker-sectioned CLAUDE.md/AGENTS.md (embed-or-`@`-link modes), but its sections are project/stack/conventions/architecture/skills/workflow — **not** the strategy/design docs; it runs **only at new-project time** (no re-sync); it targets **only claude + codex** (Gemini gets an unread CLAUDE.md; ~9 runtimes get nothing).
+- Producing agents get STATE/ROADMAP/REQ/CONTEXT/RESEARCH injected; the strategy/design artifacts arrive only as **soft path-strings** with "MANDATORY" prose. The one hard-read mechanism (`mandatory-initial-read`) covers only *framework references*.
+- The only mechanical read-receipt is a grep for CONTEXT `D-NN` IDs (`decision-coverage-plan`). Design has a conditional LLM diff. ADR/TEST-STRATEGY/etc. have only a subjective "did the LLM notice a contradiction?" — which can't catch "never read it" when the omission isn't a visible contradiction.
+- Context-budget rules bias agents toward "frontmatter only, don't read bodies"; below the 500k profile the executor's list drops even CONTEXT/RESEARCH.
+- The ambient grounding index (`generate-claude-md`) exists but omits the strategy/design docs, runs only at new-project time, and targets only claude+codex.
 
-**Three existing levers to extend:** `generate-claude-md` (the index), `<required_reading>`/`mandatory-initial-read` (the only hard-read), `decision-coverage-plan` (the only greppable gate).
+## 2. What the validation corrected (v1 → v2)
 
-## 2. The design — 5 layers
+| v1 assumption | Validation finding | v2 correction |
+|---|---|---|
+| Ambient index uses `@`-link-mode for freshness across CLIs | `@`-expansion is **Claude-only** (config docs say so; no cross-CLI conversion); eager `@`-import is also byte-unsafe (Codex 32 KB cap, "gaming the proxy") | Index is a **plain instructive path-list + mandate** — identical on all runtimes, still fresh (paths, not snapshots) |
+| Layer 2: inject sources into `<required_reading>` to force reading | `<required_reading>`/`mandatory-initial-read` is **prose-only, zero mechanical enforcement** (no hook/gate/verb) | **Cut Layer 2.** Reading is forced by the **plan gate**, not a stronger prose list |
+| Force every agent (planner+executor+researchers) to re-read every source | The **executor's primary grounding is the PLAN, always**; it only reads CONTEXT/`canonical_refs` on ≥500k windows | **Ground once at plan-time; distill into the plan; the executor inherits it for free** |
+| Build a new "active sources" registry (Layer 0) | `canonical_refs` **already is** that registry — just assembled lossily by an LLM | **Resolver populates `canonical_refs`** deterministically; no parallel structure |
+| Phase-scope the source set | **No deterministic phase-type signal** exists (inferred from title at read-time) | **Drop phase-scoping for v1**; resolve the full active set (~5–7 docs) |
+| Citation gate is optional "teeth" on top | Gate is the **only** thing with teeth; 3 of 4 artifacts support a real scripted cross-check | **Citation gate is the core enforcement**, extending `decision-coverage-plan` |
+| Adding strategy docs to `artifacts.cjs` might cause health false-positives | Backwards — the root strategy docs are **currently W019-flagged** as "unrecognized"; adding them **removes** false-positives | Register them (single consumer = W019) |
 
-**0 · Deterministic "active sources" resolver** *(linchpin).* A `gsd-tools` verb — `grounding-set` (extends `artifacts.cjs`, which today omits every strategy artifact) — that, from `.planning/` + the `## Mode` block, returns the **live, phase-scoped source set**: the strategy docs that exist, the ADR, DESIGN/LEGACY-INVENTORY, PRODUCT-BRIEF, and the design/legacy/vibe pointers. Tested code, not LLM globbing. Phase-scoped so a backend phase pulls ADR+DOMAIN+TEST+SECURITY and a FE phase pulls FRONTEND-ARCH+seam+DESIGN-INVENTORY — tight sets get honored; "read all 8 every task" gets skipped. This is the consumer-backed registry cut in 1.13.0 for having no consumer; it now has three (index, required_reading, gate).
+## 3. The corrected design — 3 core mechanisms + 3 supports
 
-**1 · Ambient grounding index** *(the AGENTS.md idea, done right).* Add a *Sources of truth* managed section to `generate-claude-md`, fed by Layer 0, emitted in **link mode** (`@`-refs — never a stale snapshot). Contents: the `## Mode`, the active source `@`-paths (one line each on what each governs), the § Source-precedence rule, and the hard mandate: *"These are authoritative for THIS project — they override your memory and training. Read and cite them before planning or editing."* Fix the two map-found gaps: **regenerate on every strategy-skill produce** (+ a SessionStart hook) and **extend runtime coverage** (gemini→GEMINI.md, plus the runtimes that get nothing).
+### Core (the enforcement — "ground once, gate the plan")
 
-**2 · Promote the soft list to a hard read.** At plan/execute spawn, inject the Layer-0 set into a real `<required_reading>` block (the mechanism that already forces framework-ref reads), replacing the advisory `<files_to_read>` for the project's strategy/design.
+**M1 · Deterministic source resolver → populates `canonical_refs`.** A `gsd-tools` verb globs the mechanical source-classes — the ROADMAP `Canonical refs:` line + the fixed `.planning/{DOMAIN-MODEL,TEST-STRATEGY,SECURITY-STRATEGY,INFRA-STRATEGY,CICD-STRATEGY,FRONTEND-ARCHITECTURE,LEGACY-INVENTORY,DESIGN-INVENTORY}.md`, `.planning/adr/*.md`, `PRODUCT-BRIEF.md` — plus the design/legacy/vibe pointers from the `## Mode` block. `discuss-phase` uses this to seed `<canonical_refs>` deterministically (LLM only *appends* user-referenced docs). Fixes the lossy accumulator that drops artifacts today.
 
-**3 · Mechanical source-citation gate** *(the teeth).* Generalize `decision-coverage-plan`: every PLAN.md carries a `## Grounding` block that, per active source, names the decision taken from it (ADR rung, TEST-STRATEGY level, the design fields honored). A script greps that each Layer-0 path is cited **and cross-checks the cited value against the artifact** (you can't cite the wrong rung). Generic/missing → block at plan, non-soft at verify.
+**M2 · Planner distills a `## Grounding` block into PLAN.md (once).** The planner already reads every source (`plan-phase.md:858/923`). It emits a structured, **subdomain-keyed** grounding block: e.g. `core:matching → ADR rung: Domain Model`, `core:matching → test level: small`, `DESIGN-INVENTORY: address = single input (design)`. The executor inherits it **for free** because the plan is its unconditional primary grounding (`execute-phase.md:643`) — unlike `canonical_refs`, which it skips below 500k. Ground once, propagate via the plan.
 
-**4 · Name the failure explicitly.** Add to § Source precedence + the index: *"If your memory and the artifact disagree, the artifact wins — re-read it."* There is currently no such rule (only "training is stale re: libraries").
+**M3 · Extend `decision-coverage-plan` to gate the sources (BLOCKING).** Add `grounding` to `DESIGNATED_HEADINGS_RE`; parse `<canonical_refs>` as a second required list; mirror the existing coverage loop so an **uncited required source blocks the plan** exactly like an uncovered `D-NN` (`plan-phase.md:1567`, `exit 1`). For the **3 strong artifacts** (DESIGN-INVENTORY, DOMAIN-MODEL, TEST-STRATEGY) the value sits in a controlled-vocabulary **table column**, so the gate **cross-checks the cited value against the doc** (subdomain-keyed) — not just "was it mentioned." The **ADR is medium** — needs a small purpose-built Axis-A table parser to extract the rung (the shipped `adr-parser` doesn't); until then it's mention-level. The symmetric `decision-coverage-verify` already exists as the back-end gate (`verify-phase.md:218`).
 
-**Ship order:** 0 + 1 + 4 = the ambient/fresh/cross-CLI/memory-overriding core. Then 2 + 3 = the mechanical teeth.
+### Supports (salience + hygiene — not the enforcement)
 
-## 3. How it works with the 3 entry points
+**S1 · Ambient index (the AGENTS.md idea).** Add a *Sources of truth* section to `generate-claude-md`, fed by M1, as a **plain instructive path-list** (*"Read and cite these before planning/editing"*) + the § Source-precedence rule + the memory-override line. Fix the two map-found gaps: **regenerate on every strategy-skill produce + a SessionStart hook**, and **extend runtime coverage** (gemini→GEMINI.md, plus runtimes that get nothing). Makes the source set *salient and ambient*; the *enforcement* is still M2/M3.
 
-**Unifying model:** the entry points (and the strategy skills after them) **write** the sources + the `## Mode` block; the Layer-0 resolver **reads** "what sources exist now"; the index + required_reading + citation gate **enforce** them. Same machinery for all three — the resolver just reflects current `.planning` state, so it's entry-point-agnostic.
+**S2 · Register strategy docs in `artifacts.cjs`** (`CANONICAL_EXACT`) + `templates/README.md` index — safe, single-consumer (W019), removes existing false-positive warnings.
 
-- **`/gsd-discover-product`** → `PRODUCT-BRIEF.md` becomes a source (the outcome / wedge / must-NOT authority). The resolver includes it; the index lists it. Optional, runs before new-project.
-- **`/gsd-new-project`** → seeds the `## Mode` block and writes the **initial** index (it already calls `generate-claude-md`). Each strategy skill that runs after (model-domain, recommend-architecture, testing/security/frontend/infra/cicd-strategy) **refreshes the index** as it emits its doc. By plan-phase the index lists every active source.
-- **`/gsd-new-milestone`** → **re-evaluates `## Mode`** for the new cycle (design-input may now be "provided design" → DESIGN-INVENTORY gets produced). The Strategy Plan refresh (Step 4.5) re-runs/updates strategies → index refresh. New sources enter; sources retired for this milestone drop out. Grounding is **per-milestone-correct**, not frozen at project init (the current staleness bug).
-- **Build loop (`discuss → plan → execute → verify`)** → consumes the resolver via `<required_reading>` + the citation gate. `discuss-phase` already accumulates `<canonical_refs>`; now it seeds that list from the resolver so nothing is missed by a lossy hand-assembly.
+**S3 · Memory-override rule.** One line in § Source precedence + the index: *"If your memory and the artifact disagree, the artifact wins — re-read it."* (None exists today; only "training is stale re: libraries.")
 
-Net change per entry point: each one ends by (re)writing the grounding index from the resolver, so the ambient file is always current for the phase you're about to build.
+**Ship order:** M1 + M2 + M3 = the enforced core (ground-once + gate). Then S1 (ambient/cross-CLI salience) + S2/S3 (hygiene). M1+M2+M3 deliver the actual behavior fix; S1 makes it visible everywhere.
 
-## 4. Realistic end-to-end testing
+## 4. How it works with the 3 entry points
 
-The hard part: the value is **agent behavior** (does it read/honor the source vs default to instinct?), which no unit test fully captures. Strategy — a **planted-discrepancy dogfood fixture** + ablation, plus mechanical tests:
+The entry points **write** the sources + `## Mode`; **M1 reads** them into `canonical_refs`; **M2/M3 enforce** at plan time; **S1** keeps the source set ambient. Entry-point-agnostic — M1 just reflects current `.planning` state.
 
-**A. The planted-discrepancy fixture (the realistic behavioral test).** A dogfood project whose strategy artifacts are deliberately **counter-instinctive** — i.e. where memory/instinct and the artifact disagree, reproducing the real failure mode:
-- ADR mandates **Transaction Script** for a subdomain a model would instinctively over-engineer into a Domain Model — *and* Domain Model for one that looks like CRUD (both calibration directions).
-- DESIGN-INVENTORY declares **one `address` input** (the exact 1.13.0 failure) where a model instinctively explodes it into street/city/state/zip.
-- TEST-STRATEGY says **integration-heavy** for a DB-bound subdomain where a model defaults to unit tests.
-Run `plan-phase` + `execute-phase` on the fixture and assert the output **honors the counter-instinctive artifacts** (Transaction Script where mandated, single address field, integration tests). Honoring the counter-instinctive choice is proof the agent read the source, not memory.
+- **`/gsd-discover-product`** → `PRODUCT-BRIEF.md` enters M1's set (outcome/wedge/must-NOT authority) and S1's index.
+- **`/gsd-new-project`** → seeds `## Mode`; each strategy skill's output is picked up by M1 at the next `discuss-phase`, and S1 refreshes the ambient index as each doc is produced. By plan-phase the plan must cite them (M3).
+- **`/gsd-new-milestone`** → re-evaluates `## Mode` (design-input may flip to "provided design" → DESIGN-INVENTORY appears); the Strategy-Plan refresh updates strategies; M1 re-resolves per milestone (new sources in, retired ones out); S1 refreshes. Grounding is **per-milestone-correct** instead of frozen at project init.
+- **Build loop** → `discuss` seeds `canonical_refs` via M1; `plan` distills `## Grounding` (M2) and is gated (M3); `execute` inherits the plan's grounding; `verify` re-checks via the symmetric coverage gate.
 
-**B. Ablation (before/after proof).** Same fixture, enforcement OFF (baseline) vs ON. OFF drifts to instinct (over-engineers, explodes the address); ON honors the artifact. The flip *is* the proof the enforcement works — not a claim, a demonstrated behavior change.
+## 5. Realistic end-to-end testing
 
-**C. The citation gate as test instrument.** Because Layer 3 forces a `## Grounding` block that cites each source's actual decision and cross-checks it against the doc, "did it engage each source" becomes **greppable and scriptable**. The gate does double duty: enforcement + automated evidence.
+**The gate makes behavior observable** — the `## Grounding` block + M3's cross-check turn "did it read/honor the source" into greppable evidence.
 
-**D. Mechanical/unit tests (deterministic):**
-- Resolver: fake `.planning` + Mode → correct phase-scoped source set.
-- Index: *Sources of truth* section emitted in link mode, lists the right `@`-paths, updates on regen; lands per-runtime (AGENTS.md/codex, CLAUDE.md/claude, GEMINI.md/gemini).
-- Citation gate: PLAN.md missing a citation for an active source → blocks; wrong cited rung → blocks; complete + correct → passes.
-- required_reading: spawn prompt contains the active source paths as a hard-read block.
+**A. Planted-discrepancy fixture (behavioral oracle).** A dogfood project with deliberately **counter-instinctive** artifacts (memory vs artifact disagree):
+- ADR mandates **Transaction Script** for a subdomain a model would over-engineer into a Domain Model (and Domain Model where it looks like CRUD).
+- DESIGN-INVENTORY declares **one `address` input** (the 1.13.0 failure) where instinct explodes it into street/city/state/zip.
+- TEST-STRATEGY says **integration-heavy** where a model defaults to unit.
+Run `plan-phase` → assert the `## Grounding` block cites the counter-instinctive values **and M3's cross-check passes** (the citation matches the doc's table). Run `execute-phase` → assert the built code honors them (Transaction Script, single address field, integration tests). Honoring the counter-instinctive choice = proof it grounded, not guessed.
 
-**E. Per-entry-point integration tests:**
-- new-project → run strategy skills → index accrues each source.
-- new-milestone that changes design-input → Mode + index update, DESIGN-INVENTORY appears, prior-milestone sources don't leak.
-- discover-product → PRODUCT-BRIEF enters the source set.
+**B. Ablation (before/after proof).** Same fixture, enforcement OFF vs ON: OFF drifts to instinct (over-engineers, explodes the address); ON honors the artifact. A demonstrated behavior flip.
 
-The end-to-end "prove it works" run = the planted-discrepancy fixture through each entry point, asserting the output honors the counter-instinctive artifacts + the citation gate fires + the index lands per-runtime — the same realistic-dogfood approach used for `/gsd-learn`, but with the discrepancy fixture as the behavioral oracle.
+**C. Negative gate test.** A plan that omits/mis-cites a required source (wrong ADR rung for the subdomain) → M3 **blocks** (`exit 1`); a correct, complete `## Grounding` → passes. Fully scriptable.
 
-## 5. Guardrails (so it doesn't rot)
+**D. Mechanical unit tests.** M1 resolver (fake `.planning` + Mode → correct source set); M3 coverage + cross-check per artifact (strong: DESIGN-INVENTORY/DOMAIN-MODEL/TEST-STRATEGY enum match; ADR: Axis-A parse); S1 index emitted as path-list, per-runtime target (AGENTS.md/GEMINI.md/CLAUDE.md), auto-resync; S2 W019 no longer flags the strategy docs.
 
-- **Pointers, not payloads** — link mode only; docs stay in `.planning`. Avoids context bloat + snapshot staleness.
-- **Every field has a consumer** — the index reads Layer 0, the gate reads Layer 0, required_reading reads Layer 0. No write-only plumbing (the 1.13.0 "inert plumbing" trap).
-- **Phase-scoped** — over-broad required_reading gets ignored; tight relevant sets get honored.
-- **Cheap grep, not bureaucracy** — the citation gate is a greppable cross-check, not an unverified self-attested table (the existing `planner-source-audit` coverage table is exactly the un-verified version to avoid).
-- **Backwards-compatible** — a project with no strategy docs yet resolves to an empty set and nothing blocks; enforcement scales with what exists.
+**E. Per-entry-point integration.** new-project → strategy skills → `canonical_refs` + index accrue each source; new-milestone changing design-input → Mode+index update, DESIGN-INVENTORY appears, prior-milestone sources don't leak; discover-product → PRODUCT-BRIEF in the set.
 
-## 6. Out of scope (v1)
+## 6. Guardrails
 
-- Rewriting the context-budget doctrine (the frontmatter-only bias) — instead, Layer 2 exempts the active source set from it (hard-read wins over budget bias). A broader budget rethink is separate.
-- Full field-level scripted oracles for every strategy doc — start with the ADR rung + design fields (the highest-value, already-structured) as scripted; the rest stay LLM-diff with the citation cross-check as the mechanical floor.
-- Runtimes beyond the ambient-file ones for v1 — cover claude/codex/gemini first (the natively-ambient trio), then the rest.
+- **Pointers, not payloads** — path-lists only (never `@`-imports of strategy docs; byte-unsafe + Claude-only). Docs stay in `.planning`.
+- **Ground once** — the planner distills; every other agent inherits via the plan. No N× re-reads, no window-gated misses.
+- **Cheap grep + real cross-check where possible** — mention-coverage for all; enum cross-check for the 3 strong artifacts; ADR mention-only until the Axis-A parser lands.
+- **Subdomain-keyed citations** — ADR/TEST/DOMAIN are per-subdomain; a flat "rung = Domain Model" is ambiguous and rejected.
+- **Backwards-compatible** — no strategy docs yet → empty required set → nothing blocks. Enforcement scales with what exists.
+- **Every field has a consumer** — M1 feeds M3 + S1; no write-only plumbing.
 
-## 7. Decisions locked
+## 7. Out of scope (v1)
 
-- Extend `generate-claude-md` + `mandatory-initial-read` + `decision-coverage-plan` — reuse, don't reinvent.
-- Link mode (`@`-refs), never embedded snapshots, for the Sources section.
-- Phase-scoped resolver is the single source of "what to ground on"; three consumers.
-- Realistic proof = planted-discrepancy fixture + ablation, with the citation gate as the automated evidence layer.
-- Ship 0+1+4 first (ambient/fresh/cross-CLI/memory), then 2+3 (mechanical teeth).
+- Rewriting the context-budget "frontmatter-only" doctrine — M2/M3 sidestep it (grounding rides the plan, which is always read).
+- Phase-scoping the source set — no deterministic signal; revisit if the set grows unwieldy (would need a `phase_type`/`domains` frontmatter field).
+- Full scripted oracles for every artifact — ship enum cross-check for the 3 strong ones + ADR Axis-A parser; the rest stay mention-coverage.
+- Runtimes beyond the natively-ambient trio (claude/codex/gemini) for S1 v1.
+
+## 8. Decisions locked (v2)
+
+- **Ground once at plan-time; gate the plan** — not force-re-read at every agent (executor rides the plan; required_reading has no teeth).
+- Reuse `canonical_refs` (resolver populates it), `decision-coverage-plan` (extend to gate sources), `generate-claude-md` (path-list index), `artifacts.cjs` (register). No parallel systems.
+- Ambient index = **plain path-list**, never `@`-link-mode (Claude-only + byte-unsafe).
+- Citations **subdomain-keyed**; real cross-check on DESIGN-INVENTORY/DOMAIN-MODEL/TEST-STRATEGY, custom parser for ADR, mention-coverage as the floor.
+- Drop phase-scoping for v1.
+- Realistic proof = planted-discrepancy fixture + ablation + negative gate test.
