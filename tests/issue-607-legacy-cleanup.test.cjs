@@ -83,6 +83,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     assert.equal(entry, undefined, 'clean hook must not appear in plan');
   });
 
+// FORK:identity BEGIN
   // ── upstream (@opengsd) fork-source signals ────────────────────────────────
 
   test('flags a hook file referencing the upstream @opengsd npm coordinate', () => {
@@ -114,6 +115,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     const entry = plan.find((p) => p.path === hookFile);
     assert.equal(entry, undefined, 'current-package hook must never be flagged');
   });
+// FORK:identity END
 
   // ── data-loss regression: user custom hooks must be preserved ──────────────
 
@@ -215,6 +217,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     assert.equal(entry, undefined, 'absent cache must not appear in plan');
   });
 
+// FORK:identity BEGIN
   test('flags the upstream @opengsd per-package update-check cache', () => {
     const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-opengsd-gsd-core.json');
     writeFile(cachePath, JSON.stringify({ update_available: false }));
@@ -233,6 +236,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     const entry = plan.find((p) => p.path === ourCache);
     assert.equal(entry, undefined, "current package's own cache must never be removed");
   });
+// FORK:identity END
 
   // ── deduplication and sort ─────────────────────────────────────────────────
 
@@ -271,6 +275,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     }
   });
 
+// FORK:identity BEGIN
   // ── empty-legacy-runtime-dir (#1.7.3) ──────────────────────────────────────
 
   test('flags an EMPTY legacy get-shit-done runtime dir', () => { // gsd-allow-legacy-name
@@ -299,6 +304,7 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     const entry = plan.find((p) => p.path === path.join(configDir, 'gsd-core'));
     assert.equal(entry, undefined, "the current 'gsd-core' runtime dir must never be flagged");
   });
+// FORK:identity END
 });
 
 describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
@@ -405,6 +411,7 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
     assert.ok(fs.existsSync(devPrefs), 'dev-preferences.md must survive apply');
   });
 
+// FORK:identity BEGIN
   // ── empty-legacy-runtime-dir apply (#1.7.3) ────────────────────────────────
 
   test('apply removes an EMPTY legacy runtime dir (recursively) and reports it removed', () => {
@@ -438,4 +445,5 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
     assert.equal(result.errors.length, 1, 'the skipped dir should be reported as an error');
     assert.match(result.errors[0].error, /not empty at apply time/);
   });
+// FORK:identity END
 });
