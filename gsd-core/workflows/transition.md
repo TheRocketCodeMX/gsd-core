@@ -217,9 +217,11 @@ cat .planning/phases/XX-current/*-SUMMARY.md
    - If the product has meaningfully changed, update the description
    - Keep it current and accurate
 
+<!-- FORK:strategy BEGIN -->
 6. **`## Mode` still accurate? (lightweight drift check)**
    - Did this phase materially change the project's nature vs the recorded `## Mode`? Common drifts: a **prototype that's now production-bound** (Code-quality/criticality rose), a phase that **added a frontend** where Mode recorded none, or a **new surface/integration**.
    - If so, note it and **suggest a refresh** — re-run the relevant strategy step (e.g. `/gsd:security-strategy`, `/gsd:frontend-architecture`), or `/gsd:new-milestone` for a scope shift (it refreshes `## Mode` + `## Strategy Plan`). Do **not** block the transition or auto-rewrite Mode here; just surface the drift so stale-Mode building doesn't continue silently.
+<!-- FORK:strategy END -->
 
 **Update PROJECT.md:**
 

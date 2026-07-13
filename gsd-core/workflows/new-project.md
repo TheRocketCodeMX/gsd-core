@@ -148,6 +148,7 @@ Record the chosen intent so Step 4 fills `## Mode` (Origin + Code-quality) accor
 **If "Refactor / rewrite it" OR "Harden it":** `Run /gsd:legacy-inventory first (it produces LEGACY-INVENTORY.md; new-project then derives requirements from design ∪ old-behavior), then return to /gsd:new-project` — exit command.
 **If "Skip exploration" OR `needs_codebase_map` is false:** Continue to Step 3.
 
+<!-- FORK:strategy BEGIN -->
 **Provided-design detection (runs regardless of whether there is existing code — the design axis is orthogonal to Origin).** A provided design is a source of truth and must be detected + routed here, symmetric to the legacy path above — otherwise it gets laundered into vision-derived requirements and the build drifts from it (the address-failure: one design input → an invented multi-field schema). Init pre-detects the signal — branch on it (it is a **hint that you CONFIRM**, never a silent lock):
 
 - **`design_dismissed` is true** (user passed `--no-design`) → Design-input: none; skip the prompt.
@@ -163,6 +164,7 @@ Record the chosen intent so Step 4 fills `## Mode` (Origin + Code-quality) accor
   - "No / none" — Design-input: none
 
 **If a provided design is recorded:** (a) record its pointer in `## Mode` Design-input (Step 4); (b) **ground requirements (Steps 3 + 7) by reading the design directly** — the pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` — deriving them from **(the design) ∪ (the vision)**, lifting the design's literal user-facing fields and never generalizing them (mirrors the legacy `design ∪ old-behavior` rule); (c) the design is ingested into the in-repo oracle (`.planning/DESIGN-INVENTORY.md`) by the **next strategy step**, not here — Step 7.6 puts `model-domain` (or `frontend-architecture` for a frontend surface) first in the `## Strategy Plan` and auto-advances into it, and it writes the oracle before the build loop's design-fidelity gate runs (the planner is the fallback if both are skipped). **Do NOT run `model-domain` mid-new-project** — it reads the PROJECT.md/REQUIREMENTS that Steps 4/7 write, so it can only run after; the recorded design pointer + the Step-7.6 on-ramp are the correct mechanism (unlike `legacy-inventory`, which is a true pre-step because it reads only the old code).
+<!-- FORK:strategy END -->
 
 ## 2a. Auto Mode Config (auto mode only)
 
@@ -349,11 +351,13 @@ If spike/sketch findings skills exist, read their SKILL.md files to inform the q
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+<!-- FORK:strategy BEGIN -->
 **If `.planning/PRODUCT-BRIEF.md` exists, read it first.** It is a validated product definition from `/gsd:discover-product` (outcome, target user, narrowest wedge, demand evidence, four-risks status, prioritized scope, explicit "not in scope"). Ground the questioning in it — **confirm and fill gaps rather than re-asking what it already answers** — and carry its outcome, wedge, and prioritized scope into PROJECT.md (Core Value / What This Is) and the requirements (Steps 4 and 7). Frame PROJECT.md around the brief's *outcome*, not a re-derived feature list.
 
 **If `.planning/LEGACY-INVENTORY.md` exists** (rewrite/refactor/vibe-coded mode, from `/gsd:legacy-inventory`), read it too and **derive requirements from (the design) ∪ (the old-system behavior)** per its coverage matrix + three-way gap map — never from the design alone. Honor its **"never lose a feature" gate** (every old capability becomes a requirement or an explicitly-dropped item with the user's prior sign-off) and carry its salvage dispositions + source-of-truth precedence into the requirements (Steps 4 and 7).
 
 **If a provided design is recorded (Step 2's design detection),** **read the design directly** — the `## Mode` Design-input pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` (the in-repo oracle doesn't exist yet; `model-domain`/`frontend-architecture` write it as the next strategy step) — and **derive requirements from (the design) ∪ (the vision)**: lift its literal user-facing fields (a single `address` input is one `address` field, not four), never generalize or invent beyond them, and never drop a design-shown field. The design is the authority on the observable shape (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`).
+<!-- FORK:strategy END -->
 
 **Open the conversation:**
 
@@ -415,6 +419,7 @@ Loop until "Create PROJECT.md" selected.
 
 Synthesize all context into `.planning/PROJECT.md` using the template from `templates/project.md`.
 
+<!-- FORK:strategy BEGIN -->
 **Fill the `## Mode` section (the persisted mode-combination — read by every downstream strategy/build skill so they don't re-detect).** Detect the three orthogonal dimensions per `@~/.claude/gsd-core/references/exploration-and-adaptability.md`, using the init signals + the conversation + any PRODUCT-BRIEF / provided design:
 - **Origin:** greenfield (no existing code) · brownfield-extend (`is_brownfield`/`has_existing_code` and the intent is to *add to* it) · rewrite/refactor (existing code but the intent is to *replace* it).
 - **Design input:** none · a provided design to ingest (a design-tool export / prototype / generated-design artifact the user supplied) · an existing design system to honor.
@@ -422,6 +427,7 @@ Synthesize all context into `.planning/PROJECT.md` using the template from `temp
 Record the named combination (e.g. "greenfield-rewrite + new-design + salvageable-old-code"). When a dimension is genuinely unclear, ask one targeted question rather than guessing.
 
 **Multi-surface nudge.** If you detect multiple *independent* surfaces with genuinely different archetypes (e.g. a backend service **and** a separate frontend app **and** a CLI in one repo), say so: GSD models **one surface per project** (`@~/.claude/gsd-core/references/strategy-flow.md`). Recommend running GSD **per package/surface**, or ask the user to pick the **primary** surface for this project and record its Mode — do not average divergent surfaces into one Mode.
+<!-- FORK:strategy END -->
 
 **For greenfield projects:**
 
@@ -1284,6 +1290,7 @@ Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=s
 
 When `TEXT_MODE=true` (per the workflow's existing TEXT_MODE handling for non-Claude runtimes), present the same two options as a plain-text numbered list and ask the user to type their choice number.
 
+<!-- FORK:strategy BEGIN -->
 ## 7.6. Strategy Plan (the on-ramp into the strategy chain)
 
 Context is now ready (PROJECT.md + `## Mode` + REQUIREMENTS + any PRODUCT-BRIEF), so recommend the **archetype-tailored strategy path** before building — this is the on-ramp the build loop depends on. **Read `@~/.claude/gsd-core/references/strategy-flow.md` now.**
@@ -1294,6 +1301,7 @@ Context is now ready (PROJECT.md + `## Mode` + REQUIREMENTS + any PRODUCT-BRIEF)
 4. **Present it** and let the user accept / customize / skip-to-build. A declined recommended step → a skip-ledger line (`- <skill> — skipped (<reason>, <date>)`); enforcers note it once, don't re-nag. The build loop honors whatever artifacts exist, so a partial path is safe.
 
 The Step-9 handoff then leads with the **first recommended step** of this plan. (The coarse roadmap below stays coarse; `plan-phase`'s elaboration gate refines it against whatever strategy artifacts get produced.)
+<!-- FORK:strategy END -->
 
 ## 8. Create Roadmap
 

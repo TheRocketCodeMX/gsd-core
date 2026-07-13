@@ -43,7 +43,9 @@ Every threat must resolve to CLOSED, OPEN (BLOCKER), or documented accepted risk
 Read ALL files from `<required_reading>`. Extract:
 - PLAN.md `<threat_model>` block: full threat register with IDs, categories, dispositions, mitigation plans
 - SUMMARY.md `## Threat Flags` section: new attack surface detected by executor during implementation
+<!-- FORK:strategy BEGIN -->
 - `.planning/SECURITY-STRATEGY.md` (when present): the app-wide posture — ASVS level, authz model, secrets/key strategy, the threat-model **parent**, and the security DoD. The phase's threat model inherits this parent; cross-check the implementation honors it (authz enforced server-side + deny-by-default per the model; per-endpoint BOLA/BFLA checks; secrets via the chosen strategy; the ASVS-level controls present). `.planning/INFRA-STRATEGY.md` + the architecture ADR (when present): the secrets/encryption + trust-boundary decisions mitigations must match. **A per-phase mitigation or implementation that contradicts the app-wide posture is a BLOCKER.**
+<!-- FORK:strategy END -->
 - `<config>` block: `asvs_level` (1/2/3), `block_on` (open / unregistered / none)
 - Implementation files: exports, auth patterns, input handling, data flows
 

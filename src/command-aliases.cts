@@ -574,6 +574,7 @@ export const ROADMAP_COMMAND_ALIASES: CommandAlias[] = [
   }
 ];
 
+// FORK:strategy BEGIN
 export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
   {
     "canonical": "project.mode",
@@ -600,6 +601,7 @@ export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
     "mutation": false
   }
 ];
+// FORK:strategy END
 
 export const NON_FAMILY_COMMAND_ALIASES: NonFamilyCommandAlias[] = [
   {
@@ -853,4 +855,6 @@ export const PHASE_SUBCOMMANDS: string[] = PHASE_COMMAND_ALIASES.map((entry) => 
 export const PHASES_SUBCOMMANDS: string[] = PHASES_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const VALIDATE_SUBCOMMANDS: string[] = VALIDATE_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const ROADMAP_SUBCOMMANDS: string[] = ROADMAP_COMMAND_ALIASES.map((entry) => entry.subcommand);
+// FORK:strategy BEGIN
 export const PROJECT_SUBCOMMANDS: string[] = PROJECT_COMMAND_ALIASES.map((entry) => entry.subcommand);
+// FORK:strategy END
