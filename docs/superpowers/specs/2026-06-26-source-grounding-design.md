@@ -90,7 +90,39 @@ Run `plan-phase` → assert the `## Grounding` block cites the counter-instincti
 - Full scripted oracles for every artifact — ship enum cross-check for the 3 strong ones + ADR Axis-A parser; the rest stay mention-coverage.
 - Runtimes beyond the natively-ambient trio (claude/codex/gemini) for S1 v1.
 
-## 8. Decisions locked (v2)
+## 8. Build-validated implementation notes (v3 — post deep-validation, 8 agents)
+
+**Citation gate — precise scope (from the linchpin analysis):**
+- **Forced-read enforcement lands on ADR-rung + DESIGN-INVENTORY** — the only two cells high-entropy enough that guessing fails. ADR rung is a *compound set* (`Domain Model + Hexagonal`) → **set-equality** compare per subdomain. DESIGN-INVENTORY → key by **(Field, Surface)** and compare **Source enum + Captured-shape** together. These are exactly your two original failures (calibration + the address bug).
+- **DOMAIN-MODEL-Type and TEST-STRATEGY-level are coverage citations, not forced-read** (3 values each, and test-level is derivable from the rung). Cite them for completeness; don't claim they force reading. (They're largely implied by the ADR anyway.)
+- **Three non-negotiable parser guards or the gate is theater:** (1) **reject `[...]` placeholder cells** (a lazy planner citing an unfilled template must fail); (2) **set-equality on ADR / leading-token on test-strategy** (compound cells); (3) **(Field, Surface) keying for DESIGN-INVENTORY**.
+- **Citation line format:** `- <ARTIFACT> · <key> → <value>` using `·`(U+00B7)/`→`(U+2192) separators — safe against subdomain colons/spaces and GFM rows. Parse regex + per-artifact compare defined in the linchpin analysis.
+- **Residual risk (name into the plan):** subdomain keys are free text across the three docs → cross-artifact key-join relies on naming consistency (casefold handles case, not renames). A canonical subdomain registry is future hardening, not v1.
+
+**Gate wiring (`decision-coverage-plan` extension):**
+- Add `grounding` to `DESIGNATED_HEADINGS_RE` (`check-command-router.cjs:111`) + the frontmatter key loop (`:150`) — otherwise `## Grounding` citations are *not scanned* and would report false-uncovered.
+- `## Grounding` is structurally safe with every existing plan validator (plan-checker is LLM-semantic with no closed section-set; gap-checker/reachability/drift ignore extra sections).
+- Config toggle: add `workflow.grounding_gate` mirroring `context_coverage_gate` exactly — schema (`config-schema.manifest.json`), default `true` (`config-defaults.manifest.json`), `gateEnabled` short-circuit in the handler, `!= "false"` guard in the workflow. Absent = enabled → free backwards-compat, and the OFF switch for the ablation test.
+- Tests: update `bug-2492-context-coverage-gate.test.cjs`; add a new unit test for the extended `extractPlanDesignatedSections`/cross-check (the functions are already exported).
+
+**Byte-budget constraints (the real implementation gotcha):**
+- `discuss-phase.md` = **29995/30000 bytes (~4 free)** and `plan-phase.md` = **89721/90000 (279 free, and it's the XL high-water mark)** → a resolver invocation **cannot be added inline**. Must **lazy-extract prose to a `gsd-core/references/` file first** (the #2551 pattern) to free bytes, then add the small `gsd_run` call. This is the known byte-lock dance from the 1.14.0 work.
+- The **PLAN template (`phase-prompt.md`) has no size gate** → adding the `## Grounding` section there is free.
+- `gsd-planner.md` is bound by the **50000-char reachability gate (~892 chars free)**, not the line budget → planner grounding instructions must be terse (put detail in a reference).
+
+**Resolver hook points (M1) — including the skip-path hole:**
+- Primary: `discuss-phase.md:296` (the canonical-refs accumulator 1b) — resolver populates the mechanical source-classes deterministically.
+- **Fallback (the hole): `plan-phase.md:385` "Continue without context"** leaves `<canonical_refs>` entirely absent → the resolver **must also run here** (and confirm the PRD express path ~253–260) so the required-source list exists before the gate at `:1562`. The ADR express path already carries it.
+
+**Ambient index (S1) touch-points + refresh:**
+- Adding the *Sources of truth* section to `generate-claude-md` is localized: `MANAGED_SECTIONS` + one generator + two map entries (`src/profile-output.cts:1055-1071, 381-540`), the doc template, and **bump the hardcoded `sections_total === 6` assertion** (`tests/claude-md.test.cjs:37`) to 7; rebuild the `.cjs`.
+- **Refresh must be event-driven, not every-session** — an unconditional regen writes the file every session (git churn + clobbers manual edits). Use a `FileChanged` matcher on the `.planning` strategy docs (the repo already has that hook type) or an mtime-gate, always `--auto`, via the detached-spawn pattern of `gsd-check-update.js`.
+
+**Legacy/vibe division of labor (no hole):**
+- The literal legacy *code* is already covered by the **orthogonal characterization/parity gate** (`plan-checker:82`, `verifier:472`) — mechanical, grounded in the real old code. Vibe-coded by the **intent-hardening gate** (`verifier:473`). My doc-citation gate covers the *docs* axis and **composes cleanly** — different triggers, no overlap.
+- **One optional hardening:** a *non-behavior-preserving rewrite region* (design-delta / fresh-from-DOMAIN-MODEL) grounds in the old system only via LEGACY-INVENTORY + prose. Extending the citation gate to require a `LEGACY-INVENTORY` citation for those regions (mirroring the existing `design-delta` BLOCKER clause) closes it. v1.1, not a blocker.
+
+## 9. Decisions locked (v2)
 
 - **Ground once at plan-time; gate the plan** — not force-re-read at every agent (executor rides the plan; required_reading has no teeth).
 - Reuse `canonical_refs` (resolver populates it), `decision-coverage-plan` (extend to gate sources), `generate-claude-md` (path-list index), `artifacts.cjs` (register). No parallel systems.
