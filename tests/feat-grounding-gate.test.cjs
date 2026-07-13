@@ -122,4 +122,28 @@ describe('grounding gate (blocking)', () => {
     assert.equal(runGate(dir, phaseDir).passed, true);
     cleanup(dir);
   });
+
+  test('reports plans_scanned so a vacuous pass is visible (#21 P1-4)', () => {
+    const { dir, phaseDir } = gateProject('## Grounding\n- ADR · pricing → Domain Model\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, true);
+    assert.equal(j.plans_scanned, 1, 'the matched *-PLAN.md count is reported');
+    cleanup(dir);
+  });
+
+  test('plan-like files that do not match *-PLAN.md produce a warning, not a silent pass (#21 P1-4)', () => {
+    // A phase dir containing only e.g. 01-01-plan.md (wrong case) previously
+    // returned passed:true with no signal that ZERO plans were actually read.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-gate-'));
+    const phaseDir = path.join(dir, '.planning', 'phase');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'), '# P\n');
+    fs.writeFileSync(path.join(phaseDir, '01-01-plan.md'), '## Grounding\n\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, true, 'passed semantics unchanged (nothing required)');
+    assert.equal(j.plans_scanned, 0);
+    assert.ok(Array.isArray(j.warnings) && j.warnings.some((w) => /01-01-plan\.md/.test(w)),
+      `expected a near-miss warning naming 01-01-plan.md, got: ${JSON.stringify(j.warnings)}`);
+    cleanup(dir);
+  });
 });

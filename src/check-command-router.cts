@@ -147,11 +147,21 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     return;
   }
   const required = groundingLib.resolveRequiredSources(projectDir).required;
-  const planText = loadPlanContents(phaseDir).join('\n');
+  // Anti-vacuous-pass surface (#21 P1-4): report how many *-PLAN.md files were
+  // actually scanned, and warn when the dir holds plan-LOOKING .md files that
+  // the pattern missed (e.g. lowercase 01-01-plan.md) — a passed:true over
+  // zero scanned plans must be visible to the orchestrator, never silent.
+  const { planFiles, nearMisses } = listPlanFiles(phaseDir);
+  const plansScanned = planFiles.length;
+  const warnings: string[] = [];
+  if (plansScanned === 0 && nearMisses.length > 0) {
+    warnings.push(`no *-PLAN.md matched in ${phaseDir}, but plan-like file(s) exist: ${nearMisses.join(', ')} — rename to <phase>-<plan>-PLAN.md; the gate scanned nothing`);
+  }
+  const planText = planFiles.map((f) => readIfExists(path.join(phaseDir, f))).join('\n');
   const cites = groundingLib.parseGroundingBlock(planText);
   const sourceCites = cites.filter((c) => c.artifact === 'SOURCE');
   if (required.length === 0 && sourceCites.length === 0) {
-    output({ passed: true, total: 0, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
+    output({ passed: true, total: 0, plans_scanned: plansScanned, warnings, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
     return;
   }
   const problems: string[] = [];
@@ -174,7 +184,22 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     if (!res.ok) problems.push(`SOURCE: ${res.reason}`);
   }
   const passed = problems.length === 0;
-  output({ passed, total: required.length, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
+  output({ passed, total: required.length, plans_scanned: plansScanned, warnings, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
+}
+
+// List the phase dir's *-PLAN.md files plus the near-misses: .md files that look
+// like plans (contain "plan" in the name) but do not match the scanned pattern.
+function listPlanFiles(phaseDir: string): { planFiles: string[]; nearMisses: string[] } {
+  if (!phaseDir || !fs.existsSync(phaseDir)) return { planFiles: [], nearMisses: [] };
+  try {
+    const entries = fs.readdirSync(phaseDir);
+    return {
+      planFiles: entries.filter((entry) => /-PLAN\.md$/.test(entry)),
+      nearMisses: entries.filter((entry) => !/-PLAN\.md$/.test(entry) && /\.md$/i.test(entry) && /PLAN/i.test(entry)),
+    };
+  } catch {
+    return { planFiles: [], nearMisses: [] };
+  }
 }
 // FORK:grounding END
 
