@@ -143,7 +143,36 @@ Uniform rule: cite the decision only that file holds, keyed to its unit; the scr
 - The literal legacy *code* is already covered by the **orthogonal characterization/parity gate** (`plan-checker:82`, `verifier:472`) — mechanical, grounded in the real old code. Vibe-coded by the **intent-hardening gate** (`verifier:473`). My doc-citation gate covers the *docs* axis and **composes cleanly** — different triggers, no overlap.
 - **One optional hardening:** a *non-behavior-preserving rewrite region* (design-delta / fresh-from-DOMAIN-MODEL) grounds in the old system only via LEGACY-INVENTORY + prose. Extending the citation gate to require a `LEGACY-INVENTORY` citation for those regions (mirroring the existing `design-delta` BLOCKER clause) closes it. v1.1, not a blocker.
 
-## 9. Decisions locked (v2)
+## 9. Full-surface understanding (v4 — all agents, all flows, all states)
+
+**The grounding surface is layered, not a flat 10.** Strategy files (Strategy-Plan-driven) + source oracles (PRODUCT-BRIEF, DESIGN-INVENTORY, LEGACY-INVENTORY) + **phase-level specs** (SPEC / UI-SPEC / AI-SPEC, per phase) + exploration outputs (`.planning/codebase/*`, `.planning/intel/*`) + **the literal sources themselves** (design, legacy code, vibe-coded app, additional context apps). Canonical "must honor" anchor: `discuss-phase.md:298`.
+
+**Two tiers (because Read-only gates can't fetch raw sources):**
+- **Upstream — explore raw → produce faithful in-repo inventory.** This is where "explore the sources yourself" actually happens: the 3 researchers (project/phase/ui — raw design/legacy) + the **2 mappers** (`codebase-mapper`, `intel-updater` — raw code) that emit the distillations everyone trusts. **Gap: the 2 mappers have NO source-precedence hook** — add it; their fidelity is upstream of everything.
+- **Downstream — cite + honor the inventory.** The build loop grounds in the oracle (`DESIGN-INVENTORY`/`LEGACY-INVENTORY`), not raw (`gsd-verifier.md:461` "never the raw design"). Correct — a Read-only gate can't verify a Figma. M2/M3 live here.
+- **Honest architectural limit:** a Read-only gate can force *"an inventory exists and the build matches it,"* not *"the inventory faithfully captures the un-fetchable source."* That last mile stays prose (this is *why* the in-repo oracle exists — 1.13.0).
+
+**The strategy-step state machine (the never-run answer):**
+| State | Reader | Gate behavior | What grounds the work |
+|---|---|---|---|
+| `done` | `project strategy-plan` = done + file on disk | **required citation** (M3), `exit 1` if uncited/mismatched | the artifact (high-entropy cell) |
+| `recommended`, not run | `strategy-plan.next_recommended` | missing-input **warn**, do not block | inline user Q&A + floor |
+| `skipped` (ledgered) | `project strategy-skipped` = true | **excluded**, note-once, never block | documented fallback + floor |
+| **never-run / never-recommended** | absent from table + ledger (`found:false`) | **empty required set → nothing blocks** | **the engineering-standards floor (enforced) + inline exploration of the literal source (when one exists) + Q&A — never nothing** |
+
+The floor (`engineering-standards.md:21` — dependency inversion at true boundaries + Functional-Core/Imperative-Shell + strong tests) is owed by *every* build regardless of whether any strategy ran; strategy docs only sharpen the rung above it. So never-run is safe by the floor; the gate must not demand a file that legitimately doesn't exist.
+
+**New mechanism — a `## Sources` registry (closes the biggest gap).** Only the *design* has a persisted location today (`## Mode` → Design input). Legacy code is assumed to be this repo; a vibe-coded app or **additional context apps/repos have no home and no ingesting skill.** Add a `## Sources` block to PROJECT.md that records the **location of every literal source** — design, legacy-code (path/repo), vibe-coded app, and **additional context apps** — each with a required **exploration output** (design→DESIGN-INVENTORY, legacy→LEGACY-INVENTORY, a context app→a new lightweight inventory). The resolver reads this registry; the gate requires each registered source to have its inventory before build; the ambient index lists them. This is the deterministic home the framework lacks.
+
+**Flow gaps to wire (grounding beyond the build loop):**
+- `ultraplan-phase` — cloud planning omits CONTEXT/UI-SPEC/AI-SPEC/DESIGN-INVENTORY/LEGACY-INVENTORY (`:99-140`, "intentionally isolated"). **Significant** — offloaded planning silently drops phase grounding; must inject the grounding set into the cloud prompt.
+- `autonomous --skip_discuss` — plans on a *stub* auto-CONTEXT ("all choices at Claude's discretion", `:192-253`). Must at least seed it from the resolver.
+- `ui-review` — audits against UI-SPEC but not the DESIGN-INVENTORY oracle. `secure-phase` — grounds in the phase threat register, not app-wide SECURITY-STRATEGY. Add the missing source reads.
+- Reference patterns that ground *well* (copy these): `code-review` (`:415-421`), `import` (`:69-129`), `audit-milestone` (`:100-142`), `legacy-inventory` (`:57`).
+
+**Scope note:** this is now "wire grounding across the whole surface," not "add one gate." It should ship in slices — (1) the resolver + M2/M3 gate on the build loop (the core), (2) the `## Sources` registry + the 2-mapper hooks (upstream exploration), (3) the flow-gap fixes (ultraplan/autonomous/ui-review/secure-phase), (4) S1 ambient index. Each slice is independently valuable.
+
+## 10. Decisions locked (v2)
 
 - **Ground once at plan-time; gate the plan** — not force-re-read at every agent (executor rides the plan; required_reading has no teeth).
 - Reuse `canonical_refs` (resolver populates it), `decision-coverage-plan` (extend to gate sources), `generate-claude-md` (path-list index), `artifacts.cjs` (register). No parallel systems.
