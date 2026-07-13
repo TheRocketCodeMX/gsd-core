@@ -12,10 +12,8 @@ const { ExitError, runMain } = require('./lib/cli-exit.cjs');
 // FAIL-SAFE: any .github/workflows/*.yml NOT listed here is treated as a
 // pipeline workflow and gets the full matrix. New workflow files default to full.
 const INERT_WORKFLOWS = new Set([
-  'stale.yml',
   'branch-cleanup.yml',
   'branch-naming.yml',
-  'auto-label-issues.yml',
   'auto-branch.yml',
   'auto-backmerge.yml',
   'close-draft-prs.yml',
@@ -25,7 +23,6 @@ const INERT_WORKFLOWS = new Set([
   'require-issue-link.yml',
   'changeset-required.yml',
   'docs-required.yml',
-  'discord-changelog.yml',
 ]);
 
 // Workflows that gate merges, ship the product, or run security/cross-platform
