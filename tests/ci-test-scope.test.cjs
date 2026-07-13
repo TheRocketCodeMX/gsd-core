@@ -63,8 +63,8 @@ describe('ci-test-scope.cjs', () => {
     assert.strictEqual(result.full_matrix, true);
   });
 
-  test('inert CI only (stale.yml) — code_changed true, product_changed false, full_matrix false', () => {
-    const result = scopeFor(['.github/workflows/stale.yml']);
+  test('inert CI only (branch-cleanup.yml) — code_changed true, product_changed false, full_matrix false', () => {
+    const result = scopeFor(['.github/workflows/branch-cleanup.yml']);
     assert.strictEqual(result.code_changed, true,
       `expected code_changed=true for inert CI, got: ${JSON.stringify(result)}`);
     assert.strictEqual(result.product_changed, false,
@@ -126,7 +126,7 @@ describe('ci-test-scope.cjs', () => {
   });
 
   test('mixed docs + inert CI — code_changed true, product_changed false (inert lane)', () => {
-    const result = scopeFor(['docs/x.md', '.github/workflows/stale.yml']);
+    const result = scopeFor(['docs/x.md', '.github/workflows/branch-cleanup.yml']);
     assert.strictEqual(result.code_changed, true);
     assert.strictEqual(result.product_changed, false,
       `expected product_changed=false for docs+inert, got: ${JSON.stringify(result)}`);
@@ -362,11 +362,11 @@ describe('INERT_WORKFLOWS allowlist integrity guard', () => {
 
   // Canonical inert workflow list — reused by both tests below.
   const knownInert = [
-    'stale.yml', 'branch-cleanup.yml', 'branch-naming.yml', 'auto-label-issues.yml',
+    'branch-cleanup.yml', 'branch-naming.yml',
     'auto-branch.yml', 'auto-backmerge.yml', 'close-draft-prs.yml',
     'dismiss-unauthorized-pr-approvals.yml', 'pr-target-validator.yml',
     'pr-template-format.yml', 'require-issue-link.yml', 'changeset-required.yml',
-    'docs-required.yml', 'discord-changelog.yml',
+    'docs-required.yml',
   ];
 
   test('all entries in INERT_WORKFLOWS exist under .github/workflows/', () => {
@@ -594,7 +594,7 @@ describe('code_changed=false implies clean output invariant', () => {
       ['src/semver.cts'],
       ['bin/gsd'],
       ['.github/workflows/test.yml'],
-      ['.github/workflows/stale.yml'],
+      ['.github/workflows/branch-cleanup.yml'],
     ]) {
       const result = scopeFor(files);
       assert.strictEqual(result.code_changed, true,
