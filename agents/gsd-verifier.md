@@ -41,6 +41,7 @@ Every truth must resolve to VERIFIED, FAILED (BLOCKER), or UNCERTAIN (WARNING wi
 <required_reading>
 @~/.claude/gsd-core/references/verification-overrides.md
 @~/.claude/gsd-core/references/gates.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 This agent implements the **Escalation Gate** pattern (surfaces unresolvable gaps to the developer for decision).
@@ -104,6 +105,7 @@ ls "$PHASE_DIR"/*-PLAN.md 2>/dev/null
 ls "$PHASE_DIR"/*-SUMMARY.md 2>/dev/null
 gsd_run query roadmap.get-phase "$PHASE_NUM"
 grep -E "^| $PHASE_NUM" .planning/REQUIREMENTS.md 2>/dev/null
+gsd_run query project mode 2>/dev/null   # drives the Mode-fit + Design-fit gates (Step 7)
 ```
 
 Extract phase goal from ROADMAP.md — this is the outcome to verify, not the tasks.
@@ -354,43 +356,7 @@ For each link:
 - `verified=false` with "not found" in detail → NOT_WIRED
 - `verified=false` with "Pattern not found" → PARTIAL
 
-**Fallback patterns** (if must_haves.key_links not defined in PLAN):
-
-### Pattern: Component → API
-
-```bash
-grep -E "fetch\(['\"].*$api_path|axios\.(get|post).*$api_path" "$component" 2>/dev/null
-grep -A 5 "fetch\|axios" "$component" | grep -E "await|\.then|setData|setState" 2>/dev/null
-```
-
-Status: WIRED (call + response handling) | PARTIAL (call, no response use) | NOT_WIRED (no call)
-
-### Pattern: API → Database
-
-```bash
-grep -E "prisma\.$model|db\.$model|$model\.(find|create|update|delete)" "$route" 2>/dev/null
-grep -E "return.*json.*\w+|res\.json\(\w+" "$route" 2>/dev/null
-```
-
-Status: WIRED (query + result returned) | PARTIAL (query, static return) | NOT_WIRED (no query)
-
-### Pattern: Form → Handler
-
-```bash
-grep -E "onSubmit=\{|handleSubmit" "$component" 2>/dev/null
-grep -A 10 "onSubmit.*=" "$component" | grep -E "fetch|axios|mutate|dispatch" 2>/dev/null
-```
-
-Status: WIRED (handler + API call) | STUB (only logs/preventDefault) | NOT_WIRED (no handler)
-
-### Pattern: State → Render
-
-```bash
-grep -E "useState.*$state_var|\[$state_var," "$component" 2>/dev/null
-grep -E "\{.*$state_var.*\}|\{$state_var\." "$component" 2>/dev/null
-```
-
-Status: WIRED (state displayed) | NOT_WIRED (state exists, not rendered)
+**Fallback patterns** (if must_haves.key_links not defined in PLAN): apply the four wiring patterns (Component → API, API → Database, Form → Handler, State → Render) from `@~/.claude/gsd-core/references/verification-patterns.md` § Wiring Verification Patterns; status vocab: WIRED | PARTIAL | STUB | NOT_WIRED.
 
 ## Step 6: Check Requirements Coverage
 
@@ -446,21 +412,24 @@ grep -n -E "TBD|FIXME|XXX" "$file" 2>/dev/null
 # Warning-level cleanup comments
 grep -n -E "TODO|HACK|PLACEHOLDER" "$file" 2>/dev/null
 grep -n -E "placeholder|coming soon|will be here|not yet implemented|not available" "$file" -i 2>/dev/null
-# Empty implementations
-grep -n -E "return null|return \{\}|return \[\]|=> \{\}" "$file" 2>/dev/null
-# Hardcoded empty data (common stub patterns)
-grep -n -E "=\s*\[\]|=\s*\{\}|=\s*null|=\s*undefined" "$file" 2>/dev/null | grep -v -E "(test|spec|mock|fixture|\.test\.|\.spec\.)" 2>/dev/null
-# Props with hardcoded empty values (React/Vue/Svelte stub indicators)
-grep -n -E "=\{(\[\]|\{\}|null|undefined|''|\"\")\}" "$file" 2>/dev/null
-# Console.log only implementations
-grep -n -B 2 -A 2 "console\.log" "$file" 2>/dev/null | grep -E "^\s*(const|function|=>)"
 ```
+
+Also run the empty-implementation / hardcoded-empty-data / log-only stub greps from `verification-patterns.md` § Universal Stub Patterns (exclude test/spec/mock/fixture files when flagging hardcoded empty data).
 
 **Stub classification:** A grep match is a STUB only when the value flows to rendering or user-visible output AND no other code path populates it with real data. A test helper, type default, or initial state that gets overwritten by a fetch/store is NOT a stub. Check for data-fetching (useEffect, fetch, query, useSWR, useQuery, subscribe) that writes to the same variable before flagging.
 
 **Debt marker gate:** Any `TBD`, `FIXME`, or `XXX` marker in a file modified by this phase is a 🛑 BLOCKER unless the same line references formal follow-up work (`issue #123`, `PR #123`, `#123`, or `DEF-*`). Unreferenced markers mean completion is not auditable; set `status: gaps_found` and list each marker under `gaps`.
 
-Categorize: 🛑 Blocker (prevents goal or unresolved debt marker) | ⚠️ Warning (incomplete) | ℹ️ Info (notable)
+<!-- FORK:fidelity BEGIN -->
+**Source-fidelity & integrity gates** — full procedures: @~/.claude/gsd-core/references/verifier-fidelity-gates.md
+- **Reward-hacking gate** (per `engineering-standards.md`): a check made to pass by tampering (weakened/skipped/trivially-passing test, hardcoded expected output) → 🛑.
+- **Architecture-fit:** the universal floor applies ALWAYS (skipped floor 🛑); ADR rung-fit both ways (under-build 🛑, over-build ⚠️).
+- **Strategy-fit:** honor `FRONTEND-ARCHITECTURE.md` + `SECURITY-STRATEGY.md` when present — 🛑 by blast radius, else ⚠️.
+- **Design-fit check** (when `gsd-tools query project mode` → `has_provided_design: true`): diff the built observable shape against the oracle (`.planning/DESIGN-INVENTORY.md` / UI-SPEC), never the raw design; fires on any field that backs a design-covered surface (schema/migration/DTO — not only UI). Invented or dropped user-facing field → 🛑 (the address-failure guard); none → "design-fit: N/A".
+- **Mode-fit:** *preserve/refactor* regions need parity evidence (unapproved drift 🛑); `design-delta` regions are parity-EXEMPT (Design-fit governs); vibe-coded-to-harden is intent-hardening, NOT behavior-parity; a silently-dropped LEGACY-INVENTORY capability 🛑.
+<!-- FORK:fidelity END -->
+
+Categorize: 🛑 Blocker (prevents goal, unresolved debt marker, reward-hacked check, or ADR-rung under-build) | ⚠️ Warning (incomplete, or over-built vs the rung) | ℹ️ Info (notable)
 
 ## Step 7b: Behavioral Spot-Checks
 

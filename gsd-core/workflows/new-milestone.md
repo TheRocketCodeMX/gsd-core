@@ -171,6 +171,25 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 ```
 
+<!-- FORK:strategy BEGIN -->
+## 4.5. Strategy Plan refresh (warm-start — what does THIS milestone need?)
+
+This is the **warm-start** strategy recommender (the new-project equivalent for an existing project). **Read `@~/.claude/gsd-core/references/strategy-flow.md` now** and map the milestone's *objective* to which strategy steps to revisit or adopt — never silently build on stale (or absent) decisions. Refresh `## Strategy Plan` in PROJECT.md accordingly.
+
+**First, the adopt case.** If the strategy artifacts are largely **absent** (an existing project newly adopting GSD — e.g. upgraded from an older gsd-core, or first GSD use on real code), this milestone is a **retrofit**: explore the code (`/gsd:map-codebase` for extend, `/gsd:legacy-inventory` for rewrite/harden) and run the relevant chain in assess-evolve to establish the missing ADR/SECURITY/TEST/etc. against the running system. Recommend the cold-start matrix scoped to what's missing.
+
+**Otherwise, map the objective** (objective→revisit map in `strategy-flow.md`) — offer the matching skill(s) via `AskUserQuestion` (printed recommendation in `--text`/auto):
+- **first frontend / major new client** → `/gsd:frontend-architecture` (+ ui-phase)
+- **payments / PII / new trust boundary / regulated flow** → `/gsd:security-strategy` (re-derive ASVS + authz)
+- **new bounded context / domain shift** → `/gsd:model-domain` + `/gsd:recommend-architecture`
+- **deploy target / data layer / pipeline change** → `/gsd:infrastructure-strategy` / `/gsd:cicd-strategy`
+- **rewrite/refactor of an existing area** → `/gsd:legacy-inventory` first (requirements = design ∪ old-behavior)
+- **ships to a provided design / new designed surface** → record `## Mode` Design-input and run `/gsd:model-domain` (or `/gsd:frontend-architecture` for a frontend surface) so `.planning/DESIGN-INVENTORY.md` (the field oracle) is written before the milestone's roadmap locks; derive requirements from design ∪ vision (lift its literal user-facing fields, never generalize)
+- **production-readiness / hardening** (a working app → production-grade) → the **hardening playlist** (members defined once in `strategy-flow.md`'s Overlays — characterize → seam → secure → observe → CI gate; don't restate them here)
+
+**Re-surface ledgered skips:** if `## Strategy Plan`'s skip-ledger records a step that this milestone's scope now makes relevant (e.g. a previously-skipped `frontend-architecture` and this milestone adds a frontend), re-offer it. If nothing applies, note "strategy artifacts still fit this milestone" and continue. The strategy decisions are project-wide and must stay valid as scope evolves.
+<!-- FORK:strategy END -->
+
 ## 5. Update STATE.md
 
 Reset STATE.md frontmatter AND body atomically via the SDK. This writes the new

@@ -65,7 +65,7 @@ AGENT_SKILLS_SYNTHESIZER=$(gsd_run query agent-skills gsd-research-synthesizer)
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper)
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`.
 
 **If `agents_installed` is false:** Display a warning before proceeding:
 ```text
@@ -149,6 +149,24 @@ Run `/gsd:map-codebase` first, then return to `/gsd:new-project`
 Exit command.
 
 **If "Skip mapping" OR `needs_codebase_map` is false:** Continue to Step 3.
+
+<!-- FORK:strategy BEGIN -->
+**Provided-design detection (runs regardless of whether there is existing code — the design axis is orthogonal to Origin).** A provided design is a source of truth and must be detected + routed here, symmetric to the legacy path above — otherwise it gets laundered into vision-derived requirements and the build drifts from it (the address-failure: one design input → an invented multi-field schema). Init pre-detects the signal — branch on it (it is a **hint that you CONFIRM**, never a silent lock):
+
+- **`design_dismissed` is true** (user passed `--no-design`) → Design-input: none; skip the prompt.
+- **`has_design_hint` is true and `design_hint_source` is `arg`** (an explicit `--design <path-or-link>`) → confirm by showing `design_pointer`, default Yes → record it.
+- **`has_design_hint` is true with a weaker source** (`design-export` / `tokens-file` / `designs-dir`) → ask once with the detected `design_pointer` **pre-filled** so a false positive is one keystroke to reject: "I found `{design_pointer}` — is that a design to build to?"
+- **`has_design_hint` is false** → still ask once (covers a Figma/Stitch URL the user will paste, which init can't detect), unless the user already said there's none.
+
+- header: "Provided design"
+- question: "Do you have a provided design or prototype to build to (Figma, an export, a clickable prototype, a tokens/component package)?"
+- options:
+  - "Yes — here's the path/link" — record it → Step 4 sets `## Mode` Design-input to the pointer; the design is the authority on the observable shape
+  - "An existing design system to honor" — record it → Design-input = existing system
+  - "No / none" — Design-input: none
+
+**If a provided design is recorded:** (a) record its pointer in `## Mode` Design-input (Step 4); (b) **ground requirements (Steps 3 + 7) by reading the design directly** — the pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` — deriving them from **(the design) ∪ (the vision)**, lifting the design's literal user-facing fields and never generalizing them (mirrors the legacy `design ∪ old-behavior` rule); (c) the design is ingested into the in-repo oracle (`.planning/DESIGN-INVENTORY.md`) by the **next strategy step**, not here — the strategy on-ramp puts `model-domain` (or `frontend-architecture` for a frontend surface) first and it writes the oracle before the build loop's design-fidelity gate runs (the planner is the fallback if both are skipped). **Do NOT run `model-domain` mid-new-project** — it reads the PROJECT.md/REQUIREMENTS that Steps 4/7 write, so it can only run after; the recorded design pointer + the strategy on-ramp are the correct mechanism (unlike `legacy-inventory`, which is a true pre-step because it reads only the old code).
+<!-- FORK:strategy END -->
 
 ## 2a. Auto Mode Config (auto mode only)
 

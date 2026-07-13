@@ -857,7 +857,7 @@ Planner prompt:
 - {uat_path} (UAT Gaps - if --gaps)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews; actionable findings must be incorporated or explicitly deferred/rejected in PLAN.md)
 - {AI_SPEC_PATH} (AI Design Contract — framework and evaluation strategy, if exists)
-- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists)
+- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists) and `.planning/DESIGN-INVENTORY.md` (the design field oracle, if exists). **From-design:** when `## Mode` records a provided design, the design is the authority on the observable shape — match the oracle's user-facing fields (don't invent/drop; internal value-objects are fine; see `planner-source-audit.md`'s DESIGN source). If a provided design exists but no oracle file is present yet, ingest the design slice this phase needs and write `.planning/DESIGN-INVENTORY.md` before finalizing the data shape.
 - {SPEC_PATH} (Phase SPEC — carries the ## Edge Coverage section to lift covered/backstop edges from, if exists)
 - {SPIKE_FINDINGS_PATH} (Spike Findings — validated patterns, constraints, landmines from experiments, if exists)
 - {SKETCH_FINDINGS_PATH} (Sketch Findings — validated design decisions, CSS patterns, visual direction, if exists)
@@ -1209,6 +1209,7 @@ Checker prompt:
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
 - {research_path} (Technical Research — includes Validation Architecture)
+- .planning/DESIGN-INVENTORY.md and {PHASE_DIR}/*-UI-SPEC.md (the design oracle — REQUIRED input for the design-fidelity check when `## Mode` records a provided design)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews; verify actionable findings are represented in PLAN.md)
 </files_to_read>
 
@@ -1515,44 +1516,9 @@ if [ "$GATE_CFG" != "false" ]; then
 fi
 ```
 
-The handler returns JSON:
-```json
-{
-  "passed": true,
-  "skipped": false,
-  "total":  2,
-  "covered": 2,
-  "uncovered": [ { "id": "D-01", "text": "...", "category": "..." } ],
-  "message": "..."
-}
-```
+The handler returns JSON `{ passed, skipped, total, covered, uncovered[{id,text,category}], message }`.
 
-**If `passed` is true (or `skipped` is true):** Display
-`✓ Decision coverage: {M}/{N} CONTEXT.md decisions covered by plans` (or
-`(skipped — gate disabled)` / `(skipped — no decisions)`) and proceed to
-step 13b.
-
-**If `passed` is false:** Display the handler's `message` block. It already
-names each uncovered decision (`D-NN | category | text`) and tells the user
-what to do — cite the id in a relevant plan's `must_haves` / `truths`, or
-move the decision under `### Claude's Discretion` / tag it `[informational]`
-if it should not be tracked. Then offer:
-
-```text
-Options:
-1. Re-plan to cover missing decisions (recommended)
-2. Edit CONTEXT.md to mark dropped decisions as [informational] / Discretion
-3. Proceed anyway — accept the coverage gap
-```
-
-If `TEXT_MODE` is true, present as a plain-text numbered list. Otherwise use
-AskUserQuestion. Selecting "Proceed anyway" continues to step 13b but
-records the override in STATE.md so verify-phase can re-surface it.
-
-**Why this gate blocks:** failing here is cheap. The plans are the contract
-between discuss-phase and execute-phase; if a decision isn't visible in any
-plan, no executor will implement it. Catching that now beats discovering it
-after thousands of dollars of execution.
+**Handling the result:** on `passed`/`skipped`, show `✓ Decision coverage: {M}/{N}` and proceed to 13b. On failure, display the handler's `message` (it names each uncovered `D-NN` and the fix) and offer re-plan / mark-informational / proceed-anyway (an override recorded in STATE.md). Full handling + rationale: `gsd-core/references/plan-phase-coverage-gate.md`.
 
 ## 13b. Record Planning Completion in STATE.md
 

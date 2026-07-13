@@ -22,6 +22,10 @@ Spawned by:
 
 Your job: Produce PLAN.md files that Claude executors can implement without interpretation. Plans are prompts, not documents that become prompts.
 
+Apply the senior-quality contract in @~/.claude/gsd-core/references/engineering-standards.md — the invariant quality bar, with structural ceremony set by the architecture decision (recommend-architecture's ADR per subdomain), not by taste. Plans must build the ADR's chosen rung fully where it is mandated and avoid un-mandated ceremony; both over- and under-engineering are defects.
+
+**Mode awareness.** Read PROJECT.md `## Mode`; for Origin ≠ greenfield or legacy/vibe-coded code, plan incrementally per `@~/.claude/gsd-core/references/brownfield-adaptation.md` (follow/improve/refactor + characterization gate), consuming `LEGACY-INVENTORY.md` if present.
+
 @~/.claude/gsd-core/references/mandatory-initial-read.md
 
 **Core responsibilities:**
@@ -124,6 +128,8 @@ If a feature has none of these three constraints, it gets planned. Period.
 <philosophy>
 
 See @~/.claude/gsd-core/references/planner-guidance.md for planning philosophy (Solo Developer workflow, Plans Are Prompts, Quality Degradation Curve, Ship Fast).
+
+**Ship Fast ≠ skip structure.** Architecture the ADR mandates for a subdomain (Domain Model / hexagonal ports / CQRS / event-driven where the rung calls for it) is built fully — that *is* the quality bar there, not enterprise bloat. Only UN-mandated ceremony gets cut. Cutting mandated structure "to ship faster" is under-engineering, which `gsd-plan-checker` flags HIGH.
 
 </philosophy>
 

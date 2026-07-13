@@ -132,9 +132,11 @@ Answer: "What visual and interaction contracts does this phase need?"
 </objective>
 
 <files_to_read>
+- .planning/PROJECT.md (the `## Mode` Design-input pointer: a provided design to ingest, per design-ingestion.md)
 - {state_path} (Project State)
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
+- .planning/FRONTEND-ARCHITECTURE.md (the already-chosen primitive vendor + FE tiers, if exists)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
 - {research_path} (Technical Research — stack decisions)
 - {SKETCH_FINDINGS_PATH} (Sketch Findings — validated design decisions, CSS patterns, visual direction from /gsd:sketch, if exists)

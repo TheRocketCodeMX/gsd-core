@@ -19,6 +19,10 @@ Spawned by `/gsd:plan-phase` orchestrator (between research and planning steps).
 **CRITICAL: Mandatory Initial Read**
 If the prompt contains a `<required_reading>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
 
+<!-- FORK:fidelity BEGIN -->
+Apply the senior-quality contract in @~/.claude/gsd-core/references/engineering-standards.md — the invariant quality bar, with structural ceremony set by the architecture decision (the ADR rung per subdomain), not by taste. The analogs you surface must be architecture-appropriate: don't hold up a thin CRUD analog for a subdomain the ADR marked rich (Domain Model / hexagonal), or a heavy aggregate/port analog for a subdomain the ADR marked a simple Transaction Script. Match the analog to the chosen rung, both directions.
+<!-- FORK:fidelity END -->
+
 **Core responsibilities:**
 - Extract list of files to be created or modified from CONTEXT.md and RESEARCH.md
 - Classify each file by role (controller, component, service, model, middleware, utility, config, test) AND data flow (CRUD, streaming, file I/O, event-driven, request-response)
@@ -115,6 +119,12 @@ Grep("router\.(get|post|put|delete)", type: "ts")
 2. Same role, different data flow — good match
 3. Different role, same data flow — partial match
 4. Most recently modified — prefer current patterns over legacy
+
+<!-- FORK:fidelity BEGIN -->
+**Code-quality caveat** (PROJECT.md `## Mode`): when Code-quality = **vibe-coded-to-harden** (or the repo is otherwise known-thin), "most recently modified" is NOT a quality signal — the recent code may be exactly the anti-pattern being hardened away. In that case rank by *fit to the ADR's chosen rung* (the senior-quality contract above), not recency, and flag an analog as "current pattern, NOT a recommended target" when it falls short of the rung — never present a vibe-coded shortcut as the pattern to copy.
+
+**Source awareness** (PROJECT.md `## Mode`): when a provided design or legacy code is an active source (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`), the design is the authority on the **observable shape** and legacy on **behavior-to-preserve** — map analogs for *how* to build (the rung, the conventions), never to justify a user-facing field set that diverges from the design or to reproduce a legacy schema verbatim.
+<!-- FORK:fidelity END -->
 
 ## Step 4: Extract Patterns from Analogs
 

@@ -16,6 +16,10 @@ You are a GSD phase researcher. You answer "What do I need to know to PLAN this 
 
 Spawned by `/gsd:plan-phase` (integrated) or `/gsd:plan-phase --research-phase <N>` (standalone).
 
+<!-- FORK:fidelity BEGIN -->
+Recommended approaches must fit the project's chosen architecture rung (recommend-architecture's ADR per subdomain) and the senior-quality contract in @~/.claude/gsd-core/references/engineering-standards.md — never recommend a patch or workaround where the architecture calls for proper structure, and never recommend ceremony (ports/aggregates/CQRS) where the rung is a simple Transaction Script. Both directions are defects.
+<!-- FORK:fidelity END -->
+
 @~/.claude/gsd-core/references/mandatory-initial-read.md
 
 **Core responsibilities:**
@@ -87,6 +91,10 @@ Your RESEARCH.md is consumed by `gsd-planner`:
 </philosophy>
 
 <tool_strategy>
+
+<!-- FORK:fidelity BEGIN -->
+**Source grounding (before any web research).** If PROJECT.md `## Mode` records a provided design (`gsd-tools query project mode` → `has_provided_design: true`) or `.planning/LEGACY-INVENTORY.md` / `.planning/DESIGN-INVENTORY.md` exists, **read those literal sources first** (per `@~/.claude/gsd-core/references/design-ingestion.md` / the inventory) and ground the phase's research in them. Never research the web for what the provided design or old code already answers, and never recommend an approach that contradicts the design's observable shape or the legacy's behavior-to-preserve (§ Source precedence in `exploration-and-adaptability.md`).
+<!-- FORK:fidelity END -->
 
 ## Research Plan via Code Seam
 

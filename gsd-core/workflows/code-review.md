@@ -442,6 +442,12 @@ FILES_TO_READ=""
 for file in "${REVIEW_FILES[@]}"; do
   FILES_TO_READ+="- ${file}\n"
 done
+# Source-fidelity inputs: hand the reviewer the Mode + the design oracle so its
+# design-fidelity (fidelity-loss) check can actually fire — without these the
+# hook is inert prose (it can't diff the built shape against an oracle it never sees).
+for ctx in .planning/PROJECT.md .planning/DESIGN-INVENTORY.md "${PHASE_DIR}"/*-UI-SPEC.md; do
+  [ -f "$ctx" ] && FILES_TO_READ+="- ${ctx} (source-fidelity: \`## Mode\` + the design oracle — diff observable shape, when a provided design exists)\n"
+done
 ```
 
 Build config block for agent:

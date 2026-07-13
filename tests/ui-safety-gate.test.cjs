@@ -81,3 +81,20 @@ describe('checkUiPresence', () => {
     assert.ok(result.tokens.includes('form'));
   });
 });
+
+// FORK:fidelity BEGIN
+describe('negation guard (#dogfood — backend phases described by contrast)', () => {
+  const { checkUiPresence } = require('../gsd-core/bin/lib/ui-safety-gate.cjs');
+  test('a UI token immediately negated is NOT a UI signal', () => {
+    assert.strictEqual(checkUiPresence('No UI needed — terminal output only').hasUI, false);
+    assert.strictEqual(checkUiPresence('Backend service, without a frontend').hasUI, false);
+    assert.strictEqual(checkUiPresence('not a screen — a data sync job').hasUI, false);
+  });
+  test('a real UI mention is still flagged (fail-safe bias preserved for non-negated)', () => {
+    assert.strictEqual(checkUiPresence('Build the dashboard UI with charts').hasUI, true);
+    assert.strictEqual(checkUiPresence('Render the product screen from the design').hasUI, true);
+    // adjacency-only: a negator not directly before the token does not suppress a real UI mention
+    assert.strictEqual(checkUiPresence('no longer a CLI — now a full dashboard UI').hasUI, true);
+  });
+});
+// FORK:fidelity END

@@ -666,6 +666,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
        ` : ''}
        - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
        - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
+       - ${PROJECT_ROOT}/.planning/adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md under .planning/ (if they exist — build to the chosen rung and test levels fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
        </files_to_read>
 
        ${AGENT_SKILLS}
@@ -1014,33 +1015,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
    ---
    ```
 
-7. **Handle failures:**
-   **Step 7.0 — classify before branching (#3095):**
-   ```bash
-   CLASS_JSON=$(gsd_run query agent.classify-failure -- "$AGENT_RETURN_BODY")
-   CLASS=$(echo "$CLASS_JSON" | jq -r '.class')
-   SENTINEL=$(echo "$CLASS_JSON" | jq -r '.sentinel // empty')
-   RETRY_AFTER=$(echo "$CLASS_JSON" | jq -r '.retryAfterSeconds // empty')
-   if [ -n "$RETRY_AFTER" ]; then RETRY_HINT="  Provider hinted retry-after: ${RETRY_AFTER}s"; else RETRY_HINT=""; fi
-   ```
-   One classifier branch handles sentinels across Claude/Copilot/Codex/Gemini. Reference: `docs/research/provider-rate-limit-signals.md`.
-   **Step 7.1 — `class == "quota-exceeded"`:**
-   Do not offer "retry now". Run step-5 spot-check first; if SUMMARY.md is missing but commits exist, route to safe-resume (`state.verify-against-disk`) instead of immediate redispatch.
-   ```text
-   ⚠ Plan {plan_id} terminated by provider quota / rate limit
-     Runtime sentinel: {SENTINEL}
-     {RETRY_HINT}
-     Partial commits on worktree branch: {N}
-     SUMMARY.md present: {yes|no}
-     1. Wait for quota reset, then resume (recommended)
-   2. Switch to a different runtime / model and resume
-   3. Abort phase and report partial state
-   ```
-   Re-run `/gsd:execute-phase` after quota reset for Option 1.
-   **Step 7.2 — `class == "classify-handoff-bug"`:**
-   If error contains `classifyHandoffIfNeeded is not defined`, treat as Claude runtime bug. Run the same step-5 spot-checks; PASS => treat as success, FAIL => fall through.
-   **Step 7.3 — `class == "unknown-failure"`:**
-   Report failed plan and ask Continue/Stop; continuing may cascade into dependent plan failures.
+7. **Handle failures:** classify BEFORE branching (#3095) — read `workflows/execute-phase/steps/failure-classification.md` (lazy) and follow it: Step 7.0 runs `gsd_run query agent.classify-failure` on the agent return body, then branch on the class — `quota-exceeded` (spot-check first, safe-resume over redispatch, quota-reset options), `classify-handoff-bug` (runtime bug — spot-checks decide), `unknown-failure` (Continue/Stop with cascade warning).
 
 @~/.claude/gsd-core/references/execute-phase-between-wave-reset.md
 
@@ -1366,6 +1341,7 @@ Read these files before verification:
 - {phase_dir}/*-PLAN.md (All plans — understand intent, check must_haves)
 - {phase_dir}/*-SUMMARY.md (All summaries — cross-reference claimed vs actual)
 - .planning/REQUIREMENTS.md (Requirement traceability)
+- .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle for the Design-fit check when `## Mode` records a provided design — diff the built shape against these, never the raw design)
 ${CONTEXT_WINDOW >= 500000 ? `- {phase_dir}/*-CONTEXT.md (User decisions — verify they were honored)
 - {phase_dir}/*-RESEARCH.md (Known pitfalls — check for traps)
 - Prior VERIFICATION.md files from earlier phases (regression check)
