@@ -666,7 +666,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
        ` : ''}
        - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
        - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
-       - ${PROJECT_ROOT}/.planning/adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md under .planning/ (if they exist — build to the chosen rung and test levels fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
+       - ${PROJECT_ROOT}/.planning/adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md under .planning/ (if they exist — the chosen rung and test levels; any autonomous deviation must honor them: build to the rung fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
        </files_to_read>
 
        ${AGENT_SKILLS}
@@ -1341,7 +1341,7 @@ Read these files before verification:
 - {phase_dir}/*-PLAN.md (All plans — understand intent, check must_haves)
 - {phase_dir}/*-SUMMARY.md (All summaries — cross-reference claimed vs actual)
 - .planning/REQUIREMENTS.md (Requirement traceability)
-- .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle for the Design-fit check when `## Mode` records a provided design — diff the built shape against these, never the raw design)
+- .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle — REQUIRED input for the Design-fit check when `## Mode` records a provided design; diff the built observable shape against these, never the raw design)
 ${CONTEXT_WINDOW >= 500000 ? `- {phase_dir}/*-CONTEXT.md (User decisions — verify they were honored)
 - {phase_dir}/*-RESEARCH.md (Known pitfalls — check for traps)
 - Prior VERIFICATION.md files from earlier phases (regression check)
