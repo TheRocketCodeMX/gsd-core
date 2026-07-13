@@ -15,6 +15,7 @@ You are a thinking partner, not an interviewer. The user is the visionary — yo
 @~/.claude/gsd-core/references/domain-probes.md
 @~/.claude/gsd-core/references/gate-prompts.md
 @~/.claude/gsd-core/references/universal-anti-patterns.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 <progressive_disclosure>
@@ -201,34 +202,12 @@ Check if CONTEXT.md already exists using `has_context` from init.
 
 ```bash
 ls ${phase_dir}/*-CONTEXT.md 2>/dev/null || true
-```
-
-**If exists:**
-
-**If `--auto`:** Auto-select "Update it" — load existing context and continue to `analyze_phase`. Log: `[auto] Context exists — updating with auto-selected decisions.`
-
-**Otherwise:** AskUserQuestion (header: "Context"; question: "Phase [X] already has context. What do you want to do?"; options: "Update it" / "View it" / "Skip"). Branch accordingly.
-
-**If doesn't exist:**
-
-Check for an interrupted discussion checkpoint:
-```bash
 ls ${phase_dir}/*-DISCUSS-CHECKPOINT.json 2>/dev/null || true
 ```
 
-If a checkpoint file exists:
+**If CONTEXT.md exists, an interrupted `*-DISCUSS-CHECKPOINT.json` exists, or `has_plans` is true** (from init): read `workflows/discuss-phase/resume.md` (lazy) and follow the matching branch — update-existing-context, checkpoint Resume / Start fresh (`--auto` auto-resumes from the last completed area), or plans-exist replan offer.
 
-**If `--auto`:** Auto-select "Resume" — load checkpoint and continue from last completed area.
-
-**Otherwise:** AskUserQuestion (header: "Resume"; question: "Found interrupted discussion checkpoint ({N} areas completed out of {M}). Resume from where you left off?"; options: "Resume" / "Start fresh"). On "Resume", parse the checkpoint JSON, load `decisions` into the internal accumulator, set `areas_completed` to skip those areas, continue to `present_gray_areas` with only the remaining areas. On "Start fresh", delete the checkpoint and continue.
-
-Check `has_plans` and `plan_count` from init. **If `has_plans` is true:**
-
-**If `--auto`:** Auto-select "Continue and replan after". Log: `[auto] Plans exist — continuing with context capture, will replan after.`
-
-**Otherwise:** AskUserQuestion (header: "Plans exist"; question: "Phase [X] already has {plan_count} plan(s) created without user context. Your decisions here won't affect existing plans unless you replan."; options: "Continue and replan after" / "View existing plans" / "Cancel"). Branch accordingly.
-
-**If `has_plans` is false:** Continue to `load_prior_context`.
+**Otherwise:** Continue to `load_prior_context`.
 </step>
 
 <step name="load_prior_context">
@@ -284,12 +263,9 @@ Parse JSON for: `todo_count`, `matches[]` (each with `file`, `title`, `area`, `s
 </step>
 
 <step name="scout_codebase">
-Lightweight scan of existing code to inform gray area identification (~10% context).
+Explore THIS phase before identifying gray areas, by spawning **dedicated parallel read-only explorer agents**. **MANDATORY — never gated on how much context you already have**; reading maps/docs in your own context is NOT a substitute (trivial work routes to /gsd:fast or /gsd:quick; in discuss-phase, the phase warrants exploration).
 
-Read `@~/.claude/gsd-core/references/scout-codebase.md` — it contains the phase-type→map selection table, single-read rule, no-maps fallback, and `<codebase_context>` output schema. Then execute:
-1. `ls .planning/codebase/*.md` to find existing maps
-2. Select 2–3 maps via the reference's table; or grep fallback if none exist
-3. Build internal `<codebase_context>` per the reference's output schema
+**Read `@~/.claude/gsd-core/references/scout-codebase.md` now and follow it end-to-end** — rationalization-killers, mode detection (picks *which lenses*, never *whether*), explorer-count breadth scaling (`--shallow` = 2-lens floor, never zero), the advisor/`discuss-phase-assumptions` `Agent()` dispatch reuse + ORCHESTRATOR RULE, cited VERIFIED-vs-INFERRED claims, the confirm-or-refute gate (raw tool output, never summarize-a-summary), and the sufficiency stop. Build `<codebase_context>` from the reconciled evidence.
 </step>
 
 <step name="dispatch_discuss_pre_hooks">
@@ -300,12 +276,13 @@ Apply each entry in `activeHooks` per @~/.claude/gsd-core/references/loop-hook-d
 </step>
 
 <step name="analyze_phase">
-Analyze the phase to identify gray areas. Use both `prior_decisions` and `codebase_context` to ground the analysis.
+Analyze the phase to identify gray areas. Use both `prior_decisions` and `codebase_context` to ground the analysis. Ground gray areas in scout's **VERIFIED** facts; **INFERRED** facts and open questions are things to confirm with the user, not settled premises.
 
 1. **Domain boundary** — What capability is this phase delivering? State it clearly.
 
 1b. **Initialize canonical refs accumulator** — Start building `<canonical_refs>` for CONTEXT.md. Sources:
    - **Now:** Copy `Canonical refs:` from ROADMAP.md for this phase. Expand each to a full relative path. Check REQUIREMENTS.md and PROJECT.md for specs/ADRs referenced.
+   - **Project discovery artifacts (if present):** add `.planning/DOMAIN-MODEL.md`, `.planning/adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`, plus the **literal sources** `LEGACY-INVENTORY.md` + `DESIGN-INVENTORY.md` (re-grounded by the builders, not just abstracted). These apply to EVERY phase: planning and implementation MUST follow the domain model, the architecture decision (+ FE + security), and the test strategy — and test tasks pull the specific `gsd-core/references/<test-infra>.md` files TEST-STRATEGY links for the level being written.
    - **`scout_codebase`:** If existing code references docs (e.g., comments citing ADRs), add those.
    - **`discuss_areas`:** When the user says "read X", "check Y", or references any doc/spec/ADR — add it immediately. These are often the MOST important refs.
 
