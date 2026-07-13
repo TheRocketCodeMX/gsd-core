@@ -54,6 +54,7 @@ This ensures verification respects project-specific design conventions.
 |---------|----------------|
 | `## Standard Stack` | Verify UI-SPEC component library matches |
 
+<!-- FORK:fidelity BEGIN -->
 **FRONTEND-ARCHITECTURE.md** (if exists) — Global frontend architecture
 
 | Section | How You Use It |
@@ -66,11 +67,14 @@ This ensures verification respects project-specific design conventions.
 | Section | How You Use It |
 |---------|----------------|
 | Design input | If a provided design is recorded, the design is the **fidelity contract** — see the design-override principle below |
+<!-- FORK:fidelity END -->
 </upstream_input>
 
 <verification_dimensions>
 
+<!-- FORK:fidelity BEGIN -->
 **Design-override principle (applies to every dimension below).** When PROJECT.md `## Mode` records a **provided design**, the dimensions' house defaults (e.g. ≤N font families, spacing on a 4px grid, the house palette size) are **not violations when the UI-SPEC value is faithful to that design** — the provided design is the authority on tokens/type/color/spacing (per `@~/.claude/gsd-core/references/design-ingestion.md`). In that case, record the deviation as **INFO ("matches provided design")**, not BLOCK/FLAG. Still BLOCK/FLAG genuine quality failures (illegible contrast, missing states, inconsistent-with-its-own-design) — fidelity to a design never excuses a11y or completeness gaps. Absent a provided design, the house defaults apply as normal.
+<!-- FORK:fidelity END -->
 
 ## Dimension 1: Copywriting
 

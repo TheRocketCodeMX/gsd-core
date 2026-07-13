@@ -443,6 +443,7 @@ grep -n -B 2 -A 2 "console\.log" "$file" 2>/dev/null | grep -E "^\s*(const|funct
 
 **Debt marker gate:** Any `TBD`, `FIXME`, or `XXX` marker in a file modified by this phase is a 🛑 BLOCKER unless the same line references formal follow-up work (`issue #123`, `PR #123`, `#123`, or `DEF-*`). Unreferenced markers mean completion is not auditable; set `status: gaps_found` and list each marker under `gaps`.
 
+<!-- FORK:fidelity BEGIN -->
 **Reward-hacking gate (per `engineering-standards.md`):** A check that was made to pass by tampering, not by working code, is a FAILED verification — not a convenience. Treat each of these as a 🛑 BLOCKER (`status: gaps_found`):
 - A test that was **weakened, skipped, or made trivially-passing** (`.skip`/`xit`/`@pytest.mark.skip`/`#[ignore]`/`t.Skip`, an assertion deleted or loosened, a body replaced with `assert True`/`expect(true)`, an `expected` value rewritten to match wrong output).
 - A **hardcoded expected output** that makes a behavior or gate pass without real computation.
@@ -472,6 +473,7 @@ git diff ${DIFF_BASE:-HEAD~1}..HEAD -- '*test*' '*spec*' 2>/dev/null | grep -nE 
   - **Origin = rewrite-refactor**, regions dispositioned *preserve*/*refactor* → **Parity:** characterization/parity evidence must exist (old behavior pinned, the same suite green against the new code). Behavior drift with no recorded, approved change is a 🛑 BLOCKER. A region the new design *changes* (gap-map `design-delta`) is **parity-EXEMPT** — the Design-fit check above governs it instead (a design-mandated flow change is not drift).
   - **Code-quality = vibe-coded-to-harden** → **intent-hardening, NOT behavior-parity:** verify the intent is preserved + hardened to the ADR rung + the universal floor + the security/test DoD. Behavior differing from the prototype is *expected* (its bugs were fixed) — do **not** require parity against the prototype's behavior.
   - **Coverage (when `LEGACY-INVENTORY.md` exists):** the "never lose a feature" gate holds — every inventoried capability in scope maps to delivered code/tests or an explicitly recorded drop. A silently-dropped capability is a 🛑 BLOCKER.
+<!-- FORK:fidelity END -->
 
 Categorize: 🛑 Blocker (prevents goal, unresolved debt marker, reward-hacked check, or ADR-rung under-build) | ⚠️ Warning (incomplete, or over-built vs the rung) | ℹ️ Info (notable)
 
