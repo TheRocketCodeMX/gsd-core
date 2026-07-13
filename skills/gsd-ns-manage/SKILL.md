@@ -31,5 +31,6 @@ Route to the appropriate management skill based on the user's intent.
 | Show project statistics | gsd-stats |
 | Toggle which skills are surfaced | gsd-surface |
 | Show the GSD command guide | gsd-help |
+| Learn the engineering concepts GSD enforces | gsd-learn |
 
 Invoke the matched skill directly using the Skill tool.

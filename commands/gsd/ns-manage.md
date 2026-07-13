@@ -5,7 +5,7 @@ argument-hint: ""
 allowed-tools:
   - Read
   - Skill
-requires: [config, workspace, workstreams, thread, pause-work, resume-work, update, ship, inbox, pr-branch, undo, cleanup, health, manager, settings, stats, surface, help]
+requires: [config, workspace, workstreams, thread, pause-work, resume-work, update, ship, inbox, pr-branch, undo, cleanup, health, manager, settings, stats, surface, help, learn]
 ---
 
 Route to the appropriate management skill based on the user's intent.
@@ -32,5 +32,6 @@ Route to the appropriate management skill based on the user's intent.
 | Show project statistics | gsd-stats |
 | Toggle which skills are surfaced | gsd-surface |
 | Show the GSD command guide | gsd-help |
+| Learn the engineering concepts GSD enforces | gsd-learn |
 
 Invoke the matched skill directly using the Skill tool.
