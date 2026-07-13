@@ -91,6 +91,50 @@ describe('DESIGN-INVENTORY × shipped template (the escaped class)', () => {
   });
 });
 
+describe('LEGACY-INVENTORY × shipped template — mechanical row-check (#21 P1-2)', () => {
+  // Pre-fix, LEGACY-INVENTORY fell through to mention-coverage (always ok),
+  // contradicting references/grounding-citations.md. The salvage-dispositions
+  // table (`| Subsystem | ... | Disposition | ... |`) is the behavior register:
+  // a citation's key must name a real row.
+  const HEADER = '| Subsystem | Quality |';
+
+  function inventory() {
+    return fillTable(template('legacy-inventory.md'), HEADER,
+      ['| billing engine | good | low | 70% | clean | BE→salvage | Refactor-salvage | yes |']);
+  }
+
+  test('citation keyed to a real subsystem row passes', () => {
+    const r = g.crossCheck('LEGACY-INVENTORY', 'billing engine', 'Refactor-salvage + preserve', inventory());
+    assert.ok(r.ok, `real row must pass: ${r.reason}`);
+  });
+
+  test('fabricated subsystem citation blocks (was mention-stub, always ok)', () => {
+    const r = g.crossCheck('LEGACY-INVENTORY', 'ghost subsystem', 'Rebuild + new', inventory());
+    assert.equal(r.ok, false, 'a subsystem not in the register must block');
+    assert.match(r.reason, /ghost subsystem/);
+  });
+
+  test('key match is case-insensitive; placeholder cells still fail', () => {
+    assert.ok(g.crossCheck('LEGACY-INVENTORY', 'Billing Engine', 'Refactor-salvage', inventory()).ok);
+    assert.equal(g.crossCheck('LEGACY-INVENTORY', '[name]', '[disposition]', inventory()).ok, false);
+  });
+
+  test('end-to-end gate: fabricated behavior citation blocks with the oracle on disk', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-li-gate-'));
+    const phaseDir = path.join(dir, '.planning', 'phase');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'), '# P\n');
+    fs.writeFileSync(path.join(dir, '.planning', 'LEGACY-INVENTORY.md'), inventory());
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'),
+      '## Grounding\n- LEGACY-INVENTORY · ghost subsystem → Rebuild + new\n\n## Tasks\n- build\n');
+    let out;
+    try { out = JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8' })); }
+    catch (e) { out = JSON.parse((e.stdout || '{}').trim() || '{}'); }
+    assert.equal(out.passed, false, 'fabricated behavior citation must block end-to-end');
+    cleanup(dir);
+  });
+});
+
 describe('ADR / DOMAIN-MODEL / TEST-STRATEGY × shipped templates', () => {
   test('ADR: shipped Axis-A header parses; rung set-equality still enforced', () => {
     const adr = fillTable(template('adr.md'), '| Subdomain | Type (from DOMAIN-MODEL) |',

@@ -173,7 +173,20 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     return ['design', 'requirement', 'internal'].includes(src) && norm(row[2]) === src
       ? { ok: true, reason: '' } : { ok: false, reason: `source mismatch for "${field}": inventory="${row[2]}" cited="${src}"` };
   }
-  // Remaining artifacts: mention-coverage only in Slice 1 (scripted cross-check lands in a follow-up).
+  if (artifact === 'LEGACY-INVENTORY') {
+    // Mechanical row-check (#21 P1-2): the salvage-dispositions table
+    // (`| Subsystem | Quality | … | Disposition | … |` in templates/legacy-inventory.md)
+    // is the behavior register — the citation's key must name a real row
+    // (case-insensitive), so a fabricated subsystem/region cannot pass.
+    const row = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i)[norm(key)];
+    if (!row) return { ok: false, reason: `subsystem "${key}" not in LEGACY-INVENTORY's salvage-dispositions table` };
+    return { ok: true, reason: '' };
+  }
+  // Remaining artifacts (SECURITY-STRATEGY / FRONTEND-ARCHITECTURE / INFRA-STRATEGY /
+  // CICD-STRATEGY / PRODUCT-BRIEF): mention-coverage only — the citation proves the
+  // artifact was cited, not that the cited value matches a source row (these artifacts
+  // have no single canonical key table to check against). Documented honestly in
+  // references/grounding-citations.md § Coverage per artifact.
   return { ok: true, reason: 'mention-coverage (no scripted cross-check yet)' };
 }
 
