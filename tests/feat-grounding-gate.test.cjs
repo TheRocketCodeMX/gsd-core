@@ -32,6 +32,16 @@ describe('grounding citation + cross-check', () => {
     assert.equal(g.crossCheck('TEST-STRATEGY', 'pricing', 'medium', ts).ok, false, 'the non-leading token must not pass as primary');
   });
 
+  test('key near-miss (parenthetical qualifier) gets a did-you-mean reason (#21 P2e)', () => {
+    const adr = '### Axis A\n| Subdomain | Type | Rung | Why |\n|---|---|---|---|\n| pricing (core) | Core | Domain Model | rich |\n';
+    const r = g.crossCheck('ADR', 'pricing', 'Domain Model', adr);
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /did you mean "pricing \(core\)"\?/,
+      'a qualifier-only miss should teach the exact row key');
+    const rGhost = g.crossCheck('ADR', 'ghost', 'Domain Model', adr);
+    assert.ok(!/did you mean/.test(rGhost.reason), 'a genuine fabrication gets no suggestion');
+  });
+
   test('DESIGN-INVENTORY cross-check on (field) source enum', () => {
     const di = '## User-facing fields\n| Field | Surface / screen | Source | Required? | Backs | Captured shape | Notes |\n|---|---|---|---|---|---|---|\n| address | signup | design | yes | — | single free-text input | — |\n';
     assert.ok(g.crossCheck('DESIGN-INVENTORY', 'address @ signup', 'design / single input', di).ok);

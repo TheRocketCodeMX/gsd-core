@@ -138,6 +138,24 @@ function parseTable(text: string, headerRe: RegExp): Record<string, string[]> {
   return rows;
 }
 
+// When a citation key misses, look for a row key that differs only by a
+// parenthetical qualifier / punctuation (normalized compare) and say so —
+// "pricing" vs a row keyed "pricing (core)" is a fixable near-miss, not a
+// fabrication, and the reason should teach the exact cell to cite (#21 P2e).
+const stripQualifier = (s: string): string =>
+  s.replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+function suggestKey(rows: Record<string, string[]>, key: string): string {
+  const want = stripQualifier(key);
+  if (!want) return '';
+  for (const k of Object.keys(rows)) {
+    if (k !== norm(key) && stripQualifier(k) === want) {
+      const cell = (rows[k][0] || k).trim();
+      return ` — did you mean "${cell}"?`;
+    }
+  }
+  return '';
+}
+
 const ADR_RUNGS = ['transaction script', 'domain model', 'hexagonal', 'cqrs', 'event sourcing', 'buy', 'off-the-shelf'];
 function rungSet(cell: string): Set<string> {
   return new Set(cell.split(/[+/]/).map(norm).filter((t) => ADR_RUNGS.includes(t)));
@@ -146,8 +164,9 @@ function rungSet(cell: string): Set<string> {
 function crossCheck(artifact: string, key: string, value: string, sourceText: string): { ok: boolean; reason: string } {
   if (isPlaceholder(key) || isPlaceholder(value)) return { ok: false, reason: 'placeholder cell — source artifact not filled in' };
   if (artifact === 'ADR') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
-    if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR` };
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const row = rows[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR${suggestKey(rows, key)}` };
     const rungCol = row[2] || '';
     const a = rungSet(rungCol);
     const b = rungSet(value);
@@ -155,20 +174,23 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     return eq ? { ok: true, reason: '' } : { ok: false, reason: `rung mismatch: ADR="${rungCol}" cited="${value}"` };
   }
   if (artifact === 'DOMAIN-MODEL') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
-    if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL` };
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const row = rows[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL${suggestKey(rows, key)}` };
     return norm(row[1]) === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `type mismatch: "${row[1]}" vs "${value}"` };
   }
   if (artifact === 'TEST-STRATEGY') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
-    if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY` };
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const row = rows[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY${suggestKey(rows, key)}` };
     const lead = (norm(row[2]).match(/^(small|medium|large)/) || [])[1];
     return lead === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `level mismatch: "${row[2]}" vs "${value}"` };
   }
   if (artifact === 'DESIGN-INVENTORY') {
     const field = key.split('@')[0].trim();
-    const row = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i)[norm(field)];
-    if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY` };
+    const rows = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i);
+    const row = rows[norm(field)];
+    if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY${suggestKey(rows, field)}` };
     const src = norm((value.split('/')[0] || '').trim());
     return ['design', 'requirement', 'internal'].includes(src) && norm(row[2]) === src
       ? { ok: true, reason: '' } : { ok: false, reason: `source mismatch for "${field}": inventory="${row[2]}" cited="${src}"` };
@@ -178,8 +200,9 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     // (`| Subsystem | Quality | … | Disposition | … |` in templates/legacy-inventory.md)
     // is the behavior register — the citation's key must name a real row
     // (case-insensitive), so a fabricated subsystem/region cannot pass.
-    const row = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i)[norm(key)];
-    if (!row) return { ok: false, reason: `subsystem "${key}" not in LEGACY-INVENTORY's salvage-dispositions table` };
+    const rows = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i);
+    const row = rows[norm(key)];
+    if (!row) return { ok: false, reason: `subsystem "${key}" not in LEGACY-INVENTORY's salvage-dispositions table${suggestKey(rows, key)}` };
     return { ok: true, reason: '' };
   }
   // Remaining artifacts (SECURITY-STRATEGY / FRONTEND-ARCHITECTURE / INFRA-STRATEGY /
