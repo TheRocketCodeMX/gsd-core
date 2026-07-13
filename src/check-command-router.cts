@@ -147,11 +147,21 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     return;
   }
   const required = groundingLib.resolveRequiredSources(projectDir).required;
-  const planText = loadPlanContents(phaseDir).join('\n');
+  // Anti-vacuous-pass surface (#21 P1-4): report how many *-PLAN.md files were
+  // actually scanned, and warn when the dir holds plan-LOOKING .md files that
+  // the pattern missed (e.g. lowercase 01-01-plan.md) — a passed:true over
+  // zero scanned plans must be visible to the orchestrator, never silent.
+  const { planFiles, nearMisses } = listPlanFiles(phaseDir);
+  const plansScanned = planFiles.length;
+  const warnings: string[] = [];
+  if (plansScanned === 0 && nearMisses.length > 0) {
+    warnings.push(`no *-PLAN.md matched in ${phaseDir}, but plan-like file(s) exist: ${nearMisses.join(', ')} — rename to <phase>-<plan>-PLAN.md; the gate scanned nothing`);
+  }
+  const planText = planFiles.map((f) => readIfExists(path.join(phaseDir, f))).join('\n');
   const cites = groundingLib.parseGroundingBlock(planText);
   const sourceCites = cites.filter((c) => c.artifact === 'SOURCE');
   if (required.length === 0 && sourceCites.length === 0) {
-    output({ passed: true, total: 0, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
+    output({ passed: true, total: 0, plans_scanned: plansScanned, warnings, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
     return;
   }
   const problems: string[] = [];
@@ -159,10 +169,13 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     const matches = cites.filter((c) => c.artifact === src.artifact);
     if (matches.length === 0) { problems.push(`${src.artifact}: no citation in ## Grounding`); continue; }
     const srcText = readIfExists(src.path);
-    const anyOk = matches.some((c) => groundingLib.crossCheck(src.artifact, c.key, c.value, srcText).ok);
-    if (!anyOk) {
-      const why = groundingLib.crossCheck(src.artifact, matches[0].key, matches[0].value, srcText).reason;
-      problems.push(`${src.artifact}: citation does not match the source (${why})`);
+    // EVERY citation line must pass its cross-check (#21 P1-1). Pre-fix, one
+    // valid citation per artifact satisfied the gate (anyOk), which let a
+    // fabricated sibling line ride through unchecked. Each failing line is
+    // reported individually so the planner can fix all of them in one pass.
+    for (const c of matches) {
+      const res = groundingLib.crossCheck(src.artifact, c.key, c.value, srcText);
+      if (!res.ok) problems.push(`${src.artifact} · ${c.key} → ${c.value}: ${res.reason}`);
     }
   }
   // Source-direct citations (SOURCE · fact → path:line) are verified against the real file.
@@ -171,7 +184,22 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     if (!res.ok) problems.push(`SOURCE: ${res.reason}`);
   }
   const passed = problems.length === 0;
-  output({ passed, total: required.length, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
+  output({ passed, total: required.length, plans_scanned: plansScanned, warnings, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
+}
+
+// List the phase dir's *-PLAN.md files plus the near-misses: .md files that look
+// like plans (contain "plan" in the name) but do not match the scanned pattern.
+function listPlanFiles(phaseDir: string): { planFiles: string[]; nearMisses: string[] } {
+  if (!phaseDir || !fs.existsSync(phaseDir)) return { planFiles: [], nearMisses: [] };
+  try {
+    const entries = fs.readdirSync(phaseDir);
+    return {
+      planFiles: entries.filter((entry) => /-PLAN\.md$/.test(entry)),
+      nearMisses: entries.filter((entry) => !/-PLAN\.md$/.test(entry) && /\.md$/i.test(entry) && /PLAN/i.test(entry)),
+    };
+  } catch {
+    return { planFiles: [], nearMisses: [] };
+  }
 }
 // FORK:grounding END
 

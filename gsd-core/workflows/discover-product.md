@@ -89,8 +89,9 @@ Write to `.planning/PRODUCT-BRIEF.md`.
 ## Step 11: Commit
 
 ```bash
+gsd_run project strategy-done discover-product 2>/dev/null || true  # flip the Strategy Plan row (when present) — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add product brief (outcome, wedge, demand evidence)" --files .planning/PRODUCT-BRIEF.md
+  gsd_run query commit "docs: add product brief (outcome, wedge, demand evidence)" --files .planning/PRODUCT-BRIEF.md .planning/PROJECT.md
 else
   echo "PRODUCT-BRIEF.md written but not committed (commit_docs is false)."
 fi

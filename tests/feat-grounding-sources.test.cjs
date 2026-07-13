@@ -1,3 +1,6 @@
+// allow-test-rule: source-text-is-the-product — see TheRocketCodeMX/gsd-core#21
+// The workflow-contract block reads gsd-core/workflows/new-project.md whose
+// deployed text IS what the runtime loads.
 'use strict';
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
@@ -61,4 +64,24 @@ describe('grounding — source-direct citation verification', () => {
     assert.equal(gate(dir).passed, false);
     cleanup(dir);
   });
+});
+
+describe('CONTRACT: new-project.md instructs recording every literal-source kind as a ## Sources row (#21 P1-5)', () => {
+  // Only the design pointer used to get recorded (via ## Mode's Design input);
+  // legacy / vibe / context-app sources were established in prose but never
+  // registered, so `query grounding required` returned an empty `sources` list
+  // and downstream agents had no location to explore.
+  const newProject = fs.readFileSync(path.join(ROOT, 'gsd-core', 'workflows', 'new-project.md'), 'utf8');
+
+  test('the ## Sources registry instruction exists where ## Mode is filled', () => {
+    assert.match(newProject, /Record `## Sources` rows/,
+      'new-project.md must explicitly instruct writing ## Sources rows');
+  });
+
+  for (const kind of ['design', 'legacy', 'vibe', 'context-app']) {
+    test(`the ${kind} kind has an explicit row instruction`, () => {
+      assert.match(newProject, new RegExp(`- ${kind} · <`),
+        `new-project.md must show the \`- ${kind} · <path>\` row form so the ${kind} source gets registered`);
+    });
+  }
 });

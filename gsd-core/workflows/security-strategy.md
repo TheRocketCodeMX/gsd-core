@@ -70,8 +70,9 @@ From DOMAIN-MODEL's actors/roles (or ask): record the authz model — **RBAC** (
 ## Step 8: Commit
 
 ```bash
+gsd_run project strategy-done security-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: record security posture" --files .planning/SECURITY-STRATEGY.md .planning/config.json
+  gsd_run query commit "docs: record security posture" --files .planning/SECURITY-STRATEGY.md .planning/config.json .planning/PROJECT.md
 else
   echo "SECURITY-STRATEGY.md written but not committed (commit_docs is false)."
 fi
