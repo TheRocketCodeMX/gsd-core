@@ -1435,28 +1435,22 @@ If `TEXT_MODE` is true, present as a plain-text numbered list (options already s
 
 ## 13a. Decision Coverage Gate
 
-After the requirements coverage gate passes, verify that every trackable
-decision captured by discuss-phase in CONTEXT.md `<decisions>` is referenced
-by at least one plan. This is the **translation gate** from issue #2492 —
-its job is to refuse to mark a phase planned when a discuss-phase decision
-silently dropped on the way into the plans.
-
-**Skip if** `workflow.context_coverage_gate` is explicitly set to `false`
-(absent key = enabled). Also skip if no CONTEXT.md exists for this phase
-(nothing to translate) or if its `<decisions>` block is empty.
+Blocking **translation gate** (#2492): every trackable CONTEXT.md `<decisions>` entry must be cited by at least one plan. Why it blocks + skip conditions: `gsd-core/references/plan-phase-coverage-gate.md`.
 
 ```bash
 GATE_CFG=$(gsd_run query config-get workflow.context_coverage_gate 2>/dev/null || echo "true")
 if [ "$GATE_CFG" != "false" ]; then
   GATE_RESULT=$(gsd_run query check.decision-coverage-plan "${PHASE_DIR}" "${CONTEXT_PATH}")
-  # BLOCKING: refuse to mark phase planned when a trackable decision is uncovered.
-  # `passed: true` covers both real-pass and skipped cases (gate disabled / no CONTEXT.md /
-  # no trackable decisions). Verify-phase counterpart deliberately omits this exit-1 — that
-  # gate is non-blocking by design (review finding F15).
+  # BLOCKING (review finding F15) — rationale: references/plan-phase-coverage-gate.md
   echo "$GATE_RESULT" | jq -e '(.passed // .data.passed) == true' >/dev/null || {
     echo "$GATE_RESULT" | jq -r '(.message // .data.message // "Decision coverage gate failed.")'
     exit 1
   }
+fi
+GG=$(gsd_run query config-get workflow.grounding_gate 2>/dev/null || echo "true")
+if [ "$GG" != "false" ]; then
+  GR=$(gsd_run query check.grounding-plan "${PHASE_DIR}")
+  echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
 fi
 ```
 

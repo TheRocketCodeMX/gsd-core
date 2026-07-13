@@ -58,6 +58,14 @@ Output: [What artifacts will be created]
 @src/path/to/relevant.ts
 </context>
 
+## Grounding
+
+<!-- One line per ACTIVE (done) strategy source — the decision this plan takes from it, keyed to its unit.
+     Get the required set: `gsd_run query grounding required`.  Format + per-source cell: references/grounding-citations.md
+     Format: - <ARTIFACT> · <key> → <value>   (· = U+00B7, → = U+2192)
+     Verified by check.grounding-plan; a missing or mismatched REQUIRED source blocks the plan. -->
+- [e.g. ADR · <subdomain> → <rung>]
+
 <tasks>
 
 <task type="auto">
