@@ -14,6 +14,8 @@ import core = require('./core.cjs');
 const { output, error, ERROR_REASON } = core;
 import { parseDecisions } from './decisions.cjs';
 import type { Decision } from './decisions.cjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import groundingLib = require('./grounding.cjs');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +59,7 @@ interface WorkflowConfig {
   auto_advance?: boolean;
   _auto_chain_active?: boolean;
   context_coverage_gate?: boolean | string;
+  grounding_gate?: boolean | string;
 }
 
 function readWorkflowConfig(projectDir: string): WorkflowConfig {
@@ -69,6 +72,7 @@ function readWorkflowConfig(projectDir: string): WorkflowConfig {
       auto_advance: (wf['auto_advance'] ?? parsed['auto_advance']) as boolean | undefined,
       _auto_chain_active: (wf['_auto_chain_active'] ?? parsed['_auto_chain_active']) as boolean | undefined,
       context_coverage_gate: (wf['context_coverage_gate'] ?? parsed['context_coverage_gate']) as boolean | string | undefined,
+      grounding_gate: (wf['grounding_gate'] ?? parsed['grounding_gate']) as boolean | string | undefined,
     };
   } catch {
     return {};
@@ -102,6 +106,47 @@ function gateEnabled(projectDir: string): boolean {
   return true;
 }
 
+// Source-grounding gate toggle (absent = enabled), mirroring gateEnabled.
+function groundingGateEnabled(projectDir: string): boolean {
+  const value = readWorkflowConfig(projectDir).grounding_gate;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const lower = value.toLowerCase();
+    if (lower === 'false' || lower === 'true') return lower !== 'false';
+  }
+  return true;
+}
+
+// check.grounding-plan — block the plan unless its ## Grounding block cites (and
+// cross-checks against the source file) every REQUIRED strategy source.
+function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): void {
+  const phaseDir = args[2] ? resolvePath(args[2], projectDir) : '';
+  if (!groundingGateEnabled(projectDir)) {
+    output({ passed: true, skipped: true, reason: 'workflow.grounding_gate is false', message: 'Grounding gate disabled by config.' }, raw, undefined);
+    return;
+  }
+  const required = groundingLib.resolveRequiredSources(projectDir).required;
+  if (required.length === 0) {
+    output({ passed: true, total: 0, problems: [], message: 'No active strategy sources — nothing to ground.' }, raw, undefined);
+    return;
+  }
+  const planText = loadPlanContents(phaseDir).join('\n');
+  const cites = groundingLib.parseGroundingBlock(planText);
+  const problems: string[] = [];
+  for (const src of required) {
+    const matches = cites.filter((c) => c.artifact === src.artifact);
+    if (matches.length === 0) { problems.push(`${src.artifact}: no citation in ## Grounding`); continue; }
+    const srcText = readIfExists(src.path);
+    const anyOk = matches.some((c) => groundingLib.crossCheck(src.artifact, c.key, c.value, srcText).ok);
+    if (!anyOk) {
+      const why = groundingLib.crossCheck(src.artifact, matches[0].key, matches[0].value, srcText).reason;
+      problems.push(`${src.artifact}: citation does not match the source (${why})`);
+    }
+  }
+  const passed = problems.length === 0;
+  output({ passed, total: required.length, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
+}
+
 function loadPlanContents(phaseDir: string): string[] {
   if (!fs.existsSync(phaseDir)) return [];
   try {
@@ -113,7 +158,7 @@ function loadPlanContents(phaseDir: string): string[] {
   }
 }
 
-const DESIGNATED_HEADINGS_RE = /^#{1,6}\s+(?:must[_ ]haves?|truths?|tasks?|objective)\b/i;
+const DESIGNATED_HEADINGS_RE = /^#{1,6}\s+(?:must[_ ]haves?|truths?|tasks?|objective|grounding)\b/i;
 const XML_DECISION_TAGS_RE = /<(?:objective|tasks?|action)(?:\s[^>]*)?>([\s\S]*?)<\/(?:objective|tasks?|action)>/gi;
 
 function stripCommentsAndFences(text: string): string {
@@ -355,7 +400,11 @@ function routeCheckCommand({ args, cwd, raw }: RouteCheckCommandOptions): void {
     cmdDecisionCoverageVerify(cwd, args, raw);
     return;
   }
-  error('Unknown check subcommand. Available: auto-mode, decision-coverage-plan, decision-coverage-verify', ERROR_REASON.SDK_UNKNOWN_COMMAND);
+  if (subcommand === 'grounding-plan') {
+    cmdGroundingPlan(cwd, args, raw);
+    return;
+  }
+  error('Unknown check subcommand. Available: auto-mode, decision-coverage-plan, decision-coverage-verify, grounding-plan', ERROR_REASON.SDK_UNKNOWN_COMMAND);
 }
 
 export = {

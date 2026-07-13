@@ -39,3 +39,59 @@ describe('grounding citation + cross-check', () => {
     assert.equal(g.crossCheck('DESIGN-INVENTORY', 'ghost', 'design / x', di).ok, false, 'unknown field fails');
   });
 });
+
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const { cleanup } = require('./helpers.cjs');
+const TOOLS = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
+
+function runGate(dir, phaseDir) {
+  try {
+    return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8' }));
+  } catch (e) {
+    return JSON.parse((e.stdout || '{}').trim() || '{}');
+  }
+}
+
+function gateProject(planBody, config) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-gate-'));
+  fs.mkdirSync(path.join(dir, '.planning', 'adr'), { recursive: true });
+  const phaseDir = path.join(dir, '.planning', 'phase');
+  fs.mkdirSync(phaseDir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'),
+    '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| recommend-architecture | done |\n');
+  fs.writeFileSync(path.join(dir, '.planning', 'adr', '0001-architecture.md'),
+    '### Axis A\n| Subdomain | Type | Rung | Why |\n|---|---|---|---|\n| pricing | Core | Domain Model | rich |\n');
+  if (config) fs.writeFileSync(path.join(dir, '.planning', 'config.json'), JSON.stringify(config));
+  fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), planBody);
+  return { dir, phaseDir };
+}
+
+describe('grounding gate (blocking)', () => {
+  test('missing citation for a done source → gate fails', () => {
+    const { dir, phaseDir } = gateProject('## Objective\nbuild it\n## Tasks\n- do\n');
+    assert.equal(runGate(dir, phaseDir).passed, false);
+    cleanup(dir);
+  });
+
+  test('correct citation → gate passes', () => {
+    const { dir, phaseDir } = gateProject('## Grounding\n- ADR · pricing → Domain Model\n## Tasks\n- do\n');
+    assert.equal(runGate(dir, phaseDir).passed, true);
+    cleanup(dir);
+  });
+
+  test('wrong rung → gate fails with reason', () => {
+    const { dir, phaseDir } = gateProject('## Grounding\n- ADR · pricing → Transaction Script\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, false);
+    assert.match(j.message, /mismatch/i);
+    cleanup(dir);
+  });
+
+  test('workflow.grounding_gate=false → skipped/pass', () => {
+    const { dir, phaseDir } = gateProject('## Objective\nno grounding\n', { workflow: { grounding_gate: false } });
+    assert.equal(runGate(dir, phaseDir).passed, true);
+    cleanup(dir);
+  });
+});
