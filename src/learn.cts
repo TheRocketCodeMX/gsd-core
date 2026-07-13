@@ -105,6 +105,7 @@ function readProgress(): Progress {
   const p = progressFile();
   if (!fs.existsSync(p)) return emptyProgress();
   const text = fs.readFileSync(p, 'utf8');
+  // allow-adhoc-markdown: extracts the single ```json state block this module itself writes (fixed self-owned format, not general markdown); consider migrating to stripFencedCode() when Phase 3 re-wires learn
   const m = text.match(/```json\s*([\s\S]*?)```/);
   if (!m) return emptyProgress();
   try {
