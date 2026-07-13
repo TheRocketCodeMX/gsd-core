@@ -131,10 +131,6 @@ describe('CommandRoutingHub — createHub validation', () => {
     assert.equal(result.data, 'cjs-data');
   });
 
-  test('constructs successfully with only cjsRegistry', () => {
-    const hub = createHub({ cjsRegistry: { phase: { add: () => ({ ok: true, data: null }) } } });
-    assert.ok(typeof hub.dispatch === 'function');
-  });
 });
 
 // ─── Happy path — always CJS ──────────────────────────────────────────────────
@@ -512,12 +508,6 @@ describe('CommandRoutingHub — P1.2 typed-payload discriminated union (#176)', 
   });
 
   // ── ERROR_KINDS values used as `kind` discriminator — still work ─────────────
-  test('ERROR_KINDS.UnknownCommand === result.kind for UnknownCommand', () => {
-    const hub = createHub({ cjsRegistry: {} });
-    const result = hub.dispatch({ family: 'nope', subcommand: 'x', args: [], cwd: '/', raw: false });
-    assert.equal(result.kind, ERROR_KINDS.UnknownCommand);
-  });
-
   test('ERROR_KINDS values are stable string constants matching their key names', () => {
     assert.equal(ERROR_KINDS.UnknownCommand, 'UnknownCommand');
     assert.equal(ERROR_KINDS.InvalidArgs, 'InvalidArgs');
@@ -844,5 +834,118 @@ describe('CommandRoutingHub — Finding 4: makeHandlerFailure wraps non-Error ca
     const result = makeHandlerFailure('msg', null);
     // null should not be wrapped into an Error — it's equivalent to "no cause"
     assert.equal(result.cause, undefined);
+  });
+});
+
+// ─── Amendment #1642: exitReason? field on InvalidArgs (Phase 1, #1644) ───────
+// The optional exitReason? field carries an ERROR_REASON enum value separately
+// from the existing `reason` explanation text. The factory conditionally adds
+// the field only when a truthy third arg is provided, preserving the strict-keys
+// invariant tested above (L444).
+
+describe('CommandRoutingHub — exitReason? field on InvalidArgs (#1644 / amendment #1642)', () => {
+  test('makeInvalidArgs(arg, reason) 2-arg form omits exitReason key (strict-keys invariant preserved)', () => {
+    const result = makeInvalidArgs('--phase', '--phase must be an integer');
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['arg', 'kind', 'ok', 'reason'],
+      `2-arg form must NOT include exitReason key; got: ${JSON.stringify(keys)}`);
+    assert.equal(result.exitReason, undefined);
+  });
+
+  test('makeInvalidArgs(arg, reason, exitReason) 3-arg form includes exitReason key with the value', () => {
+    const result = makeInvalidArgs('--phase', '--phase must be an integer', 'USAGE');
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['arg', 'exitReason', 'kind', 'ok', 'reason'],
+      `3-arg form must include exitReason key; got: ${JSON.stringify(keys)}`);
+    assert.equal(result.exitReason, 'USAGE');
+  });
+
+  test('makeInvalidArgs(arg, reason, undefined) treats undefined as absent (omits key)', () => {
+    const result = makeInvalidArgs('--phase', '--phase must be an integer', undefined);
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['arg', 'kind', 'ok', 'reason'],
+      `undefined exitReason must be omitted; got: ${JSON.stringify(keys)}`);
+  });
+
+  test('makeInvalidArgs(arg, reason, "") treats empty string as absent (omits key)', () => {
+    const result = makeInvalidArgs('--phase', '--phase must be an integer', '');
+    const keys = Object.keys(result).sort();
+    assert.deepStrictEqual(keys, ['arg', 'kind', 'ok', 'reason'],
+      `empty-string exitReason must be omitted; got: ${JSON.stringify(keys)}`);
+  });
+
+  test('3-arg factory result is still frozen', () => {
+    const result = makeInvalidArgs('--phase', 'required', 'USAGE');
+    assert.ok(Object.isFrozen(result), '3-arg factory result must be frozen');
+  });
+
+  test('hub.dispatch propagates handler-returned InvalidArgs with exitReason unchanged', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        unit: {
+          check: (_ctx) => ({
+            ok: false,
+            kind: ERROR_KINDS.InvalidArgs,
+            arg: '--flag',
+            reason: 'not supported',
+            exitReason: 'USAGE',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'unit', subcommand: 'check', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs);
+    assert.equal(result.arg, '--flag');
+    assert.equal(result.reason, 'not supported');
+    assert.equal(result.exitReason, 'USAGE',
+      `Hub must propagate exitReason from handler-returned InvalidArgs; got: ${JSON.stringify(result)}`);
+  });
+
+  test('hub.dispatch still accepts InvalidArgs WITHOUT exitReason (no contract regression)', () => {
+    const hub = createHub({
+      cjsRegistry: {
+        unit: {
+          check: (_ctx) => ({
+            ok: false,
+            kind: ERROR_KINDS.InvalidArgs,
+            arg: '--flag',
+            reason: 'not supported',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'unit', subcommand: 'check', args: [], cwd: '/', raw: false });
+
+    assert.ok(!result.ok);
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs);
+    assert.equal(result.exitReason, undefined,
+      `Hub must not synthesize exitReason when handler omits it; got: ${JSON.stringify(result)}`);
+  });
+
+  test('hub validator does NOT reject InvalidArgs with exitReason (well-formed extension)', () => {
+    // The runtime validator (_validateErrResult) coerces MALFORMED returns to HandlerFailure.
+    // A well-formed InvalidArgs with the new exitReason field must NOT be coerced.
+    const hub = createHub({
+      cjsRegistry: {
+        unit: {
+          check: (_ctx) => ({
+            ok: false,
+            kind: ERROR_KINDS.InvalidArgs,
+            arg: '--flag',
+            reason: 'required',
+            exitReason: 'USAGE',
+          }),
+        },
+      },
+    });
+
+    const result = hub.dispatch({ family: 'unit', subcommand: 'check', args: [], cwd: '/', raw: false });
+
+    assert.equal(result.kind, ERROR_KINDS.InvalidArgs,
+      `Extended InvalidArgs must not be coerced to HandlerFailure; got kind: ${result.kind}`);
   });
 });

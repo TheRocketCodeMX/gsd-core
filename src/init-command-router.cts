@@ -69,11 +69,13 @@ function routeInitCommand({ init, args, cwd, raw, error }: RouteInitCommandOptio
         const namedArgs = parseNamedArgs(args, ['granularity'], ['validate', 'tdd']);
         init.cmdInitPlanPhase(cwd, args[2], raw, { validate: namedArgs['validate'], tdd: namedArgs['tdd'], granularity: namedArgs['granularity'] });
       },
+// FORK:strategy BEGIN
       'new-project': () => {
         const namedArgs = parseNamedArgs(args, ['design'], ['no-design']);
         const design = typeof namedArgs['design'] === 'string' ? namedArgs['design'] : undefined;
         init.cmdInitNewProject(cwd, raw, { design, noDesign: namedArgs['no-design'] === true });
       },
+// FORK:strategy END
       'new-milestone': () => init.cmdInitNewMilestone(cwd, raw),
       quick: () => init.cmdInitQuick(cwd, args.slice(2).join(' '), raw),
       'ingest-docs': () => init.cmdInitIngestDocs(cwd, raw),

@@ -1,16 +1,16 @@
-// allow-test-rule: integration-test-input
+// allow-test-rule: integration-test-input — see #935
 /**
  * The /gsd:update workflow's "What's New" preview calls
- *   <configDir>/gsd-core/scripts/changeset/cli.cjs extract ...
- * Upstream referenced that path but never shipped the files, so the preview
- * always silently degraded to "(Could not extract changelog)". The fix ships
- * the changeset tooling into the runtime payload and makes its two cross-tree
- * requires resolve BOTH layouts:
- *   - repo:      scripts/changeset/  (sibling of gsd-core/)
- *   - installed: gsd-core/scripts/changeset/  (inside gsd-core/)
- *
- * These tests run the real cli.cjs in both layouts against a fixture
- * changelog written to a temp dir (test-input reads, not source-grep).
+ *   <configDir>/scripts/changeset/cli.cjs extract ...
+ * The fork originally shipped this tooling itself (at gsd-core/scripts/changeset/,
+ * with a dual-layout require fallback) because upstream referenced the path but
+ * never shipped the files. Upstream has since absorbed the fix (#935/#938):
+ * bin/install.js copies scripts/changeset/ and scripts/lib/ into
+ * <configDir>/scripts/ — a SIBLING of gsd-core/ — so the tooling's repo-relative
+ * requires ('../../gsd-core/bin/lib/X', '../lib/cli-exit.cjs') resolve
+ * identically in both layouts. These tests pin that property: they run the real
+ * cli.cjs from the repo tree AND from a faithful copy of the installed layout
+ * against a fixture changelog (test-input reads, not source-grep).
  */
 
 'use strict';
@@ -74,23 +74,29 @@ describe('update workflow changelog preview tooling (changeset cli)', () => {
     assert.ok(!out.includes('1.7.2] -'), 'extract range (from, to] must exclude the FROM version section');
   });
 
-  test('installed layout: cli.cjs works at gsd-core/scripts/changeset/ exactly as the installer ships it', () => {
-    // Mirror the installer's changesetPayload copy: the tooling lands INSIDE
-    // gsd-core/, where '../../gsd-core/bin/lib/X' does not exist and the
-    // dual-layout fallback '../../bin/lib/X' must resolve.
+  test('installed layout: cli.cjs works at <configDir>/scripts/changeset/ exactly as the installer ships it', () => {
+    // Mirror bin/install.js: scripts/changeset/ and scripts/lib/ are copied into
+    // <configDir>/scripts/ as a SIBLING of gsd-core/, so cli.cjs's
+    // '../../gsd-core/bin/lib/X' and '../lib/cli-exit.cjs' requires resolve
+    // exactly as they do in the repo tree.
     const fakeConfigDir = path.join(tmpRoot, 'fake-runtime');
-    const payload = [
-      'scripts/changeset/cli.cjs',
-      'scripts/changeset/parse.cjs',
-      'scripts/changeset/render.cjs',
-      'scripts/changeset/serialize.cjs',
-      'scripts/changeset/github-release-notes.cjs',
-      'scripts/lib/cli-exit.cjs',
-    ];
-    for (const rel of payload) {
-      const dest = path.join(fakeConfigDir, 'gsd-core', ...rel.split('/'));
+    // scripts/changeset/ — the installer copies every file in the directory.
+    const changesetSrc = path.join(ROOT, 'scripts', 'changeset');
+    for (const entry of fs.readdirSync(changesetSrc)) {
+      const srcFile = path.join(changesetSrc, entry);
+      if (!fs.statSync(srcFile).isFile()) continue;
+      const dest = path.join(fakeConfigDir, 'scripts', 'changeset', entry);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(path.join(ROOT, ...rel.split('/')), dest);
+      fs.copyFileSync(srcFile, dest);
+    }
+    // scripts/lib/ — cli-exit.cjs is required by cli.cjs via '../lib/cli-exit.cjs'.
+    const scriptsLibSrc = path.join(ROOT, 'scripts', 'lib');
+    for (const entry of fs.readdirSync(scriptsLibSrc)) {
+      const srcFile = path.join(scriptsLibSrc, entry);
+      if (!fs.statSync(srcFile).isFile()) continue;
+      const dest = path.join(fakeConfigDir, 'scripts', 'lib', entry);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(srcFile, dest);
     }
     // The runtime payload also contains gsd-core/bin/lib (copied wholesale by the
     // installer); the cli needs these two self-contained modules from it.
@@ -100,27 +106,33 @@ describe('update workflow changelog preview tooling (changeset cli)', () => {
       fs.copyFileSync(path.join(ROOT, 'gsd-core', 'bin', 'lib', lib), dest);
     }
 
-    const installedCli = path.join(fakeConfigDir, 'gsd-core', 'scripts', 'changeset', 'cli.cjs');
+    const installedCli = path.join(fakeConfigDir, 'scripts', 'changeset', 'cli.cjs');
     const out = runExtract(installedCli, changelogPath);
     assert.match(out, /1\.7\.3/, 'installed-layout extract must include the 1.7.3 release');
     assert.match(out, /Prune emptied legacy runtime dir/, 'installed-layout extract must include the entry body');
   });
 
-  test("installer payload list covers every parent-dir require of the shipped changeset files", () => {
-    // Structural guard: if someone adds a new ../ require to the changeset
-    // tooling without extending the installer's changesetPayload, the installed
-    // copy would crash with MODULE_NOT_FOUND again. Assert install.js lists
-    // every file the tooling needs.
+  test('installer still ships the changeset tooling and its scripts/lib dependency', () => {
+    // Structural guard: if the install.js changeset-payload block is dropped in
+    // an upstream merge, the installed copy would regress to the original
+    // silent "(Could not extract changelog)" failure (#935). Assert the copy
+    // block and its hard-failure verification are still present.
     const installSrc = fs.readFileSync(path.join(ROOT, 'bin', 'install.js'), 'utf8');
-    for (const rel of [
-      'scripts/changeset/cli.cjs',
-      'scripts/changeset/parse.cjs',
-      'scripts/changeset/render.cjs',
-      'scripts/changeset/serialize.cjs',
-      'scripts/changeset/github-release-notes.cjs',
-      'scripts/lib/cli-exit.cjs',
-    ]) {
-      assert.ok(installSrc.includes(`'${rel}'`), `bin/install.js changesetPayload must list '${rel}'`);
-    }
+    assert.ok(
+      /path\.join\(src, 'scripts', 'changeset'\)/.test(installSrc),
+      'bin/install.js must copy scripts/changeset/ into the runtime config dir'
+    );
+    assert.ok(
+      /path\.join\(src, 'scripts', 'lib'\)/.test(installSrc),
+      "bin/install.js must copy scripts/lib/ (cli.cjs requires '../lib/cli-exit.cjs')"
+    );
+    assert.ok(
+      installSrc.includes("'scripts/changeset/cli.cjs'"),
+      'bin/install.js must verify scripts/changeset/cli.cjs landed (hard failure, not silent degrade)'
+    );
+    assert.ok(
+      installSrc.includes("'scripts/lib/cli-exit.cjs'"),
+      'bin/install.js must verify scripts/lib/cli-exit.cjs landed (hard failure, not silent degrade)'
+    );
   });
 });

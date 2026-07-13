@@ -62,11 +62,25 @@ const UI_GATE_PATTERN = new RegExp(
 // Global-flagged variant for extracting ALL matches per line (matchAll).
 const UI_GATE_PATTERN_GLOBAL = new RegExp(UI_GATE_PATTERN.source, 'gi');
 
+// FORK:fidelity BEGIN
 // Negation guard (#dogfood): a token immediately preceded by a negator ("no UI", "without a
 // frontend", "not a screen") is a DENIAL, not a UI signal — a backend phase describing itself by
 // contrast must not be flagged. Matches a negator (+ optional article) right before the token.
 // The fail-safe-toward-UI bias is preserved for non-negated mentions.
 const NEGATOR_BEFORE_TOKEN = /(?:^|[^a-z])(?:no|not|without|never|sans|zero|n't)\s+(?:a\s+|an\s+|the\s+)?$/i;
+// FORK:fidelity END
+
+// FORK:strategy BEGIN
+// Per-phase UI-hint authority (strategy chain): the design-aware roadmapper annotates every
+// ROADMAP phase with `**UI hint**: yes|no`. When the hint is present it is AUTHORITATIVE in
+// BOTH directions — `yes` ⇒ UI, any other explicit hint (e.g. `no`) ⇒ NOT UI — because the
+// roadmapper already judged the phase against the design/strategy artifacts; keyword detection
+// must not override it, and the annotation's own bare "UI" token must not self-match.
+// Keyword detection remains the fallback ONLY when no hint exists (mirrors the fork's
+// plan-phase shell gate: `grep -qiE 'UI hint[^a-z]*:?[^a-z]*yes'` / `grep -qi 'UI hint'`).
+const UI_HINT_YES_RE = /UI hint[^a-zA-Z]*:?[^a-zA-Z]*yes/i;
+const UI_HINT_ANY_RE = /UI hint/i;
+// FORK:strategy END
 
 /**
  * Check a roadmap phase section string for frontend UI indicators.
@@ -83,14 +97,24 @@ export function checkUiPresence(text: string): UiPresenceResult {
   // Normalise CRLF so the pattern sees consistent line boundaries.
   const normalised = text.replace(/\r\n/g, '\n');
 
+// FORK:strategy BEGIN
+  // Explicit per-phase UI hint is authoritative (both directions) — see UI_HINT_*_RE above.
+  if (UI_HINT_ANY_RE.test(normalised)) {
+    const hintYes = UI_HINT_YES_RE.test(normalised);
+    return { hasUI: hintYes, tokens: hintYes ? ['ui-hint:yes'] : [] };
+  }
+// FORK:strategy END
+
   const found = new Set<string>();
   for (const line of normalised.split('\n')) {
     // Reset lastIndex before each line so the global pattern restarts from 0.
     UI_GATE_PATTERN_GLOBAL.lastIndex = 0;
     for (const m of line.matchAll(UI_GATE_PATTERN_GLOBAL)) {
+// FORK:fidelity BEGIN
       // Skip a token that's negated ("no UI", "without a frontend").
       const tokenStart = (m.index ?? 0) + (m[1] ? m[1].length : 0);
       if (NEGATOR_BEFORE_TOKEN.test(line.slice(0, tokenStart))) continue;
+// FORK:fidelity END
       found.add(m[2].toLowerCase());
     }
   }

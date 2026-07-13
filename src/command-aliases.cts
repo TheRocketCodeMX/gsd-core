@@ -458,6 +458,14 @@ export const PHASE_COMMAND_ALIASES: CommandAlias[] = [
     ],
     "subcommand": "scaffold",
     "mutation": true
+  },
+  {
+    "canonical": "phase.list-plans",
+    "aliases": [
+      "phase list-plans"
+    ],
+    "subcommand": "list-plans",
+    "mutation": false
   }
 ];
 
@@ -574,6 +582,7 @@ export const ROADMAP_COMMAND_ALIASES: CommandAlias[] = [
   }
 ];
 
+// FORK:strategy BEGIN
 export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
   {
     "canonical": "project.mode",
@@ -598,8 +607,17 @@ export const PROJECT_COMMAND_ALIASES: CommandAlias[] = [
     ],
     "subcommand": "strategy-skipped",
     "mutation": false
+  },
+  {
+    "canonical": "project.strategy-done",
+    "aliases": [
+      "project strategy-done"
+    ],
+    "subcommand": "strategy-done",
+    "mutation": true
   }
 ];
+// FORK:strategy END
 
 export const NON_FAMILY_COMMAND_ALIASES: NonFamilyCommandAlias[] = [
   {
@@ -853,4 +871,17 @@ export const PHASE_SUBCOMMANDS: string[] = PHASE_COMMAND_ALIASES.map((entry) => 
 export const PHASES_SUBCOMMANDS: string[] = PHASES_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const VALIDATE_SUBCOMMANDS: string[] = VALIDATE_COMMAND_ALIASES.map((entry) => entry.subcommand);
 export const ROADMAP_SUBCOMMANDS: string[] = ROADMAP_COMMAND_ALIASES.map((entry) => entry.subcommand);
+// FORK:strategy BEGIN
 export const PROJECT_SUBCOMMANDS: string[] = PROJECT_COMMAND_ALIASES.map((entry) => entry.subcommand);
+// FORK:strategy END
+
+export const EVAL_COMMAND_ALIASES: CommandAlias[] = [
+  {
+    "canonical": "eval.score",
+    "aliases": ["eval score"],
+    "subcommand": "score",
+    "mutation": false
+  }
+];
+
+export const EVAL_SUBCOMMANDS: string[] = EVAL_COMMAND_ALIASES.map((entry) => entry.subcommand);

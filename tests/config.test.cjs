@@ -594,6 +594,32 @@ describe('config-new-project command', () => {
     assert.strictEqual(config.hooks.context_warnings, true);
   });
 
+  test('fresh config-new-project output loads with ZERO unknown-key warnings (#21 P1-3)', () => {
+    // config-new-project seeds tavily_search / ref_search / perplexity / jina
+    // (real research toggles), but the schema whitelist didn't register them —
+    // so every loadConfig() on a fresh project warned "unknown config key(s)".
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const config = readConfig(tmpDir);
+    for (const key of ['tavily_search', 'ref_search', 'perplexity', 'jina']) {
+      assert.strictEqual(typeof config[key], 'boolean', `${key} is seeded by config-new-project`);
+    }
+
+    const { loadConfig } = require('../gsd-core/bin/lib/config-loader.cjs');
+    let stderrCapture = '';
+    const origStderrWrite = process.stderr.write;
+    process.stderr.write = (chunk) => { stderrCapture += chunk; return true; };
+    try {
+      loadConfig(tmpDir);
+    } finally {
+      process.stderr.write = origStderrWrite;
+    }
+    assert.ok(
+      !stderrCapture.includes('unknown config key'),
+      `a fresh config-new-project output must load warning-free, got: ${stderrCapture}`
+    );
+  });
+
   test('user choices override defaults', () => {
     const choices = JSON.stringify({
       mode: 'yolo',
@@ -1416,5 +1442,49 @@ describe('plan_review.source_grounding and plan_review.source_grounding_authorit
       result.error.includes('Invalid plan_review.source_grounding'),
       `Expected "Invalid plan_review.source_grounding" in error: ${result.error}`
     );
+  });
+});
+
+// ─── config-set workflow.test_command (#1216) ────────────────────────────────
+
+describe('config-set workflow.test_command (#1216)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('config-set accepts workflow.test_command', () => {
+    const result = runGsdTools(['config-set', 'workflow.test_command', 'npm test'], tmpDir);
+    assert.ok(result.success, `config-set should accept workflow.test_command: ${result.error}`);
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.workflow?.test_command, 'npm test', 'value must be persisted');
+  });
+
+  test('config-set workflow.test_command persists a custom make command', () => {
+    const result = runGsdTools(['config-set', 'workflow.test_command', 'make test'], tmpDir);
+    assert.ok(result.success, `config-set should accept workflow.test_command: ${result.error}`);
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.workflow?.test_command, 'make test', 'make test must be persisted');
+  });
+
+  test('config-get workflow.test_command returns the set value', () => {
+    runGsdTools(['config-set', 'workflow.test_command', 'cargo test'], tmpDir);
+    const result = runGsdTools('config-get workflow.test_command', tmpDir);
+    assert.ok(result.success, `config-get should return workflow.test_command: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output, 'cargo test', 'config-get must return the persisted value');
+  });
+
+  test('config-set accepts workflow.build_command', () => {
+    const result = runGsdTools(['config-set', 'workflow.build_command', 'npm run build'], tmpDir);
+    assert.ok(result.success, `config-set should accept workflow.build_command: ${result.error}`);
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.workflow?.build_command, 'npm run build', 'value must be persisted');
   });
 });

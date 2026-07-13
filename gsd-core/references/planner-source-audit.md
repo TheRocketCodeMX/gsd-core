@@ -25,8 +25,11 @@ DESIGN    | address | one address input (design)   | 02    | COVERED   |
 2. **REQ** — Every REQ-ID in `phase_req_ids`. Cross-reference REQUIREMENTS.md for descriptions.
 3. **RESEARCH** — Technical approaches, discovered constraints, and features identified in RESEARCH.md. Exclude items explicitly marked "out of scope" or "future work" by the researcher.
 4. **CONTEXT** — Every D-XX decision from CONTEXT.md `<decisions>` section.
+<!-- FORK:fidelity BEGIN -->
 5. **DESIGN** — *Only when PROJECT.md `## Mode` records a provided design (`gsd-tools query project mode` → `has_provided_design: true`).* The literal design is a source of truth, not just the abstractions above — re-ground the plan's data shape/contract/screens in the design **oracle** (`.planning/DESIGN-INVENTORY.md`'s user-facing-field list, or the phase UI-SPEC), per `@~/.claude/gsd-core/references/design-ingestion.md` and `exploration-and-adaptability.md` § Source precedence. If no oracle exists yet (model-domain was skipped), ingest the design slice this phase needs and record `.planning/DESIGN-INVENTORY.md` (from `gsd-core/templates/design-inventory.md`) before finalizing — so the plan, and the downstream gate, have an in-repo oracle to check.
+<!-- FORK:fidelity END -->
 
+<!-- FORK:fidelity BEGIN -->
 ### Design fidelity (the address-failure guard)
 
 When DESIGN is an active source, audit the plan's **observable shape** against the oracle — this is what prevents "one `address` input" becoming an invented `street/city/state/zip`:
@@ -34,6 +37,7 @@ When DESIGN is an active source, audit the plan's **observable shape** against t
 - DDD/strategy owns only the **internal** modeling of those fields — a rich value object, normalization, or a column split that doesn't change the captured/observable shape is **fine**, not a gap.
 - A field the **requirements** need but the design under-showed is **kept** (it's design ∪ requirements), tagged `source: requirement` in the oracle — never silently dropped.
 `gsd-plan-checker` re-checks this at plan time and `gsd-verifier` at build time; surfacing it here stops the drift before execution burns context.
+<!-- FORK:fidelity END -->
 
 ### What is NOT a Gap
 
@@ -81,3 +85,9 @@ The planner's only legitimate reasons to split or flag a feature are **constrain
 - ✗ "This is a challenging feature that might be better left to a future phase"
 
 If a feature has none of the three legitimate constraints (context cost, missing information, dependency conflict), it gets planned. Period.
+
+<!-- FORK:grounding BEGIN -->
+## Fill the plan's `## Grounding` block (blocking gate)
+
+Every PLAN.md carries a `## Grounding` block — the proof the plan grounded in the project's active strategy sources. Get the required set with `gsd_run query grounding required` (the `done` strategy steps + present DESIGN/LEGACY-INVENTORY, per the `## Strategy Plan`; skipped/not-yet-run steps are exempt). Write **one line per required source**, citing the decision that exists only in that file (the ADR rung per subdomain, etc.), per `@~/.claude/gsd-core/references/grounding-citations.md`. `check.grounding-plan` cross-checks each citation against the source file and **blocks the plan (`exit 1`)** on any missing or mismatched required source — so you cannot fake it from memory. When the phase grounds in a literal source file (exported design, legacy/vibe/additional-app code), add a source-direct citation with `file:line`.
+<!-- FORK:grounding END -->

@@ -1,6 +1,13 @@
-7c. **Between-wave manifest reset and worktree base refresh (waves 2+ only — #3384, #1369):**
+7b. **Pre-wave dependency check (waves 2+ only):**
+    Before wave N+1, run `gsd-tools.cjs query verify.key-links {phase_dir}/{plan}-PLAN.md` for each upcoming plan.
+    If any PRIOR-wave artifact link fails, present:
+    - `## Cross-Plan Wiring Gap` with plan/link/from/pattern rows
+    - Options: investigate+fix before continue, or continue with cascade risk
+    Skip key-links that reference files in the CURRENT (upcoming) wave.
 
-   **REQUIRED before each wave transition when `USE_WORKTREES != "false"` and `RUNTIME = "claude"`.** (Step 7b — the pre-wave key-links dependency check — already runs inline before this in `execute-phase.md`; this step covers the manifest reset + base refresh.)
+7c. **Between-wave manifest reset and worktree base refresh (waves 2+ only — #1369):**
+
+   **REQUIRED before each wave transition when `USE_WORKTREES != "false"` and `RUNTIME = "claude"`.**
 
    Wave N's `WAVE_WORKTREE_MANIFEST` was consumed by `worktree.cleanup-wave` in step 5.5. It must be
    unset so wave N+1's step 3 creates a fresh manifest for the new wave's worktrees. Without this,
@@ -22,14 +29,14 @@
    if [ "$RUNTIME" = "claude" ] && [ "$USE_WORKTREES" != "false" ]; then
      gsd_run query worktree.set-baseref 2>/dev/null || true
 
-     # Safety re-check: evaluate degradation AFTER the wave's commits. If HEAD has diverged
+     # Safety re-check: evaluate degradation AFTER the wave N commits. If HEAD has diverged
      # from origin/HEAD and baseRef is NOT "head", degrade remaining waves to sequential to
      # avoid the base-mismatch FATAL in executor agents.
      _BETWEEN_DEGRADE=$(gsd_run query worktree.base-check --pick shouldDegrade 2>/dev/null || echo "false")
      if [ "$_BETWEEN_DEGRADE" = "true" ]; then
        _DEGRADE_MSG=$(gsd_run query worktree.base-check --pick message 2>/dev/null || true)
        [ -n "$_DEGRADE_MSG" ] && printf '%s\n' "$_DEGRADE_MSG" >&2
-       printf 'Degrading to sequential mode for remaining waves: HEAD advanced past the worktree fork base after the prior wave merge (#1369).\n' >&2
+       printf 'Degrading to sequential mode for remaining waves: HEAD advanced past worktree fork base after wave %s merge (#1369).\n' "${N}" >&2
        USE_WORKTREES=false
      fi
    fi

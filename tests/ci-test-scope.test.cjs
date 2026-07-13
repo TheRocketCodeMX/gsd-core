@@ -63,8 +63,8 @@ describe('ci-test-scope.cjs', () => {
     assert.strictEqual(result.full_matrix, true);
   });
 
-  test('inert CI only (stale.yml) — code_changed true, product_changed false, full_matrix false', () => {
-    const result = scopeFor(['.github/workflows/stale.yml']);
+  test('inert CI only (branch-cleanup.yml) — code_changed true, product_changed false, full_matrix false', () => {
+    const result = scopeFor(['.github/workflows/branch-cleanup.yml']);
     assert.strictEqual(result.code_changed, true,
       `expected code_changed=true for inert CI, got: ${JSON.stringify(result)}`);
     assert.strictEqual(result.product_changed, false,
@@ -126,7 +126,7 @@ describe('ci-test-scope.cjs', () => {
   });
 
   test('mixed docs + inert CI — code_changed true, product_changed false (inert lane)', () => {
-    const result = scopeFor(['docs/x.md', '.github/workflows/stale.yml']);
+    const result = scopeFor(['docs/x.md', '.github/workflows/branch-cleanup.yml']);
     assert.strictEqual(result.code_changed, true);
     assert.strictEqual(result.product_changed, false,
       `expected product_changed=false for docs+inert, got: ${JSON.stringify(result)}`);
@@ -279,18 +279,39 @@ describe('ci-test-scope.cjs', () => {
   });
 });
 
-describe('ci-test-scope superset invariant (#494)', () => {
-  // Facet A: any tests/** change → full_matrix === true
-  test('A1: a specific changed test file forces full_matrix', () => {
-    const result = scopeFor(['tests/bug-1974-context-exhaustion-record.test.cjs']);
-    assert.strictEqual(result.full_matrix, true,
-      `expected full_matrix=true for tests/** change, got: ${JSON.stringify(result)}`);
+describe('ci-test-scope superset invariant (#494, narrowed)', () => {
+  // Facet A (narrowed): a changed test file no longer triggers the full
+  // parity matrix — instead it must ALWAYS run on the scoped windows lane,
+  // so OS-specific breakage in the changed test (the #482 class) is still
+  // exercised pre-merge. Ubuntu 22/24 coverage comes via targeted_tests.
+  test('A1: a changed test file joins the windows scoped lane without full_matrix', () => {
+    // FORK: fixture swapped from bug-1974-context-exhaustion-record.test.cjs —
+    // that context-monitor test is deleted in this fork (the monitor is an inert
+    // no-op); any existing tests/** file exercises the same scoping rule.
+    const result = scopeFor(['tests/managed-hooks.test.cjs']);
+    assert.strictEqual(result.full_matrix, false,
+      `expected full_matrix=false for a tests/**-only change, got: ${JSON.stringify(result)}`);
+    assert.ok(result.targeted_tests.includes('tests/managed-hooks.test.cjs'),
+      `expected the changed test in targeted_tests, got: ${JSON.stringify(result.targeted_tests)}`);
+    assert.ok(result.windows_tests.includes('tests/managed-hooks.test.cjs'),
+      `expected the changed test in windows_tests, got: ${JSON.stringify(result.windows_tests)}`);
   });
 
-  test('A2: any tests/** path forces full_matrix', () => {
+  test('A2: a changed test file with no windows hint still joins the windows lane', () => {
+    // commands.test.cjs matches none of the WINDOWS_HINTS substrings — the
+    // unconditional changed-test → windows lane rule must include it anyway.
+    const result = scopeFor(['tests/commands.test.cjs']);
+    assert.strictEqual(result.full_matrix, false);
+    assert.ok(result.windows_tests.includes('tests/commands.test.cjs'),
+      `expected hint-less changed test in windows_tests, got: ${JSON.stringify(result.windows_tests)}`);
+  });
+
+  test('A3: a deleted/nonexistent test path falls back to the unit token, no full_matrix', () => {
     const result = scopeFor(['tests/some-new.test.cjs']);
-    assert.strictEqual(result.full_matrix, true,
-      `expected full_matrix=true for tests/** change, got: ${JSON.stringify(result)}`);
+    assert.strictEqual(result.full_matrix, false);
+    // The nonexistent file is filtered by existingTests(); with nothing left,
+    // the #408 fallback applies so the targeted lane still runs something.
+    assert.deepStrictEqual(result.targeted_tests, ['unit']);
   });
 
   // Facet B: commands/**, agents/** → code_changed AND docs-parity selected
@@ -341,11 +362,11 @@ describe('INERT_WORKFLOWS allowlist integrity guard', () => {
 
   // Canonical inert workflow list — reused by both tests below.
   const knownInert = [
-    'stale.yml', 'branch-cleanup.yml', 'branch-naming.yml', 'auto-label-issues.yml',
+    'branch-cleanup.yml', 'branch-naming.yml',
     'auto-branch.yml', 'auto-backmerge.yml', 'close-draft-prs.yml',
-    'dismiss-unauthorized-pr-approvals.yml', 'pr-gate.yml', 'pr-target-validator.yml',
+    'dismiss-unauthorized-pr-approvals.yml', 'pr-target-validator.yml',
     'pr-template-format.yml', 'require-issue-link.yml', 'changeset-required.yml',
-    'docs-required.yml', 'discord-changelog.yml',
+    'docs-required.yml',
   ];
 
   test('all entries in INERT_WORKFLOWS exist under .github/workflows/', () => {
@@ -439,6 +460,96 @@ describe('test.yml changes job contract (#837)', () => {
   });
 });
 
+describe('test-full shard matrix parity (#1212)', () => {
+  // DEFECT.GENERATIVE-FIX: the sharded windows full-test lane has TWO surfaces
+  // that must agree — the `shard:` matrix array (how many parallel jobs run)
+  // and the `/N` denominator in `run-tests.cjs --suite unit --shard i/N` (how
+  // many slices the runner partitions the suite into). If they diverge (e.g.
+  // someone grows `shard: [1,2,3,4]` but leaves `--shard ${{ matrix.shard }}/3`),
+  // shards silently overlap and one shard errors out. This parity assertion
+  // fails the moment the two drift.
+  const yaml = require('js-yaml');
+
+  function loadTestFull() {
+    const text = fs.readFileSync(path.join(WORKFLOWS_DIR, 'test.yml'), 'utf8');
+    const doc = yaml.load(text);
+    return { text, job: doc.jobs['test-full'] };
+  }
+
+  test('distinct shard values are 1..N matching the --shard /N denominator, on every leg', () => {
+    const { job } = loadTestFull();
+    const include = job.strategy.matrix.include;
+    assert.ok(Array.isArray(include), 'test-full matrix must enumerate `include:` rows');
+    assert.ok(
+      include.every(r => Number.isInteger(r.shard)),
+      'every include row must carry an integer `shard:` key',
+    );
+
+    const distinctShards = [...new Set(include.map(r => r.shard))].sort((a, b) => a - b);
+    const n = distinctShards.length;
+
+    // Distinct shard values must be exactly 1..n (1-based, contiguous) so the
+    // runner's round-robin selection covers every file with no gaps/overlaps.
+    assert.deepStrictEqual(
+      distinctShards,
+      Array.from({ length: n }, (_, i) => i + 1),
+      `distinct shard values must be 1..${n} (1-based, contiguous), got ${JSON.stringify(distinctShards)}`,
+    );
+
+    // Every OS/node leg must appear once per shard (full cross-product) — no
+    // leg may silently skip a shard, which would drop a third of its coverage.
+    const legs = [...new Set(include.map(r => `${r.os}|${r['node-version']}`))];
+    for (const leg of legs) {
+      const [os, node] = leg.split('|');
+      const shardsForLeg = include
+        .filter(r => r.os === os && String(r['node-version']) === node)
+        .map(r => r.shard)
+        .sort((a, b) => a - b);
+      assert.deepStrictEqual(
+        shardsForLeg,
+        distinctShards,
+        `leg ${leg} must run all shards ${JSON.stringify(distinctShards)}, got ${JSON.stringify(shardsForLeg)}`,
+      );
+    }
+    // Full cross-product: every (leg, shard) pair is present exactly once, so
+    // the row count equals legs × shards with no duplicate/missing combination.
+    const pairKey = r => `${r.os}|${r['node-version']}|${r.shard}`;
+    assert.strictEqual(new Set(include.map(pairKey)).size, legs.length * n);
+    assert.strictEqual(include.length, legs.length * n);
+
+    // Find the `--shard ${{ matrix.shard }}/<N>` denominator in the unit step.
+    const unitStep = job.steps.find(
+      s => typeof s.run === 'string' && s.run.includes('run-tests.cjs') && s.run.includes('--shard'),
+    );
+    assert.ok(unitStep, 'test-full must have a step running run-tests.cjs --shard');
+    const m = /--shard\s+\$\{\{\s*matrix\.shard\s*\}\}\/(\d+)/.exec(unitStep.run);
+    assert.ok(m, `could not parse --shard i/N denominator from: ${unitStep.run}`);
+    const denominator = Number(m[1]);
+
+    assert.strictEqual(
+      denominator,
+      n,
+      `shard count (${n}) and --shard /N denominator (${denominator}) must match — ` +
+      `update both the per-row \`shard:\` values and the \`/N\` in the run command together.`,
+    );
+  });
+
+  test('required-tests fan-in still needs test-full and keeps the protected name', () => {
+    // Hyrum's Law: branch protection requires a status check literally named
+    // "Required tests". Renaming it (or dropping test-full from its needs)
+    // would silently break the gate. Pin both.
+    const text = fs.readFileSync(path.join(WORKFLOWS_DIR, 'test.yml'), 'utf8');
+    const doc = yaml.load(text);
+    const fanIn = doc.jobs['required-tests'];
+    assert.ok(fanIn, 'required-tests job must exist');
+    assert.strictEqual(fanIn.name, 'Required tests', 'the branch-protection check name must stay "Required tests"');
+    assert.ok(
+      Array.isArray(fanIn.needs) && fanIn.needs.includes('test-full'),
+      'required-tests must `needs: test-full` so all shard legs aggregate into the gate',
+    );
+  });
+});
+
 describe('code_changed=false implies clean output invariant', () => {
   // Fix 1: when code_changed is false, full_matrix, targeted_tests, windows_tests
   // must ALL be empty/false — even if a docs path coincidentally
@@ -483,7 +594,7 @@ describe('code_changed=false implies clean output invariant', () => {
       ['src/semver.cts'],
       ['bin/gsd'],
       ['.github/workflows/test.yml'],
-      ['.github/workflows/stale.yml'],
+      ['.github/workflows/branch-cleanup.yml'],
     ]) {
       const result = scopeFor(files);
       assert.strictEqual(result.code_changed, true,

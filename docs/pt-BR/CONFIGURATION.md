@@ -141,7 +141,7 @@ O GSD armazena as configurações do projeto em `.planning/config.json`. Criado 
 | `model_profile` | enum | `quality`, `balanced`, `budget`, `adaptive`, `inherit` | `balanced` | Nível de modelo para cada agente (consulte [Perfis de Modelo](#model-profiles)). `adaptive` foi adicionado conforme [#1713](https://github.com/TheRocketCodeMX/gsd-core/issues/1713) / [#1806](https://github.com/TheRocketCodeMX/gsd-core/issues/1806) e resolve da mesma forma que os outros níveis em perfis com reconhecimento de runtime. |
 | `runtime` | string | `claude`, `codex`, ou qualquer string | (nenhum) | Runtime ativo para [resolução de perfil com reconhecimento de runtime](#runtime-aware-profiles-2517). Quando definido, os níveis de perfil (opus/sonnet/haiku) resolvem para IDs de modelo nativos do runtime. Atualmente, apenas o caminho de instalação do Codex emite IDs de modelo por agente a partir deste resolvedor; outros runtimes (`opencode`, `gemini`, `qwen`, `copilot`, …) consomem o resolvedor no momento do spawn e ganham suporte a caminho de instalação dedicado em [#2612](https://github.com/TheRocketCodeMX/gsd-core/issues/2612). Quando não definido (padrão), o comportamento não se altera em relação às versões anteriores. Adicionado na v1.39 |
 | `model_profile_overrides.<runtime>.<tier>` | string \| object | substituição de nível por runtime | (nenhum) | Substitui o mapeamento de nível com reconhecimento de runtime para um `(runtime, tier)` específico. O nível é um de `opus`, `sonnet`, `haiku`. O valor é uma string de ID de modelo (por exemplo, `"gpt-5-pro"`) ou `{ model, reasoning_effort }`. Consulte [Perfis com Reconhecimento de Runtime](#runtime-aware-profiles-2517). Adicionado na v1.39 |
-| `model_policy.provider` | string | `openai`, `anthropic`, `google`, `qwen`, `generic` | (nenhum) | Declara o provedor de modelo. Provedores conhecidos (`openai`, `anthropic`, `google`, `qwen`) desbloqueiam predefinições baseadas em catálogo. `generic` trata todos os IDs de modelo como strings opacas — sem inferência de prefixo, sem padrões de esforço de raciocínio. `model_policy.runtime_tiers` resolve antes do legado `model_profile_overrides`. Consulte [Predefinições de Política de Modelo](#model-policy-presets-model_policy--added-in-v142). Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
+| `model_policy.provider` | string | `openai`, `anthropic`, `anthropic-fable`, `google`, `qwen`, `generic` | (nenhum) | Declara o provedor de modelo. Provedores conhecidos (`openai`, `anthropic`, `anthropic-fable`, `google`, `qwen`) desbloqueiam predefinições baseadas em catálogo. `generic` trata todos os IDs de modelo como strings opacas — sem inferência de prefixo, sem padrões de esforço de raciocínio. `model_policy.runtime_tiers` resolve antes do legado `model_profile_overrides`. Consulte [Predefinições de Política de Modelo](#model-policy-presets-model_policy--added-in-v142). Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
 | `model_policy.budget` | enum | `high`, `medium`, `low` | (nenhum) | Seleciona um nível de orçamento ao usar um provedor conhecido. O GSD materializa a predefinição de catálogo correspondente em mapeamentos de nível explícitos no momento da resolução. Ignorado quando `provider` é `generic` ou `custom`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
 | `model_policy.high` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo alto para provedor `generic`/`custom`. Usado quando `provider: "generic"` ou `"custom"`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
 | `model_policy.medium` | string | ID do modelo | (nenhum) | ID do modelo de nível de custo médio para provedor `generic`/`custom`. Adicionado na v1.42 ([#49](https://github.com/TheRocketCodeMX/gsd-core/issues/49)) |
@@ -155,7 +155,7 @@ O GSD armazena as configurações do projeto em `.planning/config.json`. Criado 
 | `project_code` | string | qualquer string curta | (nenhum) | Prefixo para nomes de diretórios de fase (por exemplo, `"ABC"` produz `ABC-01-setup/`). Adicionado na v1.31 |
 | `phase_id_convention` | enum | `"milestone-prefixed"`, `null` | `null` | Convenção de nomenclatura para IDs de fase. `null` = IDs numéricos legados (`Phase 1`, `Phase 2`). `"milestone-prefixed"` = IDs globalmente únicos que codificam o marco envolvente (`Phase 1-01`, `Phase 1-02`). Execute `gsd-tools roadmap upgrade --convention milestone-prefixed` para migrar um ROADMAP.md existente. |
 | `response_language` | string | código de idioma | (nenhum) | Idioma para respostas dos agentes (por exemplo, `"pt"`, `"ko"`, `"ja"`). Propagado para todos os agentes gerados para consistência de idioma entre fases. Adicionado na v1.32 |
-| `context_window` | number | qualquer inteiro | `200000` | Tamanho da janela de contexto em tokens. Defina `1000000` para modelos com contexto de 1M (por exemplo, `claude-opus-4-7[1m]`). Valores `>= 500000` habilitam enriquecimento adaptativo de contexto (leituras completas de SUMMARY.md anteriores, leituras mais profundas de antipadrões). Configurado via `/gsd-config --advanced`. |
+| `context_window` | number | qualquer inteiro | `200000` | Tamanho da janela de contexto em tokens. Defina `1000000` para modelos com contexto de 1M (por exemplo, `claude-fable-5`). Valores `>= 500000` habilitam enriquecimento adaptativo de contexto (leituras completas de SUMMARY.md anteriores, leituras mais profundas de antipadrões). Configurado via `/gsd-config --advanced`. |
 | `context_profile` | string | `dev`, `research`, `review` | (nenhum) | Predefinição de contexto de execução que aplica um conjunto pré-configurado de configurações de modo, modelo e fluxo de trabalho para o tipo atual de trabalho. Adicionado na v1.34 |
 | `claude_md_path` | string | qualquer caminho de arquivo | `./CLAUDE.md` | Caminho de saída personalizado para o arquivo CLAUDE.md gerado. Útil para monorepos ou projetos que precisam do CLAUDE.md em um local fora da raiz. Padrão é `./CLAUDE.md` na raiz do projeto. Adicionado na v1.36 |
 | `claude_md_assembly.mode` | enum | `embed`, `link` | `embed` | Controla como as seções gerenciadas são escritas no CLAUDE.md. `embed` (padrão) incorpora conteúdo entre marcadores GSD. `link` escreve `@.planning/<source-path>` — o Claude Code expande a referência em tempo de execução, reduzindo o tamanho do CLAUDE.md em ~65% em projetos típicos. `link` aplica-se apenas a seções que possuem um arquivo-fonte real; as seções `workflow` e fallback sempre são incorporadas. Substituições por bloco: `claude_md_assembly.blocks.<section>` (por exemplo `claude_md_assembly.blocks.architecture: link`). Adicionado na v1.38 |
@@ -994,7 +994,7 @@ O hint `reasoning_effort` por nível do catálogo de modelos é um campo legado 
 2. `effort.agent_overrides[<agent-id>]`
 3. `effort.routing_tier_defaults[<light|standard|heavy>]`
 4. `effort.default`
-5. `"high"` (padrão universal do Anthropic Opus 4.8)
+5. `"high"` (padrão universal do Claude)
 
 ```json
 {
@@ -1139,13 +1139,13 @@ A saída JSON de `resolve-model` inclui `reasoning_effort` quando o nível de ru
 
 | Runtime | `opus` | `sonnet` | `haiku` | reasoning_effort |
 |---------|--------|----------|---------|------------------|
-| `claude` | `claude-opus-4-8` | `claude-sonnet-4-6` | `claude-haiku-4-5` | (não usado) |
+| `claude` | `claude-opus-4-8` | `claude-sonnet-5` | `claude-haiku-4-5` | (não usado) |
 | `codex` | `gpt-5.5` | `gpt-5.3-codex` | `gpt-5.4-mini` | `xhigh` / `medium` / `medium` |
 | `gemini` | `gemini-3-pro` | `gemini-3-flash` | `gemini-2.5-flash-lite` | (não usado) |
 | `qwen` | `qwen3-max-2026-01-23` | `qwen3-coder-plus` | `qwen3-coder-next` | (não usado) |
-| `opencode` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-4-6` | `anthropic/claude-haiku-4-5` | (não usado) |
-| `copilot` | `claude-opus-4-8` | `claude-sonnet-4-6` | `claude-haiku-4-5` | (não usado) |
-| `hermes` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-4-6` | `anthropic/claude-haiku-4-5` | (não usado) |
+| `opencode` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-5` | `anthropic/claude-haiku-4-5` | (não usado) |
+| `copilot` | `claude-opus-4-8` | `claude-sonnet-5` | `claude-haiku-4-5` | (não usado) |
+| `hermes` | `anthropic/claude-opus-4-8` | `anthropic/claude-sonnet-5` | `anthropic/claude-haiku-4-5` | (não usado) |
 | Grupo B (`kilo`, `cline`, `cursor`, `windsurf`, `augment`, `trae`, `codebuddy`, `antigravity`) | (sem padrão integrado — seu runtime trata da seleção de modelo) | | | |
 
 **Exemplo Codex** — uma configuração, modelos em nível, sem bloco grande de `model_overrides`:
@@ -1229,7 +1229,7 @@ Escolha um provedor e nível de orçamento via o fluxo de configurações; o GSD
 }
 ```
 
-Provedores conhecidos: `openai`, `anthropic`, `google`, `qwen`. Níveis de orçamento: `high`, `medium`, `low`.
+Provedores conhecidos: `openai`, `anthropic`, `anthropic-fable`, `google`, `qwen`. Níveis de orçamento: `high`, `medium`, `low`. Use `anthropic` para manter a predefinição Claude baseada em Opus 4.8, ou `anthropic-fable` para optar pelo Claude Fable 5 no roteamento de alto orçamento.
 
 Para controle avançado por runtime, `runtime_tiers` aceita entradas explícitas usando os nomes internos de nível de perfil (`opus`, `sonnet`, `haiku`):
 

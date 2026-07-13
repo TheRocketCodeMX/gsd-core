@@ -31,14 +31,24 @@
  *   - PR #156 (issue #6) — validate.ts generator that #26 extends
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import phaseIdMod = require('./phase-id.cjs');
+const { OPTIONAL_PROJECT_CODE_PREFIX_SOURCE } = phaseIdMod;
+
 // ── Issue #26: regex constants (W005, W006-archived) ────────────────────────
 // Matches legacy numeric dirs (01-setup), milestone-prefixed dirs (02-01-setup),
 // deep dirs (02-04-01-deep), and project-code-prefixed variants (GSD-02-01-setup).
-export const phaseDirNameRe = /^(?:[A-Z]{1,6}-)?\d{2,}(?:-\d+)*(?:\.\d+)*-[\w-]+$/i;
+export const phaseDirNameRe = new RegExp(
+  `^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}\\d{2,}(?:-\\d+)*(?:\\.\\d+)*-[\\w-]+$`,
+  'i',
+);
 // Extracts the full phase token from a directory name, including milestone-prefixed
 // multi-segment tokens like "02-01" from "02-01-setup" or "GSD-02-01-setup".
 // Greedily captures all leading all-digit segments before the first letter-start segment.
-export const PHASE_TOKEN_FROM_DIR_RE = /^(?:[A-Z]{1,6}-)?(\d+(?:-\d+)*[A-Z]?(?:\.\d+)*)(?:-[a-z]|$)/i;
+export const PHASE_TOKEN_FROM_DIR_RE = new RegExp(
+  `^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}(\\d+(?:-\\d+)*[A-Z]?(?:\\.\\d+)*)(?:-[a-z]|$)`,
+  'i',
+);
 export const MILESTONE_ARCHIVE_DIR_RE = /^v\d+.*-phases$/i;
 
 // ── Issue #26: I001 canonicalization ────────────────────────────────────────
@@ -99,6 +109,15 @@ export function buildRoadmapPhaseVariants(roadmapContent: string): RoadmapPhaseV
   while ((m = phasePattern.exec(roadmapContent)) !== null) {
     roadmapPhases.add(m[1]);
     for (const variant of phaseVariants(m[1])) roadmapPhaseVariants.add(variant);
+  }
+  // Also matches checklist-style entries (checked or unchecked):
+  //   - [x] **Phase 01: name**   - [X] **Phase 2-01: name**   - [ ] **Phase 3: name**
+  // This is a supported ROADMAP format (parallel to buildNotStartedPhaseVariants).
+  const checklistPattern = /-\s*\[[ xX]\]\s*\*{0,2}Phase\s+([\w][\w.-]*)\s*:/gi;
+  let cm: RegExpExecArray | null;
+  while ((cm = checklistPattern.exec(roadmapContent)) !== null) {
+    roadmapPhases.add(cm[1]);
+    for (const variant of phaseVariants(cm[1])) roadmapPhaseVariants.add(variant);
   }
   return { roadmapPhases, roadmapPhaseVariants };
 }

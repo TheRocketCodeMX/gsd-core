@@ -10,6 +10,8 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const {
   resolveRuntimeConfigIntent,
+  resolveInstallPlan,
+  resolveInstallPlanFromRuntimes,
   ALLOWED_CONFIG_RUNTIMES,
   INSTALL_SURFACES,
 } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'runtime-config-adapter-registry.cjs'));
@@ -34,6 +36,7 @@ const EXPECTED_TABLE = [
   { runtime: 'cursor',      installSurface: 'cursor-hooks-json',    writesSharedSettings: false, finishPermissionWriter: null       },
   { runtime: 'windsurf',    installSurface: 'profile-marker-only',  writesSharedSettings: false, finishPermissionWriter: null       },
   { runtime: 'trae',        installSurface: 'profile-marker-only',  writesSharedSettings: false, finishPermissionWriter: null       },
+  { runtime: 'kimi',        installSurface: 'profile-marker-only',  writesSharedSettings: false, finishPermissionWriter: null       },
 ];
 
 // ---------------------------------------------------------------------------
@@ -97,7 +100,7 @@ describe('resolveRuntimeConfigIntent — unknown runtime throws TypeError', () =
 // ---------------------------------------------------------------------------
 
 describe('writesSharedSettings exclusion equivalence', () => {
-  const EXPECTED_FALSE_SET = new Set(['codex', 'copilot', 'kilo', 'cursor', 'windsurf', 'trae', 'cline']);
+  const EXPECTED_FALSE_SET = new Set(['codex', 'copilot', 'kilo', 'cursor', 'windsurf', 'trae', 'cline', 'kimi']);
 
   test('runtimes with writesSharedSettings===false are exactly the exclusion set', () => {
     const falseRuntimes = EXPECTED_TABLE
@@ -172,6 +175,10 @@ describe('installSurface correctness', () => {
     assert.strictEqual(resolveRuntimeConfigIntent('trae').installSurface, 'profile-marker-only');
   });
 
+  test('kimi -> "profile-marker-only"', () => {
+    assert.strictEqual(resolveRuntimeConfigIntent('kimi').installSurface, 'profile-marker-only');
+  });
+
   test('the 7 passthroughs + opencode + kilo -> "settings-json"', () => {
     const settingsJsonRuntimes = ['claude', 'gemini', 'antigravity', 'augment', 'qwen', 'hermes', 'codebuddy', 'opencode', 'kilo'];
     for (const runtime of settingsJsonRuntimes) {
@@ -205,14 +212,15 @@ describe('resolveRuntimeConfigIntent — fresh object each call', () => {
 // ---------------------------------------------------------------------------
 
 describe('ALLOWED_CONFIG_RUNTIMES completeness', () => {
-  const EXPECTED_15 = new Set([
+  const EXPECTED_16 = new Set([
     'claude', 'gemini', 'antigravity', 'augment', 'qwen', 'hermes', 'codebuddy',
     'opencode', 'kilo', 'codex', 'copilot', 'cline', 'cursor', 'windsurf', 'trae',
+    'kimi',
   ]);
 
-  test('ALLOWED_CONFIG_RUNTIMES contains exactly the 15 expected runtimes', () => {
+  test('ALLOWED_CONFIG_RUNTIMES contains exactly the 16 expected runtimes', () => {
     const runtimeSet = new Set(ALLOWED_CONFIG_RUNTIMES);
-    assert.deepStrictEqual(runtimeSet, EXPECTED_15);
+    assert.deepStrictEqual(runtimeSet, EXPECTED_16);
   });
 
   test('every member of ALLOWED_CONFIG_RUNTIMES resolves without throwing', () => {
@@ -221,8 +229,8 @@ describe('ALLOWED_CONFIG_RUNTIMES completeness', () => {
     }
   });
 
-  test('ALLOWED_CONFIG_RUNTIMES has exactly 15 entries', () => {
-    assert.strictEqual([...ALLOWED_CONFIG_RUNTIMES].length, 15);
+  test('ALLOWED_CONFIG_RUNTIMES has exactly 16 entries', () => {
+    assert.strictEqual([...ALLOWED_CONFIG_RUNTIMES].length, 16);
   });
 });
 
@@ -242,5 +250,57 @@ describe('INSTALL_SURFACES export', () => {
 
   test('INSTALL_SURFACES contains exactly the 6 surface strings', () => {
     assert.deepStrictEqual(new Set(INSTALL_SURFACES), EXPECTED_SURFACES);
+  });
+});
+
+describe('resolveInstallPlan — hooksSurface is descriptor-owned', () => {
+  test('real descriptor-owned none surface is preserved for opencode and kilo', () => {
+    assert.strictEqual(resolveInstallPlan('opencode').hooksSurface, 'none');
+    assert.strictEqual(resolveInstallPlan('kilo').hooksSurface, 'none');
+  });
+
+  test('synthetic descriptor resolves hooksSurface without runtime-name fallback', () => {
+    const runtimes = {
+      futurecli: {
+        runtime: {
+          installSurface: 'settings-json',
+          writesSharedSettings: true,
+          permissionWriter: null,
+          hookEvents: 'claude',
+          extendedHookEvents: ['Stop'],
+          hooksSurface: 'settings-json',
+          sandboxTier: 'none',
+        },
+      },
+    };
+
+    assert.deepStrictEqual(resolveInstallPlanFromRuntimes(runtimes, 'futurecli'), {
+      runtime: 'futurecli',
+      installSurface: 'settings-json',
+      writesSharedSettings: true,
+      finishPermissionWriter: null,
+      hookEvents: 'claude',
+      extendedHookEvents: ['Stop'],
+      hooksSurface: 'settings-json',
+      sandboxTier: 'none',
+    });
+  });
+
+  test('missing hooksSurface fails loudly instead of falling back from runtime name', () => {
+    const runtimes = {
+      opencode: {
+        runtime: {
+          installSurface: 'settings-json',
+          writesSharedSettings: true,
+          permissionWriter: 'opencode',
+          extendedHookEvents: [],
+        },
+      },
+    };
+
+    assert.throws(
+      () => resolveInstallPlanFromRuntimes(runtimes, 'opencode'),
+      /runtime\.hooksSurface/,
+    );
   });
 });

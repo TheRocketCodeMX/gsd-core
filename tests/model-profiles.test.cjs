@@ -2,10 +2,11 @@
  * Model Profiles Tests
  *
  * Tests for MODEL_PROFILES data structure, VALID_PROFILES list,
- * formatAgentToModelMapAsTable, and getAgentToModelMapForProfile.
+ * formatAgentToModelMapAsTable, getAgentToModelMapForProfile,
+ * and resolveModelInternal precedence (override > profile > default).
  */
 
-const { test, describe } = require('node:test');
+const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 const fs = require('node:fs');
@@ -18,18 +19,26 @@ const {
   getAgentToModelMapForProfile,
 } = require('../gsd-core/bin/lib/model-profiles.cjs');
 
-function agentFilesOnDisk() {
-  return fs.readdirSync(path.join(__dirname, '..', 'agents'))
-    .filter((f) => /^gsd-.*\.md$/.test(f))
-    .map((f) => f.replace(/\.md$/, ''))
-    .sort();
+const { resolveModelInternal } = require('../gsd-core/bin/lib/model-resolver.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
+const { listAgentFiles } = require('./helpers/agent-roster.cjs');
+
+// ─── temp-project helpers ──────────────────────────────────────────────────────
+
+function writeConfig(tmpDir, obj) {
+  fs.writeFileSync(
+    path.join(tmpDir, '.planning', 'config.json'),
+    JSON.stringify(obj, null, 2),
+    'utf-8'
+  );
 }
 
 // ─── MODEL_PROFILES data integrity ────────────────────────────────────────────
 
 describe('MODEL_PROFILES', () => {
   test('contains every shipped gsd agent file on disk (#3229)', () => {
-    const expectedAgents = agentFilesOnDisk();
+    // Canonical source roster (sorted gsd-* basenames without .md) — shared helper.
+    const expectedAgents = listAgentFiles();
     const actualAgents = Object.keys(MODEL_PROFILES).sort();
     assert.deepStrictEqual(actualAgents, expectedAgents);
   });
@@ -112,13 +121,65 @@ describe('getAgentToModelMapForProfile', () => {
     assert.strictEqual(map['gsd-plan-checker'], 'haiku', 'checker should use haiku in adaptive');
   });
 
-  test('resolution order: override > profile > default', () => {
-    // This tests the conceptual resolution — actual runtime test is in resolveModelInternal
-    const map = getAgentToModelMapForProfile('adaptive');
-    // Profile gives planner opus
-    assert.strictEqual(map['gsd-planner'], 'opus');
-    // An override would take precedence (tested via resolveModelInternal in model-alias-map tests)
-    // Default fallback is 'sonnet' (core.cjs line 1320)
+  // ─── resolution order: override > profile > default ─────────────────────────
+  // Uses gsd-phase-researcher because it has visibly distinct values at every
+  // level: balanced (default) = sonnet, budget (profile) = haiku, override = opus.
+  // Each tier must beat the one below it; the test goes RED if resolveModelInternal
+  // ignores model_overrides (returns 'haiku') or conflates default with profile
+  // (returns 'sonnet' instead of 'haiku' for budget).
+  describe('resolution order: override > profile > default', () => {
+    // agent under test — must have three distinct model values across tiers
+    const AGENT = 'gsd-phase-researcher';
+    const EXPECTED_DEFAULT = 'sonnet'; // balanced profile (no config)
+    const EXPECTED_PROFILE = 'haiku';  // budget profile
+    const EXPECTED_OVERRIDE = 'opus';  // explicit model_overrides entry
+
+    let tmpDir;
+    beforeEach(() => { tmpDir = createTempProject(); });
+    afterEach(() => { cleanup(tmpDir); tmpDir = null; });
+
+    test('default (no config) resolves to balanced profile model', () => {
+      // Sanity-check: balanced is the profile tier when no config is present.
+      assert.strictEqual(
+        resolveModelInternal(tmpDir, AGENT),
+        EXPECTED_DEFAULT,
+        `expected balanced-profile default "${EXPECTED_DEFAULT}" but got a different model`
+      );
+    });
+
+    test('profile setting (budget) beats the balanced default', () => {
+      writeConfig(tmpDir, { model_profile: 'budget' });
+      assert.strictEqual(
+        resolveModelInternal(tmpDir, AGENT),
+        EXPECTED_PROFILE,
+        `expected budget-profile model "${EXPECTED_PROFILE}" but got a different model`
+      );
+    });
+
+    test('model_overrides entry beats the active profile', () => {
+      // budget profile would give haiku; override must win with opus
+      writeConfig(tmpDir, {
+        model_profile: 'budget',
+        model_overrides: { [AGENT]: EXPECTED_OVERRIDE },
+      });
+      assert.strictEqual(
+        resolveModelInternal(tmpDir, AGENT),
+        EXPECTED_OVERRIDE,
+        `expected override "${EXPECTED_OVERRIDE}" to beat budget-profile model "${EXPECTED_PROFILE}"`
+      );
+    });
+
+    test('model_overrides beats the default profile too (no explicit profile key)', () => {
+      // Even without an explicit model_profile, override still wins over default
+      writeConfig(tmpDir, {
+        model_overrides: { [AGENT]: EXPECTED_OVERRIDE },
+      });
+      assert.strictEqual(
+        resolveModelInternal(tmpDir, AGENT),
+        EXPECTED_OVERRIDE,
+        `expected override "${EXPECTED_OVERRIDE}" to beat balanced default "${EXPECTED_DEFAULT}"`
+      );
+    });
   });
 
   test('returns all agents in the map', () => {

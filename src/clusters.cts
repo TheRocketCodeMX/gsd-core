@@ -127,6 +127,7 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'map-codebase',
     'profile-user',
     'spec-phase',
+// FORK:strategy BEGIN
     'model-domain',
     'recommend-architecture',
     'security-strategy',
@@ -136,12 +137,15 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'testing-strategy',
     'infrastructure-strategy',
     'cicd-strategy',
+// FORK:strategy END
     'ultraplan-phase',
     'mvp-phase',
     'execute-phase',
     'review-backlog',
     'debug',
     'extract-learnings',
+    'mempalace-recall',
+    'mempalace-capture',
     'surface',
   ]),
 });

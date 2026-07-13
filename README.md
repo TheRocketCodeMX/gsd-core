@@ -6,7 +6,7 @@
 
 **English** · [Português](README.pt-BR.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
 
-**A light-weight meta-prompting, context engineering, and spec-driven development system for Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more.**
+**A light-weight meta-prompting, context engineering, and spec-driven development system for Claude Code, OpenCode, Gemini CLI, Kimi CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more.**
 
 [![npm version](https://img.shields.io/npm/v/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
 [![npm downloads](https://img.shields.io/npm/dm/%40therocketcode%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@therocketcode/gsd-core)
@@ -21,8 +21,9 @@
 
 ## What is GSD Core
 
-GSD Core is a context-engineering and spec-driven development framework that drives AI coding agents (Claude Code, Codex, Gemini CLI, Copilot, Cursor, and more) through a disciplined phase loop. It solves [context rot](docs/explanation/context-engineering.md) — the quality degradation that accumulates as an AI fills its context window — by running all heavy research, planning, and execution work in fresh-context subagents while keeping your main session lean.
+GSD Core is a context-engineering and spec-driven development framework that drives AI coding agents (Claude Code, Codex, Gemini CLI, Kimi CLI, Copilot, Cursor, and more) through a disciplined phase loop. It solves [context rot](docs/explanation/context-engineering.md) — the quality degradation that accumulates as an AI fills its context window — by running all heavy research, planning, and execution work in fresh-context subagents while keeping your main session lean.
 
+<!-- FORK:identity BEGIN -->
 > **This is a fork** of [`open-gsd/gsd-core`](https://github.com/open-gsd/gsd-core) (MIT), maintained by TheRocketCode and published as **`@therocketcode/gsd-core`**. It keeps everything upstream offers and adds the greenfield **discovery** spine and **testing methodology** described below.
 
 ---
@@ -41,6 +42,7 @@ On top of gsd-core's phase loop, this fork adds a connected **product → domain
 **Testing know-how** the agent consults while writing tests: Testcontainers, parallel-safe DB isolation, authenticate-once / multi-role auth, synthetic test data, E2E tiering, and flaky-test avoidance.
 
 The payoff: **one complexity assessment** made during discovery parameterizes both the architecture *and* the test strategy — a single thread from "what are we building" to "how do we test it."
+<!-- FORK:identity END -->
 
 ---
 
@@ -62,7 +64,7 @@ Each milestone repeats the same five-step loop, one phase at a time:
 npx @therocketcode/gsd-core@latest
 ```
 
-The installer prompts for your runtime (Claude Code, OpenCode, Gemini CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more) and whether to install globally or locally. The installer is required for cross-runtime compatibility — do not copy files from `agents/` or `commands/` directly.
+The installer prompts for your runtime (Claude Code, OpenCode, Gemini CLI, Kimi CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more) and whether to install globally or locally. The installer is required for cross-runtime compatibility — do not copy files from `agents/` or `commands/` directly.
 
 On another runtime or without Node.js? See [Install on your runtime](docs/how-to/install-on-your-runtime.md).
 
@@ -74,6 +76,7 @@ Once installed, start your first project:
 
 New here? Follow [Your first project](docs/tutorials/your-first-project.md) for a guided walkthrough from install to first shipped phase.
 
+<!-- FORK:identity BEGIN -->
 ### Installing & updating
 
 How you get the latest version depends on what you already have installed:
@@ -87,6 +90,7 @@ How you get the latest version depends on what you already have installed:
 - **Already have this package (`@therocketcode/gsd-core`)** — just run `/gsd-update` in your session. The package coordinate is baked into the install, so a SessionStart check surfaces a banner ("GSD update available: X → Y. Run /gsd:update.") and `/gsd-update` pulls the new version. No special command, no reinstall.
 
 - **Coming from the original upstream GSD (`@opengsd/gsd-core` / `get-shit-done`)** — its `/gsd-update` points at the upstream package and will never find this fork (different npm coordinate). Switch with a one-time install using the Quickstart command above. The installer overwrites the same-named `/gsd-*` files, re-points the baked identity at this fork (so future `/gsd-update` works), and the bundled legacy-cleanup removes superseded upstream hooks and stale update-check caches. After that, the self-update path applies. <!-- gsd-allow-legacy-name -->
+<!-- FORK:identity END -->
 
 ---
 
