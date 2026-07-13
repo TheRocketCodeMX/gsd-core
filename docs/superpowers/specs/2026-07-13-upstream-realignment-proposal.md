@@ -238,6 +238,59 @@ milestone ("v2.0.0 — Upstream Realignment") with these phases as the roadmap.
 
 ---
 
+## Appendix A — Phase-0 spike results (RESOLVED, 2026-07-13)
+
+All Phase-0 unknowns are settled with file:line evidence from `upstream/main`:
+
+1. **Contribution `into:` targets — HYBRID.** The generated loop-host contract already
+   permits `into:"checker"` at plan points and `into:"verifier"` at execute points
+   (validator: `capability-validator.cjs:1379-1389`; precedent: mempalace ships
+   `into:"verifier"` at `execute:wave:post`). Only the planner has an explicit
+   injection slot in the workflow prose (`plan-phase.md:896`); the verifier and
+   plan-checker spawn prompts lack one. **Design:** declare rocket contributions at
+   the contract-valid points + a minimal core patch adding a `plan-phase.md:896`-style
+   injection line to each of the two spawn prompts. One-time 2-line patch; all future
+   fork prose then flows through capabilities with zero further core edits.
+2. **Capability-owned gate check verb — NO; hybrid confirmed (upstream's own
+   pattern).** Gate dispatch is hardcoded to the core `check` family
+   (`gsd-tools.cjs:812-815` → closed if-chain in `check-command-router.cts:885-948`;
+   ADR-959 dispatch is never consulted for `check` subcommands). Upstream's `drift`
+   capability itself declares gates whose verbs live in core. **Design:**
+   `rocket-grounding` declares the gate in its manifest (`when` must name a key in
+   the capability's own config slice — validator `:1422-1435`); the
+   `grounding-check-plan` verb is a marked core patch in check-command-router,
+   delegating to capability-shipped lib code.
+3. **Visual layer as capability assets — NO; fallback safe.** Artifact vocabulary is
+   closed (`VALID_ARTIFACT_KIND_NAMES = {commands, agents, skills, kimi-agents}`,
+   validator `:709`); `fragments/` are inlined at registry gen, never staged at
+   install. Nothing upstream occupies `gsd-core/visual/`. **Design:** keep
+   `gsd-core/visual/` as a plain additive directory; `rocket-learn` references it
+   by path.
+4. **Context-monitor — keep the fork's no-op** as a marked whole-file patch. Upstream
+   1.6.1 still injects context warnings (its opt-out is per-project + default-on,
+   which cannot satisfy the fork's categorical position). Upstream's
+   `context_guard_mode` (#1452) is workflow-self-assessment, not hook-based — it
+   coexists and addresses the original objection better; keep its `warn` default.
+   Acknowledged cost: forfeits the #1974 CRITICAL-time auto-`record-session`
+   breadcrumb (possible follow-up: a record-only variant).
+5. **Dependencies — re-remove `@anthropic-ai/claude-agent-sdk` + `ws`** as a marked
+   patch. Upstream declares both at 1.6.1 but nothing imports either (zero source
+   hits; no `sdk/`; their own backlog flags the audit liability). The fork keeps
+   zero runtime deps. Tests: `enh-191` + `no-cjs-sdk-handsync` ride;
+   `bug-505-remove-dead-sdk-verification` drops its positive assertions.
+6. **Model IDs (post-rebase data edits).** Time-critical: upstream's catalog ships
+   `gpt-5.4`, which **retires 2026-07-23** → replace with `gpt-5.6-terra`
+   (+ `gpt-5.4-mini` → `gpt-5.6-luna`); `gemini-3-flash` → `gemini-3.5-flash` (GA
+   rename). All Anthropic IDs, `gemini-3.1-pro-preview`, `gemini-2.5-flash-lite`,
+   and the Qwen trio are current. The `gpt-5.4` retirement is also an immediate
+   upstream issue/PR opportunity (goodwill + two-way alignment).
+
+**Correction to §4 Phase 2:** the realign branch cuts from **`next`**, not `main` —
+`next` is the fork's content source of truth (it carries grounding, PR #11). All
+FORK-DELTA generation and restore steps operate against `next`'s tree.
+
+---
+
 *Provenance: 2026-07-13. Built on three verification passes against real code:
 (1) exhaustive 93-file triage (every real edit classified, upstream state checked
 per file), (2) feature→architecture mapping (per-feature target shape + irreducible
