@@ -51,6 +51,8 @@ SUMMARY_FILES=$(ls "${PHASE_DIR}"/*-SUMMARY.md 2>/dev/null)
 
 Read PLAN.md — extract `<threat_model>` block: trust boundaries, STRIDE register (`threat_id`, `category`, `component`, `disposition`, `mitigation_plan`).
 
+Also read `.planning/SECURITY-STRATEGY.md` if it exists — the app-wide posture (derived ASVS level, authn/authz model, secrets strategy, the security DoD) that this phase's mitigations must conform to. The per-phase threat register inherits from this parent; verify against both, not the phase register alone.
+
 ### 2b. Read Summary Threat Flags
 
 Read SUMMARY.md — extract `## Threat Flags` entries.

@@ -64,6 +64,7 @@ Build file list for auditor:
 - All PLAN.md files in phase dir
 - UI-SPEC.md (if exists — audit baseline)
 - CONTEXT.md (if exists — locked decisions)
+- `.planning/DESIGN-INVENTORY.md` (if exists — the design field/shape oracle; the auditor checks the built UI honors it, not just UI-SPEC)
 
 ## 3. Spawn gsd-ui-auditor
 
