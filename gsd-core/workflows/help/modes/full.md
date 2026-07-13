@@ -404,6 +404,20 @@ List and audit captured seeds (read-only).
 Usage: `/gsd:capture --list-seeds`
 Usage: `/gsd:capture --list-seeds dormant`
 
+<!-- FORK:learn BEGIN -->
+### Learning
+
+**`/gsd:learn [concept or topic] [--track <track>] [--text] [--visual]`**
+Learn the engineering concepts GSD enforces — concept first, then when and why to use them, sourced from the skills in one coherent voice.
+
+- Jump to a concept (e.g., `/gsd:learn test doubles`, `/gsd:learn hexagonal`) or resume/suggest with no argument
+- `--track <track>` works a whole track in dependency order; `--text` stays terminal-only; `--visual` prefers the optional zero-install in-browser view
+- Inline and conversational, personalized to your profile, runnable standalone with no repo
+
+Usage: `/gsd:learn hexagonal`
+Usage: `/gsd:learn --track Testing`
+<!-- FORK:learn END -->
+
 ### User Acceptance Testing
 
 **`/gsd:verify-work [phase]`**
