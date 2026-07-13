@@ -459,6 +459,13 @@ Synthesize all context into `.planning/PROJECT.md` using the template from `temp
 - **Code-quality baseline:** clean · legacy-debt · vibe-coded-to-harden (AI-prototyped, thin on tests/seams).
 Record the named combination (e.g. "greenfield-rewrite + new-design + salvageable-old-code"). When a dimension is genuinely unclear, ask one targeted question rather than guessing.
 
+**Record `## Sources` rows (the literal-source registry) as you fill `## Mode`.** One line per literal source this project grounds in — `- <kind> · <path-or-url> — <note>`, kinds `design` / `legacy` / `vibe` / `context-app`:
+- provided design → `- design · <the Design-input pointer> — <form, e.g. Stitch export>` (mirrors Design-input);
+- Origin rewrite/refactor → `- legacy · <old codebase root> — behavior source (rewrite)`;
+- Code-quality vibe-coded-to-harden → `- vibe · <prototype root> — intent source; do not pin its behavior`;
+- any additional reference/context app the user pointed at → `- context-app · <path-or-url> — <what it evidences>`.
+`gsd_run query grounding required` reads these (the `sources` field) and downstream agents explore them directly — an unrecorded source is invisible to the grounding loop.
+
 **Multi-surface nudge.** If you detect multiple *independent* surfaces with genuinely different archetypes (e.g. a backend service **and** a separate frontend app **and** a CLI in one repo), say so: GSD models **one surface per project** (`@~/.claude/gsd-core/references/strategy-flow.md`). Recommend running GSD **per package/surface**, or ask the user to pick the **primary** surface for this project and record its Mode — do not average divergent surfaces into one Mode.
 <!-- FORK:strategy END -->
 
