@@ -83,6 +83,40 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     assert.equal(entry, undefined, 'clean hook must not appear in plan');
   });
 
+// FORK:identity BEGIN
+  // ── upstream (@opengsd) fork-source signals ────────────────────────────────
+
+  test('flags a hook file referencing the upstream @opengsd npm coordinate', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-check-update-worker.js');
+    // assembled so this test file itself never carries the bare literal
+    writeFile(hookFile, '// from ' + '@opengsd' + '/gsd-core\nconsole.log("x");');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.ok(entry, 'expected upstream-coordinate hook to appear in plan');
+    assert.equal(entry.reason, 'content-references-old-package');
+  });
+
+  test('flags a hook file referencing the upstream open-gsd repo slug', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-old-upstream.sh');
+    writeFile(hookFile, '# see https://github.com/' + 'open-gsd' + '/gsd-core');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.ok(entry, 'expected upstream repo-slug hook to appear in plan');
+    assert.equal(entry.reason, 'content-references-old-package');
+  });
+
+  test('does NOT flag a hook that only references the current @therocketcode package', () => {
+    const hookFile = path.join(configDir, 'hooks', 'gsd-current.js');
+    writeFile(hookFile, '// @therocketcode/gsd-core only — must survive');
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === hookFile);
+    assert.equal(entry, undefined, 'current-package hook must never be flagged');
+  });
+// FORK:identity END
+
   // ── data-loss regression: user custom hooks must be preserved ──────────────
 
   test('regression #607 (data-loss): user custom gsd-*.js with NO old-package content must NOT appear in plan', () => {
@@ -183,6 +217,27 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     assert.equal(entry, undefined, 'absent cache must not appear in plan');
   });
 
+// FORK:identity BEGIN
+  test('flags the upstream @opengsd per-package update-check cache', () => {
+    const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-opengsd-gsd-core.json');
+    writeFile(cachePath, JSON.stringify({ update_available: false }));
+
+    const plan = planLegacyCleanup([], { homeDir });
+    const entry = plan.find((p) => p.path === cachePath);
+    assert.ok(entry, 'expected upstream per-package cache to appear in plan');
+    assert.equal(entry.reason, 'legacy-shared-cache');
+  });
+
+  test('NEVER flags the current @therocketcode per-package cache (data-loss guard)', () => {
+    const ourCache = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-therocketcode-gsd-core.json');
+    writeFile(ourCache, JSON.stringify({ update_available: true }));
+
+    const plan = planLegacyCleanup([], { homeDir });
+    const entry = plan.find((p) => p.path === ourCache);
+    assert.equal(entry, undefined, "current package's own cache must never be removed");
+  });
+// FORK:identity END
+
   // ── deduplication and sort ─────────────────────────────────────────────────
 
   test('de-duplicates candidates when two configDirs share same absolute path (same dir listed twice)', () => {
@@ -217,11 +272,42 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
     writeFile(path.join(configDir, 'hooks', 'gsd-my-custom.js'), '// user hook, clean');
 
     const plan = planLegacyCleanup([configDir], { homeDir });
-    const validReasons = new Set(['content-references-old-package', 'legacy-shared-cache', 'stale-get-shit-done-path']); // gsd-allow-legacy-name
+    const validReasons = new Set(['content-references-old-package', 'legacy-shared-cache', 'stale-get-shit-done-path', 'empty-legacy-runtime-dir']); // gsd-allow-legacy-name
     for (const entry of plan) {
       assert.ok(validReasons.has(entry.reason), `unexpected reason: ${entry.reason}`);
     }
   });
+
+// FORK:identity BEGIN
+  // ── empty-legacy-runtime-dir (#1.7.3) ──────────────────────────────────────
+
+  test('flags an EMPTY legacy get-shit-done runtime dir', () => { // gsd-allow-legacy-name
+    // Empty directory tree left behind after a migration deleted its files.
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'workflows'), { recursive: true }); // gsd-allow-legacy-name
+    fs.mkdirSync(path.join(configDir, 'get-shit-done', 'bin'), { recursive: true }); // gsd-allow-legacy-name
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done')); // gsd-allow-legacy-name
+    assert.ok(entry, 'expected empty legacy runtime dir to appear in plan');
+    assert.equal(entry.reason, 'empty-legacy-runtime-dir');
+  });
+
+  test('does NOT flag a legacy get-shit-done dir that still contains a file', () => { // gsd-allow-legacy-name
+    writeFile(path.join(configDir, 'get-shit-done', 'workflows', 'leftover.md'), '# still here'); // gsd-allow-legacy-name
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'get-shit-done')); // gsd-allow-legacy-name
+    assert.equal(entry, undefined, 'a non-empty legacy runtime dir must never be flagged');
+  });
+
+  test('does NOT flag the CURRENT gsd-core runtime dir even when empty', () => {
+    fs.mkdirSync(path.join(configDir, 'gsd-core', 'bin'), { recursive: true });
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === path.join(configDir, 'gsd-core'));
+    assert.equal(entry, undefined, "the current 'gsd-core' runtime dir must never be flagged");
+  });
+// FORK:identity END
 
   // ── #1453 stale skill path in ~/.agents/skills/gsd-* ──────────────────────
 
@@ -421,4 +507,40 @@ describe('issue-607 legacy-cleanup: applyLegacyCleanup', () => {
     applyLegacyCleanup(plan);
     assert.ok(fs.existsSync(devPrefs), 'dev-preferences.md must survive apply');
   });
+
+// FORK:identity BEGIN
+  // ── empty-legacy-runtime-dir apply (#1.7.3) ────────────────────────────────
+
+  test('apply removes an EMPTY legacy runtime dir (recursively) and reports it removed', () => {
+    const legacyDir = path.join(configDir, 'get-shit-done'); // gsd-allow-legacy-name
+    fs.mkdirSync(path.join(legacyDir, 'workflows'), { recursive: true });
+    fs.mkdirSync(path.join(legacyDir, 'bin'), { recursive: true });
+
+    const plan = planLegacyCleanup([configDir], { homeDir });
+    const entry = plan.find((p) => p.path === legacyDir);
+    assert.ok(entry, 'precondition: empty legacy dir must be in plan');
+
+    const result = applyLegacyCleanup(plan);
+    assert.equal(result.errors.length, 0, 'no errors expected');
+    assert.ok(result.removed.includes(legacyDir), 'legacy dir must be reported removed');
+    assert.equal(fs.existsSync(legacyDir), false, 'empty legacy runtime dir tree must be gone');
+  });
+
+  test('apply re-verify guard: a legacy dir that gained a file after planning is NOT deleted', () => {
+    // Hand-craft a plan entry pointing at a dir that is NOT empty, to exercise
+    // the apply-time re-verification guard directly (defends against TOCTOU).
+    const legacyDir = path.join(configDir, 'get-shit-done'); // gsd-allow-legacy-name
+    const survivor  = path.join(legacyDir, 'workflows', 'appeared-after-scan.md');
+    writeFile(survivor, '# created between scan and apply');
+
+    const forgedPlan = [{ path: legacyDir, reason: 'empty-legacy-runtime-dir' }];
+    const result = applyLegacyCleanup(forgedPlan);
+
+    assert.ok(fs.existsSync(legacyDir), 'non-empty legacy dir must survive');
+    assert.ok(fs.existsSync(survivor), 'file inside must survive');
+    assert.equal(result.removed.length, 0, 'nothing should be reported removed');
+    assert.equal(result.errors.length, 1, 'the skipped dir should be reported as an error');
+    assert.match(result.errors[0].error, /not empty at apply time/);
+  });
+// FORK:identity END
 });

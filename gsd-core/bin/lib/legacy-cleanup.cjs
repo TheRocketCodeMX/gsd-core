@@ -21,12 +21,54 @@ const fs   = require('fs');
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /**
- * Substring that identifies a file as belonging to the old package.
- * Assembled from parts so this source file itself never contains the literal
+ * Substrings that identify a code file as belonging to a superseded GSD
+ * package — either the very-old pre-rename original or the rug-pulled upstream
+ * this project forked away from. A scanned code file (.js/.cjs/.mjs/.sh under
+ * hooks/ or commands/) containing ANY of these is a genuine leftover from a
+ * package this install replaces, and is safe to flag.
+ *
+ * Each is assembled from parts so THIS source file never contains the literal
  * as a plain substring (avoids self-flagging if the content scan were ever
- * widened back to include this subtree).
+ * widened to include the gsd-core/ subtree). Our own shipped code contains
+ * none of these — the package-identity drift lint guards that — so flagging
+ * them can never delete a freshly-installed @therocketcode file.
+ *
+ *   - 'gsd-core-cc'      — the pre-rename original package.
+ *   - '@opengsd/gsd-core' — the upstream npm coordinate (rug-pulled fork source).
+ *   - 'open-gsd/gsd-core' — the upstream GitHub repo slug.
  */
-const OLD_PACKAGE_SIGNAL = 'gsd-core' + '-cc';
+// FORK:identity BEGIN
+const OLD_PACKAGE_SIGNALS = [
+  'gsd-core' + '-cc',
+  '@opengsd' + '/gsd-core',
+  'open-gsd' + '/gsd-core',
+];
+
+/**
+ * Update-check cache files written by superseded packages, removed so a stale
+ * cache can't suppress or misreport update availability after switching.
+ * NEVER include the current package's own cache
+ * (`gsd-update-check-therocketcode-gsd-core.json`).
+ *   - 'gsd-update-check.json'                  — the old shared (pre-per-package) cache.
+ *   - 'gsd-update-check-opengsd-gsd-core.json' — the upstream @opengsd per-package cache.
+ */
+const LEGACY_CACHE_FILENAMES = [
+  'gsd-update-check.json',
+  'gsd-update-check-opengsd-gsd-core.json',
+];
+
+/**
+ * Legacy runtime directory names left inside a runtime config dir by a
+ * superseded install. The current fork installs its runtime under `gsd-core/`;
+ * the pre-rename upstream used `get-shit-done/`. When a user migrates, the // gsd-allow-legacy-name
+ * file-level migration deletes the OLD dir's files but leaves the emptied
+ * directory tree behind — harmless, but untidy. We prune such a dir ONLY when
+ * it contains zero files (a strict emptiness guard, re-checked at apply time),
+ * so we can never delete a directory that still holds user-authored content.
+ * NEVER list 'gsd-core' here — that is the CURRENT runtime dir.
+ */
+const LEGACY_RUNTIME_DIR_NAMES = ['get-shit-done']; // gsd-allow-legacy-name
+// FORK:identity END
 
 /**
  * Subtrees within a configDir that GSD actively scans for old-package content.
@@ -124,7 +166,7 @@ function collectFilesUnder(dir, fsMod) {
 }
 
 /**
- * Return true if the file at `absPath` contains the old-package substring.
+ * Return true if the file at `absPath` contains ANY superseded-package signal.
  * Skips unreadable files (returns false on any error).
  *
  * @param {string} absPath
@@ -134,7 +176,7 @@ function collectFilesUnder(dir, fsMod) {
 function fileContainsOldPackageSignal(absPath, fsMod) {
   try {
     const content = fsMod.readFileSync(absPath, 'utf8');
-    return content.includes(OLD_PACKAGE_SIGNAL);
+    return OLD_PACKAGE_SIGNALS.some((signal) => content.includes(signal));
   } catch {
     return false;
   }
@@ -171,6 +213,8 @@ function fileContainsLegacySkillPathSignal(absPath, fsMod) {
  *     a path reference to the pre-rename `get-shit-done/` runtime directory // gsd-allow-legacy-name
  *     (skills/ subtree, gsd-* directories only). Issue #1453.
  *   - 'legacy-shared-cache': the old package's shared update-check cache file.
+ *   - 'empty-legacy-runtime-dir': a superseded runtime dir (e.g. get-shit-done/) // gsd-allow-legacy-name
+ *     left empty after a migration deleted its files.
  *
  * @param {string[]} configDirs - absolute paths to runtime config dirs to scan
  * @param {object}  [opts]
@@ -262,16 +306,41 @@ function planLegacyCleanup(configDirs, opts = {}) {
     }
   }
 
-  // Legacy shared cache (fixed name from the old package)
-  const legacyCachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check.json');
-  try {
-    const stat = fsMod.statSync(legacyCachePath);
-    if (stat.isFile()) {
-      addCandidate(legacyCachePath, 'legacy-shared-cache');
+// FORK:identity BEGIN
+  // Update-check caches written by superseded packages (never the current one)
+  for (const cacheName of LEGACY_CACHE_FILENAMES) {
+    const legacyCachePath = path.join(homeDir, '.cache', 'gsd', cacheName);
+    try {
+      const stat = fsMod.statSync(legacyCachePath);
+      if (stat.isFile()) {
+        addCandidate(legacyCachePath, 'legacy-shared-cache');
+      }
+    } catch {
+      // absent — skip
     }
-  } catch {
-    // absent — skip
   }
+// FORK:identity END
+
+// FORK:identity BEGIN
+  // Emptied legacy runtime directories left behind after a migration deleted
+  // their files. Flag ONLY when the dir exists and contains zero files — a
+  // dir that still holds any file is left untouched (its code files are caught
+  // by the content scan above instead).
+  for (const configDir of configDirs) {
+    for (const legacyDirName of LEGACY_RUNTIME_DIR_NAMES) {
+      const legacyDir = path.join(configDir, legacyDirName);
+      let stat;
+      try {
+        stat = fsMod.statSync(legacyDir);
+      } catch {
+        continue; // absent — skip
+      }
+      if (stat.isDirectory() && collectFilesUnder(legacyDir, fsMod).length === 0) {
+        addCandidate(legacyDir, 'empty-legacy-runtime-dir');
+      }
+    }
+  }
+// FORK:identity END
 
   // Sort deterministically by path
   const sorted = [...candidates.entries()]
@@ -312,6 +381,18 @@ function applyLegacyCleanup(plan, opts = {}) {
   const errors  = [];
 
   for (const item of plan) {
+// FORK:identity BEGIN
+    // Legacy runtime dirs are removed recursively, but ONLY after re-verifying
+    // they are still empty at apply time — a defensive guard so a file that
+    // appeared between scan and apply is never destroyed.
+    const isLegacyDir = item.reason === 'empty-legacy-runtime-dir';
+    if (isLegacyDir && collectFilesUnder(item.path, fsMod).length > 0) {
+      errors.push({ path: item.path, error: 'legacy runtime dir not empty at apply time; skipped' });
+      continue;
+    }
+    const rmOpts = isLegacyDir ? { recursive: true, force: true } : { force: true };
+// FORK:identity END
+
     let lastErr;
     const maxAttempts = process.platform === 'win32' ? 3 : 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -320,7 +401,7 @@ function applyLegacyCleanup(plan, opts = {}) {
           // Synchronous 100ms delay before retry (win32 EBUSY/EPERM from Defender)
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-        fsMod.rmSync(item.path, { force: true });
+        fsMod.rmSync(item.path, rmOpts);
         lastErr = undefined;
         break;
       } catch (err) {
