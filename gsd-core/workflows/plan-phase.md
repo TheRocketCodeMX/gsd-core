@@ -1569,46 +1569,16 @@ if [ "$GATE_CFG" != "false" ]; then
     exit 1
   }
 fi
+GG=$(gsd_run query config-get workflow.grounding_gate 2>/dev/null || echo "true")
+if [ "$GG" != "false" ]; then
+  GR=$(gsd_run query check.grounding-plan "${PHASE_DIR}")
+  echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
+fi
 ```
 
-The handler returns JSON:
-```json
-{
-  "passed": true,
-  "skipped": false,
-  "total":  2,
-  "covered": 2,
-  "uncovered": [ { "id": "D-01", "text": "...", "category": "..." } ],
-  "message": "..."
-}
-```
+The handler returns JSON `{ passed, skipped, total, covered, uncovered[{id,text,category}], message }`.
 
-**If `passed` is true (or `skipped` is true):** Display
-`✓ Decision coverage: {M}/{N} CONTEXT.md decisions covered by plans` (or
-`(skipped — gate disabled)` / `(skipped — no decisions)`) and proceed to
-step 13b.
-
-**If `passed` is false:** Display the handler's `message` block. It already
-names each uncovered decision (`D-NN | category | text`) and tells the user
-what to do — cite the id in a relevant plan's `must_haves` / `truths`, or
-move the decision under `### Claude's Discretion` / tag it `[informational]`
-if it should not be tracked. Then offer:
-
-```text
-Options:
-1. Re-plan to cover missing decisions (recommended)
-2. Edit CONTEXT.md to mark dropped decisions as [informational] / Discretion
-3. Proceed anyway — accept the coverage gap
-```
-
-If `TEXT_MODE` is true, present as a plain-text numbered list. Otherwise use
-AskUserQuestion. Selecting "Proceed anyway" continues to step 13b but
-records the override in STATE.md so verify-phase can re-surface it.
-
-**Why this gate blocks:** failing here is cheap. The plans are the contract
-between discuss-phase and execute-phase; if a decision isn't visible in any
-plan, no executor will implement it. Catching that now beats discovering it
-after thousands of dollars of execution.
+**Handling the result:** on `passed`/`skipped`, show `✓ Decision coverage: {M}/{N}` and proceed to 13b. On failure, display the handler's `message` (it names each uncovered `D-NN` and the fix) and offer re-plan / mark-informational / proceed-anyway (an override recorded in STATE.md). Full handling + rationale: `gsd-core/references/plan-phase-coverage-gate.md`.
 
 ## 13b. Record Planning Completion in STATE.md
 
