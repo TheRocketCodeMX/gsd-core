@@ -21,7 +21,7 @@ Check if `--auto` flag is present in $ARGUMENTS.
 
 **If auto mode:**
 
-- Skip brownfield mapping offer (assume greenfield)
+- Skip the *interactive* brownfield router, but do NOT blindly assume greenfield: set `## Mode` Origin from the init signals (`is_brownfield` / `has_existing_code`). Existing code present → **Origin: brownfield-extend** (the safe auto default; note "auto-detected brownfield — run `/gsd:legacy-inventory` if this is a rewrite/harden"); no existing code → greenfield.
 - Skip deep questioning (extract context from provided document)
 - Config: YOLO mode is implicit (skip that question), but ask granularity/git/agents FIRST (Step 2a)
 - After config: run Steps 6-9 automatically with smart defaults:
@@ -126,29 +126,27 @@ All subsequent references to the project instruction file use `$INSTRUCTION_FILE
 
 ## 2. Brownfield Offer
 
-**If auto mode:** Skip to Step 4 (assume greenfield, synthesize PROJECT.md from provided document).
+**If auto mode:** Skip the interactive router and go to Step 4, but set Origin from `is_brownfield`/`has_existing_code` (existing code → brownfield-extend; else greenfield) — do not blindly assume greenfield. Synthesize PROJECT.md from the provided document.
 
 **If `needs_codebase_map` is true** (from init — existing code detected but no codebase map):
 
+This routes BOTH the right exploration AND the `## Mode` Origin/Code-quality recorded in Step 4 — the three intents are not the same (see `@~/.claude/gsd-core/references/strategy-flow.md`). **Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number (required for non-Claude runtimes where `AskUserQuestion` is unavailable).
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Gemini CLI, etc.) where `AskUserQuestion` is not available.
 Use AskUserQuestion:
 
-- header: "Codebase"
-- question: "I detected existing code in this directory. Would you like to map the codebase first?"
+- header: "Existing code"
+- question: "I detected existing code here. What's the intent for it?"
 - options:
-  - "Map codebase first" — Run /gsd:map-codebase to understand existing architecture (Recommended)
-  - "Skip mapping" — Proceed with project initialization
+  - "Extend it" — add to a healthy existing system → Origin: brownfield-extend; explore with `/gsd:map-codebase`
+  - "Refactor / rewrite it" — restructure or rebuild existing behavior → Origin: rewrite/refactor; explore with `/gsd:legacy-inventory`
+  - "Harden it" — a working prototype to make production-ready → Code-quality: vibe-coded-to-harden; explore with `/gsd:legacy-inventory`
+  - "Skip exploration" — proceed with init (you can map/inventory later)
 
-**If "Map codebase first":**
+Record the chosen intent so Step 4 fills `## Mode` (Origin + Code-quality) accordingly.
 
-```
-Run `/gsd:map-codebase` first, then return to `/gsd:new-project`
-```
-
-Exit command.
-
-**If "Skip mapping" OR `needs_codebase_map` is false:** Continue to Step 3.
+**If "Extend it":** `Run /gsd:map-codebase first, then return to /gsd:new-project` — exit command.
+**If "Refactor / rewrite it" OR "Harden it":** `Run /gsd:legacy-inventory first (it produces LEGACY-INVENTORY.md; new-project then derives requirements from design ∪ old-behavior), then return to /gsd:new-project` — exit command.
+**If "Skip exploration" OR `needs_codebase_map` is false:** Continue to Step 3.
 
 <!-- FORK:strategy BEGIN -->
 **Provided-design detection (runs regardless of whether there is existing code — the design axis is orthogonal to Origin).** A provided design is a source of truth and must be detected + routed here, symmetric to the legacy path above — otherwise it gets laundered into vision-derived requirements and the build drifts from it (the address-failure: one design input → an invented multi-field schema). Init pre-detects the signal — branch on it (it is a **hint that you CONFIRM**, never a silent lock):
@@ -165,7 +163,7 @@ Exit command.
   - "An existing design system to honor" — record it → Design-input = existing system
   - "No / none" — Design-input: none
 
-**If a provided design is recorded:** (a) record its pointer in `## Mode` Design-input (Step 4); (b) **ground requirements (Steps 3 + 7) by reading the design directly** — the pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` — deriving them from **(the design) ∪ (the vision)**, lifting the design's literal user-facing fields and never generalizing them (mirrors the legacy `design ∪ old-behavior` rule); (c) the design is ingested into the in-repo oracle (`.planning/DESIGN-INVENTORY.md`) by the **next strategy step**, not here — the strategy on-ramp puts `model-domain` (or `frontend-architecture` for a frontend surface) first and it writes the oracle before the build loop's design-fidelity gate runs (the planner is the fallback if both are skipped). **Do NOT run `model-domain` mid-new-project** — it reads the PROJECT.md/REQUIREMENTS that Steps 4/7 write, so it can only run after; the recorded design pointer + the strategy on-ramp are the correct mechanism (unlike `legacy-inventory`, which is a true pre-step because it reads only the old code).
+**If a provided design is recorded:** (a) record its pointer in `## Mode` Design-input (Step 4); (b) **ground requirements (Steps 3 + 7) by reading the design directly** — the pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` — deriving them from **(the design) ∪ (the vision)**, lifting the design's literal user-facing fields and never generalizing them (mirrors the legacy `design ∪ old-behavior` rule); (c) the design is ingested into the in-repo oracle (`.planning/DESIGN-INVENTORY.md`) by the **next strategy step**, not here — Step 7.6 puts `model-domain` (or `frontend-architecture` for a frontend surface) first in the `## Strategy Plan` and auto-advances into it, and it writes the oracle before the build loop's design-fidelity gate runs (the planner is the fallback if both are skipped). **Do NOT run `model-domain` mid-new-project** — it reads the PROJECT.md/REQUIREMENTS that Steps 4/7 write, so it can only run after; the recorded design pointer + the Step-7.6 on-ramp are the correct mechanism (unlike `legacy-inventory`, which is a true pre-step because it reads only the old code).
 <!-- FORK:strategy END -->
 
 ## 2a. Auto Mode Config (auto mode only)
@@ -386,6 +384,14 @@ If spike/sketch findings skills exist, read their SKILL.md files to inform the q
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+<!-- FORK:strategy BEGIN -->
+**If `.planning/PRODUCT-BRIEF.md` exists, read it first.** It is a validated product definition from `/gsd:discover-product` (outcome, target user, narrowest wedge, demand evidence, four-risks status, prioritized scope, explicit "not in scope"). Ground the questioning in it — **confirm and fill gaps rather than re-asking what it already answers** — and carry its outcome, wedge, and prioritized scope into PROJECT.md (Core Value / What This Is) and the requirements (Steps 4 and 7). Frame PROJECT.md around the brief's *outcome*, not a re-derived feature list.
+
+**If `.planning/LEGACY-INVENTORY.md` exists** (rewrite/refactor/vibe-coded mode, from `/gsd:legacy-inventory`), read it too and **derive requirements from (the design) ∪ (the old-system behavior)** per its coverage matrix + three-way gap map — never from the design alone. Honor its **"never lose a feature" gate** (every old capability becomes a requirement or an explicitly-dropped item with the user's prior sign-off) and carry its salvage dispositions + source-of-truth precedence into the requirements (Steps 4 and 7).
+
+**If a provided design is recorded (Step 2's design detection),** **read the design directly** — the `## Mode` Design-input pointer, per `@~/.claude/gsd-core/references/design-ingestion.md` (the in-repo oracle doesn't exist yet; `model-domain`/`frontend-architecture` write it as the next strategy step) — and **derive requirements from (the design) ∪ (the vision)**: lift its literal user-facing fields (a single `address` input is one `address` field, not four), never generalize or invent beyond them, and never drop a design-shown field. The design is the authority on the observable shape (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`).
+<!-- FORK:strategy END -->
+
 **Open the conversation:**
 
 Ask inline (freeform, NOT AskUserQuestion):
@@ -445,6 +451,16 @@ Loop until "Create PROJECT.md" selected.
 **If auto mode:** Synthesize from provided document. No "Ready?" gate was shown — proceed directly to commit.
 
 Synthesize all context into `.planning/PROJECT.md` using the template from `templates/project.md`.
+
+<!-- FORK:strategy BEGIN -->
+**Fill the `## Mode` section (the persisted mode-combination — read by every downstream strategy/build skill so they don't re-detect).** Detect the three orthogonal dimensions per `@~/.claude/gsd-core/references/exploration-and-adaptability.md`, using the init signals + the conversation + any PRODUCT-BRIEF / provided design:
+- **Origin:** greenfield (no existing code) · brownfield-extend (`is_brownfield`/`has_existing_code` and the intent is to *add to* it) · rewrite/refactor (existing code but the intent is to *replace* it).
+- **Design input:** none · a provided design to ingest (a design-tool export / prototype / generated-design artifact the user supplied) · an existing design system to honor.
+- **Code-quality baseline:** clean · legacy-debt · vibe-coded-to-harden (AI-prototyped, thin on tests/seams).
+Record the named combination (e.g. "greenfield-rewrite + new-design + salvageable-old-code"). When a dimension is genuinely unclear, ask one targeted question rather than guessing.
+
+**Multi-surface nudge.** If you detect multiple *independent* surfaces with genuinely different archetypes (e.g. a backend service **and** a separate frontend app **and** a CLI in one repo), say so: GSD models **one surface per project** (`@~/.claude/gsd-core/references/strategy-flow.md`). Recommend running GSD **per package/surface**, or ask the user to pick the **primary** surface for this project and record its Mode — do not average divergent surfaces into one Mode.
+<!-- FORK:strategy END -->
 
 **For greenfield projects:**
 
@@ -1348,6 +1364,19 @@ Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=s
 
 When `TEXT_MODE=true` (per the workflow's existing TEXT_MODE handling for non-Claude runtimes), present the same two options as a plain-text numbered list and ask the user to type their choice number.
 
+<!-- FORK:strategy BEGIN -->
+## 7.6. Strategy Plan (the on-ramp into the strategy chain)
+
+Context is now ready (PROJECT.md + `## Mode` + REQUIREMENTS + any PRODUCT-BRIEF), so recommend the **archetype-tailored strategy path** before building — this is the on-ramp the build loop depends on. **Read `@~/.claude/gsd-core/references/strategy-flow.md` now.**
+
+1. **Derive the archetype** from `## Mode` (Origin × Design-input × Code-quality) + the surface axes (Surface · Domain richness · Security exposure · Deployment · Criticality). Read these from the brief/requirements/project; **ask only the axes nothing has answered** (one `AskUserQuestion`/`--text` screen, recommended defaults — e.g. "Will this deploy as a service, ship as a package, or run locally?"; "Does it handle payments/PII/regulated data?"). `--auto`: infer all axes from the docs, no prompt.
+2. **Select the recommended path** from the matrix + overlays (brownfield/refactor/harden via `## Mode`; design-provided; the vibe-coded hardening playlist). It is always a subset/reorder of the canonical spine in `strategy-chain.md` — skipping `frontend-architecture` for backend/CLI, scaling `security-strategy` depth, etc.
+3. **Write `## Strategy Plan`** into PROJECT.md (the archetype line, the ordered recommended steps with status `recommended`, and the skip-ledger scaffold) per the template.
+4. **Present it** and let the user accept / customize / skip-to-build. A declined recommended step → a skip-ledger line (`- <skill> — skipped (<reason>, <date>)`); enforcers note it once, don't re-nag. The build loop honors whatever artifacts exist, so a partial path is safe.
+
+The Step-9 handoff then leads with the **first recommended step** of this plan. (The coarse roadmap below stays coarse; `plan-phase`'s elaboration gate refines it against whatever strategy artifacts get produced.)
+<!-- FORK:strategy END -->
+
 ## 8. Create Roadmap
 
 Display stage banner:
@@ -1540,17 +1569,48 @@ Present completion summary:
 **[N] phases** | **[X] requirements** | Ready to build ✓
 ```
 
+**Determine the on-ramp from `## Strategy Plan`** (written in Step 7.6):
+
+```bash
+NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the first `recommended` step, or empty
+```
+
+`NEXT_STRATEGY` is the first step whose status is `recommended` (e.g. `model-domain`, `recommend-architecture`). If the plan has **no** recommended steps (prototype archetype, or the user skipped to build), it is empty → hand off to the build loop (the panels below).
+
 **If auto mode:**
 
+- **If `NEXT_STRATEGY` is set:** auto-advance **into the strategy chain** — exit and invoke `SlashCommand("/gsd:${NEXT_STRATEGY} --auto")`. That step, on completion, runs the **strategy auto-advance driver** (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) which dispatches the next `## Strategy Plan` step (honoring skips) and ultimately the build loop — so the chain runs hands-off, no longer dead-ending after the first step.
+
+  ```
+  ╔══════════════════════════════════════════╗
+  ║  AUTO-ADVANCING → STRATEGY: ${NEXT_STRATEGY}
+  ╚══════════════════════════════════════════╝
+  ```
+- **Else** (no strategy steps recommended): exit and invoke `SlashCommand("/gsd:discuss-phase 1 --auto")`.
+
+**If interactive mode AND `NEXT_STRATEGY` is set:**
+
 ```
-╔══════════════════════════════════════════╗
-║  AUTO-ADVANCING → DISCUSS PHASE 1        ║
-╚══════════════════════════════════════════╝
+───────────────────────────────────────────────────────────────
+
+## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
+
+**Your strategy plan:** [the ordered `## Strategy Plan` steps]
+
+/clear then:
+
+/gsd:${NEXT_STRATEGY} — [one-line purpose] (first step of your strategy plan; it chains onward to the build loop)
+
+---
+
+**Also available:**
+- /gsd:discuss-phase 1 — skip strategy and start building directly
+  (declining a recommended step records a skip-ledger entry; the build loop honors whatever artifacts exist)
+
+───────────────────────────────────────────────────────────────
 ```
 
-Exit skill and invoke SlashCommand("/gsd:discuss-phase 1 --auto")
-
-**If interactive mode:**
+**If interactive mode AND `NEXT_STRATEGY` is empty** (straight to build):
 
 Check if Phase 1 has UI indicators (look for `**UI hint**: yes` in Phase 1 detail section of ROADMAP.md):
 
@@ -1640,7 +1700,7 @@ PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" 
 - [ ] STATE.md initialized
 - [ ] REQUIREMENTS.md traceability updated
 - [ ] `$INSTRUCTION_FILE` generated with GSD workflow guidance (runtime-derived via the shared `getProjectInstructionFile` policy — `AGENTS.md` for codex/opencode/kilo/kimi, `.github/copilot-instructions.md` for copilot, `GEMINI.md` for gemini/antigravity, `.claude/CLAUDE.md` for claude; an existing hand-crafted file without GSD markers is left untouched unless `--force`)
-- [ ] User knows next step is `/gsd:discuss-phase 1`
+- [ ] `## Strategy Plan` written from the archetype (Step 7.6); user directed to its first recommended step (or to `/gsd:discuss-phase 1` when no strategy steps are recommended)
 
 **Atomic commits:** Each phase commits its artifacts immediately. If context is lost, artifacts persist.
 
