@@ -1,7 +1,7 @@
 {
   "id": "nyquist",
   "role": "feature",
-  "version": "2.0.0-dev.0",
+  "version": "2.0.0-beta.1",
   "title": "Nyquist validation",
   "description": "Validation coverage audit that maps executed work back to tests and manual-only evidence.",
   "tier": "full",
