@@ -23,6 +23,27 @@
 
 GSD Core is a context-engineering and spec-driven development framework that drives AI coding agents (Claude Code, Codex, Gemini CLI, Kimi CLI, Copilot, Cursor, and more) through a disciplined phase loop. It solves [context rot](docs/explanation/context-engineering.md) — the quality degradation that accumulates as an AI fills its context window — by running all heavy research, planning, and execution work in fresh-context subagents while keeping your main session lean.
 
+<!-- FORK:identity BEGIN -->
+> **This is a fork** of [`open-gsd/gsd-core`](https://github.com/open-gsd/gsd-core) (MIT), maintained by TheRocketCode and published as **`@therocketcode/gsd-core`**. It keeps everything upstream offers and adds the greenfield **discovery** spine and **testing methodology** described below.
+
+---
+
+## What this fork adds
+
+On top of gsd-core's phase loop, this fork adds a connected **product → domain → architecture → tests** discovery spine, plus concrete test-infrastructure know-how.
+
+**Greenfield discovery — each step feeds the next:**
+
+- **`/gsd:discover-product`** — define *what to build and why*: real demand vs. interest, the narrowest wedge, the four product risks, outcome-framed → `PRODUCT-BRIEF.md`
+- **`/gsd:model-domain`** — lightweight DDD: ubiquitous language + core/supporting/generic subdomain distillation → `DOMAIN-MODEL.md`
+- **`/gsd:recommend-architecture`** — a two-axis recommendation (domain-logic ladder × deployment topology) that avoids over- *and* under-engineering, captured as an ADR → `ADR-NNNN.md`
+- **`/gsd:testing-strategy`** — derives the **test shape from the architecture** (rich core → unit tests; CRUD-over-DB → integration tests), with coverage-as-floor + mutation testing → `TEST-STRATEGY.md`
+
+**Testing know-how** the agent consults while writing tests: Testcontainers, parallel-safe DB isolation, authenticate-once / multi-role auth, synthetic test data, E2E tiering, and flaky-test avoidance.
+
+The payoff: **one complexity assessment** made during discovery parameterizes both the architecture *and* the test strategy — a single thread from "what are we building" to "how do we test it."
+<!-- FORK:identity END -->
+
 ---
 
 ## How it works
@@ -54,6 +75,22 @@ Once installed, start your first project:
 ```
 
 New here? Follow [Your first project](docs/tutorials/your-first-project.md) for a guided walkthrough from install to first shipped phase.
+
+<!-- FORK:identity BEGIN -->
+### Installing & updating
+
+How you get the latest version depends on what you already have installed:
+
+- **Nothing installed yet** — run the Quickstart command once:
+  ```bash
+  npx -y @therocketcode/gsd-core@latest --claude --global   # or --local for a single project
+  ```
+  After that you're on the self-update path below.
+
+- **Already have this package (`@therocketcode/gsd-core`)** — just run `/gsd-update` in your session. The package coordinate is baked into the install, so a SessionStart check surfaces a banner ("GSD update available: X → Y. Run /gsd:update.") and `/gsd-update` pulls the new version. No special command, no reinstall.
+
+- **Coming from the original upstream GSD (`@opengsd/gsd-core` / `get-shit-done`)** — its `/gsd-update` points at the upstream package and will never find this fork (different npm coordinate). Switch with a one-time install using the Quickstart command above. The installer overwrites the same-named `/gsd-*` files, re-points the baked identity at this fork (so future `/gsd-update` works), and the bundled legacy-cleanup removes superseded upstream hooks and stale update-check caches. After that, the self-update path applies. <!-- gsd-allow-legacy-name -->
+<!-- FORK:identity END -->
 
 ---
 

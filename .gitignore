@@ -235,3 +235,6 @@ reports/mutation/
 /gsd-core/bin/lib/learn.cjs
 /gsd-core/bin/lib/project.cjs
 /gsd-core/bin/lib/project-command-router.cjs
+
+# ── Rocket fork: local reference clones (not part of the fork) ──
+_reference/
