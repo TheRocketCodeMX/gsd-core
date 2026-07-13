@@ -231,3 +231,5 @@ reports/mutation/
 # Local Crabbox machine configuration
 .crabbox.yaml
 .crabbox.local.yaml
+/gsd-core/bin/lib/grounding.cjs
+/gsd-core/bin/lib/learn.cjs
