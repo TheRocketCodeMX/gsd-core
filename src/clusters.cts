@@ -67,6 +67,7 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'explore',
     'graphify',
     'ns-ideate',
+    'learn',
   ]),
 
   workspace_state: Object.freeze([
@@ -126,6 +127,17 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'map-codebase',
     'profile-user',
     'spec-phase',
+// FORK:strategy BEGIN
+    'model-domain',
+    'recommend-architecture',
+    'security-strategy',
+    'frontend-architecture',
+    'legacy-inventory',
+    'discover-product',
+    'testing-strategy',
+    'infrastructure-strategy',
+    'cicd-strategy',
+// FORK:strategy END
     'ultraplan-phase',
     'mvp-phase',
     'execute-phase',
