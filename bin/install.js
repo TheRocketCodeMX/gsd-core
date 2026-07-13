@@ -10167,6 +10167,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     }
   }
 
+// FORK:release BEGIN
   // Ship the changelog-extract tooling the /gsd:update workflow's "What's New"
   // preview calls at <configDir>/gsd-core/scripts/changeset/cli.cjs. Upstream
   // referenced this path but never installed the files, so the preview always
@@ -10195,6 +10196,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   if (changesetCopied === changesetPayload.length) {
     console.log(`  ${green}✓${reset} Installed gsd-core/scripts/changeset (update changelog preview)`);
   }
+// FORK:release END
 
   // Copy agents to agents directory.
   // Skipped under --minimal: gsd-* subagent descriptions are eagerly loaded

@@ -597,6 +597,7 @@ function cmdInitNewProject(
     pathExistsInternal(cwd, 'mix.exs') ||
     pathExistsInternal(cwd, 'project.clj');
 
+// FORK:strategy BEGIN
   // ── Provided-design detection (the design axis — symmetric to the legacy axis above) ──
   // A HINT that the workflow CONFIRMS with the user, never a silent lock. High-precision
   // only: an explicit `--design` arg, an unambiguous design-export file, a tokens file, or
@@ -657,6 +658,7 @@ function cmdInitNewProject(
       /* intentionally empty — best-effort detection */
     }
   }
+// FORK:strategy END
 
   const result: Record<string, unknown> = {
     researcher_model: resolveModelInternal(cwd, 'gsd-project-researcher'),
@@ -675,10 +677,12 @@ function cmdInitNewProject(
     needs_codebase_map:
       (hasCode || hasPackageFile) && !pathExistsInternal(cwd, '.planning/codebase'),
 
+// FORK:strategy BEGIN
     has_design_hint: hasDesignHint,
     design_pointer: designPointer,
     design_hint_source: designHintSource,
     design_dismissed: designDismissed,
+// FORK:strategy END
 
     ...getInitGitState(cwd),
 

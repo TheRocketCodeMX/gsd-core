@@ -873,6 +873,7 @@ function formatAuditReport(auditResult: AuditResult): string {
   return lines.join('\n');
 }
 
+// FORK:seeds BEGIN
 interface ListedSeed {
   seed_id: string;
   slug: string;
@@ -958,5 +959,6 @@ function listSeeds(cwd: string, statusFilter?: string): {
   seeds.sort((a, b) => a.seed_id.localeCompare(b.seed_id));
   return { count: seeds.length, seeds, summary };
 }
+// FORK:seeds END
 
 export = { auditOpenArtifacts, formatAuditReport, listSeeds };

@@ -82,6 +82,7 @@ describe('checkUiPresence', () => {
   });
 });
 
+// FORK:fidelity BEGIN
 describe('negation guard (#dogfood — backend phases described by contrast)', () => {
   const { checkUiPresence } = require('../gsd-core/bin/lib/ui-safety-gate.cjs');
   test('a UI token immediately negated is NOT a UI signal', () => {
@@ -96,3 +97,4 @@ describe('negation guard (#dogfood — backend phases described by contrast)', (
     assert.strictEqual(checkUiPresence('no longer a CLI — now a full dashboard UI').hasUI, true);
   });
 });
+// FORK:fidelity END

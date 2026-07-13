@@ -14,8 +14,10 @@ import core = require('./core.cjs');
 const { output, error, ERROR_REASON } = core;
 import { parseDecisions } from './decisions.cjs';
 import type { Decision } from './decisions.cjs';
+// FORK:grounding BEGIN
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import groundingLib = require('./grounding.cjs');
+// FORK:grounding END
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +108,7 @@ function gateEnabled(projectDir: string): boolean {
   return true;
 }
 
+// FORK:grounding BEGIN
 // Source-grounding gate toggle (absent = enabled), mirroring gateEnabled.
 function groundingGateEnabled(projectDir: string): boolean {
   const value = readWorkflowConfig(projectDir).grounding_gate;
@@ -152,6 +155,7 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
   const passed = problems.length === 0;
   output({ passed, total: required.length, problems, message: passed ? 'Grounding verified.' : 'Grounding gate failed:\n- ' + problems.join('\n- ') }, raw, undefined);
 }
+// FORK:grounding END
 
 function loadPlanContents(phaseDir: string): string[] {
   if (!fs.existsSync(phaseDir)) return [];
@@ -406,10 +410,12 @@ function routeCheckCommand({ args, cwd, raw }: RouteCheckCommandOptions): void {
     cmdDecisionCoverageVerify(cwd, args, raw);
     return;
   }
+// FORK:grounding BEGIN
   if (subcommand === 'grounding-plan') {
     cmdGroundingPlan(cwd, args, raw);
     return;
   }
+// FORK:grounding END
   error('Unknown check subcommand. Available: auto-mode, decision-coverage-plan, decision-coverage-verify, grounding-plan', ERROR_REASON.SDK_UNKNOWN_COMMAND);
 }
 

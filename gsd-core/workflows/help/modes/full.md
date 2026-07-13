@@ -390,6 +390,7 @@ List pending todos and select one to work on.
 Usage: `/gsd:capture --list`
 Usage: `/gsd:capture --list api`
 
+<!-- FORK:seeds BEGIN -->
 **`/gsd:capture --list-seeds [status]`**
 Browse/audit captured seeds (read-only) — distinct from `--list` (todos).
 
@@ -399,7 +400,9 @@ Browse/audit captured seeds (read-only) — distinct from `--list` (todos).
 
 Usage: `/gsd:capture --list-seeds`
 Usage: `/gsd:capture --list-seeds dormant`
+<!-- FORK:seeds END -->
 
+<!-- FORK:learn BEGIN -->
 ### Learning
 
 **`/gsd:learn [concept or topic] [--track <track>] [--text] [--visual]`**
@@ -411,6 +414,7 @@ Learn the engineering concepts GSD enforces — concept first, then when and why
 
 Usage: `/gsd:learn hexagonal`
 Usage: `/gsd:learn --track Testing`
+<!-- FORK:learn END -->
 
 ### User Acceptance Testing
 
@@ -594,13 +598,17 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Discovery & Specification
 
 - **`/gsd:explore`** — Socratic ideation and idea routing. Think through ideas before committing to plans.
+<!-- FORK:strategy BEGIN -->
 - **`/gsd:discover-product [--auto] [--challenge [@doc ...]] [--text]`** — Optional product discovery: demand vs interest, the narrowest wedge, four risks, outcome-framed; `--challenge` audits existing specs/research via a gap map instead of re-asking; writes PRODUCT-BRIEF.md.
+<!-- FORK:strategy END -->
 - **`/gsd:spec-phase <phase> [--auto] [--text]`** — Clarify WHAT a phase delivers with ambiguity scoring; produces a SPEC.md before discuss-phase.
+<!-- FORK:strategy BEGIN -->
 - **`/gsd:model-domain [--auto] [--text] [--event-storming]`** — Capture ubiquitous language and classify subdomains (core/supporting/generic) for greenfield projects; strategic DDD before architecture.
 - **`/gsd:recommend-architecture [--auto] [--text]`** — Recommend an architecture matched to domain complexity and NFRs (two-axis) and capture it as an ADR; avoids over/under-engineering.
 - **`/gsd:security-strategy [--auto] [--text]`** — Decide the app-wide security posture (thin/scale-to-zero): data classification, derived ASVS level, authz model, threat-model parent, security DoD; writes SECURITY-STRATEGY.md.
 - **`/gsd:frontend-architecture [--auto] [--text]`** — Recommend a frontend architecture (structure, state, rendering, design system, the FE side of the seam) when the project has a frontend; writes FRONTEND-ARCHITECTURE.md.
 - **`/gsd:legacy-inventory [--text] [--design <path>]`** — Exhaustively inventory a predecessor codebase for a rewrite (coverage matrix, three-way gap map, salvage card); requirements derive from design ∪ old-behavior; writes LEGACY-INVENTORY.md.
+<!-- FORK:strategy END -->
 - **`/gsd:ai-integration-phase [phase]`** — Generate an AI-SPEC.md design contract for phases that involve building AI systems.
 - **`/gsd:ui-phase [phase]`** — Generate UI design contract (UI-SPEC.md) for frontend phases.
 - **`/gsd:import --from <filepath> | --from-gsd2`** — Ingest external plans with conflict detection, or reverse-migrate a GSD-2 (`.gsd/`) project back to GSD v1 (`.planning/`) format.
@@ -608,9 +616,11 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 ### Planning & Execution
 
+<!-- FORK:strategy BEGIN -->
 - **`/gsd:testing-strategy [--auto] [--text]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md.
 - **`/gsd:infrastructure-strategy [--auto] [--text]`** — Recommend infrastructure matched to actual scale and team: compute rung, data layer per environment, observability + IaC floors; writes INFRA-STRATEGY.md.
 - **`/gsd:cicd-strategy [--auto] [--text]`** — Recommend a CI/CD strategy: platform, OIDC auth, secrets split, test-tier→stage mapping, deploy ladder; writes CICD-STRATEGY.md.
+<!-- FORK:strategy END -->
 - **`/gsd:mvp-phase <phase-number>`** — Plan a phase as a vertical MVP slice (user story + SPIDR splitting) before handing off to plan-phase. Same end-state as `/gsd:plan-phase --mvp`, with a guided MVP-shaping intro.
 - **`/gsd:ultraplan-phase [phase]`** — [BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back.
 - **`/gsd:plan-review-convergence <phase> [--codex] [--gemini] [--claude] [--opencode] [--ollama] [--lm-studio] [--llama-cpp] [--all] [--text] [--ws <name>] [--max-cycles N]`** — Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Supports both cloud reviewers (Codex/Gemini/Claude/OpenCode) and local model runtimes (Ollama, LM Studio, llama.cpp).

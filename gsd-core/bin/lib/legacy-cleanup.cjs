@@ -37,6 +37,7 @@ const fs   = require('fs');
  *   - '@opengsd/gsd-core' — the upstream npm coordinate (rug-pulled fork source).
  *   - 'open-gsd/gsd-core' — the upstream GitHub repo slug.
  */
+// FORK:identity BEGIN
 const OLD_PACKAGE_SIGNALS = [
   'gsd-core' + '-cc',
   '@opengsd' + '/gsd-core',
@@ -67,6 +68,7 @@ const LEGACY_CACHE_FILENAMES = [
  * NEVER list 'gsd-core' here — that is the CURRENT runtime dir.
  */
 const LEGACY_RUNTIME_DIR_NAMES = ['get-shit-done']; // gsd-allow-legacy-name
+// FORK:identity END
 
 /**
  * Subtrees within a configDir that GSD actively scans for old-package content.
@@ -208,6 +210,7 @@ function planLegacyCleanup(configDirs, opts = {}) {
     }
   }
 
+// FORK:identity BEGIN
   // Update-check caches written by superseded packages (never the current one)
   for (const cacheName of LEGACY_CACHE_FILENAMES) {
     const legacyCachePath = path.join(homeDir, '.cache', 'gsd', cacheName);
@@ -220,7 +223,9 @@ function planLegacyCleanup(configDirs, opts = {}) {
       // absent — skip
     }
   }
+// FORK:identity END
 
+// FORK:identity BEGIN
   // Emptied legacy runtime directories left behind after a migration deleted
   // their files. Flag ONLY when the dir exists and contains zero files — a
   // dir that still holds any file is left untouched (its code files are caught
@@ -239,6 +244,7 @@ function planLegacyCleanup(configDirs, opts = {}) {
       }
     }
   }
+// FORK:identity END
 
   // Sort deterministically by path
   const sorted = [...candidates.entries()]
@@ -279,6 +285,7 @@ function applyLegacyCleanup(plan, opts = {}) {
   const errors  = [];
 
   for (const item of plan) {
+// FORK:identity BEGIN
     // Legacy runtime dirs are removed recursively, but ONLY after re-verifying
     // they are still empty at apply time — a defensive guard so a file that
     // appeared between scan and apply is never destroyed.
@@ -288,6 +295,7 @@ function applyLegacyCleanup(plan, opts = {}) {
       continue;
     }
     const rmOpts = isLegacyDir ? { recursive: true, force: true } : { force: true };
+// FORK:identity END
 
     let lastErr;
     const maxAttempts = process.platform === 'win32' ? 3 : 1;

@@ -107,12 +107,14 @@ Build the ultraplan prompt from GSD context.
 3. Read RESEARCH.md if it exists (`research_path` is not null) — extract a concise
    summary of technical findings. Including this reduces redundant cloud research.
 
+<!-- FORK:grounding BEGIN -->
 4. **Grounding (do NOT skip — the cloud planner is isolated from plan-phase, so the
    grounding must be carried in the prompt).** Resolve the active sources with
    `gsd_run query grounding required` and read each: the strategy decisions (ADR rung
    per subdomain, TEST-STRATEGY levels, SECURITY/FE/INFRA/CICD posture), plus
    `CONTEXT.md`, `DESIGN-INVENTORY.md`, `LEGACY-INVENTORY.md`, and this phase's
    `UI-SPEC.md` / `AI-SPEC.md` when present. Summarize the decisions the plan must honor.
+<!-- FORK:grounding END -->
 
 Construct the prompt:
 

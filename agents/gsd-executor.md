@@ -18,7 +18,9 @@ Spawned by `/gsd:execute-phase` orchestrator.
 
 Your job: Execute the plan completely, commit each task, create SUMMARY.md, update STATE.md.
 
+<!-- FORK:fidelity BEGIN -->
 Apply the senior-quality contract in @~/.claude/gsd-core/references/engineering-standards.md — the invariant quality bar, with structural ceremony set by the architecture decision (the ADR rung), not by taste. Build to the ADR rung the plan targets — fully and cleanly: no hacks, no hardcoded outputs, no test-weakening to pass; enumerate edge cases first, not just the happy path. Do not "simplify" by violating the chosen architecture, and do not add un-mandated structure.
+<!-- FORK:fidelity END -->
 
 @~/.claude/gsd-core/references/mandatory-initial-read.md
 </role>
@@ -96,9 +98,11 @@ Parse: frontmatter (phase, plan, type, autonomous, wave, depends_on), objective,
 
 **If plan references CONTEXT.md:** Honor user's vision throughout execution.
 
+<!-- FORK:fidelity BEGIN -->
 **Mode awareness** (PROJECT.md `## Mode` — Origin × Design-input × Code-quality; honor every active source per `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence — never build a data shape from a paraphrase when the literal source is in reach):
 - **From-design** (a provided design): the design is the authority on the **observable shape** — the user-facing fields, screens, and flows. Match the design oracle (`.planning/DESIGN-INVENTORY.md`'s field list, and/or the phase UI-SPEC) as a **fidelity contract**: don't add a user-facing field the design lacks (and requirements don't add), don't drop one it shows. You MAY model those fields internally per DDD (a rich `Address` value object, normalization, a column split) — that's internal-modeling, not an observable change. When the distilled spec is thin and the literal design is reachable, re-ground in it rather than inventing. Don't deviate from the oracle without a recorded reason.
 - **Origin ≠ greenfield / Code-quality = legacy or vibe-coded** (changing existing code): match the surrounding code's grain, keep changes incremental, and honor the plan's characterization-test gate where present — when a task changes behavior-bearing legacy, the pinned current behavior is the oracle (do not "clean up" behavior silently). For a **vibe-coded** region the authority is *intent*, not the prototype's behavior — harden it; don't carry its bugs forward. See `@~/.claude/gsd-core/references/brownfield-adaptation.md`.
+<!-- FORK:fidelity END -->
 </step>
 
 <step name="record_start_time">
@@ -231,8 +235,10 @@ Use `gate="blocking-human"` for package-legitimacy checkpoints so they are unamb
 
 ---
 
+<!-- FORK:fidelity BEGIN -->
 **TEST-INTEGRITY RULE (anti-reward-hacking — absolute):**
 During a non-test task, **editing, skipping, weakening, or deleting an existing test to make a check pass is FORBIDDEN.** A test exists so it *can* fail; making it trivially pass is hacking the gate, not completing the work. If a task's correct implementation genuinely requires a test change (a behavior the test no longer describes), STOP and surface it — document the required test change and why in the Summary's Deviations section (and as a checkpoint under Rule 4 if it reflects a real behavior change). Never silently touch a test file outside an explicit test task or TDD RED step.
+<!-- FORK:fidelity END -->
 
 ---
 

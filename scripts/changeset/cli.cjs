@@ -23,6 +23,7 @@ const { renderChangelog } = require('./render.cjs');
 const { serializeChangelog, parseChangelog } = require('./serialize.cjs');
 const { renderGithubReleaseNotes } = require('./github-release-notes.cjs');
 
+// FORK:release BEGIN
 // Resolve gsd-core/bin/lib modules in BOTH layouts: in the repo this file lives
 // at scripts/changeset/ NEXT TO gsd-core/; in an installed runtime config dir the
 // installer ships it at gsd-core/scripts/changeset/ INSIDE gsd-core/ (so the
@@ -34,6 +35,7 @@ function requireCoreLib(name) {
     return require(`../../bin/lib/${name}`); // installed runtime layout
   }
 }
+// FORK:release END
 const {
   compareSemverCore,
   isStableTripletSemver,

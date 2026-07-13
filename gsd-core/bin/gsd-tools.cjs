@@ -990,6 +990,7 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
+// FORK:strategy BEGIN
     case 'project': {
       routeProjectCommand({
         project,
@@ -1000,6 +1001,7 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       });
       break;
     }
+// FORK:strategy END
 
     case 'requirements': {
       const subcommand = args[1];
@@ -1080,6 +1082,7 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
+// FORK:seeds BEGIN
     case 'list-seeds': {
       // Read-only browse/audit of .planning/seeds/SEED-*.md (all statuses, richer
       // fields than audit's scanSeeds). Optional status filter is args[1].
@@ -1087,7 +1090,9 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       core.output(listSeeds(cwd, args[1]), raw);
       break;
     }
+// FORK:seeds END
 
+// FORK:learn BEGIN
     case 'learn': {
       // /gsd:learn backing: read the concept catalog (index) and the user-global
       // learning-progress state. Teaching itself is inline in the agent; this only
@@ -1110,7 +1115,9 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       }
       break;
     }
+// FORK:learn END
 
+// FORK:grounding BEGIN
     case 'grounding': {
       // Source-grounding backing: compute the required source set from the
       // project's ## Strategy Plan (done steps + present oracles). The gate
@@ -1124,6 +1131,7 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       }
       break;
     }
+// FORK:grounding END
 
     case 'uat': {
       const subcommand = args[1];

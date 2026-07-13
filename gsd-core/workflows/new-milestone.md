@@ -151,7 +151,9 @@ Add/update:
 
 Update Active requirements section and "Last updated" footer.
 
+<!-- FORK:strategy BEGIN -->
 **Refresh the `## Mode` section** for this milestone (per `@~/.claude/gsd-core/references/exploration-and-adaptability.md`): a milestone is brownfield-extend by default, but re-detect — does it rewrite/refactor an existing area, ingest a new design, or harden vibe-coded code? Update Origin × Design-input × Code-quality (+ the named combination) if the milestone changes them; if PROJECT.md predates the Mode section, add it.
+<!-- FORK:strategy END -->
 
 Ensure the `## Evolution` section exists in PROJECT.md. If missing (projects created before this feature), add it before the footer:
 
@@ -174,6 +176,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 ```
 
+<!-- FORK:strategy BEGIN -->
 ## 4.5. Strategy Plan refresh (warm-start — what does THIS milestone need?)
 
 This is the **warm-start** strategy recommender (the new-project Step 7.6 equivalent for an existing project). **Read `@~/.claude/gsd-core/references/strategy-flow.md` now** and map the milestone's *objective* to which strategy steps to revisit or adopt — never silently build on stale (or absent) decisions. Refresh `## Strategy Plan` in PROJECT.md accordingly.
@@ -190,6 +193,7 @@ This is the **warm-start** strategy recommender (the new-project Step 7.6 equiva
 - **production-readiness / hardening** (a working app → production-grade) → the **hardening playlist** (members defined once in `strategy-flow.md`'s Overlays — characterize → seam → secure → observe → CI gate; don't restate them here)
 
 **Re-surface ledgered skips:** if `## Strategy Plan`'s skip-ledger records a step that this milestone's scope now makes relevant (e.g. a previously-skipped `frontend-architecture` and this milestone adds a frontend), re-offer it. If nothing applies, note "strategy artifacts still fit this milestone" and continue. The strategy decisions are project-wide and must stay valid as scope evolves.
+<!-- FORK:strategy END -->
 
 ## 5. Update STATE.md
 
@@ -607,6 +611,7 @@ Print a summary:
 
 ## 11. Done
 
+<!-- FORK:strategy BEGIN -->
 **Strategy on-ramp** (Step 4.5 refreshed `## Strategy Plan`):
 
 ```bash
@@ -616,6 +621,7 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # first
 - **Auto mode + `NEXT_STRATEGY` set:** exit and `SlashCommand("/gsd:${NEXT_STRATEGY} --auto")` — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
 - **Interactive + `NEXT_STRATEGY` set:** lead the panel below with `/gsd:${NEXT_STRATEGY}` (the strategy this milestone needs) as the next step, and offer `/gsd:discuss-phase [N]` as "skip strategy, build directly" — do NOT jump straight to discuss-phase when a strategy step is recommended.
 - **`NEXT_STRATEGY` empty** (strategy artifacts still fit, or none recommended): use the build-loop handoff below.
+<!-- FORK:strategy END -->
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

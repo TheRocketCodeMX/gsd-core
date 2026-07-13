@@ -7,7 +7,9 @@ Users currently hand-craft `/gsd:quick` prompts for test generation after each p
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
 
+<!-- FORK:fidelity BEGIN -->
 @~/.claude/gsd-core/references/ai-test-quality.md — the quality contract for AI-written tests (behavior inventory, forbidden patterns, assertion rules, falsifiability gate). Binding for every test generated here.
+<!-- FORK:fidelity END -->
 </required_reading>
 
 <process>
@@ -72,7 +74,9 @@ Present banner:
 <step name="analyze_implementation">
 Extract the list of files modified by the phase from SUMMARY.md ("Files Changed" or equivalent section).
 
+<!-- FORK:fidelity BEGIN -->
 **If `.planning/TEST-STRATEGY.md` exists, read it first and let it drive classification** — map each changed file to its subdomain and use the strategy's per-subdomain test level (unit → TDD; integration → TDD-style but exercised against real dependencies; e2e → E2E) plus its gnarly-bits and what-not-to-test lists, instead of the generic heuristics below. When the strategy prescribes integration/e2e for a file, pull the test-infra references it links (`@~/.claude/gsd-core/references/test-containers.md`, `db-test-isolation.md`, `auth-in-tests.md`, `realistic-test-data.md`, `flaky-test-checklist.md`) into the generated test's setup. Use the heuristics below only for files the strategy doesn't cover.
+<!-- FORK:fidelity END -->
 
 For each file, classify into one of three categories:
 
