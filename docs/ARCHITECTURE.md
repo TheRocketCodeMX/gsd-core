@@ -288,7 +288,7 @@ Runtime hooks that integrate with the host AI agent:
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `gsd-statusline.js` | `statusLine` | Displays model, task, directory, and context usage bar |
-| `gsd-context-monitor.js` | `PostToolUse` / `AfterTool` | Injects agent-facing context warnings at 35%/25% remaining |
+| `gsd-context-monitor.js` | `PostToolUse` / `AfterTool` | **Inert no-op in this fork** — upstream injected agent-facing context warnings; this fork disabled it (kept wired so updates overwrite active versions). See [context-monitor.md](context-monitor.md). |
 | `gsd-check-update.js` | `SessionStart` | Foreground trigger for the background update check |
 | `gsd-ensure-canonical-path.js` | `SessionStart` | For Claude Code plugin installs, symlinks `~/.claude/gsd-core/{bin,contexts,references,templates,workflows}` to the plugin's bundled tree so `@~/.claude/gsd-core/...` includes resolve; runs first in `SessionStart`, no-op in classic installs, self-heals after `claude plugin update` (#997) |
 | `gsd-check-update-worker.js` | (helper) | Background worker spawned by `gsd-check-update.js`; no direct event registration |
