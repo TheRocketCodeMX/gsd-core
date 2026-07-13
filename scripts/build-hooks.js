@@ -44,6 +44,12 @@ const HOOKS_TO_COPY = [
   // .planning/config.json changes mid-session. Must ship to dist so the
   // installer can copy it to the target hooks/ dir and register FileChanged.
   'gsd-config-reload.js',
+  // Fork FileChanged hook (grounding, #11) — refreshes the Sources-of-Truth
+  // grounding index when a strategy/source doc lands mid-session. Referenced by
+  // the plugin manifest (hooks/hooks.json) AND registered into settings.json by
+  // applySettingsJsonHooks; must ship to dist so classic (non-plugin) installs
+  // receive the file the registration points at.
+  'gsd-grounding-index-refresh.js',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',
   'gsd-read-injection-scanner.js',

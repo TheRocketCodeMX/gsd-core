@@ -32,6 +32,14 @@ const HOOKS_SURFACE_SRC = path.join(__dirname, '..', 'src', 'runtime-hooks-surfa
 const MODULE_OWNED_HOOKS = new Set([
   'gsd-cursor-session-start.js',
   'gsd-cursor-post-tool.js',
+  // Support files: installed to hooks/ (and therefore listed in
+  // GSD_UNINSTALL_HOOKS so uninstall removes them) but never registered as
+  // command entries themselves —
+  //   gsd-check-update-worker.js is spawned detached BY gsd-check-update.js,
+  //   gsd-ensure-canonical-path.js is a plugin-manifest (hooks/hooks.json)
+  //   SessionStart hook that no-ops in classic installs.
+  'gsd-check-update-worker.js',
+  'gsd-ensure-canonical-path.js',
 ]);
 
 // ADR-857 phase 5f-1b: settings-json hook registration moved to runtime-hooks-surface.cts.

@@ -7665,6 +7665,14 @@ const GSD_UNINSTALL_HOOKS = [
   'gsd-validate-commit.sh',
   'gsd-phase-boundary.sh',
   'gsd-graphify-update.sh',
+  // 2.0.0 update-matrix fix: these files are written into targetDir/hooks/ by
+  // the installer (HOOKS_TO_COPY) but were missing here, so uninstall left
+  // them behind as orphans.
+  'gsd-check-update-worker.js',
+  'gsd-ensure-canonical-path.js',
+  'gsd-worktree-path-guard.js',
+  'gsd-grounding-index-refresh.js',
+  'managed-hooks-registry.cjs',
 ];
 
 /**
@@ -8162,12 +8170,20 @@ function uninstall(isGlobal, runtime = 'claude') {
     }
   }
 
-  // 6. Clean up settings.json (remove GSD hooks and statusline)
-  const settingsPath = path.join(targetDir, 'settings.json');
+  // 6. Clean up settings files (remove GSD hooks and statusline).
+  // Local Claude installs write GSD hook entries to settings.local.json (#338),
+  // so uninstall must clean BOTH files — cleaning only settings.json left every
+  // managed hook registered in settings.local.json pointing at already-deleted
+  // scripts (2.0.0 update-matrix fix).
+  const settingsFilesToClean = (runtime === 'claude' && !isGlobal)
+    ? ['settings.json', 'settings.local.json']
+    : ['settings.json'];
+  for (const settingsFileToClean of settingsFilesToClean) {
+  const settingsPath = path.join(targetDir, settingsFileToClean);
   if (fs.existsSync(settingsPath)) {
     let settings = readSettings(settingsPath);
     if (settings === null) {
-      console.log(`  ${yellow}i${reset} Skipping settings.json cleanup — file could not be parsed`);
+      console.log(`  ${yellow}i${reset} Skipping ${settingsFileToClean} cleanup — file could not be parsed`);
       settings = {}; // prevent downstream crashes, but don't write back
     }
     let settingsModified = false;
@@ -8248,7 +8264,7 @@ function uninstall(isGlobal, runtime = 'claude') {
       }
       if (permissionsModified) {
         settingsModified = true;
-        console.log(`  ${green}✓${reset} Removed GSD permissions from settings.json`);
+        console.log(`  ${green}✓${reset} Removed GSD permissions from ${settingsFileToClean}`);
       }
     }
 
@@ -8257,6 +8273,7 @@ function uninstall(isGlobal, runtime = 'claude') {
       removedCount++;
     }
   }
+  } // end settingsFilesToClean loop
 
   // 6. For OpenCode, clean up permissions from opencode.json or opencode.jsonc
   if (isOpencode) {
@@ -11063,6 +11080,10 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const configReloadCommand = isGlobal
     ? buildHookCommand(targetDir, 'gsd-config-reload.js', hookOpts)
     : localCmd('gsd-config-reload.js');
+  // Fork grounding hook (#11): FileChanged Sources-of-Truth index refresh.
+  const groundingRefreshCommand = isGlobal
+    ? buildHookCommand(targetDir, 'gsd-grounding-index-refresh.js', hookOpts)
+    : localCmd('gsd-grounding-index-refresh.js');
 
   // #3002 CR: when resolveNodeRunner() returns null, every dependent JS-hook
   // command is null too. Emit one warning here so the operator sees the cause
@@ -11107,6 +11128,7 @@ function install(isGlobal, runtime = 'claude', options = {}) {
     readGuardCommand,
     readInjectionScannerCommand,
     configReloadCommand,
+    groundingRefreshCommand,
     hookOpts,
     localCmd,
     localShellCmd,

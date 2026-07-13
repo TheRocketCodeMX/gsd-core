@@ -1172,6 +1172,8 @@ interface ApplySettingsJsonHooksOpts {
   readGuardCommand: string | null;
   readInjectionScannerCommand: string | null;
   configReloadCommand: string | null;
+  /** Fork grounding hook (#11): FileChanged Sources-of-Truth index refresh. */
+  groundingRefreshCommand?: string | null;
   hookOpts: BuildHookCommandOpts;
   localCmd: (hookFile: string) => string | null;
   localShellCmd: (hookFile: string) => string | null;
@@ -1196,6 +1198,7 @@ function applySettingsJsonHooks(settings: any, opts: ApplySettingsJsonHooksOpts)
     readGuardCommand,
     readInjectionScannerCommand,
     configReloadCommand,
+    groundingRefreshCommand,
     hookOpts,
     localCmd,
     localShellCmd,
@@ -1667,6 +1670,35 @@ function applySettingsJsonHooks(settings: any, opts: ApplySettingsJsonHooksOpts)
       } else if (!alreadyHasConfigReload && !configReloadCommand) {
         console.warn(`  ${yellow}⚠${reset}  Skipped FileChanged hook — Node executable path unavailable`);
       }
+
+      // ── FileChanged grounding-index refresh (fork #11) ─────────────────────
+      // When a strategy/source doc lands under .planning/ mid-session, refresh
+      // the Sources-of-Truth grounding index (inject current source set +
+      // detached `generate-claude-md --auto`). Matcher mirrors the plugin
+      // manifest (hooks/hooks.json); the hook itself is a no-op for files that
+      // are not .planning strategy docs.
+      const groundingRefreshFile = path.join(targetDir, 'hooks', 'gsd-grounding-index-refresh.js');
+      const alreadyHasGroundingRefresh = settings.hooks.FileChanged.some((entry: HookGroup) =>
+        entry.hooks && entry.hooks.some((h: HookEntry) => referencesHook(h as Record<string, unknown>, 'gsd-grounding-index-refresh'))
+      );
+      if (!alreadyHasGroundingRefresh && fs.existsSync(groundingRefreshFile) && groundingRefreshCommand) {
+        settings.hooks.FileChanged.push({
+          matcher: 'PROJECT\\.md|DOMAIN-MODEL\\.md|TEST-STRATEGY\\.md|SECURITY-STRATEGY\\.md|FRONTEND-ARCHITECTURE\\.md|INFRA-STRATEGY\\.md|CICD-STRATEGY\\.md|DESIGN-INVENTORY\\.md|LEGACY-INVENTORY\\.md|PRODUCT-BRIEF\\.md|-architecture\\.md',
+          hooks: [
+            {
+              type: 'command',
+              command: groundingRefreshCommand,
+              timeout: 8
+            }
+          ]
+        });
+        console.log(`  ${green}✓${reset} Configured FileChanged grounding-index refresh hook (Claude Code)`);
+      } else if (!alreadyHasGroundingRefresh && !fs.existsSync(groundingRefreshFile)) {
+        console.warn(`  ${yellow}⚠${reset}  Skipped FileChanged grounding hook — gsd-grounding-index-refresh.js not found at target`);
+      } else if (!alreadyHasGroundingRefresh && !groundingRefreshCommand) {
+        console.warn(`  ${yellow}⚠${reset}  Skipped FileChanged grounding hook — Node executable path unavailable`);
+      }
+      // ── end FileChanged grounding-index refresh ─────────────────────────────
     }
     // ── end FileChanged hook ────────────────────────────────────────────────────
   }

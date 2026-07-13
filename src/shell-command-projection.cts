@@ -153,6 +153,12 @@ const MANAGED_HOOK_BASENAMES_BY_SURFACE: Record<string, Set<string>> = {
     'gsd-read-injection-scanner.js',
     'gsd-update-banner.js',
     'gsd-workflow-guard.js',
+    // 2.0.0 update-matrix fix: worktree-path-guard is a managed node hook
+    // registered into settings.json PreToolUse; without it here the legacy
+    // bare-`node` rewrite skips it and uninstall leaves it registered.
+    'gsd-worktree-path-guard.js',
+    // Fork grounding FileChanged hook (#11) — managed node hook.
+    'gsd-grounding-index-refresh.js',
   ]),
   'codex-toml': new Set([
     'gsd-check-update.js',
@@ -170,6 +176,13 @@ const MANAGED_HOOK_COMMAND_BASENAMES_BY_SURFACE: Record<string, Set<string>> = {
     'gsd-read-injection-scanner.js',
     'gsd-update-banner.js',
     'gsd-workflow-guard.js',
+    // 2.0.0 update-matrix fix: these three are written into settings.json by
+    // the installer but were missing here, so uninstall's per-hook filter
+    // (isManagedHookCommand) left them registered — including a PostToolUse
+    // entry pointing at the already-deleted gsd-graphify-update.sh.
+    'gsd-worktree-path-guard.js',
+    'gsd-graphify-update.sh',
+    'gsd-grounding-index-refresh.js',
     'gsd-session-state.sh',
     'gsd-validate-commit.sh',
     'gsd-phase-boundary.sh',

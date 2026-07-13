@@ -234,9 +234,16 @@ describe('enh-770: Claude install is idempotent for the new hook events', () => 
     const result2 = install(false, 'claude', { installerMigrations: [] });
     const s2 = result2.settings;
 
+    // FileChanged legitimately carries 2 managed hooks since the fork's
+    // grounding-index refresh (#11) registers alongside config-reload; the
+    // idempotency contract is: exactly one entry per managed hook, no dupes.
     const cmds = hooksForEvent(s2, 'FileChanged');
-    assert.strictEqual(cmds.length, 1,
-      `FileChanged should have exactly 1 hook after idempotent reinstall; got ${cmds.length}: ${JSON.stringify(cmds)}`);
+    assert.strictEqual(cmds.filter((c) => c.includes('gsd-config-reload')).length, 1,
+      `exactly one gsd-config-reload registration expected; got: ${JSON.stringify(cmds)}`);
+    assert.strictEqual(cmds.filter((c) => c.includes('gsd-grounding-index-refresh')).length, 1,
+      `exactly one gsd-grounding-index-refresh registration expected; got: ${JSON.stringify(cmds)}`);
+    assert.strictEqual(cmds.length, 2,
+      `FileChanged should have exactly 2 hooks after idempotent reinstall; got ${cmds.length}: ${JSON.stringify(cmds)}`);
   });
 });
 
