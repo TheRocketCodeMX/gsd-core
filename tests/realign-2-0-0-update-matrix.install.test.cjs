@@ -7,7 +7,7 @@
 // installer, which inherits upstream's installer-migrations (000–004) and
 // install-surface changes that were never exercised against fork-created
 // installs. Feared surfaces:
-//   - migration 003 (get-shit-done → gsd-core rename) must no-op for fork users
+//   - migration 003 (get-shit-done → gsd-core rename) must no-op for fork users // gsd-allow-legacy-name (matrix tests legacy-path migration)
 //     (the fork already used gsd-core/ at 1.14.0),
 //   - migration 004 (stale-pristine-snapshot prune) must not misclassify
 //     fork-managed files,
@@ -377,7 +377,7 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
     // it must complete and be recorded (a misclassification would either block
     // the install — caught in A1 — or delete fork-managed files — caught by A4/A5).
     assert.ok(
-      ids.includes('2026-06-09-prune-stale-pristine-get-shit-done'),
+      ids.includes('2026-06-09-prune-stale-pristine-get-shit-done'), // gsd-allow-legacy-name (matrix tests legacy-path migration)
       `migration 004 must be recorded; got ${JSON.stringify(ids)}`,
     );
     for (const m of state.appliedMigrations || []) {
@@ -534,7 +534,7 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
     assert.equal(version, PKG.version);
     const state = readJson(path.join(cellBProject, '.claude', 'gsd-install-state.json'), 'Cell B ledger');
     const ids = (state.appliedMigrations || []).map((m) => m.id);
-    assert.ok(ids.includes('2026-06-09-prune-stale-pristine-get-shit-done'), `migration 004 must be recorded; got ${JSON.stringify(ids)}`);
+    assert.ok(ids.includes('2026-06-09-prune-stale-pristine-get-shit-done'), `migration 004 must be recorded; got ${JSON.stringify(ids)}`); // gsd-allow-legacy-name (matrix tests legacy-path migration)
   });
 
   test('B4: settings.local.json hooks valid, current-form, grounding hook registered', { skip: !runnable }, () => {
