@@ -161,7 +161,6 @@ The feature itself is upstream-native as of v1.6.1 (`gsd-core/workflows/list-see
 - `docs/FORK-DELTA.md`
 - `docs/FORK-PATCHES.json`
 - `tests/fork-delta-manifest.test.cjs`
-- `.changeset/fork-delta-guard.md`
 
 ### realignment-extracted (Epic #13) — new files created DURING the v2.0.0 port
 
@@ -180,6 +179,7 @@ These are also new since the fork base but must **not** be carried through a rea
 
 - `hooks/gsd-context-monitor.js.tmp.27634.318d8b7b56ab` — an accidentally committed atomic-write temp artifact; delete it. (Done — not carried into the 2.0.0 tree.)
 - `.changeset/daring-ravens-snooze.md` — a transient changeset consumed by the release pipeline; carry it only if it has not been released yet. (Released — not carried into the 2.0.0 tree.)
+- `.changeset/*.md` generally — RELEASE-TRANSIENT: changesets are promoted into CHANGELOG.md and deleted at finalize. NEVER list them in the guarded additive set (the guard would fail on every post-release tree; this bit PR #23).
 
 ---
 
