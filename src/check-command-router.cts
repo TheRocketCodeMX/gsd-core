@@ -159,10 +159,13 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
     const matches = cites.filter((c) => c.artifact === src.artifact);
     if (matches.length === 0) { problems.push(`${src.artifact}: no citation in ## Grounding`); continue; }
     const srcText = readIfExists(src.path);
-    const anyOk = matches.some((c) => groundingLib.crossCheck(src.artifact, c.key, c.value, srcText).ok);
-    if (!anyOk) {
-      const why = groundingLib.crossCheck(src.artifact, matches[0].key, matches[0].value, srcText).reason;
-      problems.push(`${src.artifact}: citation does not match the source (${why})`);
+    // EVERY citation line must pass its cross-check (#21 P1-1). Pre-fix, one
+    // valid citation per artifact satisfied the gate (anyOk), which let a
+    // fabricated sibling line ride through unchecked. Each failing line is
+    // reported individually so the planner can fix all of them in one pass.
+    for (const c of matches) {
+      const res = groundingLib.crossCheck(src.artifact, c.key, c.value, srcText);
+      if (!res.ok) problems.push(`${src.artifact} · ${c.key} → ${c.value}: ${res.reason}`);
     }
   }
   // Source-direct citations (SOURCE · fact → path:line) are verified against the real file.
