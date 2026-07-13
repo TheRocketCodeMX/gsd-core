@@ -285,7 +285,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 
 ---
 
-## References (98 shipped)
+## References (100 shipped)
 
 Full roster at `gsd-core/references/*.md`. References are shared knowledge documents that workflows and agents `@-reference`. The groupings below match [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#references-gsd-corereferencesmd) — core, workflow, thinking-model clusters, and the modular planner decomposition.
 
@@ -294,6 +294,8 @@ Full roster at `gsd-core/references/*.md`. References are shared knowledge docum
 | Reference | Role |
 |-----------|------|
 | `checkpoints.md` | Checkpoint type definitions and interaction patterns. |
+| `grounding-citations.md` | The `## Grounding` citation format + per-source high-entropy cell that `check.grounding-plan` cross-checks. |
+| `plan-phase-coverage-gate.md` | Extracted plan-phase decision-coverage-gate result-handling prose (lazy-loaded). |
 | `learn-catalog.md` | The `/gsd-learn` concept graph — 84 nodes/10 tracks, each with its source reference, prerequisites, and visual flag. |
 | `teaching-pattern.md` | The five-beat teaching doctrine for `/gsd-learn` (concept → how → when → why → practice). |
 | `gates.md` | 4 canonical gate types (Confirm, Quality, Safety, Transition) wired into plan-checker and verifier. |
@@ -443,7 +445,7 @@ The `gsd-planner` agent is decomposed into a core agent plus reference modules t
 
 ---
 
-## CLI Modules (93 shipped)
+## CLI Modules (94 shipped)
 
 Full listing: `gsd-core/bin/lib/*.cjs`.
 
@@ -478,6 +480,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `frontmatter.cjs` | YAML frontmatter CRUD operations |
 | `gap-checker.cjs` | Post-planning gap analysis (#2493): unified REQUIREMENTS.md + CONTEXT.md decisions vs PLAN.md coverage report (`gsd-tools gap-analysis`) |
 | `graphify.cjs` | Knowledge-graph build/query/status/diff for `/gsd-graphify` |
+| `grounding.cjs` | Source-grounding backing — resolves the required strategy-source set from the `## Strategy Plan`, parses the plan's `## Grounding` block, and cross-checks each citation against the source file (for `check.grounding-plan`) |
 | `gsd2-import.cjs` | External-plan ingest for `/gsd-import --from-gsd2` |
 | `init-command-router.cjs` | Thin CJS subcommand router adapter for `gsd-tools init` |
 | `init.cjs` | Compound context loading for each workflow type |

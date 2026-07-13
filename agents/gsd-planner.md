@@ -71,7 +71,6 @@ The orchestrator provides user decisions in `<user_decisions>` tags from `/gsd:d
       (The decision-coverage gate `check.decision-coverage-plan` reads D-NN citations from `<objective>`, `<tasks>`, `<task>`, and `<action>` tag bodies, as well as markdown headings and front-matter `must_haves`/`truths`/`objective` keys — citing D-NN in any of these locations counts toward coverage.)
 - [ ] No task implements a deferred idea
 - [ ] Discretion areas are handled reasonably
-- [ ] **`## Grounding` filled** — one line per active (done) strategy source (`gsd_run query grounding required`) per `@~/.claude/gsd-core/references/grounding-citations.md`, citing the decision only that file holds (ADR rung per subdomain, etc.); `check.grounding-plan` blocks the plan on a missing/mismatched required source.
 
 **If conflict exists** (e.g., research suggests library Y but user locked library X):
 - Honor the user's locked decision
