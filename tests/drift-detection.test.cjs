@@ -469,17 +469,44 @@ describe('detectDrift — non-blocking guarantee', () => {
   });
 });
 
-// ─── Config validation: new keys present and restricted ──────────────────────
+// ─── Config validation: drift keys owned by the drift capability ──────────────
+//
+// After ADR-857 phase-6 migration, workflow.drift_threshold and workflow.drift_action
+// are no longer in the central config schema manifest (VALID_CONFIG_KEYS). They are
+// federated config keys owned exclusively by the `drift` capability in the registry.
+// VALID_CONFIG_KEYS covers central-only keys; capability-owned keys resolve through
+// the federated config overlay (loadConfig still returns them at their defaults).
+
+const CAPABILITY_REGISTRY_PATH = path.join(
+  __dirname,
+  '..',
+  'gsd-core',
+  'bin',
+  'lib',
+  'capability-registry.cjs',
+);
 
 describe('config-schema — drift keys', () => {
-  test('workflow.drift_threshold in VALID_CONFIG_KEYS', () => {
-    const { VALID_CONFIG_KEYS } = require(CONFIG_SCHEMA_PATH);
-    assert.ok(VALID_CONFIG_KEYS.has('workflow.drift_threshold'));
+  test('workflow.drift_threshold owned by drift capability (not central)', () => {
+    const { isCentralConfigKey } = require(CONFIG_SCHEMA_PATH);
+    const registry = require(CAPABILITY_REGISTRY_PATH);
+    // Must be owned by the drift capability
+    assert.strictEqual(registry.configKeys['workflow.drift_threshold'], 'drift',
+      'workflow.drift_threshold must be owned by the drift capability');
+    // Must NOT be in central schema (migration complete)
+    assert.strictEqual(isCentralConfigKey('workflow.drift_threshold'), false,
+      'workflow.drift_threshold must not be a central config key after capability migration');
   });
 
-  test('workflow.drift_action in VALID_CONFIG_KEYS', () => {
-    const { VALID_CONFIG_KEYS } = require(CONFIG_SCHEMA_PATH);
-    assert.ok(VALID_CONFIG_KEYS.has('workflow.drift_action'));
+  test('workflow.drift_action owned by drift capability (not central)', () => {
+    const { isCentralConfigKey } = require(CONFIG_SCHEMA_PATH);
+    const registry = require(CAPABILITY_REGISTRY_PATH);
+    // Must be owned by the drift capability
+    assert.strictEqual(registry.configKeys['workflow.drift_action'], 'drift',
+      'workflow.drift_action must be owned by the drift capability');
+    // Must NOT be in central schema (migration complete)
+    assert.strictEqual(isCentralConfigKey('workflow.drift_action'), false,
+      'workflow.drift_action must not be a central config key after capability migration');
   });
 });
 
@@ -571,9 +598,19 @@ describe('gsd-codebase-mapper --paths flag', () => {
 });
 
 // ─── Execute-phase workflow integration ──────────────────────────────────────
+//
+// After ADR-857 phase-6 migration, codebase_drift_gate is no longer an inline
+// step in execute-phase.md. Instead, it is declared as a gate in the `drift`
+// capability at the `execute:wave:post` hook point. The execute-phase.md
+// dispatches capability gates via `gsd_run loop render-hooks execute:wave:post`,
+// which fires the drift gates automatically.
 
 describe('execute-phase integrates codebase_drift_gate', () => {
   test('workflow references a codebase drift step', () => {
+    // After capability migration: the drift gate fires via execute:wave:post
+    // render-hooks dispatch. Verify two things:
+    // 1. execute-phase.md has the execute:wave:post render-hooks call site.
+    // 2. The drift capability declares a codebase-drift gate at execute:wave:post.
     const doc = fs.readFileSync(
       path.join(
         __dirname,
@@ -584,7 +621,25 @@ describe('execute-phase integrates codebase_drift_gate', () => {
       ),
       'utf8',
     );
-    assert.ok(/codebase_drift_gate|codebase-drift/.test(doc));
+    // execute-phase.md must dispatch execute:wave:post hooks (the call site that fires drift gates)
+    assert.ok(
+      /loop render-hooks execute:wave:post/.test(doc),
+      'execute-phase.md must dispatch execute:wave:post hooks (drift capability gate call site)',
+    );
+    // The drift capability must declare a codebase-drift gate at execute:wave:post
+    const registry = require(CAPABILITY_REGISTRY_PATH);
+    const driftCap = registry.capabilities['drift'];
+    assert.ok(driftCap, 'drift capability must be registered');
+    const codebaseDriftGate = (driftCap.gates || []).find(
+      (g) => g.check && /codebase.drift/i.test(g.check.query),
+    );
+    assert.ok(
+      codebaseDriftGate,
+      'drift capability must declare a codebase-drift gate at execute:wave:post',
+    );
+    assert.strictEqual(codebaseDriftGate.point, 'execute:wave:post');
+    assert.strictEqual(codebaseDriftGate.blocking, false,
+      'codebase-drift gate must be non-blocking by contract');
   });
 
   test('workflow documents non-blocking guarantee for drift', () => {
@@ -663,5 +718,79 @@ describe('verify codebase-drift CLI', () => {
     } finally {
       cleanup(nonGit);
     }
+  });
+});
+
+// ─── Regression #1493 — workflow.drift_action / drift_threshold read from nested config shape ───
+//
+// loadConfig() returns a flattened object; config?.workflow was always undefined,
+// making drift_action permanently 'warn' and drift_threshold always 3 regardless
+// of .planning/config.json contents. Fix reads the raw nested JSON directly.
+
+describe('verify codebase-drift — workflow config read from nested shape (#1493)', () => {
+  let tmp;
+  beforeEach(() => {
+    tmp = createTempGitProject('gsd-drift-1493-');
+    fs.mkdirSync(path.join(tmp, '.planning', 'codebase'), { recursive: true });
+  });
+  afterEach(() => cleanup(tmp));
+
+  test('workflow.drift_action=auto-remap in config.json is honored (not always warn) (#1493)', () => {
+    // Write config with nested workflow shape — the flat loadConfig() path would
+    // have silently dropped this, leaving action === 'warn'.
+    fs.writeFileSync(
+      path.join(tmp, '.planning', 'config.json'),
+      JSON.stringify({ workflow: { drift_action: 'auto-remap', drift_threshold: 1 } }, null, 2),
+    );
+
+    // Map codebase to current HEAD so anything committed next is "new" drift.
+    const structure = path.join(tmp, '.planning', 'codebase', 'STRUCTURE.md');
+    fs.writeFileSync(structure, '# Codebase Structure\n\n- `src/`\n');
+    writeMappedCommit(structure, git(tmp, 'rev-parse', 'HEAD'), '2026-04-22');
+    git(tmp, 'add', '-A');
+    git(tmp, 'commit', '-m', 'map codebase');
+
+    // Add one structural barrel file — enough to exceed drift_threshold of 1.
+    const dir = path.join(tmp, 'packages', 'ui', 'src');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.ts'), 'export {};\n');
+    git(tmp, 'add', '-A');
+    git(tmp, 'commit', '-m', 'add package barrel');
+
+    const r = runGsdTools(['verify', 'codebase-drift'], tmp);
+    assert.strictEqual(r.success, true, r.error);
+    const data = JSON.parse(r.output);
+    assert.strictEqual(
+      data.action, 'auto-remap',
+      'workflow.drift_action=auto-remap must flow through from nested config; "warn" means the flat-shape bug is still active',
+    );
+  });
+
+  test('workflow.drift_threshold in config.json gates triggering (#1493)', () => {
+    // Threshold of 100 — 1 structural file should not trigger action_required.
+    fs.writeFileSync(
+      path.join(tmp, '.planning', 'config.json'),
+      JSON.stringify({ workflow: { drift_action: 'auto-remap', drift_threshold: 100 } }, null, 2),
+    );
+
+    const structure = path.join(tmp, '.planning', 'codebase', 'STRUCTURE.md');
+    fs.writeFileSync(structure, '# Codebase Structure\n\n- `src/`\n');
+    writeMappedCommit(structure, git(tmp, 'rev-parse', 'HEAD'), '2026-04-22');
+    git(tmp, 'add', '-A');
+    git(tmp, 'commit', '-m', 'map codebase');
+
+    const dir = path.join(tmp, 'packages', 'ui', 'src');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.ts'), 'export {};\n');
+    git(tmp, 'add', '-A');
+    git(tmp, 'commit', '-m', 'add one package barrel');
+
+    const r = runGsdTools(['verify', 'codebase-drift'], tmp);
+    assert.strictEqual(r.success, true, r.error);
+    const data = JSON.parse(r.output);
+    assert.strictEqual(data.threshold, 100,
+      'workflow.drift_threshold=100 must be read from nested config; 3 means the flat-shape bug is still active');
+    assert.strictEqual(data.action_required, false,
+      '1 structural file must not exceed threshold of 100');
   });
 });

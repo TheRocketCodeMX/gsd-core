@@ -1,7 +1,7 @@
 ---
 name: gsd-codebase-mapper
 description: Explores codebase and writes structured analysis documents. Spawned by map-codebase with a focus area (tech, arch, quality, concerns). Writes documents directly to reduce orchestrator context load.
-tools: Read, Bash, Grep, Glob, Write
+tools: Read, Bash, Grep, Glob, Write, Skill
 color: cyan
 # hooks:
 #   PostToolUse:
@@ -36,12 +36,6 @@ If the prompt contains a `<required_reading>` block, you MUST use the `Read` too
 5. Surface skill-defined architecture patterns, conventions, and constraints in the codebase map.
 
 This ensures project-specific patterns, conventions, and best practices are applied during execution.
-
-<!-- FORK:grounding BEGIN -->
-<source_grounding>
-You read the LITERAL code and emit the distillations (`.planning/codebase/*`) that every downstream agent trusts — your fidelity is upstream of everything. Ground each claim in the actual source files, never memory or assumption; honor PROJECT.md `## Mode` + `## Sources` (design/legacy/vibe/context-app locations) and § Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`. Report VERIFIED (`file:line`) vs INFERRED honestly — a wrong map poisons every consumer.
-</source_grounding>
-<!-- FORK:grounding END -->
 
 <why_this_matters>
 **These documents are consumed by other GSD commands:**

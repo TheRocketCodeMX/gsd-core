@@ -21,7 +21,7 @@ Mode routing:
 - **--backlog**: Add an idea to the backlog parking lot (999.x numbering) → add-backlog workflow
 - **--seed**: Capture a forward-looking idea with trigger conditions → plant-seed workflow
 - **--list**: List pending todos and select one to work on → check-todos workflow
-- **--list-seeds [status]**: Browse/audit captured seeds (read-only), optionally filtered by status → list-seeds workflow
+- **--list-seeds**: List/audit captured seeds (optional status filter) → list-seeds workflow
 </objective>
 
 <routing>
@@ -33,7 +33,7 @@ Mode routing:
 | --backlog | ROADMAP.md backlog section (999.x) | add-backlog |
 | --seed | .planning/seeds/SEED-NNN-slug.md | plant-seed |
 | --list | Interactive todo browser + action router | check-todos |
-| --list-seeds | Read-only seed browser (.planning/seeds/) + optional status filter | list-seeds |
+| --list-seeds | Read-only seed list/audit (optional status filter) | list-seeds |
 
 </routing>
 
@@ -54,6 +54,7 @@ Parse the first token of $ARGUMENTS:
 - If it is `--note`: strip the flag, pass remainder to note workflow
 - If it is `--backlog`: strip the flag, pass remainder to add-backlog workflow
 - If it is `--seed`: strip the flag, pass remainder to plant-seed workflow
+- If it is `--list-seeds`: strip the flag, pass remainder (optional status filter) to list-seeds workflow
 - If it is `--list`: pass remainder (optional area filter) to check-todos workflow
 - Otherwise: pass all of $ARGUMENTS to add-todo workflow
 </context>

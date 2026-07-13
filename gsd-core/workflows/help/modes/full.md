@@ -256,11 +256,15 @@ Check project status and intelligently route to next action.
 Modes:
 - **default** — progress report + intelligent routing
 - **`--next`** — auto-advance to the next logical step (use `--next --force` to bypass safety gates)
+- **`--next --auto`** — like `--next`, but chains steps automatically until milestone completion or a blocking decision
+- **`--next --converge`** — when the next action is planning, route it through `/gsd:plan-review-convergence` instead of `/gsd:plan-phase`; requires `workflow.plan_review_convergence=true`. `--cross-ai` is an alias. Reviewer flags (`--codex`, `--gemini`, `--claude`, `--opencode`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--all`) and `--max-cycles N` forward to the convergence loop.
 - **`--forensic`** — append a 6-check integrity audit after the progress report
 - **`--do "<text>"`** — smart router: dispatch freeform intent to the matching `/gsd-*` command (see *Smart Router* above)
 
 Usage: `/gsd:progress`
 Usage: `/gsd:progress --next`
+Usage: `/gsd:progress --next --auto`
+Usage: `/gsd:progress --next --auto --converge`
 Usage: `/gsd:progress --forensic`
 
 ### Session Management
@@ -390,31 +394,15 @@ List pending todos and select one to work on.
 Usage: `/gsd:capture --list`
 Usage: `/gsd:capture --list api`
 
-<!-- FORK:seeds BEGIN -->
 **`/gsd:capture --list-seeds [status]`**
-Browse/audit captured seeds (read-only) — distinct from `--list` (todos).
+List and audit captured seeds (read-only).
 
-- Lists every seed with id, status, scope, trigger, and title
-- Optional status filter (e.g., `/gsd:capture --list-seeds triggered`)
-- Read-only — never mutates seeds
+- Lists all seeds with ID, status, scope, trigger, and title
+- Optional status filter (e.g., `/gsd:capture --list-seeds dormant`)
+- Does not modify any seed — enrich with `/gsd:capture --seed --enrich SEED-NNN`
 
 Usage: `/gsd:capture --list-seeds`
 Usage: `/gsd:capture --list-seeds dormant`
-<!-- FORK:seeds END -->
-
-<!-- FORK:learn BEGIN -->
-### Learning
-
-**`/gsd:learn [concept or topic] [--track <track>] [--text] [--visual]`**
-Learn the engineering concepts GSD enforces — concept first, then when and why to use them, sourced from the skills in one coherent voice.
-
-- Jump to a concept (e.g., `/gsd:learn test doubles`, `/gsd:learn hexagonal`) or resume/suggest with no argument
-- `--track <track>` works a whole track in dependency order; `--text` stays terminal-only; `--visual` prefers the optional zero-install in-browser view
-- Inline and conversational, personalized to your profile, runnable standalone with no repo
-
-Usage: `/gsd:learn hexagonal`
-Usage: `/gsd:learn --track Testing`
-<!-- FORK:learn END -->
 
 ### User Acceptance Testing
 
@@ -598,17 +586,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Discovery & Specification
 
 - **`/gsd:explore`** — Socratic ideation and idea routing. Think through ideas before committing to plans.
-<!-- FORK:strategy BEGIN -->
-- **`/gsd:discover-product [--auto] [--challenge [@doc ...]] [--text]`** — Optional product discovery: demand vs interest, the narrowest wedge, four risks, outcome-framed; `--challenge` audits existing specs/research via a gap map instead of re-asking; writes PRODUCT-BRIEF.md.
-<!-- FORK:strategy END -->
 - **`/gsd:spec-phase <phase> [--auto] [--text]`** — Clarify WHAT a phase delivers with ambiguity scoring; produces a SPEC.md before discuss-phase.
-<!-- FORK:strategy BEGIN -->
-- **`/gsd:model-domain [--auto] [--text] [--event-storming]`** — Capture ubiquitous language and classify subdomains (core/supporting/generic) for greenfield projects; strategic DDD before architecture.
-- **`/gsd:recommend-architecture [--auto] [--text]`** — Recommend an architecture matched to domain complexity and NFRs (two-axis) and capture it as an ADR; avoids over/under-engineering.
-- **`/gsd:security-strategy [--auto] [--text]`** — Decide the app-wide security posture (thin/scale-to-zero): data classification, derived ASVS level, authz model, threat-model parent, security DoD; writes SECURITY-STRATEGY.md.
-- **`/gsd:frontend-architecture [--auto] [--text]`** — Recommend a frontend architecture (structure, state, rendering, design system, the FE side of the seam) when the project has a frontend; writes FRONTEND-ARCHITECTURE.md.
-- **`/gsd:legacy-inventory [--text] [--design <path>]`** — Exhaustively inventory a predecessor codebase for a rewrite (coverage matrix, three-way gap map, salvage card); requirements derive from design ∪ old-behavior; writes LEGACY-INVENTORY.md.
-<!-- FORK:strategy END -->
 - **`/gsd:ai-integration-phase [phase]`** — Generate an AI-SPEC.md design contract for phases that involve building AI systems.
 - **`/gsd:ui-phase [phase]`** — Generate UI design contract (UI-SPEC.md) for frontend phases.
 - **`/gsd:import --from <filepath> | --from-gsd2`** — Ingest external plans with conflict detection, or reverse-migrate a GSD-2 (`.gsd/`) project back to GSD v1 (`.planning/`) format.
@@ -616,15 +594,10 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 ### Planning & Execution
 
-<!-- FORK:strategy BEGIN -->
-- **`/gsd:testing-strategy [--auto] [--text]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md.
-- **`/gsd:infrastructure-strategy [--auto] [--text]`** — Recommend infrastructure matched to actual scale and team: compute rung, data layer per environment, observability + IaC floors; writes INFRA-STRATEGY.md.
-- **`/gsd:cicd-strategy [--auto] [--text]`** — Recommend a CI/CD strategy: platform, OIDC auth, secrets split, test-tier→stage mapping, deploy ladder; writes CICD-STRATEGY.md.
-<!-- FORK:strategy END -->
 - **`/gsd:mvp-phase <phase-number>`** — Plan a phase as a vertical MVP slice (user story + SPIDR splitting) before handing off to plan-phase. Same end-state as `/gsd:plan-phase --mvp`, with a guided MVP-shaping intro.
 - **`/gsd:ultraplan-phase [phase]`** — [BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back.
 - **`/gsd:plan-review-convergence <phase> [--codex] [--gemini] [--claude] [--opencode] [--ollama] [--lm-studio] [--llama-cpp] [--all] [--text] [--ws <name>] [--max-cycles N]`** — Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Supports both cloud reviewers (Codex/Gemini/Claude/OpenCode) and local model runtimes (Ollama, LM Studio, llama.cpp).
-- **`/gsd:autonomous [--from N] [--to N] [--only N] [--interactive]`** — Run all remaining phases autonomously: discuss → plan → execute per phase.
+- **`/gsd:autonomous [--from N] [--to N] [--only N] [--interactive] [--converge]`** — Run all remaining phases autonomously: discuss → plan → execute per phase. `--converge` routes planning through plan-review convergence; `--cross-ai` is an alias.
 
 ### Quality, Review & Verification
 
@@ -647,6 +620,8 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Knowledge & Context
 
 - **`/gsd:graphify [build|query <term>|status|diff]`** — Build, query, and inspect the project knowledge graph in `.planning/graphs/`.
+- **`/gsd:mempalace-recall`** — Recall prior decisions, patterns, and surprises from MemPalace before planning.
+- **`/gsd:mempalace-capture [artifact-type]`** — File a phase artifact into MemPalace and mirror decision facts into its temporal KG.
 - **`/gsd:thread [list [--open|--resolved] | close <slug> | status <slug> | name | description]`** — Manage persistent context threads for cross-session work.
 - **`/gsd:profile-user [--questionnaire] [--refresh]`** — Generate developer behavioral profile and create Claude-discoverable artifacts.
 - **`/gsd:stats`** — Display project statistics: phases, plans, requirements, git metrics, and timeline.
@@ -667,7 +642,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 These six skills exist primarily for the model to perform two-stage hierarchical routing across 60+ skills. You can invoke them directly when you want to browse a category interactively.
 
-- **`/gsd-context`** — Codebase intelligence routing (map, graphify, docs, learnings).
+- **`/gsd-context`** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace).
 - **`/gsd-ideate`** — Exploration / capture routing (explore, sketch, spike, spec, capture).
 - **`/gsd-manage`** — Configuration and workspace routing (workstreams, thread, update, ship, inbox).
 - **`/gsd-project`** — Project-lifecycle routing (milestones, audits, summary).

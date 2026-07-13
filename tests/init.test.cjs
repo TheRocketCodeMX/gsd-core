@@ -325,6 +325,142 @@ describe('init commands', () => {
     const output = JSON.parse(result.output);
     assert.strictEqual(output.phase_req_ids, null);
   });
+
+  test('init plan-phase resolves phase_req_ids from flat Phase Details after active milestone heading', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '11-second-active-phase'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), [
+      '---',
+      'milestone: v0.4.0',
+      'current_phase: 11',
+      '---',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), [
+      '# Roadmap: Example',
+      '',
+      '## Milestones',
+      '',
+      '- ✅ **v0.3.0 Foundations** - Phases 1-9 (shipped 2026-01-01)',
+      '- 🚧 **v0.4.0 Feature Work** - Phases 10-11 (in progress)',
+      '',
+      '## Phases',
+      '',
+      '<details>',
+      '<summary>✅ v0.3.0 Foundations (Phases 1-9) - SHIPPED 2026-01-01</summary>',
+      '',
+      '- [x] **Phase 1: Bootstrap**',
+      '',
+      '</details>',
+      '',
+      '### 🚧 v0.4.0 Feature Work (Active)',
+      '',
+      '**Milestone Goal:** Deliver the feature set.',
+      '',
+      '- [ ] **Phase 10: First Active Phase**',
+      '- [ ] **Phase 11: Second Active Phase**',
+      '',
+      '### 📋 v0.5+ (Planned)',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 10: First Active Phase',
+      '**Goal**: Build the first piece.',
+      '**Requirements**: REQ-01',
+      '',
+      '### Phase 11: Second Active Phase',
+      '**Goal**: Build the second piece.',
+      '**Requirements**: REQ-02, REQ-03',
+      '',
+      '## Progress',
+      '',
+    ].join('\n'));
+
+    const result = runGsdTools('init plan-phase 11', tmpDir);
+    assert.ok(result.success, `init plan-phase failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_req_ids, 'REQ-02, REQ-03');
+  });
+
+  test('init execute-phase resolves phase_req_ids from flat Phase Details after active milestone heading', () => {
+    seedPhase(tmpDir, '11-second-active-phase', {
+      '11-01-PLAN.md': '# Plan',
+    });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), [
+      '---',
+      'milestone: v0.4.0',
+      'current_phase: 11',
+      '---',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), [
+      '# Roadmap: Example',
+      '',
+      '## Phases',
+      '',
+      '### 🚧 v0.4.0 Feature Work (Active)',
+      '',
+      '- [ ] **Phase 10: First Active Phase**',
+      '- [ ] **Phase 11: Second Active Phase**',
+      '',
+      '### 📋 v0.5+ (Planned)',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 10: First Active Phase',
+      '**Goal**: Build the first piece.',
+      '**Requirements**: REQ-01',
+      '',
+      '### Phase 11: Second Active Phase',
+      '**Goal**: Build the second piece.',
+      '**Requirements**: REQ-02, REQ-03',
+      '',
+    ].join('\n'));
+
+    const result = runGsdTools('init execute-phase 11', tmpDir);
+    assert.ok(result.success, `init execute-phase failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_req_ids, 'REQ-02, REQ-03');
+  });
+
+  test('init phase-op resolves a details-summary milestone phase from later flat Phase Details', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), [
+      'milestone: v1.11',
+      'current_phase: 86',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), [
+      '# Roadmap',
+      '',
+      '## Phases',
+      '<details open>',
+      '<summary>🔄 v1.11 A06 (Phases 86-91) — IN PROGRESS</summary>',
+      '',
+      '- [ ] **Phase 86: Details Block Regression** — Parser should resolve this (DATA-01)',
+      '- [ ] **Phase 87: Other Work** — Later phase',
+      '</details>',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 86: Details Block Regression',
+      '**Goal**: Resolve phase details after collapsed milestone block',
+      '**Requirements**: DATA-01',
+      '',
+      '### Phase 87: Other Work',
+      '**Goal**: Not relevant',
+      '',
+    ].join('\n'));
+
+    const result = runGsdTools('init phase-op 86', tmpDir);
+    assert.ok(result.success, `init phase-op failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_name, 'Details Block Regression');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -537,6 +673,35 @@ describe('init plan-phase zero-padded phase number (bug #2391)', () => {
       'phase_slug must be identical regardless of padding');
     assert.strictEqual(out03.phase_req_ids, out3.phase_req_ids,
       'phase_req_ids must be identical regardless of padding');
+  });
+
+  // ── #904: branch_name must use normalized (stripped + zero-padded) phase number ──
+  // When project_code is set (e.g. "CK") the phase directory is prefixed:
+  // "CK-01-foundation". extractPhaseToken returns "CK-01" as phase_number.
+  // branch_name must call normalizePhaseName so it strips the prefix and zero-pads,
+  // producing "gsd/phase-01-foundation" rather than "gsd/phase-CK-01-foundation".
+  test('branch_name uses normalized phase number when project_code prefixes phase dir (#904)', () => {
+    seedPhase(tmpDir, 'CK-01-foundation', {
+      'CK-01-01-PLAN.md': '# Plan',
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({
+        project_code: 'CK',
+        git: {
+          branching_strategy: 'phase',
+          phase_branch_template: 'gsd/phase-{phase}-{slug}',
+        },
+      }, null, 2)
+    );
+
+    const result = runGsdTools('init execute-phase 1', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    // branch_name must use the normalized phase number, not the raw "CK-01" token
+    assert.strictEqual(output.branch_name, 'gsd/phase-01-foundation',
+      'branch_name must use normalized phase number (strip project_code prefix, zero-pad), not raw phase_number');
   });
 });
 
@@ -816,6 +981,40 @@ describe('cmdInitPhaseOp fallback', () => {
     assert.strictEqual(output.has_plans, false);
   });
 
+  test('fallback resolves drifted project-code-prefixed roadmap heading by bare number (#1455)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase MANIFOLD-117: Prefixed Heading\n**Goal:** Build prefixed phase\n**Plans:** TBD\n'
+    );
+
+    const result = runGsdTools('init phase-op 117', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_dir, null);
+    assert.strictEqual(output.phase_number, '117');
+    assert.strictEqual(output.phase_name, 'Prefixed Heading');
+    assert.strictEqual(output.phase_slug, 'prefixed-heading');
+  });
+
+  test('fallback resolves drifted project-code-prefixed roadmap heading by prefixed ID (#1455)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase MANIFOLD-117: Prefixed Heading\n**Goal:** Build prefixed phase\n**Plans:** TBD\n'
+    );
+
+    const result = runGsdTools('init phase-op MANIFOLD-117', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase_found, true);
+    assert.strictEqual(output.phase_dir, null);
+    assert.strictEqual(output.phase_number, 'MANIFOLD-117');
+    assert.strictEqual(output.phase_name, 'Prefixed Heading');
+    assert.strictEqual(output.phase_slug, 'prefixed-heading');
+  });
+
   test('prefers current milestone roadmap entry over archived phase with same number', () => {
     const archiveDir = path.join(
       tmpDir,
@@ -883,6 +1082,13 @@ describe('cmdInitPhaseOp fallback', () => {
 describe('cmdInitProgress', () => {
   let tmpDir;
 
+  function writePassedVerification(phaseDir, phaseToken) {
+    fs.writeFileSync(
+      path.join(phaseDir, `${phaseToken}-VERIFICATION.md`),
+      ['---', 'status: passed', '---', '', '# Verification', ''].join('\n')
+    );
+  }
+
   beforeEach(() => {
     tmpDir = createFixture();
   });
@@ -909,6 +1115,7 @@ describe('cmdInitProgress', () => {
     fs.mkdirSync(phase1, { recursive: true });
     fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
     fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+    writePassedVerification(phase1, '01');
 
     // Phase 02: in_progress (has plan, no summary)
     const phase2 = path.join(tmpDir, '.planning', 'phases', '02-api');
@@ -962,6 +1169,7 @@ describe('cmdInitProgress', () => {
     fs.mkdirSync(phase1, { recursive: true });
     fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
     fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+    writePassedVerification(phase1, '01');
 
     const result = runGsdTools('init progress', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -970,6 +1178,26 @@ describe('cmdInitProgress', () => {
     assert.strictEqual(output.completed_count, 1);
     assert.strictEqual(output.current_phase, null);
     assert.strictEqual(output.next_phase, null);
+  });
+
+  test('implementation-complete phase without passed verification remains current work', () => {
+    const phase1 = path.join(tmpDir, '.planning', 'phases', '01-setup');
+    fs.mkdirSync(phase1, { recursive: true });
+    fs.writeFileSync(path.join(phase1, '01-01-PLAN.md'), '# Plan');
+    fs.writeFileSync(path.join(phase1, '01-01-SUMMARY.md'), '# Summary');
+
+    const result = runGsdTools('init progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.completed_count, 0);
+    assert.strictEqual(output.in_progress_count, 1);
+    assert.strictEqual(output.has_work_in_progress, true);
+    assert.strictEqual(output.current_phase.number, '01');
+    assert.strictEqual(output.current_phase.status, 'executed');
+    assert.strictEqual(output.current_phase.implementation_complete, true);
+    assert.strictEqual(output.current_phase.verification_status, 'missing');
+    assert.strictEqual(output.current_phase.verification_passed, false);
   });
 
   test('paused_at detected from STATE.md', () => {
@@ -1210,59 +1438,7 @@ describe('cmdInitNewProject', () => {
     assert.strictEqual(output.has_package_file, false);
     assert.strictEqual(output.is_brownfield, false);
     assert.strictEqual(output.needs_codebase_map, false);
-// FORK:strategy BEGIN
-    // Design axis: a clean greenfield has no design hint (false-positive guard baseline).
-    assert.strictEqual(output.has_design_hint, false);
-    assert.strictEqual(output.design_pointer, null);
-    assert.strictEqual(output.design_hint_source, null);
-    assert.strictEqual(output.design_dismissed, false);
-// FORK:strategy END
   });
-
-// FORK:strategy BEGIN
-  describe('provided-design detection (hint, not lock)', () => {
-    test('--design arg is the strongest hint (source: arg)', () => {
-      const output = JSON.parse(runGsdTools('init new-project --design https://figma.com/file/abc', tmpDir).output);
-      assert.strictEqual(output.has_design_hint, true);
-      assert.strictEqual(output.design_pointer, 'https://figma.com/file/abc');
-      assert.strictEqual(output.design_hint_source, 'arg');
-    });
-
-    test('a .fig export on disk is detected (source: design-export)', () => {
-      fs.writeFileSync(path.join(tmpDir, 'app.fig'), '');
-      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
-      assert.strictEqual(output.has_design_hint, true);
-      assert.strictEqual(output.design_hint_source, 'design-export');
-    });
-
-    test('a tokens.json is detected (source: tokens-file)', () => {
-      fs.writeFileSync(path.join(tmpDir, 'tokens.json'), '{}');
-      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
-      assert.strictEqual(output.has_design_hint, true);
-      assert.strictEqual(output.design_hint_source, 'tokens-file');
-    });
-
-    test('a designs/ dir is the weak hint (source: designs-dir)', () => {
-      fs.mkdirSync(path.join(tmpDir, 'designs'));
-      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
-      assert.strictEqual(output.has_design_hint, true);
-      assert.strictEqual(output.design_hint_source, 'designs-dir');
-    });
-
-    test('--no-design dismisses (no prompt) even with an artifact present', () => {
-      fs.writeFileSync(path.join(tmpDir, 'app.fig'), '');
-      const output = JSON.parse(runGsdTools('init new-project --no-design', tmpDir).output);
-      assert.strictEqual(output.design_dismissed, true);
-      assert.strictEqual(output.has_design_hint, false);
-    });
-
-    test('a design-system dep alone is NOT a hint (no false positive)', () => {
-      fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"dependencies":{"tailwindcss":"^3"}}');
-      const output = JSON.parse(runGsdTools('init new-project', tmpDir).output);
-      assert.strictEqual(output.has_design_hint, false);
-    });
-  });
-// FORK:strategy END
 
   test('brownfield with package.json detected', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"test"}');
@@ -1674,6 +1850,229 @@ describe('withProjectRoot project identity', () => {
       'project_code should still be present');
     assert.strictEqual(output.project_title, undefined,
       'project_title should not be present when PROJECT.md is missing');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADR-0006: init handlers honor GSD_WORKSTREAM (planningPaths/planningDir consumption)
+// Issue #1189 — regression guard: workstream-scoped paths must be resolved
+// through planningDir(cwd) which picks up GSD_WORKSTREAM from env.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('init handlers honor GSD_WORKSTREAM (ADR-0006 planningPaths consumption)', () => {
+  const { seedWorkstream } = require('./fixtures/index.cjs');
+
+  /**
+   * Build a workstream-scoped fixture under tmpDir.
+   * Only workstream-scoped files exist; flat .planning/ has only the phases dir.
+   */
+  function buildWsFixture(tmpDir, ws = 'wsx') {
+    const wsDir = seedWorkstream(tmpDir, { name: ws });
+    // Write the planning files ONLY under the workstream path
+    fs.writeFileSync(
+      path.join(wsDir, 'STATE.md'),
+      '# State\n'
+    );
+    fs.writeFileSync(
+      path.join(wsDir, 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase 1: Setup\n**Goal:** Bootstrap\n**Requirements**: R-01\n**Plans:** 1 plans\n'
+    );
+    fs.writeFileSync(
+      path.join(wsDir, 'config.json'),
+      JSON.stringify({})
+    );
+    // Create a phase plan under the workstream
+    fs.mkdirSync(path.join(wsDir, 'phases', '01-setup'), { recursive: true });
+    fs.writeFileSync(path.join(wsDir, 'phases', '01-setup', '01-01-PLAN.md'), '# Plan\n');
+    return wsDir;
+  }
+
+  // ── Test 1: execute-phase — workstream-scoped path fields (happy) ─────────
+
+  describe('execute-phase — workstream-scoped path fields', () => {
+    let tmpDir;
+
+    beforeEach(() => {
+      tmpDir = createFixture();
+      buildWsFixture(tmpDir, 'wsx');
+    });
+
+    afterEach(() => {
+      cleanup(tmpDir);
+    });
+
+    test('execute-phase emits workstream-scoped state/roadmap/config paths (ADR-0006)', () => {
+      const result = runGsdTools('init execute-phase 1', tmpDir, { GSD_WORKSTREAM: 'wsx', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Positive: paths must be workstream-scoped
+      assert.strictEqual(output.state_path, '.planning/workstreams/wsx/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/workstreams/wsx/ROADMAP.md');
+      assert.strictEqual(output.config_path, '.planning/workstreams/wsx/config.json');
+      // Goodhart both-directions: must NOT be the flat form
+      assert.notStrictEqual(output.state_path, '.planning/STATE.md');
+      assert.notStrictEqual(output.roadmap_path, '.planning/ROADMAP.md');
+      assert.notStrictEqual(output.config_path, '.planning/config.json');
+      // phase_dir is emitted and must be workstream-scoped
+      assert.ok(
+        output.phase_dir && output.phase_dir.includes('workstreams/wsx'),
+        `phase_dir should include workstreams/wsx, got: ${output.phase_dir}`
+      );
+    });
+
+    test('execute-phase WITHOUT GSD_WORKSTREAM resolves flat paths (boundary control)', () => {
+      // Flat fixture: the workstream fixture exists but we do NOT pass GSD_WORKSTREAM.
+      // Handler should resolve flat .planning/ → state/roadmap/config are flat,
+      // and the workstream phase is NOT found (flat phases/ is empty).
+      const result = runGsdTools('init execute-phase 1', tmpDir, { GSD_WORKSTREAM: '', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Flat paths must be returned when no workstream is active
+      assert.strictEqual(output.state_path, '.planning/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
+      assert.strictEqual(output.config_path, '.planning/config.json');
+      // Phase is NOT found in flat .planning/phases/ (only exists under workstream)
+      assert.strictEqual(output.phase_found, false,
+        'phase should not be found in flat path when only workstream fixture exists');
+    });
+  });
+
+  // ── Test 2: milestone-op — reads workstream-scoped roadmap/state/phases ───
+
+  describe('milestone-op — reads workstream-scoped planning files', () => {
+    let tmpDir;
+
+    beforeEach(() => {
+      // Do NOT call createFixture (which would add flat .planning/phases/).
+      // Create a bare temp dir so files only exist under the workstream path.
+      const os = require('os');
+      tmpDir = fs.mkdtempSync(require('path').join(os.tmpdir(), 'gsd-test-'));
+      buildWsFixture(tmpDir, 'wsx');
+    });
+
+    afterEach(() => {
+      cleanup(tmpDir);
+    });
+
+    test('milestone-op with GSD_WORKSTREAM finds roadmap/state/phases in workstream scope (ADR-0006)', () => {
+      const result = runGsdTools('init milestone-op', tmpDir, { GSD_WORKSTREAM: 'wsx', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      assert.strictEqual(output.roadmap_exists, true,
+        'roadmap_exists must be true: ROADMAP.md exists only under workstream path');
+      assert.strictEqual(output.state_exists, true,
+        'state_exists must be true: STATE.md exists only under workstream path');
+      assert.strictEqual(output.phases_dir_exists, true,
+        'phases_dir_exists must be true: phases/ exists under workstream path');
+    });
+
+    test('milestone-op WITHOUT GSD_WORKSTREAM misses workstream-only files (negative discrimination)', () => {
+      const result = runGsdTools('init milestone-op', tmpDir, { GSD_WORKSTREAM: '', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Handler looked at flat .planning/ — no files there → all false
+      assert.strictEqual(output.roadmap_exists, false,
+        'roadmap_exists must be false: ROADMAP.md is only under workstream, not flat .planning/');
+      assert.strictEqual(output.state_exists, false,
+        'state_exists must be false: STATE.md is only under workstream, not flat .planning/');
+    });
+  });
+
+  // ── Test 3: plan-phase — workstream-scoped resolution ────────────────────
+
+  describe('plan-phase — workstream-scoped path resolution', () => {
+    let tmpDir;
+
+    beforeEach(() => {
+      tmpDir = createFixture();
+      buildWsFixture(tmpDir, 'wsx');
+    });
+
+    afterEach(() => {
+      cleanup(tmpDir);
+    });
+
+    test('plan-phase emits workstream-scoped state/roadmap/requirements paths (ADR-0006)', () => {
+      const result = runGsdTools('init plan-phase 1', tmpDir, { GSD_WORKSTREAM: 'wsx', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Path fields must be scoped to the workstream
+      assert.strictEqual(output.state_path, '.planning/workstreams/wsx/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/workstreams/wsx/ROADMAP.md');
+      assert.strictEqual(output.requirements_path, '.planning/workstreams/wsx/REQUIREMENTS.md');
+      // Must NOT be flat
+      assert.notStrictEqual(output.state_path, '.planning/STATE.md');
+      assert.notStrictEqual(output.roadmap_path, '.planning/ROADMAP.md');
+      // phase_dir is workstream-scoped and phase is found
+      assert.strictEqual(output.phase_found, true);
+      assert.ok(
+        output.phase_dir && output.phase_dir.includes('workstreams/wsx'),
+        `phase_dir should include workstreams/wsx, got: ${output.phase_dir}`
+      );
+    });
+
+    test('plan-phase WITHOUT GSD_WORKSTREAM resolves flat paths (boundary control)', () => {
+      const result = runGsdTools('init plan-phase 1', tmpDir, { GSD_WORKSTREAM: '', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      assert.strictEqual(output.state_path, '.planning/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
+      assert.strictEqual(output.requirements_path, '.planning/REQUIREMENTS.md');
+      // Phase only exists under workstream, so not found via flat path
+      assert.strictEqual(output.phase_found, false);
+    });
+  });
+
+  // ── Test 4: phase-op — workstream-scoped phase resolution ────────────────
+
+  describe('phase-op — workstream-scoped phase resolution', () => {
+    let tmpDir;
+
+    beforeEach(() => {
+      tmpDir = createFixture();
+      buildWsFixture(tmpDir, 'wsx');
+    });
+
+    afterEach(() => {
+      cleanup(tmpDir);
+    });
+
+    test('phase-op with GSD_WORKSTREAM finds phase in workstream scope and emits scoped paths (ADR-0006)', () => {
+      const result = runGsdTools('init phase-op 1', tmpDir, { GSD_WORKSTREAM: 'wsx', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Phase is found via workstream-scoped phases dir
+      assert.strictEqual(output.phase_found, true,
+        'phase_found must be true: phase exists under workstream path');
+      assert.ok(
+        output.phase_dir && output.phase_dir.includes('workstreams/wsx'),
+        `phase_dir should include workstreams/wsx, got: ${output.phase_dir}`
+      );
+      // Path fields are workstream-scoped
+      assert.strictEqual(output.state_path, '.planning/workstreams/wsx/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/workstreams/wsx/ROADMAP.md');
+      assert.notStrictEqual(output.state_path, '.planning/STATE.md');
+    });
+
+    test('phase-op WITHOUT GSD_WORKSTREAM does not find workstream-only phase (negative discrimination)', () => {
+      const result = runGsdTools('init phase-op 1', tmpDir, { GSD_WORKSTREAM: '', GSD_PROJECT: '' });
+      assert.ok(result.success, `Command failed: ${result.error}`);
+
+      const output = JSON.parse(result.output);
+      // Phase only exists under workstream path — flat path has no matching phase dir
+      assert.strictEqual(output.phase_found, false,
+        'phase_found must be false: phase only exists under workstream path');
+      // Flat paths are emitted
+      assert.strictEqual(output.state_path, '.planning/STATE.md');
+      assert.strictEqual(output.roadmap_path, '.planning/ROADMAP.md');
+    });
   });
 });
 

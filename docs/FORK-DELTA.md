@@ -1,6 +1,6 @@
 # FORK-DELTA — what this fork owns on top of upstream
 
-**Base:** upstream `open-gsd/gsd-core` v1.4.0 = commit `7eb4d286`. Everything below is `git diff 7eb4d286..HEAD` on `next` (the fork's content source of truth), with pure branding excluded (see *Branding-only*).
+**Base:** upstream `TheRocketCodeMX/gsd-core` v1.4.0 = commit `7eb4d286`. Everything below is `git diff 7eb4d286..HEAD` on `next` (the fork's content source of truth), with pure branding excluded (see *Branding-only*).
 
 This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 
@@ -277,7 +277,7 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 ## Branding-only (handled by `scripts/sync-upstream.sh`)
 
-~223 files differ from the base **only** by the six branding forms (`@opengsd/gsd-core` → `@therocketcode/gsd-core`, `open-gsd/gsd-core` → `TheRocketCodeMX/gsd-core`, `opengsd-gsd-core` → `therocketcode-gsd-core`, the escaped/encoded variants). Do not track them here — after any upstream merge, run `./scripts/sync-upstream.sh` (whole tree) and the identity-drift lint. This includes all runtime-launcher `npx @…/gsd-core` one-liners across workflows/agents, README translations, docs/, `gsd-core/bin/lib/package-identity.cjs`, `gsd-core/bin/check-latest-version.cjs`, `gsd-core/workflows/update.md`, `src/phase-lifecycle.cts`, `src/validate.cts`, and similar.
+~223 files differ from the base **only** by the six branding forms (`@therocketcode/gsd-core` → `@therocketcode/gsd-core`, `TheRocketCodeMX/gsd-core` → `TheRocketCodeMX/gsd-core`, `therocketcode-gsd-core` → `therocketcode-gsd-core`, the escaped/encoded variants). Do not track them here — after any upstream merge, run `./scripts/sync-upstream.sh` (whole tree) and the identity-drift lint. This includes all runtime-launcher `npx @…/gsd-core` one-liners across workflows/agents, README translations, docs/, `gsd-core/bin/lib/package-identity.cjs`, `gsd-core/bin/check-latest-version.cjs`, `gsd-core/workflows/update.md`, `src/phase-lifecycle.cts`, `src/validate.cts`, and similar.
 
 ---
 

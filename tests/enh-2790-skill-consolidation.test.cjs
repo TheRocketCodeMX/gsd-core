@@ -25,12 +25,10 @@ const KNOWN_SKILLS = new Set([
   'autonomous.md',
   'capture.md',
   'cleanup.md',
-  'learn.md',
   'code-review.md',
   'complete-milestone.md',
   'config.md',
   'debug.md',
-  'discover-product.md',
   'discuss-phase.md',
   'docs-update.md',
   'eval-review.md',
@@ -47,8 +45,9 @@ const KNOWN_SKILLS = new Set([
   'ingest-docs.md',
   'manager.md',
   'map-codebase.md',
+  'mempalace-capture.md',
+  'mempalace-recall.md',
   'milestone-summary.md',
-  'model-domain.md',
   'mvp-phase.md',
   'new-milestone.md',
   'new-project.md',
@@ -60,10 +59,6 @@ const KNOWN_SKILLS = new Set([
   'profile-user.md',
   'progress.md',
   'quick.md',
-  'recommend-architecture.md',
-  'security-strategy.md',
-  'frontend-architecture.md',
-  'legacy-inventory.md',
   'resume-work.md',
   'review-backlog.md',
   'review.md',
@@ -75,9 +70,6 @@ const KNOWN_SKILLS = new Set([
   'spike.md',
   'stats.md',
   'surface.md',
-  'testing-strategy.md',
-  'infrastructure-strategy.md',
-  'cicd-strategy.md',
   'thread.md',
   'ui-phase.md',
   'ui-review.md',
@@ -134,36 +126,16 @@ describe('new consolidated skills exist', () => {
     assert.ok(fs.existsSync(skillPath('capture')), 'capture.md does not exist');
   });
 
-  test('capture.md has a name: field in frontmatter', () => {
-    const fm = parseFrontmatter(skillPath('capture'));
-    assert.ok(fm.name && fm.name.length > 0, 'capture.md missing name: in frontmatter');
-  });
-
   test('commands/gsd/phase.md exists', () => {
     assert.ok(fs.existsSync(skillPath('phase')), 'phase.md does not exist');
-  });
-
-  test('phase.md has a name: field in frontmatter', () => {
-    const fm = parseFrontmatter(skillPath('phase'));
-    assert.ok(fm.name && fm.name.length > 0, 'phase.md missing name: in frontmatter');
   });
 
   test('commands/gsd/config.md exists', () => {
     assert.ok(fs.existsSync(skillPath('config')), 'config.md does not exist');
   });
 
-  test('config.md has a name: field in frontmatter', () => {
-    const fm = parseFrontmatter(skillPath('config'));
-    assert.ok(fm.name && fm.name.length > 0, 'config.md missing name: in frontmatter');
-  });
-
   test('commands/gsd/workspace.md exists', () => {
     assert.ok(fs.existsSync(skillPath('workspace')), 'workspace.md does not exist');
-  });
-
-  test('workspace.md has a name: field in frontmatter', () => {
-    const fm = parseFrontmatter(skillPath('workspace'));
-    assert.ok(fm.name && fm.name.length > 0, 'workspace.md missing name: in frontmatter');
   });
 });
 

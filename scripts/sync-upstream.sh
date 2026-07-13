@@ -28,16 +28,20 @@ rebrand() {
     -e 's#open-gsd\\/gsd-core#TheRocketCodeMX\\/gsd-core#g' \
     -e 's#opengsd-gsd-core#therocketcode-gsd-core#g' \
     -e 's#%40opengsd%2Fgsd-core#%40therocketcode%2Fgsd-core#g' \
+    -e 's#@open-gsd/maintainers#@TheRocketCodeMX/maintainers#g' \
     "$@"
-}
+} # FORK: added in Phase 2 — .secretscanignore owner form (@open-gsd/maintainers → @TheRocketCodeMX/maintainers)
 
 if [ "$#" -gt 0 ]; then
   rebrand "$@"
   echo "Rebranded $# file(s)."
 else
-  # whole tree: text files only, excluding reference clones / deps / git
+  # whole tree: text files only, excluding reference clones / deps / git.
+  # FORK: added in Phase 2 — exclude this script itself: its own sed patterns contain the
+  # upstream coordinate and a whole-tree pass would rewrite them into no-ops (self-clobber).
   mapfile -t files < <(grep -rIlE 'opengsd|open-gsd' \
-    --exclude-dir=_reference --exclude-dir=node_modules --exclude-dir=.git . || true)
+    --exclude-dir=_reference --exclude-dir=node_modules --exclude-dir=.git \
+    --exclude=sync-upstream.sh . || true)
   if [ "${#files[@]}" -gt 0 ]; then
     rebrand "${files[@]}"
     echo "Rebranded ${#files[@]} file(s) across the tree."

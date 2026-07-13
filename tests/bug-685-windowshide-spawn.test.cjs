@@ -24,9 +24,10 @@ function regionBetween(src, startAnchor, endAnchor) {
 }
 
 describe('bug #685: Windows spawns must set windowsHide:true (no console-window flash)', () => {
-  // NOTE: gsd-context-monitor.js is intentionally inert in this fork (no spawn).
-  // Its former record-session windowsHide assertion was removed along with the
-  // hook's behavior; the completeness test below still guards every other site.
+  test('gsd-context-monitor record-session spawn sets windowsHide', () => {
+    const region = regionBetween(read('hooks/gsd-context-monitor.js'), "'record-session'", '.unref()');
+    assert.match(region, /windowsHide:\s*true/, 'record-session spawn must set windowsHide: true');
+  });
 
   const cts = () => read('src/shell-command-projection.cts');
   const helpers = [
@@ -59,7 +60,10 @@ describe('bug #685: Windows spawns must set windowsHide:true (no console-window 
   test('roadmap-upgrade execSync git calls all set windowsHide', () => {
     const src = read('src/roadmap-upgrade.cts');
     const calls = src.match(/execSync\([^)]*\)/g) || [];
-    assert.ok(calls.length >= 4, 'expected the roadmap-upgrade git execSync calls to be present');
+    // #1542 made rollback git-independent (surgical fs restore), so the only
+    // remaining git execSync is the `git status --porcelain` precondition. The
+    // durable guard is that EVERY git execSync still present sets windowsHide.
+    assert.ok(calls.length >= 1, 'expected at least the roadmap-upgrade git status execSync call to be present');
     const missing = calls.filter((c) => !/windowsHide:\s*true/.test(c));
     assert.deepEqual(missing, [], `execSync without windowsHide:\n${missing.join('\n')}`);
   });

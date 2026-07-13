@@ -4,17 +4,7 @@ const cp = require('node:child_process');
 const path = require('node:path');
 
 const { parseFragment } = require('./parse.cjs');
-// FORK:release BEGIN
-// Dual-layout resolve: repo (scripts/changeset/ next to gsd-core/) vs installed
-// runtime (gsd-core/scripts/changeset/ inside gsd-core/). See cli.cjs.
-let _identity;
-try {
-  _identity = require('../../gsd-core/bin/lib/package-identity.cjs'); // repo layout
-} catch {
-  _identity = require('../../bin/lib/package-identity.cjs'); // installed runtime layout
-}
-const { packageName, repoSlug: defaultRepoSlug } = _identity;
-// FORK:release END
+const { packageName, repoSlug: defaultRepoSlug } = require('../../gsd-core/bin/lib/package-identity.cjs');
 
 const SECTION_ORDER = ['Fixed', 'Added', 'Changed', 'Deprecated', 'Removed', 'Security'];
 

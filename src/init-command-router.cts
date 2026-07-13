@@ -26,7 +26,7 @@ import { parseNamedArgs } from './command-arg-projection.cjs';
 interface InitModule {
   cmdInitExecutePhase(cwd: string, phase: string | undefined, raw: boolean, opts: Record<string, string | boolean | null>): void;
   cmdInitPlanPhase(cwd: string, phase: string | undefined, raw: boolean, opts: Record<string, string | boolean | null>): void;
-  cmdInitNewProject(cwd: string, raw: boolean, opts?: { design?: string; noDesign?: boolean }): void;
+  cmdInitNewProject(cwd: string, raw: boolean): void;
   cmdInitNewMilestone(cwd: string, raw: boolean): void;
   cmdInitQuick(cwd: string, name: string, raw: boolean): void;
   cmdInitIngestDocs(cwd: string, raw: boolean): void;
@@ -69,13 +69,7 @@ function routeInitCommand({ init, args, cwd, raw, error }: RouteInitCommandOptio
         const namedArgs = parseNamedArgs(args, ['granularity'], ['validate', 'tdd']);
         init.cmdInitPlanPhase(cwd, args[2], raw, { validate: namedArgs['validate'], tdd: namedArgs['tdd'], granularity: namedArgs['granularity'] });
       },
-// FORK:strategy BEGIN
-      'new-project': () => {
-        const namedArgs = parseNamedArgs(args, ['design'], ['no-design']);
-        const design = typeof namedArgs['design'] === 'string' ? namedArgs['design'] : undefined;
-        init.cmdInitNewProject(cwd, raw, { design, noDesign: namedArgs['no-design'] === true });
-      },
-// FORK:strategy END
+      'new-project': () => init.cmdInitNewProject(cwd, raw),
       'new-milestone': () => init.cmdInitNewMilestone(cwd, raw),
       quick: () => init.cmdInitQuick(cwd, args.slice(2).join(' '), raw),
       'ingest-docs': () => init.cmdInitIngestDocs(cwd, raw),
