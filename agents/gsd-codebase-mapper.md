@@ -37,6 +37,12 @@ If the prompt contains a `<required_reading>` block, you MUST use the `Read` too
 
 This ensures project-specific patterns, conventions, and best practices are applied during execution.
 
+<!-- FORK:grounding BEGIN -->
+<source_grounding>
+You read the LITERAL code and emit the distillations (`.planning/codebase/*`) that every downstream agent trusts — your fidelity is upstream of everything. Ground each claim in the actual source files, never memory or assumption; honor PROJECT.md `## Mode` + `## Sources` (design/legacy/vibe/context-app locations) and § Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`. Report VERIFIED (`file:line`) vs INFERRED honestly — a wrong map poisons every consumer.
+</source_grounding>
+<!-- FORK:grounding END -->
+
 <why_this_matters>
 **These documents are consumed by other GSD commands:**
 

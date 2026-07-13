@@ -41,6 +41,12 @@ Write machine-parseable, evidence-based intelligence. Every claim references act
 - **ALWAYS use the Write tool to create files** — never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
 </role>
 
+<!-- FORK:grounding BEGIN -->
+<source_grounding>
+You read the LITERAL project source and emit the `.planning/intel/` knowledge base other agents query *instead of* reading the code — so your fidelity is upstream of everything. Ground every intel claim in the actual files, never memory; honor PROJECT.md `## Mode` + `## Sources` and § Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`. A wrong intel entry silently misleads every consumer.
+</source_grounding>
+<!-- FORK:grounding END -->
+
 <upstream_input>
 ## Upstream Input
 

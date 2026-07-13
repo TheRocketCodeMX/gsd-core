@@ -273,6 +273,13 @@ Codebase context will be gathered during plan-phase research.
 
 </code_context>
 
+<canonical_refs>
+## Canonical References
+
+{Even with discuss skipped, list the active strategy sources so the planner still grounds and the grounding gate has a required set. Populate from `gsd_run query grounding required`: the done strategy artifacts (`.planning/adr/*`, `DOMAIN-MODEL.md`, `TEST-STRATEGY.md`, SECURITY/FE/INFRA/CICD), `DESIGN-INVENTORY.md`, `LEGACY-INVENTORY.md`, and any `## Sources` literal-source locations. These MUST be read and cited in each plan's `## Grounding` block. If none exist yet, write "(none — build to the engineering-standards floor)".}
+
+</canonical_refs>
+
 <specifics>
 ## Specific Ideas
 
@@ -816,23 +823,7 @@ When any phase operation fails or a blocker is detected, present 3 options via A
 2. **"Skip this phase"** — Mark phase as skipped, continue to the next incomplete phase
 3. **"Stop autonomous mode"** — Display summary of progress so far and exit cleanly
 
-**On "Fix and retry":** Loop back to the failed step within execute_phase. If the same step fails again after retry, re-present these options.
-
-**On "Skip this phase":** Log `Phase {N} ⏭ {Name} — Skipped by user` and proceed to iterate.
-
-**On "Stop autonomous mode":** Display progress summary:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- GSD ► AUTONOMOUS ▸ STOPPED
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
- Completed: {list of completed phases}
- Skipped: {list of skipped phases}
- Remaining: {list of remaining phases}
-
- Resume with: /gsd:autonomous ${ONLY_PHASE ? "--only " + ONLY_PHASE : "--from " + next_phase}${TO_PHASE ? " --to " + TO_PHASE : ""}
-```
+**Handling each option:** Read `workflows/autonomous/blocker-handling.md` now (lazy — only on this path) and follow it exactly — the retry loop, the skip log line, and the stop progress-summary banner.
 
 </step>
 
