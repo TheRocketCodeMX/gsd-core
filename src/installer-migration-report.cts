@@ -35,6 +35,7 @@ export const BUNDLED_GSD_HOOK_FILES: ReadonlySet<string> = Object.freeze(new Set
   'hooks/gsd-cursor-session-start.js',
   'hooks/gsd-ensure-canonical-path.js',
   'hooks/gsd-graphify-update.sh',
+  'hooks/gsd-grounding-index-refresh.js',
   'hooks/gsd-phase-boundary.sh',
   'hooks/gsd-prompt-guard.js',
   'hooks/gsd-read-guard.js',

@@ -18,7 +18,5 @@
     "incremental": true,
     "tsBuildInfoFile": "tsconfig.build.tsbuildinfo"
   },
-  "include": ["src/**/*.cts"],
-  "//exclude": "FORK: Phase-2 temporary (Epic #13) — these fork riders reference pre-#1267 module layout (core.cjs spine) and Phase-3 marked patches (PROJECT_SUBCOMMANDS in command-aliases.cts). Re-include in Phase 3 when the riders are re-homed onto io.cjs and the command-aliases patch lands.",
-  "exclude": ["src/project.cts", "src/project-command-router.cts"]
+  "include": ["src/**/*.cts"]
 }

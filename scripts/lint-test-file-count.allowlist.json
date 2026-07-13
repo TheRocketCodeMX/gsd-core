@@ -1,5 +1,5 @@
 {
-  "_doc": "Baseline of modules currently exceeding the 2-test-file limit. Each entry locks in TODAY's exact test filenames as the allowlisted set (identity ratchet). Adding a NEW test file to a capped module fails (novel). Removing one requires pruning this list (stale, ratchet-down). When a cluster drops to ≤ 2, remove its entry entirely. New entries require justification in PR description.",
+  "_doc": "Baseline of modules currently exceeding the 2-test-file limit. Each entry locks in TODAY's exact test filenames as the allowlisted set (identity ratchet). Adding a NEW test file to a capped module fails (novel). Removing one requires pruning this list (stale, ratchet-down). When a cluster drops to \u2264 2, remove its entry entirely. New entries require justification in PR description.",
   "modules": {
     "audit": {
       "files": [
@@ -67,6 +67,14 @@
         "phase.test.cjs"
       ],
       "issue": "597"
+    },
+    "project": {
+      "files": [
+        "bug-2419-project-researcher-agent.test.cjs",
+        "project-instruction-file-parity.test.cjs",
+        "project-query-verbs.test.cjs"
+      ],
+      "issue": "Epic #13 v2.0.0 realignment: fork's project-query-verbs joins upstream's two project-prefix tests"
     },
     "roadmap": {
       "files": [
