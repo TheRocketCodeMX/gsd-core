@@ -410,6 +410,8 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --dry-run --tag next
 
       - name: Tag and push
@@ -433,7 +435,9 @@ jobs:
 
       - name: Publish to npm (next)
         if: ${{ !inputs.dry_run }}
-        # --provenance is automatic under OIDC trusted publishing
+        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag next
 
       - name: Create GitHub pre-release
@@ -576,6 +580,8 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --dry-run
 
       - name: Create PR to merge release back to main
@@ -629,7 +635,9 @@ jobs:
 
       - name: Publish to npm (latest)
         if: ${{ !inputs.dry_run }}
-        # --provenance is automatic under OIDC trusted publishing
+        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
       - name: Create GitHub Release
