@@ -12,8 +12,15 @@ const { cleanup } = require('./helpers.cjs');
 
 const HOOK = path.resolve(__dirname, '..', 'hooks', 'gsd-grounding-index-refresh.js');
 
-function runHook(event) {
-  const out = execFileSync(process.execPath, [HOOK], { input: JSON.stringify(event), encoding: 'utf8' });
+// Opt out of the best-effort detached generate-claude-md spawn: it would race the
+// child's index write against this test's directory teardown (and lock the dir on
+// Windows). The hook's contract under test is the additionalContext injection.
+function runHook(event, env) {
+  const out = execFileSync(process.execPath, [HOOK], {
+    input: JSON.stringify(event),
+    encoding: 'utf8',
+    env: { ...process.env, GSD_GROUNDING_NO_REFRESH_SPAWN: '1', ...env },
+  });
   return out.trim();
 }
 

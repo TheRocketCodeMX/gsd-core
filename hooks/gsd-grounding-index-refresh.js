@@ -66,11 +66,15 @@ process.stdin.on('end', () => {
     }
 
     // Best-effort: refresh the persisted ambient index for future sessions / other CLIs.
+    // Target the project via --cwd (a resolution override, NOT process.chdir) rather than
+    // the spawn cwd option — a live child whose OS cwd is the project would lock that
+    // directory on Windows. GSD_GROUNDING_NO_REFRESH_SPAWN=1 opts out (used by tests to
+    // avoid racing the detached write against directory teardown).
     try {
       const tools = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
-      if (fs.existsSync(tools)) {
-        spawn(process.execPath, [tools, 'query', 'generate-claude-md', '--auto'], {
-          cwd, detached: true, stdio: 'ignore', windowsHide: true,
+      if (process.env.GSD_GROUNDING_NO_REFRESH_SPAWN !== '1' && fs.existsSync(tools)) {
+        spawn(process.execPath, [tools, 'query', 'generate-claude-md', '--auto', '--cwd', cwd], {
+          detached: true, stdio: 'ignore', windowsHide: true,
         }).unref();
       }
     } catch { /* best effort — the additionalContext injection is the primary value */ }
