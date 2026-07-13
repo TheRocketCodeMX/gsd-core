@@ -550,7 +550,7 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 
 ---
 
-## Hooks (17 shipped)
+## Hooks (18 shipped)
 
 Full listing: `hooks/`.
 
@@ -569,6 +569,7 @@ Full listing: `hooks/`.
 | `gsd-read-injection-scanner.js` | `PostToolUse` | Scans tool Read results for prompt-injection patterns (v1.36+, PR #2201) |
 | `gsd-worktree-path-guard.js` | `PreToolUse` | Hard-blocks Edit/Write/MultiEdit with absolute paths outside the worktree root (PR #579, #260) |
 | `gsd-config-reload.js` | `FileChanged` | Hot-reloads GSD config context when `.planning/config.json` changes mid-session (#770) |
+| `gsd-grounding-index-refresh.js` | `FileChanged` | Refreshes the grounding "Sources of Truth" index (injects the active source set + best-effort rewrites the ambient CLAUDE.md) when a strategy/source doc changes mid-session (#11) |
 | `gsd-session-state.sh` | `PostToolUse` | Session-state tracking for shell-based runtimes |
 | `gsd-validate-commit.sh` | `PostToolUse` | Commit validation for conventional-commit enforcement |
 | `gsd-phase-boundary.sh` | `PostToolUse` | Phase-boundary detection for workflow transitions |

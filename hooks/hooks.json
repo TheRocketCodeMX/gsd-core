@@ -63,6 +63,12 @@
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/gsd-config-reload.js\"", "timeout": 8 }
         ]
+      },
+      {
+        "matcher": "PROJECT\\.md|DOMAIN-MODEL\\.md|TEST-STRATEGY\\.md|SECURITY-STRATEGY\\.md|FRONTEND-ARCHITECTURE\\.md|INFRA-STRATEGY\\.md|CICD-STRATEGY\\.md|DESIGN-INVENTORY\\.md|LEGACY-INVENTORY\\.md|PRODUCT-BRIEF\\.md|-architecture\\.md",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/gsd-grounding-index-refresh.js\"", "timeout": 8 }
+        ]
       }
     ]
   }
