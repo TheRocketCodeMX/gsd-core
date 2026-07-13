@@ -73,6 +73,7 @@
     { "path": "src/profile-output.cts", "feature": "identity", "mode": "markers", "markers": 1, "anchors": ["GEMINI\\.md"] },
     { "path": "src/installer-migration-report.cts", "feature": "grounding", "mode": "anchors-only", "anchors": ["gsd-grounding-index-refresh\\.js"] },
     { "path": "src/ui-safety-gate.cts", "feature": "fidelity", "mode": "markers", "markers": 2, "anchors": ["NEGATOR_BEFORE_TOKEN"] },
+    { "path": "src/ui-safety-gate.cts", "feature": "strategy", "mode": "markers", "markers": 2, "anchors": ["UI_HINT_YES_RE", "hint is present it is AUTHORITATIVE"] },
     { "path": "hooks/hooks.json", "feature": "grounding", "mode": "anchors-only", "anchors": ["gsd-grounding-index-refresh"] },
     { "path": "hooks/managed-hooks-registry.cjs", "feature": "grounding", "mode": "anchors-only", "anchors": ["gsd-grounding-index-refresh\\.js"] },
     { "path": "hooks/gsd-context-monitor.js", "feature": "context-monitor", "mode": "whole-file", "anchors": ["intentionally kept as an inert no-op", "DISABLED in @therocketcode/gsd-core"] },

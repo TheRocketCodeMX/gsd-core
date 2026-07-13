@@ -17,6 +17,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 @~/.claude/gsd-core/references/gate-prompts.md
 @~/.claude/gsd-core/references/agent-contracts.md
 @~/.claude/gsd-core/references/gates.md
+@~/.claude/gsd-core/references/engineering-standards.md
 </required_reading>
 
 <available_agent_types>
@@ -25,6 +26,7 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 - gsd-pattern-mapper — Analyzes codebase for existing patterns, produces PATTERNS.md
 - gsd-planner — Creates detailed plans from phase scope
 - gsd-plan-checker — Reviews plan quality before execution
+- gsd-roadmapper — Elaborates the coarse roadmap against locked strategy (pre-flight gate)
 </available_agent_types>
 
 <runtime_compatibility>
@@ -131,6 +133,22 @@ fi
 ```
 
 The gate fires only on `Complete`. `Executed` and `Needs Review` are not gated — those states mean planning was finished but verification did not pass, and replanning is a legitimate next step.
+
+## 1.6. Roadmap elaboration gate (strategy → build; fires once per milestone)
+
+The roadmap may have been generated **coarse** (before the strategy chain ran). Before planning, ensure its phase *structure* reflects the locked strategy — **gated** (fires only when the roadmap predates the artifacts) and **idempotent** (a marker):
+
+```bash
+ELAB=skip
+if [ -f .planning/ROADMAP.md ] && ! grep -q 'Elaborated against strategy' .planning/ROADMAP.md; then
+  for f in .planning/adr/*.md .planning/SECURITY-STRATEGY.md .planning/FRONTEND-ARCHITECTURE.md .planning/TEST-STRATEGY.md .planning/INFRA-STRATEGY.md .planning/CICD-STRATEGY.md; do
+    [ -e "$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
+  done
+fi
+echo "roadmap_elaboration: $ELAB"
+```
+
+**If `ELAB=stale`:** Read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy — only on this path) and follow it: it elaborates the roadmap once against the locked strategy (auto / offer-in-interactive), spawning `gsd-roadmapper` in elaborate-mode, then you re-read ROADMAP.md and continue. **Else (`ELAB=skip`):** proceed normally — per-phase planning consumes the artifacts via canonical_refs.
 
 ## 2. Parse and Normalize Arguments
 
@@ -268,82 +286,7 @@ Using PRD: {PRD_FILE}
 Generating CONTEXT.md from requirements...
 ```
 
-3. Parse the PRD content and generate CONTEXT.md. The orchestrator should:
-   - Extract all requirements, user stories, acceptance criteria, and constraints from the PRD
-   - Map each to a locked decision (everything in the PRD is treated as a locked decision)
-   - Identify any areas the PRD doesn't cover and mark as "Claude's Discretion"
-   - **Extract canonical refs** from ROADMAP.md for this phase, plus any specs/ADRs referenced in the PRD — expand to full file paths (MANDATORY)
-   - Create CONTEXT.md in the phase directory
-
-4. Write CONTEXT.md:
-```markdown
-# Phase [X]: [Name] - Context
-
-**Gathered:** [date]
-**Status:** Ready for planning
-**Source:** PRD Express Path ({PRD_FILE})
-
-<domain>
-## Phase Boundary
-
-[Extracted from PRD — what this phase delivers]
-
-</domain>
-
-<decisions>
-## Implementation Decisions
-
-{For each requirement/story/criterion in the PRD:}
-### [Category derived from content]
-- [Requirement as locked decision]
-
-### Claude's Discretion
-[Areas not covered by PRD — implementation details, technical choices]
-
-</decisions>
-
-<canonical_refs>
-## Canonical References
-
-**Downstream agents MUST read these before planning or implementing.**
-
-[MANDATORY. Extract from ROADMAP.md and any docs referenced in the PRD.
-Use full relative paths. Group by topic area.]
-
-### [Topic area]
-- `path/to/spec-or-adr.md` — [What it decides/defines]
-
-[If no external specs: "No external specs — requirements fully captured in decisions above"]
-
-</canonical_refs>
-
-<specifics>
-## Specific Ideas
-
-[Any specific references, examples, or concrete requirements from PRD]
-
-</specifics>
-
-<deferred>
-## Deferred Ideas
-
-[Items in PRD explicitly marked as future/v2/out-of-scope]
-[If none: "None — PRD covers phase scope"]
-
-</deferred>
-
----
-
-*Phase: XX-name*
-*Context gathered: [date] via PRD Express Path*
-```
-
-5. Commit:
-```bash
-gsd_run query commit "docs(${padded_phase}): generate context from PRD" --files "${phase_dir}/${padded_phase}-CONTEXT.md"
-```
-
-6. Set `context_content` to the generated CONTEXT.md content and continue to step 5 (Handle Research).
+3. Read `workflows/plan-phase/modes/prd-express.md` now (lazy — only on this `--prd` path) and follow its steps 3–6: parse the PRD into a CONTEXT.md (every PRD requirement = a locked decision; gaps = "Claude's Discretion"; canonical refs from ROADMAP.md + PRD-referenced specs — MANDATORY), write it from that template, commit, set `context_content`, then continue to step 5 (Handle Research).
 
 **Effect:** This completely bypasses step 4 (Load CONTEXT.md) since we just created it. The rest of the workflow (research, planning, verification) proceeds normally with the PRD-derived context.
 
@@ -640,7 +583,7 @@ Run the UI deterministic gate whenever **any** `plan:pre` UI hook is active — 
 GATE=$(gsd_run check ui-plan-gate "${PHASE}" --raw)
 ```
 
-Read `frontend`, `hasUiSpec`, and `block` from `GATE`.
+Read `frontend`, `hasUiSpec`, and `block` from `GATE`. `frontend` honors the roadmapper's per-phase `**UI hint**` as AUTHORITATIVE in both directions — `yes` ⇒ frontend, an explicit `no` ⇒ not frontend; keyword detection is only the no-hint fallback (`checkUiPresence`).
 
 **Branch 2 — no frontend indicators (`frontend` is `false`):** Skip silently to step 6.
 
@@ -785,7 +728,7 @@ Display banner:
 ◆ Spawning pattern mapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
 ```
 
-Use the active `pattern-mapper` hook's `fragment.inline` as the prompt template and substitute the phase fields below before spawning its declared `ref.agent`.
+Use the active `pattern-mapper` hook's `fragment.inline` as the prompt template and substitute the phase fields below before spawning its declared `ref.agent`. Before spawning, append step 8's **Canonical References mandate bullet** to the fragment's `<files_to_read>` — the mapper must ground in the strategy artifacts too.
 
 ```markdown
 {pattern_mapper_hook.fragment.inline}
@@ -851,6 +794,7 @@ Planner prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
+- **Every file listed under `## Canonical References` inside {context_path}** — these are MANDATORY ("Downstream agents MUST read these before planning"). When they include a DOMAIN-MODEL.md, an architecture ADR, or a TEST-STRATEGY.md, the plan MUST follow the domain model's subdomain classification, the architecture decision's per-subdomain rung, and the test strategy's per-subdomain test levels — and pull the test-infra references that TEST-STRATEGY links into the `@`-context of the relevant test tasks. Also read `.planning/DOMAIN-MODEL.md`, the latest `.planning/adr/*.md`, `.planning/TEST-STRATEGY.md`, `.planning/INFRA-STRATEGY.md`, and `.planning/CICD-STRATEGY.md` directly if they exist — they are project-wide and always apply, even when not listed.
 - {research_path} (Technical Research)
 - {PATTERNS_PATH} (Pattern Map — analog files and code excerpts, if exists)
 - {verification_path} (Verification Gaps - if --gaps)
