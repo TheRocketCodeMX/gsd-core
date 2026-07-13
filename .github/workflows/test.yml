@@ -116,7 +116,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.product_changed == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # 30 (was 15): a mega-PR's targeted scope approaches the full suite; unsharded
+    # Windows needs the headroom (realignment PR #19 hit the 15m wall). Normal PRs
+    # finish in 2-4 min and are unaffected. Upstream-PR candidate.
+    timeout-minutes: 30
     env:
       GSD_PLUGIN_ROOT: .ci-gsd-plugin-root-disabled
     strategy:
