@@ -25,7 +25,7 @@ const REF_RE = new RegExp(
 );
 
 const SCAN_EXT = new Set(['.md', '.cjs', '.js', '.cts', '.ts']);
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', '.changeset']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', '.changeset', '_reference']); // FORK:identity — _reference/ is a gitignored local upstream mirror (eslint excludes it too)
 // This guard file itself names the phantom numbers (by necessity); exclude it.
 const SELF = path.relative(ROOT, __filename);
 
