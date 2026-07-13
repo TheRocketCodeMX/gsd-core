@@ -66,4 +66,76 @@ function resolveRequiredSources(cwd: string): ResolveResult {
   return { required, skipped, pending };
 }
 
-export = { resolveRequiredSources, parseStrategyPlan };
+// --- citation parsing + cross-check ---
+const CITE_RE = /^-\s+(DOMAIN-MODEL|ADR|TEST-STRATEGY|SECURITY-STRATEGY|FRONTEND-ARCHITECTURE|INFRA-STRATEGY|CICD-STRATEGY|DESIGN-INVENTORY|LEGACY-INVENTORY|PRODUCT-BRIEF)\s+·\s+(.+?)\s+→\s+(.+?)\s*$/;
+
+function parseGroundingBlock(planText: string): Array<{ artifact: string; key: string; value: string }> {
+  const out: Array<{ artifact: string; key: string; value: string }> = [];
+  const sec = planText.match(/##\s+Grounding([\s\S]*?)(?:\n##\s|\s*$)/);
+  if (!sec) return out;
+  for (const line of sec[1].split('\n')) {
+    const m = line.match(CITE_RE);
+    if (m) out.push({ artifact: m[1], key: m[2].trim(), value: m[3].trim() });
+  }
+  return out;
+}
+
+const isPlaceholder = (s: string): boolean => /^\[.*\]$/.test(s.trim());
+const norm = (s: string): string => s.trim().toLowerCase();
+
+// Pull a GFM table (whose header row matches headerRe) into rows[casefold(col0)] = cells[].
+function parseTable(text: string, headerRe: RegExp): Record<string, string[]> {
+  const rows: Record<string, string[]> = {};
+  let inTable = false;
+  for (const line of text.split('\n')) {
+    if (!inTable && headerRe.test(line) && line.includes('|')) { inTable = true; continue; }
+    if (inTable) {
+      if (/^\s*\|?\s*:?-{3,}/.test(line)) continue; // alignment row
+      if (!line.includes('|')) break;
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+      if (cells.length) rows[norm(cells[0])] = cells;
+    }
+  }
+  return rows;
+}
+
+const ADR_RUNGS = ['transaction script', 'domain model', 'hexagonal', 'cqrs', 'event sourcing', 'buy', 'off-the-shelf'];
+function rungSet(cell: string): Set<string> {
+  return new Set(cell.split(/[+/]/).map(norm).filter((t) => ADR_RUNGS.includes(t)));
+}
+
+function crossCheck(artifact: string, key: string, value: string, sourceText: string): { ok: boolean; reason: string } {
+  if (isPlaceholder(key) || isPlaceholder(value)) return { ok: false, reason: 'placeholder cell — source artifact not filled in' };
+  if (artifact === 'ADR') {
+    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR` };
+    const rungCol = row[2] || '';
+    const a = rungSet(rungCol);
+    const b = rungSet(value);
+    const eq = a.size > 0 && a.size === b.size && [...a].every((t) => b.has(t));
+    return eq ? { ok: true, reason: '' } : { ok: false, reason: `rung mismatch: ADR="${rungCol}" cited="${value}"` };
+  }
+  if (artifact === 'DOMAIN-MODEL') {
+    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL` };
+    return norm(row[1]) === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `type mismatch: "${row[1]}" vs "${value}"` };
+  }
+  if (artifact === 'TEST-STRATEGY') {
+    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY` };
+    const lead = (norm(row[2]).match(/^(small|medium|large)/) || [])[1];
+    return lead === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `level mismatch: "${row[2]}" vs "${value}"` };
+  }
+  if (artifact === 'DESIGN-INVENTORY') {
+    const field = key.split('@')[0].trim();
+    const row = parseTable(sourceText, /\|\s*Field\s*\|/i)[norm(field)];
+    if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY` };
+    const src = norm((value.split('/')[0] || '').trim());
+    return ['design', 'requirement', 'internal'].includes(src) && norm(row[2]) === src
+      ? { ok: true, reason: '' } : { ok: false, reason: `source mismatch for "${field}": inventory="${row[2]}" cited="${src}"` };
+  }
+  // Remaining artifacts: mention-coverage only in Slice 1 (scripted cross-check lands in a follow-up).
+  return { ok: true, reason: 'mention-coverage (no scripted cross-check yet)' };
+}
+
+export = { resolveRequiredSources, parseStrategyPlan, parseGroundingBlock, crossCheck };
