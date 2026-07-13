@@ -278,12 +278,18 @@ All Phase-0 unknowns are settled with file:line evidence from `upstream/main`:
    hits; no `sdk/`; their own backlog flags the audit liability). The fork keeps
    zero runtime deps. Tests: `enh-191` + `no-cjs-sdk-handsync` ride;
    `bug-505-remove-dead-sdk-verification` drops its positive assertions.
-6. **Model IDs (post-rebase data edits).** Time-critical: upstream's catalog ships
-   `gpt-5.4`, which **retires 2026-07-23** → replace with `gpt-5.6-terra`
-   (+ `gpt-5.4-mini` → `gpt-5.6-luna`); `gemini-3-flash` → `gemini-3.5-flash` (GA
-   rename). All Anthropic IDs, `gemini-3.1-pro-preview`, `gemini-2.5-flash-lite`,
-   and the Qwen trio are current. The `gpt-5.4` retirement is also an immediate
-   upstream issue/PR opportunity (goodwill + two-way alignment).
+6. **Model IDs — CORRECTED after primary-source verification** (OpenAI deprecations
+   page, fetched 2026-07-13; supersedes the initial web-research claim, which the CTO
+   correctly challenged). `gpt-5.4` is **NOT retiring** — it is itself a recommended
+   replacement target. The 2026-07-23 shutdowns are the older `gpt-5-codex` /
+   `gpt-5.1-codex(-max/-mini)` / `gpt-5.2-codex` variants, none of which either tree
+   ships. Upstream's `gpt-5.4` default is fine; the fork's `gpt-5.3-codex` is not on
+   the deprecation list. `gpt-5.6` does not exist as an API model ID (it was a ChatGPT
+   product name in news coverage). Anthropic IDs verified current. The Gemini rename
+   claim (`gemini-3-flash` → `gemini-3.5-flash`) came from the same web pass — re-verify
+   against Google's docs at Phase-3 time before touching the catalog. **No upstream
+   issue warranted.** Standing rule: model-catalog edits and community-facing claims
+   require primary-source verification (provider docs), never news coverage alone.
 
 **Correction to §4 Phase 2:** the realign branch cuts from **`next`**, not `main` —
 `next` is the fork's content source of truth (it carries grounding, PR #11). All
