@@ -611,7 +611,11 @@ function cmdInitPlanPhase(
   output(withProjectRoot(cwd, result), raw);
 }
 
-function cmdInitNewProject(cwd: string, raw: boolean): void {
+function cmdInitNewProject(
+  cwd: string,
+  raw: boolean,
+  opts?: { design?: string; noDesign?: boolean },
+): void {
   const config = loadConfig(cwd);
 
   const homedir = os.homedir();
@@ -687,6 +691,69 @@ function cmdInitNewProject(cwd: string, raw: boolean): void {
     pathExistsInternal(cwd, 'mix.exs') ||
     pathExistsInternal(cwd, 'project.clj');
 
+// FORK:strategy BEGIN
+  // ── Provided-design detection (the design axis — symmetric to the legacy axis above) ──
+  // A HINT that the workflow CONFIRMS with the user, never a silent lock. High-precision
+  // only: an explicit `--design` arg, an unambiguous design-export file, a tokens file, or
+  // a designs/ dir. Deliberately NOT design-system deps (every Tailwind app would trip them)
+  // and NOT pasted Figma URLs (undetectable — those stay covered by the workflow's ask).
+  let hasDesignHint = false;
+  let designPointer: string | null = null;
+  let designHintSource: string | null = null;
+  const designDismissed = !!(opts && opts.noDesign);
+  if (opts && opts.design) {
+    hasDesignHint = true;
+    designPointer = opts.design;
+    designHintSource = 'arg';
+  } else if (!designDismissed) {
+    try {
+      const designExtensions = new Set(['.fig', '.sketch', '.xd']);
+      const designSkip = new Set([
+        'node_modules', '.git', '.planning', '.claude', '.codex', 'dist', 'build', 'target',
+      ]);
+      function findDesignFile(dir: string, depth: number): string | null {
+        if (depth > 2) return null; // designs live near the root — shallower than the code scan
+        let entries: fs.Dirent[];
+        try {
+          entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch {
+          return null;
+        }
+        for (const entry of entries) {
+          if (entry.isFile()) {
+            const lower = entry.name.toLowerCase();
+            if (designExtensions.has(path.extname(lower)) || lower === 'tokens.json' || lower.endsWith('.tokens.json')) {
+              return path.relative(cwd, path.join(dir, entry.name)) || entry.name;
+            }
+          }
+        }
+        for (const entry of entries) {
+          if (entry.isDirectory() && !designSkip.has(entry.name)) {
+            const found = findDesignFile(path.join(dir, entry.name), depth + 1);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+      const designFile = findDesignFile(cwd, 0);
+      if (designFile) {
+        hasDesignHint = true;
+        designPointer = designFile;
+        designHintSource = designFile.toLowerCase().includes('tokens.json') ? 'tokens-file' : 'design-export';
+      } else {
+        const designDir = ['designs', 'mockups', 'wireframes'].find((d) => pathExistsInternal(cwd, d));
+        if (designDir) {
+          hasDesignHint = true;
+          designPointer = designDir;
+          designHintSource = 'designs-dir';
+        }
+      }
+    } catch {
+      /* intentionally empty — best-effort detection */
+    }
+  }
+// FORK:strategy END
+
   const result: Record<string, unknown> = {
     researcher_model: resolveModelInternal(cwd, 'gsd-project-researcher'),
     synthesizer_model: resolveModelInternal(cwd, 'gsd-research-synthesizer'),
@@ -703,6 +770,13 @@ function cmdInitNewProject(cwd: string, raw: boolean): void {
     is_brownfield: hasCode || hasPackageFile,
     needs_codebase_map:
       (hasCode || hasPackageFile) && !pathExistsInternal(cwd, '.planning/codebase'),
+
+// FORK:strategy BEGIN
+    has_design_hint: hasDesignHint,
+    design_pointer: designPointer,
+    design_hint_source: designHintSource,
+    design_dismissed: designDismissed,
+// FORK:strategy END
 
     ...getInitGitState(cwd),
 
