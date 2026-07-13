@@ -112,6 +112,7 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 - `tests/feat-grounding-index-refresh-hook.test.cjs`
 - `tests/feat-grounding-resolver.test.cjs`
 - `tests/feat-grounding-sources.test.cjs`
+- `tests/grounding-shipped-template-fixtures.test.cjs`
 - `tests/grounding-fixture-ablation.test.cjs`
 
 ### exploration

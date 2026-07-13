@@ -146,7 +146,7 @@ function rungSet(cell: string): Set<string> {
 function crossCheck(artifact: string, key: string, value: string, sourceText: string): { ok: boolean; reason: string } {
   if (isPlaceholder(key) || isPlaceholder(value)) return { ok: false, reason: 'placeholder cell — source artifact not filled in' };
   if (artifact === 'ADR') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR` };
     const rungCol = row[2] || '';
     const a = rungSet(rungCol);
@@ -155,19 +155,19 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     return eq ? { ok: true, reason: '' } : { ok: false, reason: `rung mismatch: ADR="${rungCol}" cited="${value}"` };
   }
   if (artifact === 'DOMAIN-MODEL') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL` };
     return norm(row[1]) === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `type mismatch: "${row[1]}" vs "${value}"` };
   }
   if (artifact === 'TEST-STRATEGY') {
-    const row = parseTable(sourceText, /\|\s*Subdomain\s*\|/i)[norm(key)];
+    const row = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i)[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY` };
     const lead = (norm(row[2]).match(/^(small|medium|large)/) || [])[1];
     return lead === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `level mismatch: "${row[2]}" vs "${value}"` };
   }
   if (artifact === 'DESIGN-INVENTORY') {
     const field = key.split('@')[0].trim();
-    const row = parseTable(sourceText, /\|\s*Field\s*\|/i)[norm(field)];
+    const row = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i)[norm(field)];
     if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY` };
     const src = norm((value.split('/')[0] || '').trim());
     return ['design', 'requirement', 'internal'].includes(src) && norm(row[2]) === src
