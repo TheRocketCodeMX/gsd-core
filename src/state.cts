@@ -9,8 +9,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-import core = require('./core.cjs');
-const { escapeRegex, loadConfig, getMilestoneInfo, getMilestonePhaseFilter, extractCurrentMilestone, output, error } = core;
+import ioMod = require('./io.cjs');
+const { output, error } = ioMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import configLoaderMod = require('./config-loader.cjs');
+const { loadConfig } = configLoaderMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import phaseIdMod = require('./phase-id.cjs');
+const { escapeRegex, normalizePhaseName, extractPhaseToken } = phaseIdMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import roadmapParserMod = require('./roadmap-parser.cjs');
+const { getMilestoneInfo, getMilestonePhaseFilter, extractCurrentMilestone } = roadmapParserMod;
 import { platformWriteSync, platformReadSync, platformEnsureDir } from './shell-command-projection.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
@@ -32,6 +41,7 @@ import {
   KNOWN_STATUS_PATTERNS,
   stateReplaceFieldIfTemplate,
 } from './state-document.cjs';
+import { tokenizeHeadings } from './markdown-sectionizer.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,6 +79,15 @@ interface StateAddBlockerOptions {
   text_file?: string;
 }
 
+interface StateAddRoadmapEvolutionOptions {
+  phase?: string;
+  action?: string;
+  after?: string;
+  note?: string;
+  note_file?: string;
+  urgent?: boolean;
+}
+
 interface StateRecordSessionOptions {
   stopped_at?: string;
   resume_file?: string | null;
@@ -96,6 +115,21 @@ interface PrunedSection {
   lines: string[];
 }
 
+const STATE_PROGRESS_RESYNC_FIELDS = new Set([
+  'Progress',
+  'Total Plans in Phase',
+  'Total Phases',
+]);
+
+function shouldResyncStateProgress(fields: Iterable<string>): boolean {
+  for (const field of fields) {
+    if (STATE_PROGRESS_RESYNC_FIELDS.has(field)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
 // Cache disk scan results from buildStateFrontmatter per cwd per process (#1967).
@@ -118,8 +152,128 @@ process.on('exit', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Lock liveness probe (test seam) — audit M1
+//
+// mtime is a LEAKY proxy for "the holder is still alive": a live-but-slow writer
+// whose critical section runs past staleThresholdMs ages out and a waiter would
+// steal its lock → two writers in STATE.md's read-modify-write window → lost
+// update / corruption (the recurring #500/#905/#1230 family). The real signal —
+// process.kill(pid, 0) — is already used by capability-lock.cts. We backport it
+// here. The indirection lets unit tests inject a deterministic isPidAlive without
+// real pids (mirrors capability-lock's _lockProbes / _setLockProbes seam).
+// ---------------------------------------------------------------------------
+
+/** Is `pid` a live process? process.kill(pid, 0) succeeds for a live (signalable) process. */
+function _realIsPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true; // signalable → alive
+  } catch (err) {
+    // EPERM = process exists but we cannot signal it (still ALIVE). ESRCH = gone.
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+const _stateLockProbes: { isPidAlive: (pid: number) => boolean } = { isPidAlive: _realIsPidAlive };
+
+// ---------------------------------------------------------------------------
+// State-lock test hooks (test seam) — audit M8 / M9
+//
+// Both M8 (scan-before-lock TOCTOU in writeStateMd) and M9 (orphan empty lock +
+// fd leak on a recoverable writeSync/closeSync error in acquireStateLock) are
+// concurrency / resource-safety issues a single-threaded test cannot otherwise
+// observe. These purpose-built hooks make the failure windows deterministic
+// (mirrors the M1 _setLockProbes seam above):
+//
+//   afterAcquire(lockPath)  — fired inside writeStateMd immediately AFTER the lock
+//     is acquired. A test can mutate the disk here (simulate a concurrent writer
+//     landing in the scan→lock window) to prove the disk scan runs INSIDE the lock.
+//   simulateWriteError      — a ONE-SHOT errno string. When set, the next writeSync
+//     inside acquireStateLock throws it (and the hook self-clears), forcing the
+//     openSync-succeeds-then-write-fails cleanup path without an OS-level fault.
+//   onLoopIteration(ctx)    — fired at the TOP of each acquireStateLock retry
+//     iteration so a test can snapshot whether an orphan lock is stranded.
+//   beforeSteal(ctx)        — fired AFTER the steal decision but BEFORE the identity
+//     re-confirm + atomic rename-steal. A test can recreate a fresh lock here to
+//     simulate a racer winning the steal in the decision→steal gap, proving the
+//     identity re-confirm aborts a double-steal (PR #1532 review window b).
+//
+// All hooks default to no-ops; real callers are byte-for-behaviour unchanged.
+// ---------------------------------------------------------------------------
+interface StateLockTestHooks {
+  afterAcquire?: (lockPath: string) => void;
+  simulateWriteError?: string | null;
+  onLoopIteration?: (ctx: { iteration: number }) => void;
+  beforeSteal?: (ctx: { lockPath: string }) => void;
+}
+const _stateLockTestHooks: StateLockTestHooks = {};
+
+/**
+ * Consume the one-shot simulateWriteError errno, if set. Returns an Error with the
+ * configured `.code` and self-clears so only the NEXT writeSync throws (the retry
+ * then succeeds). Returns null when no injection is pending.
+ */
+function _consumeSimulatedWriteError(): NodeJS.ErrnoException | null {
+  const code = _stateLockTestHooks.simulateWriteError;
+  if (!code) return null;
+  _stateLockTestHooks.simulateWriteError = null; // one-shot
+  const e = new Error('simulated writeSync failure (' + code + ')') as NodeJS.ErrnoException;
+  e.code = code;
+  return e;
+}
+
+function _stateLockIsPidAlive(pid: number): boolean {
+  return _stateLockProbes.isPidAlive(pid);
+}
+
+/**
+ * Is the holder recorded in the lock body VERIFIED-LIVE? The STATE.md lock body is
+ * a bare pid (written at acquire time). Returns true ONLY when the body parses to a
+ * positive integer pid AND that pid signals alive. A garbage / non-numeric / legacy
+ * body (or a dead pid) is NOT verified-live, so the lock stays stealable — corrupt
+ * locks never block forever, and a live holder is never stolen.
+ */
+function _stateHolderVerifiedLive(lockPath: string): boolean {
+  const pid = _stateLockBodyPid(lockPath);
+  return pid !== null && _stateLockIsPidAlive(pid);
+}
+
+/**
+ * Parse the lock body to its recorded pid, or null when the body is empty / non-numeric
+ * / unreadable (legacy or mid-creation). Distinguishing a COMPLETE dead-pid body (steal
+ * promptly) from an EMPTY/unparseable one (the create→write window — do not steal while
+ * fresh) is what `_stateHolderVerifiedLive` alone cannot express, so the steal decision
+ * in acquireStateLock reads the pid directly (PR #1532 review, window a).
+ */
+function _stateLockBodyPid(lockPath: string): number | null {
+  let body: string;
+  try {
+    body = fs.readFileSync(lockPath, 'utf-8');
+  } catch {
+    return null; // unreadable body → cannot verify
+  }
+  const trimmed = body.trim();
+  const pid = parseInt(trimmed, 10);
+  if (!Number.isInteger(pid) || pid <= 0 || String(pid) !== trimmed) return null;
+  return pid;
+}
+
+// Monotonic sequence for unique stale-steal rename targets (no crypto dependency).
+let _stateStealSeq = 0;
+
 // Hoisted to module scope — compiled once, not per call (#320). Stateless (/i, used with .match).
-const byPhaseTablePattern = /(\|\s*Phase\s*\|\s*Plans\s*\|\s*Total\s*\|\s*Avg\/Plan\s*\|[ \t]*\n\|(?:[- :\t]+\|)+[ \t]*\n)((?:[ \t]*\|[^\n]*\n)*)(?=\n|$)/i;
+const byPhaseTablePattern = /(\|\s*Phase\s*\|\s*Plans\s*\|\s*Total\s*\|\s*Avg\/Plan\s*\|[ \t]*\r?\n\|(?:[- :\t]+\|)+[ \t]*\r?\n)((?:[ \t]*\|[^\n]*\n)*)(?=\r?\n|$)/i;
+
+// ─── ADR-1372 T6: seam-based section splice helper ───────────────────────────
+
+// Shared stop predicates corresponding to the regex lookaheads used in state.cts:
+//   STOP_H2_PLUS : (?=\n##|$)            — stops at any heading with level ≥ 2
+//   STOP_H2_H3   : (?=\n###?|\n##[^#]|$) — stops at level 2 or 3
+//   STOP_H2_ONLY : (?=\n##[^#]|$)        — stops at level 2 only
+const STOP_H2_PLUS = (lv: number): boolean => lv >= 2;
+const STOP_H2_H3 = (lv: number): boolean => lv === 2 || lv === 3;
+const STOP_H2_ONLY = (lv: number): boolean => lv === 2;
 
 function cmdStateLoad(cwd: string, raw: boolean): void {
   const config = loadConfig(cwd);
@@ -240,6 +394,7 @@ function cmdStatePatch(cwd: string, patches: Record<string, string>, raw: boolea
   const statePath = planningPaths(cwd).state;
   try {
     const results: { updated: string[]; failed: string[] } = { updated: [], failed: [] };
+    const shouldResync = shouldResyncStateProgress(Object.keys(patches));
 
     // Use atomic read-modify-write to prevent lost updates from concurrent agents
     readModifyWriteStateMd(statePath, (content) => {
@@ -253,7 +408,7 @@ function cmdStatePatch(cwd: string, patches: Record<string, string>, raw: boolea
         }
       }
       return content;
-    }, cwd);
+    }, cwd, { resync: shouldResync });
 
     output(results, raw, results.updated.length > 0 ? 'true' : 'false');
   } catch {
@@ -277,7 +432,7 @@ function cmdStateUpdate(cwd: string, field: string | undefined, value: string | 
   const statePath = planningPaths(cwd).state;
   try {
     let updated = false;
-    const shouldResync = ['Progress', 'Total Plans in Phase', 'Total Phases'].includes(field as string);
+    const shouldResync = shouldResyncStateProgress([field as string]);
     // Preserve curated progress for body-only updates, but allow fields that
     // directly project into progress.* frontmatter to rebuild after mutation.
     readModifyWriteStateMd(statePath, (content) => {
@@ -334,45 +489,97 @@ function stateReplaceFieldWithFallback(content: string, primary: string, fallbac
  * Fixes #1365: advance-plan could not update Status/Last activity after begin-phase.
  */
 function updateCurrentPositionFields(content: string, fields: { status?: string; lastActivity?: string; plan?: string }): string {
-  const posPattern = /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i;
-  const posMatch = content.match(posPattern);
-  if (!posMatch) return content;
+  // ADR-1372 T6: locate ## Current Position using tokenizeHeadings, extract the
+  // untrimmed body span, apply field edits, then splice the modified body back in.
+  // Stop predicate mirrors (?=\n##|$): any heading with level ≥ 2.
+  const headings = tokenizeHeadings(content);
+  const posIdx = headings.findIndex(h => h.level === 2 && /^current\s+position$/i.test(h.text));
+  if (posIdx === -1) return content;
 
-  let posBody = posMatch[2];
+  const posHeading = headings[posIdx];
+  const lines = content.split('\n');
+  const posHeadingLine = lines[posHeading.line - 1];
+  const posBodyStart = posHeading.offset + posHeadingLine.length + 1;
+  let posBodyEnd = content.length;
+  for (let j = posIdx + 1; j < headings.length; j++) {
+    if (STOP_H2_PLUS(headings[j].level)) {
+      posBodyEnd = headings[j].offset - 1;
+      break;
+    }
+  }
+
+  let posBody = content.slice(posBodyStart, posBodyEnd);
   const statusDefaults = KNOWN_TEMPLATE_DEFAULTS['Status'];
   const lastActivityDefaults = KNOWN_TEMPLATE_DEFAULTS['Last Activity'];
 
-  if (fields.status && /^Status:/m.test(posBody)) {
-    // Only replace when the existing Current Position Status is a known template default.
-    const existingStatusMatch = posBody.match(/^Status:\s*(.+)$/m);
-    const existingStatus = existingStatusMatch ? existingStatusMatch[1].trim() : null;
-    const isInList = existingStatus && statusDefaults.some(d => d.toLowerCase() === existingStatus.toLowerCase());
-    const matchesPattern = existingStatus && KNOWN_STATUS_PATTERNS.some(p => p.test(existingStatus));
-    const isDefault = !existingStatus || isInList || matchesPattern;
-    if (isDefault) {
-      posBody = posBody.replace(/^Status:.*$/m, `Status: ${fields.status}`);
+  if (fields.status) {
+    if (/^Status:/m.test(posBody)) {
+      // Inline format: Status: value — only replace when the existing value is a
+      // known template default (Knuth invariant: preserve executor-authored values).
+      const existingStatusMatch = posBody.match(/^Status:\s*(.+)$/m);
+      const existingStatus = existingStatusMatch ? existingStatusMatch[1].trim() : null;
+      const isInList = existingStatus && statusDefaults.some(d => d.toLowerCase() === existingStatus.toLowerCase());
+      const matchesPattern = existingStatus && KNOWN_STATUS_PATTERNS.some(p => p.test(existingStatus));
+      const isDefault = !existingStatus || isInList || matchesPattern;
+      if (isDefault) {
+        posBody = posBody.replace(/^Status:.*$/m, `Status: ${fields.status}`);
+      }
+    } else {
+      // Table format: | Status | value | — apply the same preserve-authored guard
+      // as the inline branch: only overwrite a known template default.
+      // (Finding 2 code-review: the table branch was unconditional before this fix.)
+      const existingStatus = stateExtractField(posBody, 'Status');
+      const isInList = existingStatus && statusDefaults.some(d => d.toLowerCase() === existingStatus.toLowerCase());
+      const matchesPattern = existingStatus && KNOWN_STATUS_PATTERNS.some(p => p.test(existingStatus));
+      const isDefault = !existingStatus || isInList || matchesPattern;
+      if (isDefault) {
+        const replaced = stateReplaceField(posBody, 'Status', fields.status);
+        if (replaced !== null) posBody = replaced;
+      }
     }
   }
-  if (fields.lastActivity && /^Last activity:/im.test(posBody)) {
-    // Only replace when the existing Current Position Last activity is a known template
-    // default (a bare ISO date).  Executor-authored narrative prose is preserved.
-    const existingActivityMatch = posBody.match(/^Last activity:\s*(.+)$/im);
-    const existingActivity = existingActivityMatch ? existingActivityMatch[1].trim() : null;
-    // A bare ISO date (YYYY-MM-DD with nothing after) is handler-generated.
-    // A date with a narrative suffix (e.g. "2026-02-15 -- blocked by infra...")
-    // was authored by the executor and must be preserved.
-    const isDateShape = existingActivity && /^\d{4}-\d{2}-\d{2}$/.test(existingActivity);
-    const inList = existingActivity && lastActivityDefaults.some(d => d.toLowerCase() === existingActivity.toLowerCase());
-    const isDefault = !existingActivity || isDateShape || inList;
-    if (isDefault) {
-      posBody = posBody.replace(/^Last activity:.*$/im, `Last activity: ${fields.lastActivity}`);
+  if (fields.lastActivity) {
+    if (/^Last activity:/im.test(posBody)) {
+      // Inline format — only replace when the existing value is a known template
+      // default (a bare ISO date).  Executor-authored narrative prose is preserved.
+      const existingActivityMatch = posBody.match(/^Last activity:\s*(.+)$/im);
+      const existingActivity = existingActivityMatch ? existingActivityMatch[1].trim() : null;
+      // A bare ISO date (YYYY-MM-DD with nothing after) is handler-generated.
+      // A date with a narrative suffix (e.g. "2026-02-15 -- blocked by infra...")
+      // was authored by the executor and must be preserved.
+      const isDateShape = existingActivity && /^\d{4}-\d{2}-\d{2}$/.test(existingActivity);
+      const inList = existingActivity && lastActivityDefaults.some(d => d.toLowerCase() === existingActivity.toLowerCase());
+      const isDefault = !existingActivity || isDateShape || inList;
+      if (isDefault) {
+        posBody = posBody.replace(/^Last activity:.*$/im, `Last activity: ${fields.lastActivity}`);
+      }
+    } else {
+      // Table format — apply the same preserve-authored guard as the inline branch:
+      // only overwrite a bare ISO date or a known default; preserve narrative prose.
+      // (Finding 2 code-review: the table branch was unconditional before this fix.)
+      const existingActivity = stateExtractField(posBody, 'Last Activity')
+        ?? stateExtractField(posBody, 'Last activity');
+      const isDateShape = existingActivity && /^\d{4}-\d{2}-\d{2}$/.test(existingActivity);
+      const inList = existingActivity && lastActivityDefaults.some(d => d.toLowerCase() === existingActivity.toLowerCase());
+      const isDefault = !existingActivity || isDateShape || inList;
+      if (isDefault) {
+        const replaced = stateReplaceField(posBody, 'Last Activity', fields.lastActivity)
+          ?? stateReplaceField(posBody, 'Last activity', fields.lastActivity);
+        if (replaced !== null) posBody = replaced;
+      }
     }
   }
-  if (fields.plan && /^Plan:/m.test(posBody)) {
-    posBody = posBody.replace(/^Plan:.*$/m, `Plan: ${fields.plan}`);
+  if (fields.plan) {
+    if (/^Plan:/m.test(posBody)) {
+      posBody = posBody.replace(/^Plan:.*$/m, `Plan: ${fields.plan}`);
+    } else {
+      const replaced = stateReplaceField(posBody, 'Plan', fields.plan);
+      if (replaced !== null) posBody = replaced;
+    }
   }
 
-  return content.replace(posPattern, () => `${posMatch[1]}${posBody}`);
+  // Splice the modified body back in place of the original untrimmed span.
+  return content.slice(0, posBodyStart) + posBody + content.slice(posBodyEnd);
 }
 
 function cmdStateAdvancePlan(cwd: string, raw: boolean): void {
@@ -471,7 +678,7 @@ function cmdStateRecordMetric(cwd: string, options: StateRecordMetricOptions, ra
   let created = false;
   readModifyWriteStateMd(statePath, (content) => {
     // Find Performance Metrics section and its table
-    const metricsPattern = /(##\s*Performance Metrics[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n)([\s\S]*?)(?=\n##|\n$|$)/i;
+    const metricsPattern = /(##\s*Performance Metrics[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n)([\s\S]*?)(?=\n##|\n$|$)/i; // allow-adhoc-markdown: metrics-table write-path section-collect in state.cts; pending collectSection migration #1372
     const metricsMatch = content.match(metricsPattern);
 
     const newRow = `| Phase ${phase} P${plan} | ${duration} | ${tasks || '-'} tasks | ${files || '-'} files |`;
@@ -586,17 +793,32 @@ function cmdStateAddDecision(cwd: string, options: StateAddDecisionOptions, raw:
   let created = false;
 
   readModifyWriteStateMd(statePath, (content) => {
-    // Find Decisions section (various heading patterns)
-    const sectionPattern = /(###?\s*(?:Decisions|Decisions Made|Accumulated.*Decisions)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const match = content.match(sectionPattern);
+    // ADR-1372 T6: find Decisions section via tokenizeHeadings; stop at level 2 or 3.
+    // Mirrors /(###?\s*(?:Decisions|Decisions Made|Accumulated.*Decisions)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i
+    const decisionsPred = (lv: number, text: string): boolean =>
+      (lv === 2 || lv === 3) && /^(?:Decisions|Decisions Made|Accumulated.*Decisions)$/i.test(text);
+    const sectionBody = (() => {
+      const hs = tokenizeHeadings(content);
+      const i = hs.findIndex(h => decisionsPred(h.level, h.text));
+      if (i === -1) return null;
+      const h = hs[i];
+      const ls = content.split('\n');
+      const hl = ls[h.line - 1];
+      const bs = h.offset + hl.length + 1;
+      let se = content.length;
+      for (let j = i + 1; j < hs.length; j++) {
+        if (STOP_H2_H3(hs[j].level)) { se = hs[j].offset - 1; break; }
+      }
+      return { bodyStart: bs, bodyEnd: se, body: content.slice(bs, se) };
+    })();
 
-    if (match) {
-      let sectionBody = match[2];
+    if (sectionBody !== null) {
+      let newBody = sectionBody.body;
       // Remove placeholders
-      sectionBody = sectionBody.replace(/None yet\.?\s*\n?/gi, '').replace(/No decisions yet\.?\s*\n?/gi, '');
-      sectionBody = sectionBody.trimEnd() + '\n' + entry + '\n';
+      newBody = newBody.replace(/None yet\.?\s*\n?/gi, '').replace(/No decisions yet\.?\s*\n?/gi, '');
+      newBody = newBody.trimEnd() + '\n' + entry + '\n';
       _added = true;
-      return content.replace(sectionPattern, (_match, header: string) => `${header}${sectionBody}`);
+      return content.slice(0, sectionBody.bodyStart) + newBody + content.slice(sectionBody.bodyEnd);
     }
 
     // Section absent — DWIM: auto-create canonical ## Decisions scaffold,
@@ -639,15 +861,31 @@ function cmdStateAddBlocker(cwd: string, text: string | StateAddBlockerOptions, 
   let created = false;
 
   readModifyWriteStateMd(statePath, (content) => {
-    const sectionPattern = /(###?\s*(?:Blockers|Blockers\/Concerns|Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const match = content.match(sectionPattern);
+    // ADR-1372 T6: find Blockers/Concerns section via tokenizeHeadings; stop at level 2 or 3.
+    // Mirrors /(###?\s*(?:Blockers|Blockers\/Concerns|Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i
+    const blockersPred = (lv: number, text: string): boolean =>
+      (lv === 2 || lv === 3) && /^(?:Blockers|Blockers\/Concerns|Concerns)$/i.test(text);
+    const sectionSpan = (() => {
+      const hs = tokenizeHeadings(content);
+      const i = hs.findIndex(h => blockersPred(h.level, h.text));
+      if (i === -1) return null;
+      const h = hs[i];
+      const ls = content.split('\n');
+      const hl = ls[h.line - 1];
+      const bs = h.offset + hl.length + 1;
+      let se = content.length;
+      for (let j = i + 1; j < hs.length; j++) {
+        if (STOP_H2_H3(hs[j].level)) { se = hs[j].offset - 1; break; }
+      }
+      return { bodyStart: bs, bodyEnd: se, body: content.slice(bs, se) };
+    })();
 
-    if (match) {
-      let sectionBody = match[2];
+    if (sectionSpan !== null) {
+      let sectionBody = sectionSpan.body;
       sectionBody = sectionBody.replace(/None\.?\s*\n?/gi, '').replace(/None yet\.?\s*\n?/gi, '');
       sectionBody = sectionBody.trimEnd() + '\n' + entry + '\n';
       _added = true;
-      return content.replace(sectionPattern, (_match, header: string) => `${header}${sectionBody}`);
+      return content.slice(0, sectionSpan.bodyStart) + sectionBody + content.slice(sectionSpan.bodyEnd);
     }
 
     // Section absent — DWIM: auto-create canonical ### Blockers scaffold.
@@ -669,6 +907,128 @@ function cmdStateAddBlocker(cwd: string, text: string | StateAddBlockerOptions, 
   output(result, raw, 'true');
 }
 
+function cmdStateAddRoadmapEvolution(cwd: string, options: StateAddRoadmapEvolutionOptions, raw: boolean): void {
+  const statePath = planningPaths(cwd).state;
+  if (!fs.existsSync(statePath)) { output({ error: 'STATE.md not found' }, raw, undefined); return; }
+
+  const { phase, action, after, note, note_file, urgent } = options;
+  let noteText: string | undefined = undefined;
+  try {
+    noteText = readTextArgOrFile(cwd, note, note_file, 'note');
+  } catch (err) {
+    output({ added: false, reason: (err as Error).message }, raw, 'false');
+    return;
+  }
+  // Reject missing / empty / whitespace-only notes — an evolution entry with no
+  // narrative is meaningless and would corrupt the section with a dangling bullet.
+  if (!noteText || !noteText.trim()) { output({ error: 'note required' }, raw, undefined); return; }
+  // Flatten line breaks so the entry is always a single Markdown bullet. The
+  // dedupe + rendering contract is line-oriented; a multiline --note-file would
+  // otherwise spill continuation lines outside the bullet and defeat dedupe.
+  // Internal spacing (e.g. dollar columns) is preserved.
+  const flatNote = noteText.replace(/\s*[\r\n]+\s*/g, ' ').trim();
+
+  const actionText = (action && action.trim()) || 'changed';
+  const afterText = after && after.trim() ? ` after Phase ${after.trim()}` : '';
+  const urgentText = urgent ? ' (URGENT)' : '';
+  const entry = `- Phase ${phase || '?'} ${actionText}${afterText}: ${flatNote}${urgentText}`;
+
+  let duplicate = false;
+  let created = false;
+  let subsectionCreated = false;
+
+  // The Roadmap Evolution subsection lives under `## Accumulated Context`. Scope
+  // every lookup to that section's body so a `### Roadmap Evolution` heading in an
+  // unrelated h2 section (or a fenced example) can never be matched or mutated.
+  // The accBody lookahead stops only at the next h2 (`\n##[^#]`), so nested h3
+  // subsections stay inside the captured Accumulated Context body.
+  // Section boundaries mirror the sibling handlers (add-decision/add-blocker):
+  // a trailing CR on a CRLF STATE.md is absorbed by the lazy body and trimmed,
+  // so following sections are preserved without data loss (see the CRLF test).
+  //
+  // ADR-1372 T6: accPattern and subPattern migrated to tokenizeHeadings.
+  // accPattern  = /(##\s*Accumulated Context\s*\n)([\s\S]*?)(?=\n##[^#]|$)/i
+  //               → stop at level 2 only (STOP_H2_ONLY)
+  // subPattern  = /(###\s*Roadmap Evolution\s*\n)([\s\S]*?)(?=\n###?|$)/i
+  //               → applied to accBody; stop at level 2 or 3 (STOP_H2_H3)
+  readModifyWriteStateMd(statePath, (content) => {
+    // Locate ## Accumulated Context and extract its untrimmed body span.
+    const accHs = tokenizeHeadings(content);
+    const accIdx = accHs.findIndex(h => h.level === 2 && /^accumulated\s+context$/i.test(h.text));
+
+    if (accIdx !== -1) {
+      const accH = accHs[accIdx];
+      const contentLines = content.split('\n');
+      const accHL = contentLines[accH.line - 1];
+      const accBodyStart = accH.offset + accHL.length + 1;
+      let accBodyEnd = content.length;
+      for (let j = accIdx + 1; j < accHs.length; j++) {
+        if (STOP_H2_ONLY(accHs[j].level)) { accBodyEnd = accHs[j].offset - 1; break; }
+      }
+      const accBody = content.slice(accBodyStart, accBodyEnd);
+
+      // Find `### Roadmap Evolution` WITHIN the Accumulated Context body only.
+      // tokenizeHeadings is applied to accBody to scope the search.
+      // Stop predicate mirrors (?=\n###?|$): level 2 or 3.
+      const subHs = tokenizeHeadings(accBody);
+      const subIdx = subHs.findIndex(h => h.level === 3 && /^roadmap\s+evolution$/i.test(h.text));
+
+      if (subIdx !== -1) {
+        const subH = subHs[subIdx];
+        const accLines = accBody.split('\n');
+        const subHL = accLines[subH.line - 1];
+        const subBodyStart = subH.offset + subHL.length + 1;
+        let subBodyEnd = accBody.length;
+        for (let j = subIdx + 1; j < subHs.length; j++) {
+          if (STOP_H2_H3(subHs[j].level)) { subBodyEnd = subHs[j].offset - 1; break; }
+        }
+        let subBody = accBody.slice(subBodyStart, subBodyEnd);
+
+        // Dedupe: exact (trimmed) line already present is a no-op replay.
+        if (subBody.split('\n').some((line) => line.trim() === entry.trim())) {
+          duplicate = true;
+          return content;
+        }
+        subBody = subBody.replace(/None yet\.?\s*\n?/gi, '');
+        subBody = subBody.trimEnd() + '\n' + entry + '\n';
+        // Splice subBody into accBody, then splice newAccBody into content.
+        const newAccBody = accBody.slice(0, subBodyStart) + subBody + accBody.slice(subBodyEnd);
+        return content.slice(0, accBodyStart) + newAccBody + content.slice(accBodyEnd);
+      }
+
+      // Subsection missing — append it at the end of the Accumulated Context body.
+      subsectionCreated = true;
+      const trimmedAcc = accBody.trimEnd();
+      const block = `${trimmedAcc ? `${trimmedAcc}\n\n` : ''}### Roadmap Evolution\n\n${entry}\n`;
+      return content.slice(0, accBodyStart) + block + content.slice(accBodyEnd);
+    }
+
+    // No `## Accumulated Context` — DWIM: create both at end of file.
+    // Mirrors the add-decision / add-blocker auto-create behavior.
+    created = true;
+    subsectionCreated = true;
+    const scaffold = [
+      '',
+      '## Accumulated Context',
+      '',
+      '### Roadmap Evolution',
+      '',
+      entry,
+      '',
+    ].join('\n');
+    return content.trimEnd() + '\n' + scaffold;
+  }, cwd);
+
+  if (duplicate) {
+    output({ added: false, reason: 'duplicate', entry }, raw, 'false');
+    return;
+  }
+  const result: Record<string, unknown> = { added: true, entry };
+  if (created) result['created'] = true;
+  if (subsectionCreated) result['subsection_created'] = true;
+  output(result, raw, 'true');
+}
+
 function cmdStateResolveBlocker(cwd: string, text: string, raw: boolean): void {
   const statePath = planningPaths(cwd).state;
   if (!fs.existsSync(statePath)) { output({ error: 'STATE.md not found' }, raw, undefined); return; }
@@ -677,27 +1037,35 @@ function cmdStateResolveBlocker(cwd: string, text: string, raw: boolean): void {
   let resolved = false;
 
   readModifyWriteStateMd(statePath, (content) => {
-    const sectionPattern = /(###?\s*(?:Blockers|Blockers\/Concerns|Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const match = content.match(sectionPattern);
+    // ADR-1372 T6: find Blockers/Concerns section via tokenizeHeadings; stop at level 2 or 3.
+    // Mirrors /(###?\s*(?:Blockers|Blockers\/Concerns|Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i
+    const hs = tokenizeHeadings(content);
+    const i = hs.findIndex(h => (h.level === 2 || h.level === 3) && /^(?:Blockers|Blockers\/Concerns|Concerns)$/i.test(h.text));
+    if (i === -1) return content;
 
-    if (match) {
-      const sectionBody = match[2];
-      const lines = sectionBody.split('\n');
-      const filtered = lines.filter(line => {
-        if (!line.startsWith('- ')) return true;
-        return !line.toLowerCase().includes(text.toLowerCase());
-      });
-
-      let newBody = filtered.join('\n');
-      // If section is now empty, add placeholder
-      if (!newBody.trim() || !newBody.includes('- ')) {
-        newBody = 'None\n';
-      }
-
-      resolved = true;
-      return content.replace(sectionPattern, (_match, header: string) => `${header}${newBody}`);
+    const h = hs[i];
+    const ls = content.split('\n');
+    const hl = ls[h.line - 1];
+    const bs = h.offset + hl.length + 1;
+    let se = content.length;
+    for (let j = i + 1; j < hs.length; j++) {
+      if (STOP_H2_H3(hs[j].level)) { se = hs[j].offset - 1; break; }
     }
-    return content;
+    const sectionBody = content.slice(bs, se);
+    const lines = sectionBody.split('\n');
+    const filtered = lines.filter(line => {
+      if (!line.startsWith('- ')) return true;
+      return !line.toLowerCase().includes(text.toLowerCase());
+    });
+
+    let newBody = filtered.join('\n');
+    // If section is now empty, add placeholder
+    if (!newBody.trim() || !newBody.includes('- ')) {
+      newBody = 'None\n';
+    }
+
+    resolved = true;
+    return content.slice(0, bs) + newBody + content.slice(se);
   }, cwd);
 
   if (resolved) {
@@ -713,6 +1081,7 @@ function cmdStateRecordSession(cwd: string, options: StateRecordSessionOptions, 
 
   const now = realClock.nowIso();
   const updated: string[] = [];
+  let sessionCreated = false;
 
   readModifyWriteStateMd(statePath, (content) => {
     // Update Last session / Last Date
@@ -755,14 +1124,157 @@ function cmdStateRecordSession(cwd: string, options: StateRecordSessionOptions, 
       }
     }
 
+    // Bug #944: DWIM normalize/auto-create — when the caller supplied --stopped-at or
+    // --resume-file but the body lacks the canonical labels (in-place replace
+    // returned a miss), persist the values durably. Mirrors the DWIM pattern used
+    // by add-decision, add-blocker, and record-metric. Never silently drop
+    // caller-supplied values.
+    //
+    // Guard: only act when the caller actually supplied a value. When no
+    // --stopped-at / --resume-file are given and the body already had no session
+    // labels (nothing was updated), we return recorded:false — the existing
+    // behaviour for a no-op call that didn't supply any values.
+    //
+    // Correctness invariant: both buildStateFrontmatter and cmdStateSnapshot read
+    // only the FIRST `## Session` block (via a /##\s*Session\s*\n…/i regex).
+    // If we blindly append a second `## Session` block when one already exists, the
+    // newly-written Stopped at / Resume file end up in the second (invisible) block.
+    // Fix: when a `## Session` heading already exists, normalize THAT block in place
+    // (insert / replace canonical bold-label lines within the existing section).
+    // A `## Session Continuity` heading (bootstrap shape) is handled additively —
+    // missing canonical fields are inserted while the heading and any prose are
+    // preserved (#1101). Only append a brand-new section when NEITHER heading exists.
+    const callerSuppliedValues = !!(options.stopped_at || (options.resume_file !== undefined && options.resume_file !== null));
+    const needsStoppedAt = options.stopped_at && !updated.includes('Stopped At');
+    const needsResumeFile = options.resume_file !== undefined && options.resume_file !== null && !updated.includes('Resume File');
+    const needsLastSession = !updated.includes('Last session') && !updated.includes('Last Date');
+
+    if (callerSuppliedValues && (needsStoppedAt || needsResumeFile || needsLastSession)) {
+      const resumeValue = (options.resume_file !== undefined && options.resume_file !== null)
+        ? options.resume_file
+        : 'None';
+      const stoppedAtValue = options.stopped_at || 'None';
+
+      // Determine whether a session heading already exists in the body. The
+      // canonical normalized form is `## Session`; the bootstrap templates
+      // (workstream.cts, gsd2-import.cts, templates/state.md) instead emit
+      // `## Session Continuity`. Treat each separately so we never append a
+      // duplicate section alongside an existing one.
+      const existingCanonicalSession = /^## Session[ \t]*$/im.test(content);
+      const existingSessionContinuity = /^## Session Continuity[ \t]*$/im.test(content);
+
+      if (existingCanonicalSession) {
+        // Normalize in place: replace the ENTIRE BODY of the existing ## Session
+        // section (heading + all content up to the next ## heading or EOF) with
+        // canonical bold-label lines. The negative-lookahead per-line pattern
+        // `(?!^## )[\s\S]` consumes every line that doesn't start with "## ",
+        // which correctly stops at the next section boundary without consuming it.
+        // A trailing blank line is added so the next ## heading keeps its spacing.
+        content = content.replace(
+          /^(## Session[ \t]*\n(?:(?!^## )[\s\S])*)/m,
+          [
+            '## Session',
+            '',
+            `**Last session:** ${now}`,
+            `**Stopped at:** ${stoppedAtValue}`,
+            `**Resume file:** ${resumeValue}`,
+            '',
+            '',
+          ].join('\n'),
+        );
+      } else if (existingSessionContinuity) {
+        // #1101: a `## Session Continuity` section already exists (bootstrap
+        // shape). Previously this fell through to the append branch and created
+        // a SECOND `## Session` block — a duplicate. Instead, insert only the
+        // canonical fields that are still missing, right after the heading,
+        // preserving the `## Session Continuity` heading and ALL existing lines
+        // (e.g. prose like "Next recommended action"). Fields already updated in
+        // place above (needs* false) are not re-inserted. A function replacement
+        // is used so `$`-bearing caller values are inserted literally (#3454).
+        const linesToInsert: string[] = [];
+        if (needsLastSession) linesToInsert.push(`**Last session:** ${now}`);
+        if (needsStoppedAt) linesToInsert.push(`**Stopped at:** ${stoppedAtValue}`);
+        if (needsResumeFile) linesToInsert.push(`**Resume file:** ${resumeValue}`);
+        if (linesToInsert.length > 0) {
+          // Case-insensitive to match the `existingSessionContinuity` detection
+          // above (#1101 review F3) — otherwise a lowercase heading would detect
+          // but no-op the insert while still reporting the fields as updated.
+          content = content.replace(
+            /^(## Session Continuity[ \t]*\n)/im,
+            (_m, heading: string) => heading + linesToInsert.join('\n') + '\n',
+          );
+        }
+      } else {
+        // No session heading exists at all — append a new canonical section.
+        const scaffold = [
+          '',
+          '## Session',
+          '',
+          `**Last session:** ${now}`,
+          `**Stopped at:** ${stoppedAtValue}`,
+          `**Resume file:** ${resumeValue}`,
+          '',
+        ].join('\n');
+        content = content.trimEnd() + '\n' + scaffold;
+      }
+
+      sessionCreated = true;
+
+      if (needsLastSession) updated.push('Last session');
+      if (needsStoppedAt) updated.push('Stopped At');
+      if (needsResumeFile) updated.push('Resume File');
+    }
+
     return content;
   }, cwd);
 
   if (updated.length > 0) {
-    output({ recorded: true, updated }, raw, 'true');
+    const result: Record<string, unknown> = { recorded: true, updated };
+    if (sessionCreated) result['created'] = true;
+    output(result, raw, 'true');
   } else {
     output({ recorded: false, reason: 'No session fields found in STATE.md' }, raw, 'false');
   }
+}
+
+/**
+ * Match the session section body from a STATE.md body. #1101: recognise the
+ * bootstrap `## Session Continuity` heading but PREFER the normalized `## Session`
+ * block when both exist (legacy duplicate files), so the reader agrees with the
+ * writer (which updates `## Session` first). `(?:^|\n)` line-anchors (kept out of
+ * `/m` so `$` stays end-of-string for the `(?=\n##|$)` section boundary), which
+ * excludes an h3 `### Session Continuity`; the trailing-` Archive` boundary still
+ * excludes `## Session Continuity Archive` (preserving the #2444 scoping).
+ * Returns the match whose group 1 is the section body, or null.
+ */
+function matchSessionSection(body: string): RegExpMatchArray | null {
+  return body.match(/(?:^|\n)##[ \t]*Session[ \t]*\n([\s\S]*?)(?=\n##|$)/i) // allow-adhoc-markdown: read-only session-section extract in state.cts; pending collectSection migration #1372
+    || body.match(/(?:^|\n)##[ \t]*Session Continuity[ \t]*\n([\s\S]*?)(?=\n##|$)/i); // allow-adhoc-markdown: read-only session-continuity section extract in state.cts; pending collectSection migration #1372
+}
+
+function parseProsePhaseField(value: string | null): { phase: string | null; name: string | null } {
+  if (!value) return { phase: null, name: null };
+  const phaseMatch = value.match(/\b(\d+[A-Z]?(?:\.\d+)*)\b/i);
+  const parenName = value.match(/\(([^)]+)\)/);
+  const dashName = value.match(/—\s*([^(\n]+?)(?:\s*\(|$)/);
+  const rawName = parenName?.[1] ?? dashName?.[1] ?? null;
+  const name = rawName && !/^(?:complete|executing|not started)$/i.test(rawName.trim())
+    ? rawName.trim()
+    : null;
+  return {
+    phase: phaseMatch ? phaseMatch[1] : null,
+    name,
+  };
+}
+
+function parseProseLastActivityField(value: string | null): { date: string | null; description: string | null } {
+  if (!value) return { date: null, description: null };
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})(?:\s+[—-]{1,2}\s+(.+))?$/);
+  if (!match) return { date: value, description: null };
+  return {
+    date: match[1],
+    description: match[2]?.trim() || null,
+  };
 }
 
 function cmdStateSnapshot(cwd: string, raw: boolean): void {
@@ -795,15 +1307,18 @@ function cmdStateSnapshot(cwd: string, raw: boolean): void {
   };
 
   // Extract basic fields — frontmatter keys take precedence over body
-  const currentPhase = fmScalar('current_phase') ?? stateExtractField(body, 'Current Phase');
-  const currentPhaseName = fmScalar('current_phase_name') ?? stateExtractField(body, 'Current Phase Name');
+  const prosePhase = parseProsePhaseField(stateExtractField(body, 'Phase'));
+  const currentPhase = fmScalar('current_phase') ?? stateExtractField(body, 'Current Phase') ?? prosePhase.phase;
+  const currentPhaseName = fmScalar('current_phase_name') ?? stateExtractField(body, 'Current Phase Name') ?? prosePhase.name;
   const totalPhasesRaw = fmScalar('total_phases') ?? stateExtractField(body, 'Total Phases');
   const currentPlan = fmScalar('current_plan') ?? stateExtractField(body, 'Current Plan');
   const totalPlansRaw = fmScalar('total_plans_in_phase') ?? stateExtractField(body, 'Total Plans in Phase');
   const status = fmScalar('status') ?? stateExtractField(body, 'Status');
   const progressRaw = fmScalar('progress') ?? stateExtractField(body, 'Progress');
-  const lastActivity = fmScalar('last_activity') ?? stateExtractField(body, 'Last Activity');
-  const lastActivityDesc = fmScalar('last_activity_desc') ?? stateExtractField(body, 'Last Activity Description');
+  const rawLastActivity = stateExtractField(body, 'Last Activity') ?? stateExtractField(body, 'Last activity');
+  const proseLastActivity = parseProseLastActivityField(rawLastActivity);
+  const lastActivity = fmScalar('last_activity') ?? proseLastActivity.date ?? rawLastActivity;
+  const lastActivityDesc = fmScalar('last_activity_desc') ?? stateExtractField(body, 'Last Activity Description') ?? proseLastActivity.description;
   const pausedAt = fmScalar('paused_at') ?? stateExtractField(body, 'Paused At');
 
   // Parse numeric fields
@@ -813,7 +1328,7 @@ function cmdStateSnapshot(cwd: string, raw: boolean): void {
 
   // Extract decisions table
   const decisions: Array<{ phase: string; summary: string; rationale: string }> = [];
-  const decisionsMatch = body.match(/##\s*Decisions Made[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n([\s\S]*?)(?=\n##|\n$|$)/i);
+  const decisionsMatch = body.match(/##\s*Decisions Made[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n([\s\S]*?)(?=\n##|\n$|$)/i); // allow-adhoc-markdown: read-only decisions-table section-collect in state.cts; pending collectSection migration #1372
   if (decisionsMatch) {
     const tableBody = decisionsMatch[1];
     const rows = tableBody.trim().split('\n').filter(r => r.includes('|'));
@@ -831,7 +1346,7 @@ function cmdStateSnapshot(cwd: string, raw: boolean): void {
 
   // Extract blockers list
   const blockers: string[] = [];
-  const blockersMatch = body.match(/##\s*Blockers\s*\n([\s\S]*?)(?=\n##|$)/i);
+  const blockersMatch = body.match(/##\s*Blockers\s*\n([\s\S]*?)(?=\n##|$)/i); // allow-adhoc-markdown: read-only blockers section-collect in state.cts; pending collectSection migration #1372
   if (blockersMatch) {
     const blockersSection = blockersMatch[1];
     const items = blockersSection.match(/^-\s+(.+)$/gm) || [];
@@ -847,11 +1362,17 @@ function cmdStateSnapshot(cwd: string, raw: boolean): void {
     resume_file: null,
   };
 
-  const sessionMatch = body.match(/##\s*Session\s*\n([\s\S]*?)(?=\n##|$)/i);
+  // #1101: prefer the canonical `## Session` block, falling back to the bootstrap
+  // `## Session Continuity` heading. See matchSessionSection for the anchoring.
+  const sessionMatch = matchSessionSection(body);
   if (sessionMatch) {
     const sessionSection = sessionMatch[1];
+    // Accept both `**Last Date:**` (canonical template form) and `**Last session:**`
+    // (the form written by the DWIM auto-create / normalize path added for #944).
     const lastDateMatch = sessionSection.match(/\*\*Last Date:\*\*\s*(.+)/i)
-      || sessionSection.match(/^Last Date:\s*(.+)/im);
+      || sessionSection.match(/^Last Date:\s*(.+)/im)
+      || sessionSection.match(/\*\*Last session:\*\*\s*(.+)/i)
+      || sessionSection.match(/^Last session:\s*(.+)/im);
     const stoppedAtMatch = sessionSection.match(/\*\*Stopped At:\*\*\s*(.+)/i)
       || sessionSection.match(/^Stopped At:\s*(.+)/im);
     const resumeFileMatch = sessionSection.match(/\*\*Resume File:\*\*\s*(.+)/i)
@@ -884,24 +1405,87 @@ function cmdStateSnapshot(cwd: string, raw: boolean): void {
 // ─── State Frontmatter Sync ──────────────────────────────────────────────────
 
 /**
+ * Canonical key for matching a ROADMAP phase token against an on-disk phase
+ * directory: normalizePhaseName collapses padding/case, strips the project-code
+ * prefix, and handles decimals/letter-suffixes/milestone-prefixed IDs, so
+ * "Phase 4"/"Phase 04"/dir "04-delta" and "Phase PROJ-42"/dir "PROJ-42-foo"
+ * each map to one key. For a directory, extract its phase token first.
+ *
+ * Stripping the project-code prefix is GSD's canonical phase identity (a
+ * project_code is a display prefix; normalizePhaseName / phaseTokenMatches treat
+ * `CK-01` and `01` as the same phase, which is what lets a prefixed dir match a
+ * bare ROADMAP token). A consistent project uses one scheme, so a bare numeric
+ * and a same-suffix project-code phase never coexist in one milestone.
+ */
+function phaseKeyFromToken(token: string): string {
+  return normalizePhaseName(token).toUpperCase();
+}
+function phaseKeyFromDir(dir: string): string {
+  return phaseKeyFromToken(extractPhaseToken(dir));
+}
+
+/**
+ * Extract the set of retired/folded phase keys from a ROADMAP milestone scope
+ * (#1514). A retired phase is struck through with GFM strikethrough,
+ * e.g. `- [x] ~~**Phase 04: Delta**~~ — folded into Phase 05; number retired`.
+ * Such a phase keeps a `[x]` mark and often a directory but ships no completion
+ * artifact, so it would otherwise inflate `total_phases` (the denominator)
+ * without ever satisfying the numerator, freezing a shipped milestone below
+ * 100%.
+ *
+ * Detection is scoped to the lines that canonically mark a phase retired — a
+ * checklist entry (`- [x] …`) or a phase heading (`#### Phase …`) — and within
+ * those, only a struck span whose SUBJECT is the phase counts: the phase
+ * reference must sit at the start of the `~~…~~` span (after optional markdown
+ * emphasis), as in `~~**Phase 04: Delta**~~`, `~~Phase 04~~`, or
+ * `~~Phase PROJ-42~~`. This ignores struck PROSE that merely mentions a phase
+ * (a goal line `~~folded into Phase 05~~`, or `~~Phase 04 was renamed~~`) and
+ * the fold target in `~~Phase 04~~ — folded into Phase 05` (outside the span).
+ * The phase token shape mirrors the heading counter's `[\w][\w.-]*` so numeric,
+ * decimal, and project-code IDs are detected alike. Returns canonical keys
+ * (see phaseKeyFromToken).
+ */
+function extractRetiredPhaseNumbers(scope: string): Set<string> {
+  const retired = new Set<string>();
+  const isChecklistOrHeading = /^\s*(?:[-*+]\s*\[[ xX]\]|#{1,6}\s)/;
+  for (const line of scope.split(/\r?\n/)) {
+    if (!isChecklistOrHeading.test(line)) continue;
+    const strikeSpan = /~~([^~]*?)~~/g;
+    let s: RegExpExecArray | null;
+    while ((s = strikeSpan.exec(line)) !== null) {
+      const phaseRef = /^[\s*_]*Phase\s+([\w][\w.-]*)/i.exec(s[1]);
+      // Require a digit so struck prose like ~~Phase Overview~~ is ignored.
+      if (phaseRef && /\d/.test(phaseRef[1])) retired.add(phaseKeyFromToken(phaseRef[1]));
+    }
+  }
+  return retired;
+}
+
+/**
  * Extract machine-readable fields from STATE.md markdown body and build
  * a YAML frontmatter object. Allows hooks and scripts to read state
  * reliably via `state json` instead of fragile regex parsing.
  */
 function buildStateFrontmatter(bodyContent: string, cwd: string | undefined): Record<string, unknown> {
-  const currentPhase = stateExtractField(bodyContent, 'Current Phase');
-  const currentPhaseName = stateExtractField(bodyContent, 'Current Phase Name');
+  const prosePhase = parseProsePhaseField(stateExtractField(bodyContent, 'Phase'));
+  const currentPhase = stateExtractField(bodyContent, 'Current Phase') ?? prosePhase.phase;
+  const currentPhaseName = stateExtractField(bodyContent, 'Current Phase Name') ?? prosePhase.name;
   const currentPlan = stateExtractField(bodyContent, 'Current Plan');
   const totalPhasesRaw = stateExtractField(bodyContent, 'Total Phases');
   const totalPlansRaw = stateExtractField(bodyContent, 'Total Plans in Phase');
   const status = stateExtractField(bodyContent, 'Status');
   const progressRaw = stateExtractField(bodyContent, 'Progress');
-  const lastActivity = stateExtractField(bodyContent, 'Last Activity');
+  const rawLastActivity = stateExtractField(bodyContent, 'Last Activity') ?? stateExtractField(bodyContent, 'Last activity');
+  const proseLastActivity = parseProseLastActivityField(rawLastActivity);
+  const lastActivity = proseLastActivity.date ?? rawLastActivity;
+  const lastActivityDesc = stateExtractField(bodyContent, 'Last Activity Description') ?? proseLastActivity.description;
   // Bug #2444: scope Stopped At extraction to the ## Session section so that
   // historical "Stopped at:" prose elsewhere in the body (e.g. in a
   // Session Continuity Archive section) never overwrites the current value.
   // Fall back to full-body search only when no ## Session section exists.
-  const sessionSectionMatch = bodyContent.match(/##\s*Session\s*\n([\s\S]*?)(?=\n##|$)/i);
+  // #1101: prefer the canonical `## Session` block, falling back to the bootstrap
+  // `## Session Continuity` heading. See matchSessionSection for the anchoring.
+  const sessionSectionMatch = matchSessionSection(bodyContent);
   const sessionBodyScope = sessionSectionMatch ? sessionSectionMatch[1] : bodyContent;
   const stoppedAt = stateExtractField(sessionBodyScope, 'Stopped At') || stateExtractField(sessionBodyScope, 'Stopped at');
   const pausedAt = stateExtractField(bodyContent, 'Paused At');
@@ -929,6 +1513,21 @@ function buildStateFrontmatter(bodyContent: string, cwd: string | undefined): Re
         // on repeated buildStateFrontmatter invocations within the same process (#1967)
         let cached = _diskScanCache.get(cwd);
         if (!cached) {
+          // Read the current-milestone ROADMAP scope once: it feeds both the
+          // heading-based phase count below and the retired/folded-phase
+          // exclusion (#1514). Computed before the disk scan so retired phases
+          // can be dropped from the dir set too.
+          let roadmapScope: string | null = null;
+          let retiredPhaseNums = new Set<string>();
+          try {
+            const roadmapPath = path.join(planningDir(cwd), 'ROADMAP.md');
+            const roadmapRaw = platformReadSync(roadmapPath);
+            if (roadmapRaw !== null) {
+              roadmapScope = extractCurrentMilestone(roadmapRaw, cwd);
+              retiredPhaseNums = extractRetiredPhaseNumbers(roadmapScope);
+            }
+          } catch { /* fall through: no roadmap scope → no retired exclusion */ }
+
           const isDirInMilestone = getMilestonePhaseFilter(cwd) as (dir: string) => boolean;
           const allMatchingDirs = fs.readdirSync(phasesDir, { withFileTypes: true })
             .filter(e => e.isDirectory()).map(e => e.name)
@@ -940,6 +1539,11 @@ function buildStateFrontmatter(bodyContent: string, cwd: string | undefined): Re
           // modified dir. This prevents double-counting (e.g. two "Phase 1" dirs).
           const seenPhaseNums = new Map<string, string>(); // normalizedNum -> dirName
           for (const dir of allMatchingDirs) {
+            // #1514: a retired/folded phase keeps a directory but no completion
+            // artifact; drop it from the disk phase set so it counts toward
+            // neither the denominator nor the numerator (mirrors the heading
+            // exclusion below). Project-code-aware via phaseKeyFromDir.
+            if (retiredPhaseNums.size > 0 && retiredPhaseNums.has(phaseKeyFromDir(dir))) continue;
             const m = dir.match(/^0*(\d+[A-Za-z]?(?:\.\d+)*)/);
             const key = m ? m[1].toLowerCase() : dir;
             if (!seenPhaseNums.has(key)) {
@@ -974,21 +1578,21 @@ function buildStateFrontmatter(bodyContent: string, cwd: string | undefined): Re
           // `## Phase Overview:` or `## Phase Details:` — single source of
           // truth for total_phases (#549).
           let roadmapPhaseCount = 0;
-          try {
-            const roadmapPath = path.join(planningDir(cwd), 'ROADMAP.md');
-            const roadmapRaw = platformReadSync(roadmapPath);
-            if (roadmapRaw !== null) {
-              const roadmapScope = extractCurrentMilestone(roadmapRaw, cwd);
-              const phaseHeadingPattern = /#{2,4}\s*Phase\s+([\w][\w.-]*)\s*:/gi;
-              let m: RegExpExecArray | null;
-              while ((m = phaseHeadingPattern.exec(roadmapScope)) !== null) {
-                // Only count tokens that contain at least one digit — excludes
-                // pure-word section headings (Overview, Details) while keeping
-                // numeric phases (01, 05.1) and project-code IDs (PROJ-42).
-                if (/\d/.test(m[1])) roadmapPhaseCount++;
-              }
+          if (roadmapScope !== null) {
+            const phaseHeadingPattern = /#{2,4}\s*Phase\s+([\w][\w.-]*)\s*:/gi;
+            let m: RegExpExecArray | null;
+            while ((m = phaseHeadingPattern.exec(roadmapScope)) !== null) {
+              // Only count tokens that contain at least one digit — excludes
+              // pure-word section headings (Overview, Details) while keeping
+              // numeric phases (01, 05.1) and project-code IDs (PROJ-42).
+              // Also exclude 999.x backlog phases. Mirrors init.cts filter.
+              if (!/\d/.test(m[1]) || /^999\b/.test(m[1])) continue;
+              // #1514: retired/folded phases are struck through in the ROADMAP;
+              // exclude them from the denominator (they can never be completed).
+              if (retiredPhaseNums.has(phaseKeyFromToken(m[1]))) continue;
+              roadmapPhaseCount++;
             }
-          } catch { /* fall through: phaseDirs.length used as sole count */ }
+          }
 
           cached = {
             totalPhases: roadmapPhaseCount > 0
@@ -1033,6 +1637,7 @@ function buildStateFrontmatter(bodyContent: string, cwd: string | undefined): Re
   if (pausedAt) fm['paused_at'] = pausedAt;
   fm['last_updated'] = realClock.nowIso();
   if (lastActivity) fm['last_activity'] = lastActivity;
+  if (lastActivityDesc) fm['last_activity_desc'] = lastActivityDesc;
 
   const progress: Record<string, unknown> = {};
   if (totalPhases !== null) progress['total_phases'] = totalPhases;
@@ -1073,6 +1678,66 @@ function syncStateFrontmatter(content: string, cwd: string | undefined): string 
     derivedFm['status'] = existingFm['status'];
   }
 
+  // Bug #948: preserve `milestone_name` / `milestone` when the derived value
+  // is the template placeholder 'milestone'. getMilestoneInfo returns the
+  // literal string 'milestone' when it cannot match the version from the roadmap
+  // (e.g. no ROADMAP.md, roadmap lacks the heading for the stored version, or the
+  // milestone version read from STATE.md itself triggers the lookup before the
+  // file is fully written). A placeholder must never overwrite a real name that the
+  // existing frontmatter already holds; only an empty derived value falls through
+  // to this guard (the primary #905 preserve path below handles that).
+  const MILESTONE_NAME_PLACEHOLDER = 'milestone';
+  if (
+    derivedFm['milestone_name'] === MILESTONE_NAME_PLACEHOLDER &&
+    existingFm['milestone_name'] &&
+    existingFm['milestone_name'] !== MILESTONE_NAME_PLACEHOLDER
+  ) {
+    derivedFm['milestone_name'] = existingFm['milestone_name'];
+    // Keep the stored milestone version consistent with the preserved name.
+    if (existingFm['milestone']) {
+      derivedFm['milestone'] = existingFm['milestone'];
+    }
+  }
+
+  // Bug #905: preserve scalar fields that buildStateFrontmatter can only derive
+  // from body annotations (Current Phase:, Current Plan:, etc.). When those
+  // annotations are absent — e.g. after an agent or tool rewrites the body —
+  // buildStateFrontmatter returns no value for those keys. Mirror the same
+  // fallback pattern used in cmdStateJson so the existing frontmatter values
+  // survive every writeStateMd call.
+  //
+  // For stopped_at / paused_at: the original #905 "fall back when derived is
+  // absent" rule is preserved here. The stale-body-overwrites-frontmatter
+  // scenario from #948 is prevented by the no-op guard in
+  // readModifyWriteStateMd: when the transform produces no change the file is
+  // never written, so syncStateFrontmatter never even runs. Attempting to
+  // "always prefer frontmatter" here breaks legitimate callers like phase.complete
+  // that intentionally write a new stopped_at value to the body and expect
+  // syncStateFrontmatter to pick it up.
+  if (!derivedFm['stopped_at'] && existingFm['stopped_at']) {
+    derivedFm['stopped_at'] = existingFm['stopped_at'];
+  }
+  if (!derivedFm['paused_at'] && existingFm['paused_at']) {
+    derivedFm['paused_at'] = existingFm['paused_at'];
+  }
+  if (!derivedFm['current_phase'] && existingFm['current_phase']) {
+    derivedFm['current_phase'] = existingFm['current_phase'];
+  }
+  if (!derivedFm['current_phase_name'] && existingFm['current_phase_name']) {
+    derivedFm['current_phase_name'] = existingFm['current_phase_name'];
+  }
+  if (!derivedFm['current_plan'] && existingFm['current_plan']) {
+    derivedFm['current_plan'] = existingFm['current_plan'];
+  }
+  // progress is a sub-object: fall back to existing only when the body+disk
+  // scan produced NO progress block at all. When buildStateFrontmatter did
+  // derive a progress block (even a lower one), that derived value wins — the
+  // shouldPreserveExistingProgress cross-milestone logic is applied later in
+  // cmdStateJson on the read path where it is appropriate.
+  if (!derivedFm['progress'] && existingFm['progress']) {
+    derivedFm['progress'] = normalizeProgressNumbers(existingFm['progress']);
+  }
+
   const yamlStr = reconstructFrontmatter(derivedFm as unknown as Frontmatter);
   return `---\n${yamlStr}\n---\n\n${body}`;
 }
@@ -1108,42 +1773,163 @@ function acquireStateLock(statePath: string, clock?: StateLockClock): string {
   if (clock === undefined) clock = realClock;
   const lockPath = statePath + '.lock';
   const retryDelay = 200; // ms
-  const staleThresholdMs = 10000;
   const maxWaitMs = 30000;
+  // Deadman ceiling (audit M1) — set ABOVE maxWaitMs so a holder that reads as
+  // VERIFIED-LIVE is NEVER stolen within the wait budget; only a crashed (dead
+  // pid) or unparseable-body lock is stolen, and a pid-reuse holder (reads alive
+  // but is unrelated) is recovered once age crosses this absolute ceiling rather
+  // than blocking forever. The prior mtime-only `staleThresholdMs = 10000` gate
+  // was BELOW maxWaitMs, so a live-but-slow holder >10 s was robbed mid-write.
+  const deadmanCeilingMs = 60000;
+  // Fresh-create floor (PR #1532 review, window a) — a lock with an EMPTY/unparseable
+  // body is either mid-creation (O_EXCL create done, pid not yet written by the holder)
+  // or a genuine orphan. While such a body is younger than this floor it is treated as
+  // mid-creation and is NEVER stolen — stealing it at age ≈ 0 robs a holder still
+  // writing its pid (the lost-update window capability-lock.cts's `age <= LOCK_STALE_MS`
+  // floor closes). The create→write gap is sub-millisecond; this floor is orders of
+  // magnitude larger yet well under maxWaitMs so a real orphan still clears within budget.
+  // A COMPLETE dead-pid body is NOT subject to this floor — it is stolen promptly.
+  const freshCreateFloorMs = 1000;
   const startedAt = clock.now();
 
+  // Shared helper: check the time budget then back off with jitter before the
+  // next retry.  Both the EEXIST contention path and the recoverable-errno path
+  // must go through this so neither can busy-spin (#1217).
+  const checkBudgetAndSleep = (context: string) => {
+    if (clock.now() - startedAt >= maxWaitMs) {
+      const e = new Error(
+        'acquireStateLock: ' + lockPath + ' ' + context + ' for ' +
+        (clock.now() - startedAt) + 'ms (exceeded ' + maxWaitMs + 'ms budget)'
+      );
+      (e as unknown as Record<string, unknown>).lockBudgetExceeded = true;
+      throw e;
+    }
+    const jitter = Math.floor(Math.random() * 50);
+    clock.sleep(retryDelay + jitter);
+  };
+
+  let _loopIteration = 0;
   while (true) {
+    if (_stateLockTestHooks.onLoopIteration) _stateLockTestHooks.onLoopIteration({ iteration: _loopIteration++ });
     try {
       const fd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
-      fs.writeSync(fd, String(process.pid));
-      fs.closeSync(fd);
+      // Audit M9 (resource-safety): once the exclusive create SUCCEEDS, a
+      // writeSync/closeSync failure must NOT leak the fd or strand the just-created
+      // (now empty) lock — an orphan body self-blocks every later acquirer until a
+      // liveness steal or the deadman. On any write/close error, guardedly close the
+      // fd and unlink the file we created, then re-throw to the existing outer catch
+      // (which keeps classifying recoverable vs fatal errnos — DRY). A FATAL errno
+      // still propagates after cleanup; a RECOVERABLE one retries from a clean slate.
+      // Mirrors capability-lock.cts:415-425.
+      try {
+        const injected = _consumeSimulatedWriteError();
+        if (injected) throw injected; // test seam: one-shot writeSync failure (M9)
+        fs.writeSync(fd, String(process.pid));
+        fs.closeSync(fd);
+      } catch (writeErr) {
+        try { fs.closeSync(fd); } catch { /* best-effort — fd may already be closed */ }
+        // Best-effort unlink of the lock WE just created. Guarded so we never throw
+        // here; if another acquirer already stole the empty lock the unlink is a
+        // harmless ENOENT no-op (we do not double-unlink someone else's lock — the
+        // open(O_EXCL) above guarantees we created this path this iteration).
+        try { fs.unlinkSync(lockPath); } catch { /* best-effort — no orphan */ }
+        throw writeErr; // re-throw to the outer catch for recoverable/fatal classification
+      }
       // Exit-time cleanup keeps a crashed locked region from leaving a stale file (#1916).
       _heldStateLocks.add(lockPath);
       return lockPath;
     } catch (err) {
       // Transient filesystem errors (Docker overlay-fs, NFS, OS signals, AV scanners)
-      // are recoverable — retry the acquisition loop rather than propagating.
+      // are recoverable — retry with the same budget + backoff as the EEXIST path so
+      // a permanently-failing errno cannot busy-spin at 100% CPU (#1217).
       // See ACQUIRE_LOCK_RETRY_ERRNOS for the full list and rationale.
-      if (ACQUIRE_LOCK_RETRY_ERRNOS.has((err as NodeJS.ErrnoException).code as string)) { continue; }
+      if (ACQUIRE_LOCK_RETRY_ERRNOS.has((err as NodeJS.ErrnoException).code as string)) {
+        checkBudgetAndSleep((err as NodeJS.ErrnoException).code + ' persisted');
+        continue;
+      }
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; // propagate — silent bypass causes lost updates
-      // Only unlink a lock we did not place when it has crossed the staleness
-      // threshold (crashed holder). Nuking a fresh lock held by a slow-but-live
-      // writer causes lost updates (#3711 regression).
+      // Liveness-gated steal (audit M1) + steal-safety (PR #1532 review). The steal
+      // decision is three-way on the lock body:
+      //   - VERIFIED-LIVE holder (parseable pid that signals alive): NEVER stolen until
+      //     its age crosses the absolute deadman ceiling (the pid-reuse backstop) —
+      //     nuking a slow-but-live writer's lock causes lost updates (#3711 / #500/#905/
+      //     #1230 family).
+      //   - COMPLETE DEAD pid (parseable pid, not alive): stolen PROMPTLY regardless of
+      //     age — a crashed holder left a full body.
+      //   - EMPTY / unparseable body: liveness is unknowable. While FRESH (age <=
+      //     freshCreateFloorMs) it is a lock still mid-creation (O_EXCL done, pid not yet
+      //     written) and is NOT stolen (window a); only once aged past the floor is it a
+      //     genuine orphan and stealable.
+      // The steal itself is an ATOMIC rename-then-recreate (only one racer can rename the
+      // inode) guarded by an identity re-confirm, so a racer that recreates a fresh lock
+      // in the decision→steal gap never has its replacement deleted (window b). Mirrors
+      // capability-lock.cts:455-499.
       try {
         const stat = fs.statSync(lockPath);
-        if ((clock).now() - stat.mtimeMs > staleThresholdMs) {
-          try { fs.unlinkSync(lockPath); } catch { /* already gone */ }
+        const ageMs = clock.now() - stat.mtimeMs;
+        const bodyPid = _stateLockBodyPid(lockPath);
+        const holderLive = bodyPid !== null && _stateLockIsPidAlive(bodyPid);
+        let steal: boolean;
+        if (holderLive) {
+          steal = ageMs > deadmanCeilingMs;   // pid-reuse backstop only
+        } else if (bodyPid !== null) {
+          steal = true;                       // complete dead pid → prompt steal
+        } else {
+          steal = ageMs > freshCreateFloorMs; // empty/garbage → protect the create window
+        }
+        if (steal) {
+          if (_stateLockTestHooks.beforeSteal) _stateLockTestHooks.beforeSteal({ lockPath });
+          // Identity re-confirm immediately before the steal: a racer that stole +
+          // recreated a fresh lock in the decision→steal gap changes (dev, ino) and/or
+          // the body pid → do NOT delete the replacement; re-evaluate from scratch.
+          let confirmStat: fs.Stats;
+          try {
+            confirmStat = fs.statSync(lockPath);
+          } catch {
+            continue; // lock vanished between decision and steal — retry the create.
+          }
+          const sameInstance =
+            typeof stat.dev === 'number' && typeof stat.ino === 'number' &&
+            confirmStat.dev === stat.dev && confirmStat.ino === stat.ino &&
+            _stateLockBodyPid(lockPath) === bodyPid;
+          if (!sameInstance) {
+            // The lock changed under us (a racer won the steal + recreated). Back off
+            // and re-evaluate rather than deleting the racer's fresh replacement.
+            checkBudgetAndSleep('lock changed before steal');
+            continue;
+          }
+          // Atomic steal: rename the inode aside, then remove it. Only ONE racer can
+          // win the rename; a failed rename means another process already stole it, so
+          // we must NOT fall through to a delete — back off and retry the create.
+          const stolen = lockPath + '.stale-' + process.pid + '-' + clock.now() + '-' + (_stateStealSeq++);
+          let renamed = false;
+          try { fs.renameSync(lockPath, stolen); renamed = true; } catch { /* another racer won */ }
+          if (renamed) {
+            try { fs.rmSync(stolen, { force: true }); } catch { /* best-effort */ }
+            // Successful steal — retry immediately to grab the just-freed lock.
+            // Must NOT call checkBudgetAndSleep here: a throw-after-rename would
+            // corrupt filesystem state, and the budget is already bounded on the next
+            // iteration's EEXIST or open attempt (#1217 regression fix).
+            continue;
+          }
+          // Lost the steal race (or a transient rename failure) — apply budget + backoff
+          // so it cannot busy-spin (#1217).
+          checkBudgetAndSleep('stale lock steal lost to racer');
           continue;
         }
-      } catch { continue; /* released between EEXIST and stat */ }
-      if ((clock).now() - startedAt >= maxWaitMs) {
-        throw new Error(
-          'acquireStateLock: ' + lockPath + ' held by live process for ' +
-          ((clock).now() - startedAt) + 'ms (exceeded ' + maxWaitMs + 'ms budget)'
-        );
+      } catch (err) {
+        // Re-throw a budget-exceeded error from the steal path above unchanged — its
+        // message already names the real cause ("lock changed before steal" / "stale
+        // lock steal lost to racer") and double-wrapping it would replace that with the
+        // misleading "statSync failed after EEXIST" context string (#1217 diagnostic fix).
+        if ((err as Record<string, unknown>)?.lockBudgetExceeded) throw err;
+        // statSync failed — lock was likely released between our EEXIST and this
+        // stat call.  Apply budget + backoff so a persistent statSync failure
+        // cannot busy-spin (#1217).
+        checkBudgetAndSleep('statSync failed after EEXIST');
+        continue;
       }
-      const jitter = Math.floor(Math.random() * 50);
-      (clock).sleep(retryDelay + jitter);
+      checkBudgetAndSleep('held by live process');
     }
   }
 }
@@ -1175,13 +1961,24 @@ function withStateLock<T>(statePath: string, fn: () => T): T {
  *   Optional clock seam; defaults to realClock. Passed through to acquireStateLock.
  */
 function writeStateMd(statePath: string, content: string, cwd?: string, clock?: StateLockClock): void {
-  // Invalidate disk scan cache before computing new frontmatter — the write
-  // may create new PLAN/SUMMARY files that buildStateFrontmatter must see.
-  // Safe for any calling pattern, not just short-lived CLI processes (#1967).
-  if (cwd) _diskScanCache.delete(cwd);
-  const synced = syncStateFrontmatter(content, cwd);
   const lockPath = acquireStateLock(statePath, clock);
+  // Test seam (audit M8): fire AFTER the lock is taken so a test can simulate a
+  // concurrent writer landing in the (now-closed) scan→lock window.
+  if (_stateLockTestHooks.afterAcquire) _stateLockTestHooks.afterAcquire(lockPath);
   try {
+    // Audit M8 (leaky-abstractions): the disk scan that counts PLAN/SUMMARY files
+    // to build the frontmatter is the READ half of this read-modify-write — it must
+    // run INSIDE the lock (mirroring readModifyWriteStateMd), not before it. Scanning
+    // before acquireStateLock left a TOCTOU window where a concurrent writer that
+    // committed a new PLAN/SUMMARY between our scan and our lock made writeStateMd
+    // stamp STALE progress counts (lost update — the #500/#905/#1230 family). The
+    // scan order is otherwise byte-for-behaviour identical for single-threaded
+    // callers — only the concurrent-writer window closes.
+    //
+    // Invalidate the disk scan cache first — the write may create new PLAN/SUMMARY
+    // files that buildStateFrontmatter must see (#1967).
+    if (cwd) _diskScanCache.delete(cwd);
+    const synced = syncStateFrontmatter(content, cwd);
     platformWriteSync(statePath, synced);
   } finally {
     releaseStateLock(lockPath);
@@ -1216,17 +2013,100 @@ function readModifyWriteStateMd(statePath: string, transformFn: (content: string
     // Snapshot the existing progress block BEFORE the transform so we can
     // restore it when resync is false.
     const preFm = resync ? null : extractFrontmatter(content) as Record<string, unknown>;
+
+    // Bug #1230: delta heuristic — snapshot pre-transform body source fields so
+    // we can detect whether THIS write changed them. syncStateFrontmatter
+    // re-derives frontmatter status/stopped_at from the body on every write;
+    // when the body's source field was NOT changed by the transform, the
+    // existing frontmatter value (e.g. a hand-set 'completed') must win over
+    // the body-derived value (e.g. 'verifying' from a stale "Status: Verifying
+    // Phase 3" line that an earlier tool wrote). We do NOT disturb `preFm`
+    // above (null when resync:true) — these are independent snapshots.
+    // Strip frontmatter before calling stateExtractField so the YAML `status:`
+    // key in the frontmatter block cannot shadow the body field we are tracking.
+    const preBody = stripFrontmatter(content);
+    const preFmSnapshot = extractFrontmatter(content) as Record<string, unknown>;
+    const preBodyStatus = stateExtractField(preBody, 'Status');
+    // Bug #1230 / Change B: scope stopped_at delta to the ## Session section,
+    // mirroring buildStateFrontmatter's sessionBodyScope logic (line ~1172).
+    // A stale "Stopped at:" in a non-Session section (e.g. Session Continuity
+    // Archive prose) must not interfere with the delta comparison.
+    const preSessionMatch = matchSessionSection(preBody);
+    const preSessionScope = preSessionMatch ? preSessionMatch[1] : preBody;
+    const preBodyStoppedAt = stateExtractField(preSessionScope, 'Stopped At') || stateExtractField(preSessionScope, 'Stopped at');
+
     const modified = transformFn(content);
+
+    // Bug #948: no-op guard — if the transform produced no change, do NOT write
+    // the file. An unconditional write would bump `last_updated`, reset
+    // `milestone_name` to the template placeholder, and resurrect stale
+    // body-derived `stopped_at` values via syncStateFrontmatter. Skipping the
+    // write when content is unchanged is safe because every caller that mutates
+    // content already returns the mutated string, and callers that detect a
+    // no-op explicitly return the original content unchanged.
+    if (modified === content) {
+      return;
+    }
+
     let synced = syncStateFrontmatter(modified, cwd);
 
-    if (!resync && preFm && preFm['progress']) {
+    // Compute postFm once and apply BOTH the progress-restore (when !resync)
+    // AND the status/stopped_at preservation (#1230) before reconstructing.
+    // This avoids double-wrapping the frontmatter block.
+    const needsProgressRestore = !resync && preFm && preFm['progress'];
+
+    // Post-transform body source fields used for the delta comparison (#1230).
+    // Use `modified` (not `synced`): syncStateFrontmatter only rewrites the frontmatter block, so the body is identical in both — and we need the body the transform produced.
+    // Strip frontmatter so the YAML status key cannot shadow the body field.
+    const postBody = stripFrontmatter(modified);
+    const postBodyStatus = stateExtractField(postBody, 'Status');
+    // Bug #1230 / Change B: scope stopped_at delta to the ## Session section,
+    // consistent with the pre-transform snapshot above and buildStateFrontmatter.
+    const postSessionMatch = matchSessionSection(postBody);
+    const postSessionScope = postSessionMatch ? postSessionMatch[1] : postBody;
+    const postBodyStoppedAt = stateExtractField(postSessionScope, 'Stopped At') || stateExtractField(postSessionScope, 'Stopped at');
+
+    let mutated = false;
+    const postFm = extractFrontmatter(synced) as Record<string, unknown>;
+
+    if (needsProgressRestore) {
       // Re-apply the curated progress block that syncStateFrontmatter just
       // overwrote with disk-derived values.  Only restore keys that were present
       // in the snapshot — this preserves any new non-progress frontmatter fields
       // (e.g., status, current_phase) that syncStateFrontmatter legitimately
       // derived from the updated body.
-      const postFm = extractFrontmatter(synced) as Record<string, unknown>;
       postFm['progress'] = preFm['progress'];
+      mutated = true;
+    }
+
+    // Bug #1230: preserve existing frontmatter status when this write did NOT
+    // change the body's Status field. A write that doesn't touch Status must
+    // not silently revert a hand-set frontmatter status (e.g. 'completed') to
+    // whatever the stale body Status happens to derive (e.g. 'verifying').
+    // Only apply when the existing frontmatter held a real, non-unknown status.
+    if (
+      postBodyStatus === preBodyStatus &&
+      typeof preFmSnapshot['status'] === 'string' &&
+      preFmSnapshot['status'].length > 0 &&
+      preFmSnapshot['status'] !== 'unknown' &&
+      postFm['status'] !== preFmSnapshot['status']
+    ) {
+      postFm['status'] = preFmSnapshot['status'];
+      mutated = true;
+    }
+
+    // Bug #1230: same delta heuristic for stopped_at.
+    if (
+      postBodyStoppedAt === preBodyStoppedAt &&
+      typeof preFmSnapshot['stopped_at'] === 'string' &&
+      preFmSnapshot['stopped_at'].length > 0 &&
+      postFm['stopped_at'] !== preFmSnapshot['stopped_at']
+    ) {
+      postFm['stopped_at'] = preFmSnapshot['stopped_at'];
+      mutated = true;
+    }
+
+    if (mutated) {
       const yamlStr = reconstructFrontmatter(postFm as unknown as Frontmatter);
       const body = stripFrontmatter(synced);
       synced = `---\n${yamlStr}\n---\n\n${body}`;
@@ -1265,6 +2145,17 @@ function cmdStateJson(cwd: string, raw: boolean): void {
   if (built['status'] === 'unknown' && existingFm && existingFm['status'] && existingFm['status'] !== 'unknown') {
     built['status'] = existingFm['status'];
   }
+  // Bug #905: preserve scalar fields when body annotations are absent.
+  // Mirrors the same fallback pattern applied in syncStateFrontmatter.
+  if (existingFm && !built['current_phase'] && existingFm['current_phase']) {
+    built['current_phase'] = existingFm['current_phase'];
+  }
+  if (existingFm && !built['current_phase_name'] && existingFm['current_phase_name']) {
+    built['current_phase_name'] = existingFm['current_phase_name'];
+  }
+  if (existingFm && !built['current_plan'] && existingFm['current_plan']) {
+    built['current_plan'] = existingFm['current_plan'];
+  }
   // Preserve curated cross-milestone aggregates when local disk scanning sees
   // only a narrower realized subset (#3242 Bug A). Stale lower counters still
   // rebuild from disk because they do not exceed the derived scan.
@@ -1292,73 +2183,105 @@ function cmdStateBeginPhase(cwd: string, phaseNumber: string | number, phaseName
   const updated: string[] = [];
 
   readModifyWriteStateMd(statePath, (content) => {
+    // Bug #1255: all body-field replacements must operate on the body only
+    // (frontmatter stripped), not on the full content.  When the full content is
+    // passed to stateReplaceField the YAML `status: planning` key matches the
+    // plain-text pattern (`^Status:\s*`) before the body pipe-table row, so the
+    // pipe-table `| Status | Planning |` is never updated and syncStateFrontmatter
+    // re-derives 'planning' from the unchanged body — the status never advances.
+    const existingFm = extractFrontmatter(content) as Record<string, unknown>;
+    const hasFrontmatter = Object.keys(existingFm).length > 0;
+    let body = stripFrontmatter(content);
+
+    // Helper to reassemble content for field-replacement checks; callers that
+    // only need to test/replace body fields use `body` directly, and the final
+    // return reassembles the frontmatter block with the updated body.
+    const reassemble = (b: string) =>
+      hasFrontmatter ? `---\n${reconstructFrontmatter(existingFm as unknown as Frontmatter)}\n---\n\n${b}` : b;
+
     // Idempotency guard (#3127): if the phase is already mid-flight, do NOT
     // overwrite execution-progress fields (Current Plan, plan body line,
     // Last Activity Description). Only update fields that are safe to
     // refresh on resume (Last Activity date, Status if inconsistent).
     // A phase is considered mid-flight when Status contains 'Executing Phase N'
     // for the current phase number.
-    const currentStatus = stateExtractField(content, 'Status') || '';
+    // #1255: extract from body (not full content) so the YAML `status:` key
+    // cannot shadow the body Status field.
+    const currentStatus = stateExtractField(body, 'Status') || '';
     const isAlreadyExecuting = new RegExp(`Executing Phase\\s+${escapeRegex(String(phaseNumber))}\\b`, 'i').test(currentStatus);
 
-    // Update Status field
+    // Update Status field (body only — #1255)
     const statusValue = `Executing Phase ${phaseNumber}`;
-    let result = stateReplaceField(content, 'Status', statusValue);
-    if (result) { content = result; updated.push('Status'); }
+    let result = stateReplaceField(body, 'Status', statusValue);
+    if (result) { body = result; updated.push('Status'); }
 
     // Update Last Activity (safe to update on resume — tracks when execute-phase ran)
-    result = stateReplaceField(content, 'Last Activity', today);
-    if (result) { content = result; updated.push('Last Activity'); }
+    result = stateReplaceField(body, 'Last Activity', today);
+    if (result) { body = result; updated.push('Last Activity'); }
 
     if (!isAlreadyExecuting) {
       // First-time execution: set all progress fields
 
       // Update Last Activity Description
       const activityDesc = `Phase ${phaseNumber} execution started`;
-      result = stateReplaceField(content, 'Last Activity Description', activityDesc);
-      if (result) { content = result; updated.push('Last Activity Description'); }
+      result = stateReplaceField(body, 'Last Activity Description', activityDesc);
+      if (result) { body = result; updated.push('Last Activity Description'); }
 
       // Update Current Phase
-      result = stateReplaceField(content, 'Current Phase', String(phaseNumber));
-      if (result) { content = result; updated.push('Current Phase'); }
+      result = stateReplaceField(body, 'Current Phase', String(phaseNumber));
+      if (result) { body = result; updated.push('Current Phase'); }
 
       // Update Current Phase Name
       if (phaseName) {
-        result = stateReplaceField(content, 'Current Phase Name', phaseName);
-        if (result) { content = result; updated.push('Current Phase Name'); }
+        result = stateReplaceField(body, 'Current Phase Name', phaseName);
+        if (result) { body = result; updated.push('Current Phase Name'); }
       }
 
       // Update Current Plan to 1 (starting from the first plan)
-      result = stateReplaceField(content, 'Current Plan', '1');
-      if (result) { content = result; updated.push('Current Plan'); }
+      result = stateReplaceField(body, 'Current Plan', '1');
+      if (result) { body = result; updated.push('Current Plan'); }
 
       // Update Total Plans in Phase
       if (planCount) {
-        result = stateReplaceField(content, 'Total Plans in Phase', String(planCount));
-        if (result) { content = result; updated.push('Total Plans in Phase'); }
+        result = stateReplaceField(body, 'Total Plans in Phase', String(planCount));
+        if (result) { body = result; updated.push('Total Plans in Phase'); }
       }
 
       // Update **Current focus:** body text line (#1104)
       const focusLabel = phaseName ? `Phase ${phaseNumber} — ${phaseName}` : `Phase ${phaseNumber}`;
       const focusPattern = /(\*\*Current focus:\*\*\s*).*/i;
-      if (focusPattern.test(content)) {
-        content = content.replace(focusPattern, (_match, prefix: string) => `${prefix}${focusLabel}`);
+      if (focusPattern.test(body)) {
+        body = body.replace(focusPattern, (_match, prefix: string) => `${prefix}${focusLabel}`);
         updated.push('Current focus');
       }
 
       // Update ## Current Position section (#1104, #1365)
-      const positionPattern = /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i;
-      const positionMatch = content.match(positionPattern);
-      if (positionMatch) {
-        const header = positionMatch[1];
-        let posBody = positionMatch[2];
+      // ADR-1372 T6: positionPattern → tokenizeHeadings + spliceStateSection.
+      // Mirrors /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i; stop at level ≥ 2.
+      const posHs = tokenizeHeadings(body);
+      const posIdx = posHs.findIndex(h => h.level === 2 && /^current\s+position$/i.test(h.text));
+      if (posIdx !== -1) {
+        const posH = posHs[posIdx];
+        const bodyLines = body.split('\n');
+        const posHL = bodyLines[posH.line - 1];
+        const posBodyStart = posH.offset + posHL.length + 1;
+        let posBodyEnd = body.length;
+        for (let j = posIdx + 1; j < posHs.length; j++) {
+          if (STOP_H2_PLUS(posHs[j].level)) { posBodyEnd = posHs[j].offset - 1; break; }
+        }
+        let posBody = body.slice(posBodyStart, posBodyEnd);
 
         // Update or insert Phase line
         const newPhase = `Phase: ${phaseNumber}${phaseName ? ` (${phaseName})` : ''} — EXECUTING`;
         if (/^Phase:/m.test(posBody)) {
           posBody = posBody.replace(/^Phase:.*$/m, newPhase);
         } else {
-          posBody = newPhase + '\n' + posBody;
+          // Pipe-table format in Current Position (#1257): update the | Phase | … |
+          // cell rather than prepending a spurious inline `Phase:` line (which left
+          // the table cell stale). Mirrors the Status/Last-activity table branches.
+          const phaseValue = `${phaseNumber}${phaseName ? ` (${phaseName})` : ''} — EXECUTING`;
+          const replaced = stateReplaceField(posBody, 'Phase', phaseValue);
+          if (replaced !== null) posBody = replaced;
         }
 
         // Update or insert Plan line
@@ -1366,42 +2289,74 @@ function cmdStateBeginPhase(cwd: string, phaseNumber: string | number, phaseName
         if (/^Plan:/m.test(posBody)) {
           posBody = posBody.replace(/^Plan:.*$/m, newPlan);
         } else {
-          posBody = posBody.replace(/^(Phase:.*$)/m, `$1\n${newPlan}`);
+          // Pipe-table format in Current Position (#1257): update the | Plan | … |
+          // cell rather than appending after a prepended inline line.
+          const planValue = `1 of ${planCount || '?'}`;
+          const replaced = stateReplaceField(posBody, 'Plan', planValue);
+          if (replaced !== null) posBody = replaced;
         }
 
         // Update Status line if present
         const newStatus = `Status: Executing Phase ${phaseNumber}`;
         if (/^Status:/m.test(posBody)) {
           posBody = posBody.replace(/^Status:.*$/m, newStatus);
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          const replaced = stateReplaceField(posBody, 'Status', `Executing Phase ${phaseNumber}`);
+          if (replaced !== null) posBody = replaced;
         }
 
         // Update Last activity line if present
-        const newActivity = `Last activity: ${today} -- Phase ${phaseNumber} execution started`;
+        const newActivity = `Last activity: ${today} — Phase ${phaseNumber} execution started`;
         if (/^Last activity:/im.test(posBody)) {
           posBody = posBody.replace(/^Last activity:.*$/im, newActivity);
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          // Value must match the inline branch (date + narrative), not bare date.
+          const activityValue = `${today} — Phase ${phaseNumber} execution started`;
+          const replaced = stateReplaceField(posBody, 'Last Activity', activityValue)
+            ?? stateReplaceField(posBody, 'Last activity', activityValue);
+          if (replaced !== null) posBody = replaced;
         }
 
-        content = content.replace(positionPattern, () => `${header}${posBody}`);
+        body = body.slice(0, posBodyStart) + posBody + body.slice(posBodyEnd);
         updated.push('Current Position');
       }
     } else {
       // Resume path: only update Last activity timestamp in Current Position
       // (do not touch Plan:, stopped_at, progress.percent, or plan counter)
-      const positionPattern = /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i;
-      const positionMatch = content.match(positionPattern);
-      if (positionMatch) {
-        const header = positionMatch[1];
-        let posBody = positionMatch[2];
-        const resumeActivity = `Last activity: ${today} -- Phase ${phaseNumber} execution resumed (wave continue)`;
+      // ADR-1372 T6: positionPattern → tokenizeHeadings; stop at level ≥ 2.
+      const posHsR = tokenizeHeadings(body);
+      const posIdxR = posHsR.findIndex(h => h.level === 2 && /^current\s+position$/i.test(h.text));
+      if (posIdxR !== -1) {
+        const posHR = posHsR[posIdxR];
+        const bodyLinesR = body.split('\n');
+        const posHLR = bodyLinesR[posHR.line - 1];
+        const posBodyStartR = posHR.offset + posHLR.length + 1;
+        let posBodyEndR = body.length;
+        for (let j = posIdxR + 1; j < posHsR.length; j++) {
+          if (STOP_H2_PLUS(posHsR[j].level)) { posBodyEndR = posHsR[j].offset - 1; break; }
+        }
+        let posBody = body.slice(posBodyStartR, posBodyEndR);
+        const resumeActivity = `Last activity: ${today} — Phase ${phaseNumber} execution resumed (wave continue)`;
         if (/^Last activity:/im.test(posBody)) {
           posBody = posBody.replace(/^Last activity:.*$/im, resumeActivity);
-          content = content.replace(positionPattern, () => `${header}${posBody}`);
+          body = body.slice(0, posBodyStartR) + posBody + body.slice(posBodyEndR);
           updated.push('Last activity (resume)');
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          const replaced = stateReplaceField(posBody, 'Last Activity', resumeActivity)
+            ?? stateReplaceField(posBody, 'Last activity', resumeActivity);
+          if (replaced !== null) {
+            posBody = replaced;
+            body = body.slice(0, posBodyStartR) + posBody + body.slice(posBodyEndR);
+            updated.push('Last activity (resume)');
+          }
         }
       }
     }
 
-    return content;
+    return reassemble(body);
   }, cwd);
 
   output({ updated, phase: phaseNumber, phase_name: phaseName || null, plan_count: planCount || null }, raw, updated.length > 0 ? 'true' : 'false');
@@ -1462,20 +2417,20 @@ function cmdSignalResume(cwd: string, raw: boolean): void {
  * Returns modified content string.
  */
 function updatePerformanceMetricsSection(content: string, cwd: string, phaseNum: string | number, planCount: number, summaryCount: number): string {
-  // Update Velocity: Total plans completed
-  const totalMatch = content.match(/Total plans completed:\s*(\d+|\[N\])/);
-  const prevTotal = totalMatch && totalMatch[1] !== '[N]' ? parseInt(totalMatch[1], 10) : 0;
-  const newTotal = prevTotal + summaryCount;
-  content = content.replace(
-    /Total plans completed:\s*(\d+|\[N\])/,
-    `Total plans completed: ${newTotal}`
-  );
-
-  // Update By Phase table — upsert row for this phase
+  // By Phase table — upsert the row for THIS phase FIRST. The velocity total is then
+  // DERIVED from the table's Plans column so it stays idempotent on re-run: completing
+  // the same phase again upserts the same row, so the column sum is stable. The previous
+  // blind-add (prevTotal + summaryCount) re-read the cumulative total each call and
+  // double-counted on every re-run. (#1582)
   const byPhaseMatch = content.match(byPhaseTablePattern);
   if (byPhaseMatch) {
     let tableBody = byPhaseMatch[2].trim();
-    const phaseRowPattern = new RegExp(`^\\|\\s*${escapeRegex(String(phaseNum))}\\s*\\|.*$`, 'm');
+    // Match the existing row for this phase, tolerating leading-zero padding in either
+    // direction (#1659): canonicalize a numeric phase to its integer form so a seeded
+    // "| 05 |" row is upserted (not duplicated) by `phase complete 5`, and vice-versa.
+    const phaseNumStr = String(phaseNum);
+    const canonCell = /^\d+$/.test(phaseNumStr) ? `0*${Number(phaseNumStr)}` : escapeRegex(phaseNumStr);
+    const phaseRowPattern = new RegExp(`^\\|\\s*${canonCell}\\s*\\|.*$`, 'm');
     const newRow = `| ${phaseNum} | ${summaryCount} | - | - |`;
 
     if (phaseRowPattern.test(tableBody)) {
@@ -1488,6 +2443,31 @@ function updatePerformanceMetricsSection(content: string, cwd: string, phaseNum:
     }
 
     content = content.replace(byPhaseTablePattern, (_match, tableHeader: string) => `${tableHeader}${tableBody}\n`);
+  }
+
+  // Velocity: Total plans completed — DERIVED as the sum of the By-Phase Plans column
+  // (the second cell) across all data rows. Idempotent by construction (re-running phase
+  // complete upserts the same row → same sum) and self-healing (a hand-edited inflated
+  // total is corrected to the true sum on the next completion). When the By-Phase table
+  // is absent, leave the velocity total unchanged rather than guess. (#1582)
+  if (/Total plans completed:\s*(\d+|\[N\])/.test(content)) {
+    const tableForSum = content.match(byPhaseTablePattern);
+    if (tableForSum) {
+      let sum = 0;
+      for (const row of tableForSum[2].split(/\r?\n/)) {
+        // Data rows look like `| <phase> | <plans> | … |`, optionally indented (the
+        // byPhaseTablePattern data-row capture allows `[ \t]*` leading whitespace, so the
+        // sum must too or hand-edited/legacy indented rows are silently skipped — #1582
+        // codex review). Header (`| Phase | Plans | …`) and separator (`| --- | --- | …`)
+        // rows have a non-numeric second cell and are skipped; non-numeric cells → 0.
+        const cellMatch = row.match(/^\s*\|\s*[^|]+\s*\|\s*(\d+)\s*\|/);
+        if (cellMatch) sum += parseInt(cellMatch[1], 10);
+      }
+      content = content.replace(
+        /Total plans completed:\s*(\d+|\[N\])/,
+        `Total plans completed: ${sum}`,
+      );
+    }
   }
 
   return content;
@@ -1515,36 +2495,49 @@ function cmdStatePlannedPhase(cwd: string, phaseNumber: string | number, planCou
   // doing so tramples curated/known-good counters. Route through the body-only
   // write contract (resync:false), the same guard state.update uses. (#500 RC1)
   readModifyWriteStateMd(statePath, (content) => {
+    // Bug #1257: all body-field replacements must operate on the body only
+    // (frontmatter stripped), not on the full content. When the full content is
+    // passed to stateReplaceFieldIfTemplate the YAML `status: planning` key matches
+    // the plain-text pattern (`^Status:\s*`) before the body pipe-table row, so the
+    // pipe-table `| Status | Planning |` cell is never updated and syncStateFrontmatter
+    // re-derives 'planning' from the unchanged body — the status never advances.
+    // (Mirrors the begin/complete-phase fix from #1255/#1256.)
+    const existingFm = extractFrontmatter(content) as Record<string, unknown>;
+    const hasFrontmatter = Object.keys(existingFm).length > 0;
+    let body = stripFrontmatter(content);
+    const reassemble = (b: string) =>
+      hasFrontmatter ? `---\n${reconstructFrontmatter(existingFm as unknown as Frontmatter)}\n---\n\n${b}` : b;
+
     // Update Status — only when the existing value is a known template default
     // (Knuth invariant: preserve executor-authored values).
-    const newContent = stateReplaceFieldIfTemplate(content, 'Status', statusDefaults, 'Ready to execute');
-    if (newContent !== content) { content = newContent; updated.push('Status'); }
+    const newBody = stateReplaceFieldIfTemplate(body, 'Status', statusDefaults, 'Ready to execute');
+    if (newBody !== body) { body = newBody; updated.push('Status'); }
 
     // Update Total Plans in Phase
     if (planCount !== null && planCount !== undefined) {
-      const result = stateReplaceField(content, 'Total Plans in Phase', String(planCount));
-      if (result) { content = result; updated.push('Total Plans in Phase'); }
+      const result = stateReplaceField(body, 'Total Plans in Phase', String(planCount));
+      if (result) { body = result; updated.push('Total Plans in Phase'); }
     }
 
     // Update Last Activity — only when the existing value is a known template default
     {
-      const after = stateReplaceFieldIfTemplate(content, 'Last Activity', lastActivityDefaults, today);
-      if (after !== content) { content = after; updated.push('Last Activity'); }
+      const after = stateReplaceFieldIfTemplate(body, 'Last Activity', lastActivityDefaults, today);
+      if (after !== body) { body = after; updated.push('Last Activity'); }
     }
 
     // Update Last Activity Description
     {
-      const result = stateReplaceField(content, 'Last Activity Description', `Phase ${phaseNumber} planning complete — ${planCount || '?'} plans ready`);
-      if (result) { content = result; updated.push('Last Activity Description'); }
+      const result = stateReplaceField(body, 'Last Activity Description', `Phase ${phaseNumber} planning complete — ${planCount || '?'} plans ready`);
+      if (result) { body = result; updated.push('Last Activity Description'); }
     }
 
     // Update Current Position section
-    content = updateCurrentPositionFields(content, {
+    body = updateCurrentPositionFields(body, {
       status: 'Ready to execute',
-      lastActivity: `${today} -- Phase ${phaseNumber} planning complete`,
+      lastActivity: `${today} — Phase ${phaseNumber} planning complete`,
     });
 
-    return content;
+    return reassemble(body);
   }, cwd, { resync: false });
 
   output({ updated, phase: phaseNumber, plan_count: planCount }, raw, updated.length > 0 ? 'true' : 'false');
@@ -1571,15 +2564,26 @@ function cmdStateMilestoneSwitch(cwd: string, version: string | undefined, name:
     const existingFm = extractFrontmatter(content) as Record<string, unknown>;
     const body = stripFrontmatter(content);
 
-    const positionPattern = /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i;
+    // ADR-1372 T6: positionPattern → tokenizeHeadings + spliceStateSection.
+    // Mirrors /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i; stop at level ≥ 2.
     const resetPositionBody =
       `\nPhase: Not started (defining requirements)\n` +
       `Plan: —\n` +
       `Status: Defining requirements\n` +
       `Last activity: ${today} — Milestone ${version} started\n\n`;
     let newBody: string;
-    if (positionPattern.test(body)) {
-      newBody = body.replace(positionPattern, (_m, header: string) => `${header}${resetPositionBody}`);
+    const msPosHs = tokenizeHeadings(body);
+    const msPosIdx = msPosHs.findIndex(h => h.level === 2 && /^current\s+position$/i.test(h.text));
+    if (msPosIdx !== -1) {
+      const msPosH = msPosHs[msPosIdx];
+      const msBodyLines = body.split('\n');
+      const msPosHL = msBodyLines[msPosH.line - 1];
+      const msPosBodyStart = msPosH.offset + msPosHL.length + 1;
+      let msPosBodyEnd = body.length;
+      for (let j = msPosIdx + 1; j < msPosHs.length; j++) {
+        if (STOP_H2_PLUS(msPosHs[j].level)) { msPosBodyEnd = msPosHs[j].offset - 1; break; }
+      }
+      newBody = body.slice(0, msPosBodyStart) + resetPositionBody + body.slice(msPosBodyEnd);
     } else {
       const preface = body.trim().length > 0 ? body : '# Project State\n';
       newBody = `${preface.trimEnd()}\n\n## Current Position\n${resetPositionBody}`;
@@ -1704,12 +2708,27 @@ function cmdStateSync(cwd: string, options: StateSyncOptions | undefined, raw: b
     return;
   }
 
+  // #1514: read the current-milestone ROADMAP scope once so retired/folded
+  // phases are excluded from BOTH the disk scan and the heading count here,
+  // exactly as buildStateFrontmatter does — otherwise `state sync --verify`
+  // would keep re-deriving the inflated denominator and report "no drift".
+  let syncRoadmapScope: string | null = null;
+  let syncRetiredPhaseNums = new Set<string>();
+  try {
+    const roadmapRaw = platformReadSync(path.join(planningDir(cwd), 'ROADMAP.md'));
+    if (roadmapRaw !== null) {
+      syncRoadmapScope = extractCurrentMilestone(roadmapRaw, cwd);
+      syncRetiredPhaseNums = extractRetiredPhaseNumbers(syncRoadmapScope);
+    }
+  } catch { /* fall through: no roadmap scope → no retired exclusion */ }
+
   // Scan all phases
   let entries: string[];
   try {
     entries = fs.readdirSync(phasesDir, { withFileTypes: true })
       .filter(e => e.isDirectory())
       .map(e => e.name)
+      .filter(name => !(syncRetiredPhaseNums.size > 0 && syncRetiredPhaseNums.has(phaseKeyFromDir(name))))
       .sort();
   } catch {
     output({ synced: true, changes: [], dry_run: !!verify }, raw, undefined);
@@ -1755,17 +2774,17 @@ function cmdStateSync(cwd: string, options: StateSyncOptions | undefined, raw: b
   let syncTotalPhases: number | null = null;
   try {
     let roadmapPhaseCount = 0;
-    const roadmapPath = path.join(planningDir(cwd), 'ROADMAP.md');
-    const roadmapRaw = platformReadSync(roadmapPath);
-    if (roadmapRaw !== null) {
-      const roadmapScope = extractCurrentMilestone(roadmapRaw, cwd);
+    if (syncRoadmapScope !== null) {
       const phaseHeadingPattern = /#{2,4}\s*Phase\s+([\w][\w.-]*)\s*:/gi;
       let m: RegExpExecArray | null;
-      while ((m = phaseHeadingPattern.exec(roadmapScope)) !== null) {
+      while ((m = phaseHeadingPattern.exec(syncRoadmapScope)) !== null) {
         // Only count tokens that contain at least one digit — excludes
         // pure-word section headings (Overview, Details) while keeping
         // numeric phases (01, 05.1) and project-code IDs (PROJ-42).
-        if (/\d/.test(m[1])) roadmapPhaseCount++;
+        if (!/\d/.test(m[1])) continue;
+        // #1514: retired/folded phases are struck through; exclude from total.
+        if (syncRetiredPhaseNums.has(phaseKeyFromToken(m[1]))) continue;
+        roadmapPhaseCount++;
       }
     }
     if (roadmapPhaseCount > 0) {
@@ -1859,102 +2878,109 @@ function cmdStatePrune(cwd: string, options: StatePruneOptions, raw: boolean): v
 
   // Shared pruning logic applied to both dry-run and real passes.
   // Returns { newContent, archivedSections }.
+  // ADR-1372 T6: all four inline section-collect regexes replaced with
+  // tokenizeHeadings + untrimmed-span splicing for byte-identical writes.
   function prunePass(content: string): { newContent: string; archivedSections: PrunedSection[] } {
     const sections: PrunedSection[] = [];
 
-    // Prune Decisions section: entries like "- [Phase N]: ..."
-    const decisionPattern = /(###?\s*(?:Decisions|Decisions Made|Accumulated.*Decisions)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const decMatch = content.match(decisionPattern);
-    if (decMatch) {
-      const lines = decMatch[2].split('\n');
-      const keep: string[] = [];
-      const archive: string[] = [];
-      for (const line of lines) {
-        const phaseMatch = line.match(/^\s*-\s*\[Phase\s+(\d+)/i);
-        if (phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) {
-          archive.push(line);
-        } else {
-          keep.push(line);
-        }
+    // Helper: locate a heading matching pred, extract untrimmed body [bs, se),
+    // apply transform, and splice back. Returns updated content.
+    // All prune-section patterns stop at level 2 or 3 (STOP_H2_H3).
+    function pruneSectionSpan(
+      c: string,
+      pred: (lv: number, text: string) => boolean,
+      transform: (body: string) => { keep: string[]; archive: string[] },
+      sectionName: string,
+    ): string {
+      const hs = tokenizeHeadings(c);
+      const i = hs.findIndex(h => pred(h.level, h.text));
+      if (i === -1) return c;
+      const h = hs[i];
+      const ls = c.split('\n');
+      const hl = ls[h.line - 1];
+      const bs = h.offset + hl.length + 1;
+      let se = c.length;
+      for (let j = i + 1; j < hs.length; j++) {
+        if (STOP_H2_H3(hs[j].level)) { se = hs[j].offset - 1; break; }
       }
+      const body = c.slice(bs, se);
+      const { keep, archive } = transform(body);
       if (archive.length > 0) {
-        sections.push({ section: 'Decisions', count: archive.length, lines: archive });
-        content = content.replace(decisionPattern, (_m, header: string) => `${header}${keep.join('\n')}`);
+        sections.push({ section: sectionName, count: archive.length, lines: archive });
+        return c.slice(0, bs) + keep.join('\n') + c.slice(se);
       }
+      return c;
     }
 
-    // Prune Recently Completed section: entries mentioning phase numbers
-    const recentPattern = /(###?\s*Recently Completed\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const recMatch = content.match(recentPattern);
-    if (recMatch) {
-      const lines = recMatch[2].split('\n');
-      const keep: string[] = [];
-      const archive: string[] = [];
-      for (const line of lines) {
-        const phaseMatch = line.match(/Phase\s+(\d+)/i);
-        if (phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) {
-          archive.push(line);
-        } else {
-          keep.push(line);
+    // Prune Decisions section: entries like "- [Phase N]: ..."
+    content = pruneSectionSpan(
+      content,
+      (lv, text) => (lv === 2 || lv === 3) && /^(?:Decisions|Decisions Made|Accumulated.*Decisions)$/i.test(text),
+      (body) => {
+        const keep: string[] = [], archive: string[] = [];
+        for (const line of body.split('\n')) {
+          const phaseMatch = line.match(/^\s*-\s*\[Phase\s+(\d+)/i);
+          if (phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) { archive.push(line); } else { keep.push(line); }
         }
-      }
-      if (archive.length > 0) {
-        sections.push({ section: 'Recently Completed', count: archive.length, lines: archive });
-        content = content.replace(recentPattern, (_m, header: string) => `${header}${keep.join('\n')}`);
-      }
-    }
+        return { keep, archive };
+      },
+      'Decisions',
+    );
+
+    // Prune Recently Completed section: entries mentioning phase numbers
+    content = pruneSectionSpan(
+      content,
+      (lv, text) => (lv === 2 || lv === 3) && /^recently\s+completed$/i.test(text),
+      (body) => {
+        const keep: string[] = [], archive: string[] = [];
+        for (const line of body.split('\n')) {
+          const phaseMatch = line.match(/Phase\s+(\d+)/i);
+          if (phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) { archive.push(line); } else { keep.push(line); }
+        }
+        return { keep, archive };
+      },
+      'Recently Completed',
+    );
 
     // Prune resolved blockers: lines marked as resolved (strikethrough ~~text~~
     // or "[RESOLVED]" prefix) with a phase reference older than cutoff
-    const blockersPattern = /(###?\s*(?:Blockers|Blockers\/Concerns|Blockers\s*&\s*Concerns)\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const blockersMatch = content.match(blockersPattern);
-    if (blockersMatch) {
-      const lines = blockersMatch[2].split('\n');
-      const keep: string[] = [];
-      const archive: string[] = [];
-      for (const line of lines) {
-        const isResolved = /~~.*~~|\[RESOLVED\]/i.test(line);
-        const phaseMatch = line.match(/Phase\s+(\d+)/i);
-        if (isResolved && phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) {
-          archive.push(line);
-        } else {
-          keep.push(line);
+    content = pruneSectionSpan(
+      content,
+      (lv, text) => (lv === 2 || lv === 3) && /^(?:Blockers|Blockers\/Concerns|Blockers\s*&\s*Concerns)$/i.test(text),
+      (body) => {
+        const keep: string[] = [], archive: string[] = [];
+        for (const line of body.split('\n')) {
+          const isResolved = /~~.*~~|\[RESOLVED\]/i.test(line);
+          const phaseMatch = line.match(/Phase\s+(\d+)/i);
+          if (isResolved && phaseMatch && parseInt(phaseMatch[1], 10) <= cutoff) { archive.push(line); } else { keep.push(line); }
         }
-      }
-      if (archive.length > 0) {
-        sections.push({ section: 'Blockers (resolved)', count: archive.length, lines: archive });
-        content = content.replace(blockersPattern, (_m, header: string) => `${header}${keep.join('\n')}`);
-      }
-    }
+        return { keep, archive };
+      },
+      'Blockers (resolved)',
+    );
 
     // Prune Performance Metrics table rows: keep only rows for phases > cutoff.
     // Preserves header rows (| Phase | ... and |---|...) and any prose around the table.
-    const metricsPattern = /(###?\s*Performance Metrics\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)/i;
-    const metricsMatch = content.match(metricsPattern);
-    if (metricsMatch) {
-      const sectionLines = metricsMatch[2].split('\n');
-      const keep: string[] = [];
-      const archive: string[] = [];
-      for (const line of sectionLines) {
-        // Table data row: starts with | followed by a number (phase)
-        const tableRowMatch = line.match(/^\|\s*(\d+)\s*\|/);
-        if (tableRowMatch) {
-          const rowPhase = parseInt(tableRowMatch[1], 10);
-          if (rowPhase <= cutoff) {
-            archive.push(line);
+    content = pruneSectionSpan(
+      content,
+      (lv, text) => (lv === 2 || lv === 3) && /^performance\s+metrics$/i.test(text),
+      (body) => {
+        const keep: string[] = [], archive: string[] = [];
+        for (const line of body.split('\n')) {
+          // Table data row: starts with | followed by a number (phase)
+          const tableRowMatch = line.match(/^\|\s*(\d+)\s*\|/);
+          if (tableRowMatch) {
+            const rowPhase = parseInt(tableRowMatch[1], 10);
+            if (rowPhase <= cutoff) { archive.push(line); } else { keep.push(line); }
           } else {
+            // Header row, separator row, or prose — always keep
             keep.push(line);
           }
-        } else {
-          // Header row, separator row, or prose — always keep
-          keep.push(line);
         }
-      }
-      if (archive.length > 0) {
-        sections.push({ section: 'Performance Metrics', count: archive.length, lines: archive });
-        content = content.replace(metricsPattern, (_m, header: string) => `${header}${keep.join('\n')}`);
-      }
-    }
+        return { keep, archive };
+      },
+      'Performance Metrics',
+    );
 
     return { newContent: content, archivedSections: sections };
   }
@@ -2065,50 +3091,86 @@ function cmdStateCompletePhase(cwd: string, raw: boolean, overridePhase?: string
   readModifyWriteStateMd(statePath, (content) => {
     const currentPhase = resolvedPhase;
 
-    // Update Status field
+    // Bug #1255: operate on body only so the YAML frontmatter `status:` key
+    // cannot shadow the body Status field (pipe-table or inline).
+    const existingFm = extractFrontmatter(content) as Record<string, unknown>;
+    const hasFrontmatter = Object.keys(existingFm).length > 0;
+    let body = stripFrontmatter(content);
+
+    const reassemble = (b: string) =>
+      hasFrontmatter ? `---\n${reconstructFrontmatter(existingFm as unknown as Frontmatter)}\n---\n\n${b}` : b;
+
+    // Update Status field (body only — #1255)
     const statusValue = `Phase ${currentPhase} complete`;
-    let result = stateReplaceField(content, 'Status', statusValue);
-    if (result) { content = result; updated.push('Status'); }
+    let result = stateReplaceField(body, 'Status', statusValue);
+    if (result) { body = result; updated.push('Status'); }
 
     // Update Last Activity date
-    result = stateReplaceField(content, 'Last Activity', today);
-    if (result) { content = result; updated.push('Last Activity'); }
+    result = stateReplaceField(body, 'Last Activity', today);
+    if (result) { body = result; updated.push('Last Activity'); }
 
     // Update Last Activity Description
     const activityDesc = `Phase ${currentPhase} marked complete`;
-    result = stateReplaceField(content, 'Last Activity Description', activityDesc);
-    if (result) { content = result; updated.push('Last Activity Description'); }
+    result = stateReplaceField(body, 'Last Activity Description', activityDesc);
+    if (result) { body = result; updated.push('Last Activity Description'); }
 
     // Update ## Current Position section
-    const positionPattern = /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i;
-    const positionMatch = content.match(positionPattern);
-    if (positionMatch) {
-      const header = positionMatch[1];
-      let posBody = positionMatch[2];
+    // ADR-1372 T6: positionPattern → tokenizeHeadings; stop at level ≥ 2.
+    // Mirrors /(##\s*Current Position\s*\n)([\s\S]*?)(?=\n##|$)/i
+    {
+      const cpHs = tokenizeHeadings(body);
+      const cpIdx = cpHs.findIndex(h => h.level === 2 && /^current\s+position$/i.test(h.text));
+      if (cpIdx !== -1) {
+        const cpH = cpHs[cpIdx];
+        const cpBodyLines = body.split('\n');
+        const cpHL = cpBodyLines[cpH.line - 1];
+        const cpBodyStart = cpH.offset + cpHL.length + 1;
+        let cpBodyEnd = body.length;
+        for (let j = cpIdx + 1; j < cpHs.length; j++) {
+          if (STOP_H2_PLUS(cpHs[j].level)) { cpBodyEnd = cpHs[j].offset - 1; break; }
+        }
+        let posBody = body.slice(cpBodyStart, cpBodyEnd);
 
-      // Update Phase line to show COMPLETE
-      const newPhase = `Phase: ${currentPhase} — COMPLETE`;
-      if (/^Phase:/m.test(posBody)) {
-        posBody = posBody.replace(/^Phase:.*$/m, newPhase);
+        // Update Phase line to show COMPLETE
+        const newPhase = `Phase: ${currentPhase} — COMPLETE`;
+        if (/^Phase:/m.test(posBody)) {
+          posBody = posBody.replace(/^Phase:.*$/m, newPhase);
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          // Value cell must be bare (no "Phase:" label prefix) — the column header already provides the label.
+          const replaced = stateReplaceField(posBody, 'Phase', `${currentPhase} — COMPLETE`);
+          if (replaced !== null) posBody = replaced;
+        }
+
+        // Update Status line if present
+        const newStatus = `Status: Phase ${currentPhase} complete`;
+        if (/^Status:/m.test(posBody)) {
+          posBody = posBody.replace(/^Status:.*$/m, newStatus);
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          const replaced = stateReplaceField(posBody, 'Status', `Phase ${currentPhase} complete`);
+          if (replaced !== null) posBody = replaced;
+        }
+
+        // Update Last activity line if present
+        const newActivity = `Last activity: ${today} — Phase ${currentPhase} marked complete`;
+        if (/^Last activity:/im.test(posBody)) {
+          posBody = posBody.replace(/^Last activity:.*$/im, newActivity);
+        } else {
+          // Pipe-table format in Current Position (#1255)
+          // Value must match the inline branch (date + narrative), not bare date.
+          const activityValue = `${today} — Phase ${currentPhase} marked complete`;
+          const replaced = stateReplaceField(posBody, 'Last Activity', activityValue)
+            ?? stateReplaceField(posBody, 'Last activity', activityValue);
+          if (replaced !== null) posBody = replaced;
+        }
+
+        body = body.slice(0, cpBodyStart) + posBody + body.slice(cpBodyEnd);
+        updated.push('Current Position');
       }
-
-      // Update Status line if present
-      const newStatus = `Status: Phase ${currentPhase} complete`;
-      if (/^Status:/m.test(posBody)) {
-        posBody = posBody.replace(/^Status:.*$/m, newStatus);
-      }
-
-      // Update Last activity line if present
-      const newActivity = `Last activity: ${today} -- Phase ${currentPhase} marked complete`;
-      if (/^Last activity:/im.test(posBody)) {
-        posBody = posBody.replace(/^Last activity:.*$/im, newActivity);
-      }
-
-      content = content.replace(positionPattern, () => `${header}${posBody}`);
-      updated.push('Current Position');
     }
 
-    return content;
+    return reassemble(body);
   }, cwd);
 
   output(
@@ -2138,6 +3200,7 @@ export = {
   cmdStateUpdateProgress,
   cmdStateAddDecision,
   cmdStateAddBlocker,
+  cmdStateAddRoadmapEvolution,
   cmdStateResolveBlocker,
   cmdStateRecordSession,
   cmdStateSnapshot,
@@ -2151,4 +3214,30 @@ export = {
   cmdStateMilestoneSwitch,
   cmdSignalWaiting,
   cmdSignalResume,
+  // Test seam (#1514): the pure retired/folded-phase parser, exposed so its
+  // strikethrough-detection logic can be property-tested directly.
+  _extractRetiredPhaseNumbers: extractRetiredPhaseNumbers,
+  // Test seam (audit M1): inject a deterministic isPidAlive so the liveness-gated
+  // steal decision is exercised without real pids. Mirrors capability-lock.cts.
+  _setLockProbes(probes: Partial<{ isPidAlive: (pid: number) => boolean }>): void {
+    if (typeof probes.isPidAlive === 'function') _stateLockProbes.isPidAlive = probes.isPidAlive;
+  },
+  _resetLockProbes(): void {
+    _stateLockProbes.isPidAlive = _realIsPidAlive;
+  },
+  // Test seam (audit M8/M9): inject deterministic hooks for the scan-in-lock window
+  // (afterAcquire), the one-shot recoverable writeSync failure (simulateWriteError),
+  // and per-iteration orphan-lock snapshots (onLoopIteration). See _stateLockTestHooks.
+  _setStateLockTestHooks(hooks: StateLockTestHooks): void {
+    if ('afterAcquire' in hooks) _stateLockTestHooks.afterAcquire = hooks.afterAcquire;
+    if ('simulateWriteError' in hooks) _stateLockTestHooks.simulateWriteError = hooks.simulateWriteError;
+    if ('onLoopIteration' in hooks) _stateLockTestHooks.onLoopIteration = hooks.onLoopIteration;
+    if ('beforeSteal' in hooks) _stateLockTestHooks.beforeSteal = hooks.beforeSteal;
+  },
+  _resetStateLockTestHooks(): void {
+    delete _stateLockTestHooks.afterAcquire;
+    delete _stateLockTestHooks.simulateWriteError;
+    delete _stateLockTestHooks.onLoopIteration;
+    delete _stateLockTestHooks.beforeSteal;
+  },
 };

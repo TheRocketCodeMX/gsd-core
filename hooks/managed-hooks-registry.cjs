@@ -22,6 +22,7 @@ const MANAGED_HOOKS = [
   'gsd-context-monitor.js',
   'gsd-cursor-post-tool.js',
   'gsd-cursor-session-start.js',
+  'gsd-ensure-canonical-path.js',
   'gsd-graphify-update.sh',
   'gsd-grounding-index-refresh.js',
   'gsd-phase-boundary.sh',

@@ -46,17 +46,107 @@ const REAL_COMMANDS_DIR = path.join(__dirname, '..', 'commands', 'gsd');
 const MANIFEST = loadSkillsManifest(REAL_COMMANDS_DIR);
 const RESOLVED_CORE = resolveProfile({ modes: ['core'], manifest: MANIFEST });
 
+function loadFreshInstallerWithInstallPlanStub(stub) {
+  return loadFreshInstallerWithPlanStubs({ installStub: stub });
+}
+
+function loadFreshInstallerWithPlanStubs({ installStub, uninstallStub }) {
+  const installPath = require.resolve('../bin/install.js');
+  const planPath = require.resolve('../gsd-core/bin/lib/runtime-artifact-install-plan.cjs');
+  const planModule = require(planPath);
+  const originalInstall = planModule.createRuntimeArtifactInstallPlan;
+  const originalUninstall = planModule.createRuntimeArtifactUninstallPlan;
+  if (installStub) planModule.createRuntimeArtifactInstallPlan = installStub;
+  if (uninstallStub) planModule.createRuntimeArtifactUninstallPlan = uninstallStub;
+  delete require.cache[installPath];
+  const installer = require('../bin/install.js');
+
+  return {
+    installer,
+    restore() {
+      planModule.createRuntimeArtifactInstallPlan = originalInstall;
+      planModule.createRuntimeArtifactUninstallPlan = originalUninstall;
+      delete require.cache[installPath];
+    },
+  };
+}
+
 // ─── Section 6: installRuntimeArtifacts — parameterised layout loop ──────────
+
+describe('installRuntimeArtifacts — consumes Runtime Artifact Install Plan Module', () => {
+  test('executes returned copy items and cleanup obligations', (t) => {
+    const configDir = createTempDir('gsd-install-plan-adapter-');
+    const sourceDir = createTempDir('gsd-install-plan-source-');
+    const cleanupDir = createTempDir('gsd-install-plan-cleanup-');
+    t.after(() => {
+      cleanup(configDir);
+      cleanup(sourceDir);
+      cleanup(cleanupDir);
+    });
+
+    fs.writeFileSync(path.join(sourceDir, 'proof.md'), '# proof\n');
+    fs.writeFileSync(path.join(cleanupDir, 'temp.md'), '# cleanup\n');
+    let planArgs;
+    const { installer, restore } = loadFreshInstallerWithInstallPlanStub((args) => {
+      planArgs = args;
+      return {
+        ok: true,
+        plan: {
+          cleanupDirs: [cleanupDir],
+          items: [
+            { kind: 'commands', sourceDir, destDir: path.join(configDir, 'commands', 'gsd') },
+          ],
+        },
+      };
+    });
+    t.after(restore);
+
+    installer.installRuntimeArtifacts('gemini', configDir, 'global', RESOLVED_CORE);
+
+    assert.strictEqual(planArgs.layout.runtime, 'gemini');
+    assert.strictEqual(planArgs.layout.configDir, configDir);
+    assert.strictEqual(planArgs.layout.scope, 'global');
+    assert.strictEqual(planArgs.resolvedProfile, RESOLVED_CORE);
+    assert.strictEqual(planArgs.resolveAttribution('gemini'), undefined);
+    assert.ok(fs.existsSync(path.join(configDir, 'commands', 'gsd', 'proof.md')));
+    assert.ok(!fs.existsSync(cleanupDir), 'returned cleanup dir must be removed after copy');
+  });
+
+  test('cleans returned obligations when planning fails', (t) => {
+    const configDir = createTempDir('gsd-install-plan-fail-');
+    const cleanupDir = createTempDir('gsd-install-plan-fail-cleanup-');
+    t.after(() => {
+      cleanup(configDir);
+      cleanup(cleanupDir);
+    });
+
+    fs.writeFileSync(path.join(cleanupDir, 'temp.md'), '# cleanup\n');
+    const { installer, restore } = loadFreshInstallerWithInstallPlanStub(() => ({
+      ok: false,
+      kind: 'rewrite_failed',
+      failedKind: 'commands',
+      message: 'planned failure',
+      cleanupDirs: [cleanupDir],
+    }));
+    t.after(restore);
+
+    assert.throws(
+      () => installer.installRuntimeArtifacts('gemini', configDir, 'global', RESOLVED_CORE),
+      /planned failure/,
+    );
+    assert.ok(!fs.existsSync(cleanupDir), 'failure cleanup dir must be removed');
+  });
+});
 
 const SKILLS_RUNTIMES_LAYOUT = [
   'claude', 'cursor', 'codex', 'copilot', 'antigravity',
-  'windsurf', 'augment', 'trae', 'qwen', 'codebuddy',
+  'augment', 'trae', 'qwen', 'kimi', 'codebuddy',
 ];
 
 const ALL_RUNTIMES_LAYOUT = [
   'claude', 'cursor', 'gemini', 'codex', 'copilot', 'antigravity',
   'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy',
-  'cline', 'opencode', 'kilo',
+  'cline', 'kimi', 'opencode', 'kilo',
 ];
 
 function countPrefixedEntries(destDir, prefix) {
@@ -73,6 +163,21 @@ function writeSkillEntry(destDir, prefix, stem) {
 function writeCommandEntry(destDir, prefix, stem) {
   fs.mkdirSync(destDir, { recursive: true });
   fs.writeFileSync(path.join(destDir, `${prefix}${stem}.md`), `# ${stem}\n`);
+}
+
+function readAllSkillMd(dir) {
+  const out = [];
+  if (!fs.existsSync(dir)) return '';
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const ent of fs.readdirSync(cur, { withFileTypes: true })) {
+      const p = path.join(cur, ent.name);
+      if (ent.isDirectory()) stack.push(p);
+      else if (ent.name === 'SKILL.md') out.push(fs.readFileSync(p, 'utf8'));
+    }
+  }
+  return out.join('\n');
 }
 
 describe('installRuntimeArtifacts — skills runtimes write gsd-prefixed skill dirs', () => {
@@ -95,6 +200,40 @@ describe('installRuntimeArtifacts — skills runtimes write gsd-prefixed skill d
         `${runtime}: ${skillsKind.prefix}help/SKILL.md must exist`
       );
 
+      if (runtime === 'kimi') {
+        const newProjectSkill = path.join(destDir, 'gsd-new-project', 'SKILL.md');
+        assert.ok(fs.existsSync(newProjectSkill), 'kimi: gsd-new-project/SKILL.md must exist');
+        const content = fs.readFileSync(newProjectSkill, 'utf8');
+        assert.match(content, /^name: gsd-new-project$/m);
+        assert.match(content, /\/skill:gsd-new-project/);
+        assert.doesNotMatch(content, /kimi_cli\.tools|system_prompt_path|^version: 1$/m);
+
+        const agentsDir = path.join(configDir, 'agents');
+        const rootYaml = path.join(agentsDir, 'gsd.yaml');
+        const rootPrompt = path.join(agentsDir, 'gsd.md');
+        const executorYaml = path.join(agentsDir, 'subagents', 'gsd-executor.yaml');
+        const executorPrompt = path.join(agentsDir, 'subagents', 'gsd-executor.md');
+        assert.ok(fs.existsSync(rootYaml), 'kimi: agents/gsd.yaml must exist');
+        assert.ok(fs.existsSync(rootPrompt), 'kimi: agents/gsd.md must exist');
+        assert.ok(fs.existsSync(executorYaml), 'kimi: agents/subagents/gsd-executor.yaml must exist');
+        assert.ok(fs.existsSync(executorPrompt), 'kimi: agents/subagents/gsd-executor.md must exist');
+
+        const rootYamlContent = fs.readFileSync(rootYaml, 'utf8');
+        assert.match(rootYamlContent, /^version: 1$/m);
+        assert.match(rootYamlContent, /^agent:$/m);
+        assert.match(rootYamlContent, /extend: default/);
+        assert.match(rootYamlContent, /system_prompt_path: \.\/gsd\.md/);
+        assert.match(rootYamlContent, /tools:/);
+        assert.match(rootYamlContent, /subagents:/);
+        assert.match(rootYamlContent, /kimi_cli\.tools\./);
+        assert.doesNotMatch(rootYamlContent, /mcp__/);
+
+        const executorYamlContent = fs.readFileSync(executorYaml, 'utf8');
+        assert.match(executorYamlContent, /system_prompt_path: \.\/gsd-executor\.md/);
+        assert.match(executorYamlContent, /kimi_cli\.tools\./);
+        assert.doesNotMatch(executorYamlContent, /mcp__/);
+      }
+
       if (RESOLVED_CORE.skills !== '*') {
         const prefixedCount = countPrefixedEntries(destDir, skillsKind.prefix || 'gsd-');
         assert.strictEqual(prefixedCount, RESOLVED_CORE.skills.size,
@@ -105,7 +244,7 @@ describe('installRuntimeArtifacts — skills runtimes write gsd-prefixed skill d
 });
 
 describe('installRuntimeArtifacts — hermes nested layout', () => {
-  test('hermes: skills/gsd/<stem>/SKILL.md, no gsd- prefix in name', (t) => {
+  test('hermes: skills/gsd/gsd-<stem>/SKILL.md with gsd- prefix in name (#947)', (t) => {
     const configDir = createTempDir('gsd-ial-hermes-');
     t.after(() => cleanup(configDir));
 
@@ -113,9 +252,11 @@ describe('installRuntimeArtifacts — hermes nested layout', () => {
 
     const nestedDir = path.join(configDir, 'skills', 'gsd');
     assert.ok(fs.existsSync(nestedDir));
-    assert.ok(fs.existsSync(path.join(nestedDir, 'help', 'SKILL.md')));
-    assert.ok(!fs.existsSync(path.join(nestedDir, 'gsd-help')),
-      'hermes must NOT have gsd-help prefix');
+    // #947: Hermes now uses canonical gsd- prefix — skills/gsd/gsd-<stem>/SKILL.md
+    assert.ok(fs.existsSync(path.join(nestedDir, 'gsd-help', 'SKILL.md')),
+      'skills/gsd/gsd-help/SKILL.md must exist (canonical gsd- prefix, #947)');
+    assert.ok(!fs.existsSync(path.join(nestedDir, 'help')),
+      'bare-stem skills/gsd/help/ must NOT exist (#947 fix)');
   });
 });
 
@@ -154,6 +295,47 @@ describe('installRuntimeArtifacts — cursor commands layout (#785)', () => {
     // Cursor commands are plain markdown — no YAML frontmatter
     const helpContent = fs.readFileSync(path.join(commandsDir, 'gsd-help.md'), 'utf8');
     assert.ok(!helpContent.startsWith('---'), 'cursor commands must not start with YAML frontmatter');
+  });
+});
+
+describe('installRuntimeArtifacts — windsurf workflows layout (#1615)', () => {
+  test('windsurf: local install writes workflow slash-command files, not skills', (t) => {
+    const configDir = createTempDir('gsd-ial-windsurf-');
+    t.after(() => cleanup(configDir));
+
+    installRuntimeArtifacts('windsurf', configDir, 'local', RESOLVED_CORE);
+
+    const workflowsDir = path.join(configDir, 'workflows');
+    assert.ok(fs.existsSync(workflowsDir), 'workflows/ must exist for Windsurf local install');
+    assert.ok(fs.existsSync(path.join(workflowsDir, 'gsd-help.md')),
+      'workflows/gsd-help.md must exist for /gsd-help');
+    assert.ok(!fs.existsSync(path.join(configDir, 'skills')),
+      'Windsurf must not install dead skills/ artifacts for slash commands');
+
+    const helpContent = fs.readFileSync(path.join(workflowsDir, 'gsd-help.md'), 'utf8');
+    assert.ok(!helpContent.startsWith('---'), 'Windsurf workflows must be plain markdown, not SKILL.md frontmatter');
+    assert.match(helpContent, /# gsd-help/, 'workflow should identify the slash command it backs');
+    assert.ok(helpContent.includes(`${configDir}/gsd-core/commands/gsd/help.md`.replace(/\\/g, '/')),
+      'workflow should reference the installed command body using the actual install target');
+
+    for (const fileName of fs.readdirSync(workflowsDir)) {
+      if (!fileName.endsWith('.md')) continue;
+      const workflowPath = path.join(workflowsDir, fileName);
+      const byteLength = Buffer.byteLength(fs.readFileSync(workflowPath, 'utf8'), 'utf8');
+      assert.ok(byteLength <= 12000, `${fileName} must respect Windsurf's 12,000-character workflow limit`);
+    }
+  });
+
+  test('windsurf: global install is explicit no-op for workflow artifacts', (t) => {
+    const configDir = createTempDir('gsd-ial-windsurf-global-');
+    t.after(() => cleanup(configDir));
+
+    installRuntimeArtifacts('windsurf', configDir, 'global', RESOLVED_CORE);
+
+    assert.ok(!fs.existsSync(path.join(configDir, 'workflows')),
+      'global Windsurf install must not write workflows under the config root');
+    assert.ok(!fs.existsSync(path.join(configDir, 'skills')),
+      'global Windsurf install must not write dead skills artifacts');
   });
 });
 
@@ -267,6 +449,39 @@ describe('installOpencodeFamilySkills — emits skills/<name>/SKILL.md (#784)', 
 
 // ─── Section 7: uninstallRuntimeArtifacts — all runtimes ─────────────────────
 
+describe('uninstallRuntimeArtifacts — consumes Runtime Artifact Uninstall Plan Module', () => {
+  test('removes returned plan destinations with layout kind metadata', (t) => {
+    const configDir = createTempDir('gsd-uninstall-plan-adapter-');
+    t.after(() => cleanup(configDir));
+
+    const commandsDir = path.join(configDir, 'custom-commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+    fs.writeFileSync(path.join(commandsDir, 'gsd-help.md'), '# remove\n');
+    fs.writeFileSync(path.join(commandsDir, 'user-custom.md'), '# keep\n');
+
+    let planLayout;
+    const { installer, restore } = loadFreshInstallerWithPlanStubs({
+      uninstallStub(layout) {
+        planLayout = layout;
+        return {
+          items: [
+            { kind: 'commands', destDir: commandsDir },
+          ],
+        };
+      },
+    });
+    t.after(restore);
+
+    installer.uninstallRuntimeArtifacts('gemini', configDir, 'global');
+
+    assert.strictEqual(planLayout.runtime, 'gemini');
+    assert.strictEqual(planLayout.configDir, configDir);
+    assert.strictEqual(planLayout.scope, 'global');
+    assert.ok(!fs.existsSync(path.join(commandsDir, 'gsd-help.md')));
+    assert.ok(fs.existsSync(path.join(commandsDir, 'user-custom.md')));
+  });
+});
+
 describe('uninstallRuntimeArtifacts — removes gsd-owned entries, preserves foreign', () => {
   for (const runtime of ALL_RUNTIMES_LAYOUT) {
     test(`${runtime}: gsd entries removed, foreign preserved`, (t) => {
@@ -289,17 +504,23 @@ describe('uninstallRuntimeArtifacts — removes gsd-owned entries, preserves for
 
       if (runtime === 'hermes') {
         const kind = layout.kinds[0];
-        const destDir = path.join(configDir, kind.destSubpath);
+        const destDir = path.join(configDir, kind.destSubpath); // skills/gsd
+        // Seed a gsd-* prefixed skill (canonical #947 layout) and a bare-stem skill (#3664 era)
+        fs.mkdirSync(path.join(destDir, 'gsd-help'), { recursive: true });
+        fs.writeFileSync(path.join(destDir, 'gsd-help', 'SKILL.md'), '# gsd-help\n');
         fs.mkdirSync(path.join(destDir, 'help'), { recursive: true });
-        fs.writeFileSync(path.join(destDir, 'help', 'SKILL.md'), '# help\n');
+        fs.writeFileSync(path.join(destDir, 'help', 'SKILL.md'), '# bare-stem help (#3664)\n');
         const siblingDir = path.join(configDir, 'skills', 'user-skill');
         fs.mkdirSync(siblingDir, { recursive: true });
         fs.writeFileSync(path.join(siblingDir, 'SKILL.md'), '# user\n');
 
         uninstallRuntimeArtifacts(runtime, configDir, 'global');
 
-        assert.ok(!fs.existsSync(destDir));
-        assert.ok(fs.existsSync(path.join(siblingDir, 'SKILL.md')));
+        // skills/gsd/ removed (gsd-* removed by _removeGsdEntries, bare-stem by legacy cleanup,
+        // then DESCRIPTION.md removed, category dir removed as empty)
+        assert.ok(!fs.existsSync(destDir), 'skills/gsd/ must be removed after uninstall');
+        // User skill outside skills/gsd/ preserved
+        assert.ok(fs.existsSync(path.join(siblingDir, 'SKILL.md')), 'user-skill must be preserved');
         return;
       }
 
@@ -312,6 +533,14 @@ describe('uninstallRuntimeArtifacts — removes gsd-owned entries, preserves for
           const foreignDir = path.join(destDir, 'user-custom-skill');
           fs.mkdirSync(foreignDir, { recursive: true });
           fs.writeFileSync(path.join(foreignDir, 'SKILL.md'), '# user\n');
+        } else if (kind.kind === 'kimi-agents') {
+          fs.mkdirSync(path.join(destDir, 'subagents'), { recursive: true });
+          fs.writeFileSync(path.join(destDir, 'gsd.yaml'), 'version: 1\n');
+          fs.writeFileSync(path.join(destDir, 'gsd.md'), '# gsd\n');
+          fs.writeFileSync(path.join(destDir, 'subagents', 'gsd-executor.yaml'), 'version: 1\n');
+          fs.writeFileSync(path.join(destDir, 'subagents', 'gsd-executor.md'), '# executor\n');
+          fs.writeFileSync(path.join(destDir, 'user-agent.yaml'), 'version: 1\n');
+          fs.writeFileSync(path.join(destDir, 'subagents', 'user-agent.yaml'), 'version: 1\n');
         } else {
           writeCommandEntry(destDir, kind.prefix, 'help');
           writeCommandEntry(destDir, kind.prefix, 'phase');
@@ -327,6 +556,13 @@ describe('uninstallRuntimeArtifacts — removes gsd-owned entries, preserves for
           assert.ok(!fs.existsSync(path.join(destDir, `${kind.prefix}help`)));
           assert.ok(!fs.existsSync(path.join(destDir, `${kind.prefix}phase`)));
           assert.ok(fs.existsSync(path.join(destDir, 'user-custom-skill', 'SKILL.md')));
+        } else if (kind.kind === 'kimi-agents') {
+          assert.ok(!fs.existsSync(path.join(destDir, 'gsd.yaml')));
+          assert.ok(!fs.existsSync(path.join(destDir, 'gsd.md')));
+          assert.ok(!fs.existsSync(path.join(destDir, 'subagents', 'gsd-executor.yaml')));
+          assert.ok(!fs.existsSync(path.join(destDir, 'subagents', 'gsd-executor.md')));
+          assert.ok(fs.existsSync(path.join(destDir, 'user-agent.yaml')));
+          assert.ok(fs.existsSync(path.join(destDir, 'subagents', 'user-agent.yaml')));
         } else {
           assert.ok(!fs.existsSync(path.join(destDir, `${kind.prefix}help.md`)));
           assert.ok(!fs.existsSync(path.join(destDir, `${kind.prefix}phase.md`)));
@@ -387,7 +623,7 @@ describe('installRuntimeArtifacts — legacy migrations run before layout copy',
     assert.ok(fs.existsSync(path.join(configDir, 'skills', 'gsd-help', 'SKILL.md')));
   });
 
-  test('hermes: legacy flat skills/gsd-*/ migrated AND new nested skills/gsd/<stem>/ written', (t) => {
+  test('hermes: legacy flat skills/gsd-*/ migrated AND new nested skills/gsd/gsd-<stem>/ written (#947)', (t) => {
     const configDir = createTempDir('gsd-legacy-hermes-install-');
     t.after(() => cleanup(configDir));
 
@@ -397,13 +633,15 @@ describe('installRuntimeArtifacts — legacy migrations run before layout copy',
 
     installRuntimeArtifacts('hermes', configDir, 'global', RESOLVED_CORE);
 
-    assert.ok(!fs.existsSync(legacyFlatHelp));
-    assert.ok(fs.existsSync(path.join(configDir, 'skills', 'gsd', 'help', 'SKILL.md')));
+    assert.ok(!fs.existsSync(legacyFlatHelp), 'legacy flat skill must be removed');
+    // #947: canonical path is skills/gsd/gsd-<stem>/ not skills/gsd/<stem>/
+    assert.ok(fs.existsSync(path.join(configDir, 'skills', 'gsd', 'gsd-help', 'SKILL.md')),
+      'skills/gsd/gsd-help/SKILL.md must exist after install (#947)');
   });
 });
 
 describe('uninstallRuntimeArtifacts — legacy cleanup runs before layout removal', () => {
-  test('hermes: both flat and nested layouts removed', (t) => {
+  test('hermes: both flat and nested layouts removed (#947: bare-stem dirs cleaned on uninstall)', (t) => {
     const { uninstallRuntimeArtifacts } = require('../bin/install.js');
     const configDir = createTempDir('gsd-legacy-uninstall-hermes-');
     t.after(() => cleanup(configDir));
@@ -414,8 +652,9 @@ describe('uninstallRuntimeArtifacts — legacy cleanup runs before layout remova
     fs.writeFileSync(path.join(flatHelp, 'SKILL.md'), '# legacy flat\n');
 
     const nestedGsd = path.join(skillsDir, 'gsd');
+    // Seed a pre-#947 bare-stem GSD skill (no gsd- prefix, from #3664 era)
     fs.mkdirSync(path.join(nestedGsd, 'help'), { recursive: true });
-    fs.writeFileSync(path.join(nestedGsd, 'help', 'SKILL.md'), '# nested help\n');
+    fs.writeFileSync(path.join(nestedGsd, 'help', 'SKILL.md'), '# nested help (bare-stem)\n');
 
     const userSkill = path.join(skillsDir, 'user-skill');
     fs.mkdirSync(userSkill, { recursive: true });
@@ -423,9 +662,12 @@ describe('uninstallRuntimeArtifacts — legacy cleanup runs before layout remova
 
     uninstallRuntimeArtifacts('hermes', configDir, 'global');
 
-    assert.ok(!fs.existsSync(flatHelp));
-    assert.ok(!fs.existsSync(nestedGsd));
-    assert.ok(fs.existsSync(path.join(userSkill, 'SKILL.md')));
+    // Pre-#2841 flat skills/gsd-help/ removed by legacy cleanup
+    assert.ok(!fs.existsSync(flatHelp), 'flat gsd-help must be removed');
+    // skills/gsd/ removed: bare-stem dirs cleaned + no gsd-* dirs remain → empty → removed
+    assert.ok(!fs.existsSync(nestedGsd), 'skills/gsd/ must be removed after uninstall');
+    // User content outside skills/gsd/ preserved
+    assert.ok(fs.existsSync(path.join(userSkill, 'SKILL.md')), 'user-skill must be preserved');
   });
 
   test('claude: legacy commands/gsd/ cleaned AND new skills/ entries removed', (t) => {
@@ -452,4 +694,45 @@ describe('uninstallRuntimeArtifacts — legacy cleanup runs before layout remova
     assert.ok(!fs.existsSync(legacyDir));
     assert.ok(fs.existsSync(path.join(userSkill, 'SKILL.md')));
   });
+});
+
+describe('skills wrapper threads install scope into converter isGlobal (regression: local installs must not leak global home paths)', () => {
+  // Bug: the skills wrapper in runtime-artifact-layout passed `runtime` (a truthy
+  // string) as the converter's 3rd positional arg. For antigravity/copilot that
+  // param was `isGlobal`, so LOCAL installs always took the GLOBAL path branch and
+  // leaked ~/.gemini/antigravity or ~/.copilot instead of the workspace path.
+  for (const { runtime, globalMarker, localMarker } of [
+    { runtime: 'antigravity', globalMarker: '~/.gemini/antigravity', localMarker: '.agents' },
+    { runtime: 'copilot', globalMarker: '~/.copilot', localMarker: '.github' },
+  ]) {
+    test(`${runtime}: local skill content uses workspace path, not global home`, (t) => {
+      const globalDir = createTempDir(`gsd-ial-g-${runtime}-`);
+      const localDir = createTempDir(`gsd-ial-l-${runtime}-`);
+      t.after(() => { cleanup(globalDir); cleanup(localDir); });
+
+      installRuntimeArtifacts(runtime, globalDir, 'global', RESOLVED_CORE);
+      installRuntimeArtifacts(runtime, localDir, 'local', RESOLVED_CORE);
+
+      const gSkills = resolveRuntimeArtifactLayout(runtime, globalDir, 'global').kinds.find(k => k.kind === 'skills');
+      const lSkills = resolveRuntimeArtifactLayout(runtime, localDir, 'local').kinds.find(k => k.kind === 'skills');
+      assert.ok(gSkills && lSkills, `${runtime}: must resolve a skills kind for both scopes`);
+
+      const gCombined = readAllSkillMd(path.join(globalDir, gSkills.destSubpath));
+      const lCombined = readAllSkillMd(path.join(localDir, lSkills.destSubpath));
+
+      // Precondition (non-vacuity guard): some core skill carries a ~/.claude
+      // reference, so the GLOBAL install surfaces the global home marker. If this
+      // assertion ever fails, the source skills lost their path references — fix
+      // the fixture/source, do not delete this test.
+      assert.ok(gCombined.includes(globalMarker),
+        `${runtime}: precondition — global install should contain '${globalMarker}'`);
+
+      // The actual regression: a LOCAL install must NOT leak the global home path…
+      assert.ok(!lCombined.includes(globalMarker),
+        `${runtime}: local install must NOT leak global home path '${globalMarker}'`);
+      // …and SHOULD reference the workspace-relative path.
+      assert.ok(lCombined.includes(localMarker),
+        `${runtime}: local install must reference workspace path '${localMarker}'`);
+    });
+  }
 });

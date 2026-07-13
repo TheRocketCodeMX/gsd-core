@@ -127,7 +127,7 @@ Uniform rule: cite the decision only that file holds, keyed to its unit; the scr
 - Tests: update `bug-2492-context-coverage-gate.test.cjs`; add a new unit test for the extended `extractPlanDesignatedSections`/cross-check (the functions are already exported).
 
 **Byte-budget constraints (the real implementation gotcha):**
-- `discuss-phase.md` = **29995/30000 bytes (~4 free)** and `plan-phase.md` = **89721/90000 (279 free, and it's the XL high-water mark)** → a resolver invocation **cannot be added inline**. Must **lazy-extract prose to a `gsd-core/references/` file first** (the #2551 pattern) to free bytes, then add the small `gsd_run` call. This is the known byte-lock dance from the 1.14.0 work.
+- `discuss-phase.md` = **29995/30000 bytes (~4 free)** and `plan-phase.md` = **89721/90000 (279 free, and it's the XL high-water mark)** → a resolver invocation **cannot be added inline**. Must **lazy-extract prose to a `gsd-core/references/` file first** (the established lazy-extraction pattern) to free bytes, then add the small `gsd_run` call. This is the known byte-lock dance from the 1.14.0 work.
 - The **PLAN template (`phase-prompt.md`) has no size gate** → adding the `## Grounding` section there is free.
 - `gsd-planner.md` is bound by the **50000-char reachability gate (~892 chars free)**, not the line budget → planner grounding instructions must be terse (put detail in a reference).
 

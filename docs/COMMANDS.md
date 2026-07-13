@@ -14,7 +14,7 @@ The hyphen and colon forms are *runtime-specific spellings of the same command*.
 
 ### Skill Runtime Behavior (Claude Code)
 
-Heavy workflow skills (`/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-autonomous`) carry `context: fork` in their frontmatter. On Claude Code, this runs each skill in an isolated subagent context window, protecting the main session's context budget. The skills also declare `effort: xhigh`, signalling maximum token budget to the runtime.
+Heavy workflow skills (`/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-autonomous`) declare `effort: max`, signalling maximum token budget to the runtime. These skills are spawning orchestrators — they must run at top level so they retain the `Agent` tool needed to spawn subagents. They do **not** carry `context: fork` (see #921).
 
 Quick-status skills (`/gsd-progress`, `/gsd-stats`) declare `effort: low`, directing the runtime to use a minimal token budget for fast reads.
 
@@ -86,6 +86,36 @@ Manage GSD workspaces — create, list, or remove isolated workspace environment
 /gsd-workspace --new --name feature-b --repos . --strategy worktree  # Same-repo isolation
 /gsd-workspace --list
 /gsd-workspace --remove feature-b
+```
+
+---
+
+### `/gsd-spec-phase`
+
+Clarify WHAT a phase delivers through Socratic questioning with quantitative ambiguity scoring, then probe for omitted edges. Produces `SPEC.md` before discuss-phase.
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `N` | Yes | Phase number |
+
+| Flag | Description |
+|------|-------------|
+| `--auto` | Skip interactive questions; Claude selects recommended defaults and writes SPEC.md |
+| `--text` | Use plain-text numbered lists instead of TUI menus (required for `/rc` remote sessions) |
+
+**Position in workflow:** `spec-phase → discuss-phase → plan-phase → execute-phase → verify`
+
+**Edge Coverage (Step 5.5):** After the ambiguity gate passes, spec-phase runs an edge-completeness probe over each requirement. It raises only applicable categories from a closed 8-category taxonomy (boundary, adjacency, empty, encoding, ordering, precision, idempotency, concurrency), proposes one concrete candidate edge per category, and records each as `covered` / `dismissed` (reason required) / `backstop` / `unresolved` in a `## Edge Coverage` SPEC section. Unresolved applicable edges soft-gate the spec (Resolve / Write-anyway-flagged / Keep-probing); `covered` and `backstop` edges are later lifted into plan-phase `must_haves`. Under `--auto` the probe **never auto-dismisses** — it auto-covers where a defensible acceptance criterion exists, otherwise auto-backstops.
+
+**Prohibition Coverage (Step 5.6):** After the edge probe, spec-phase runs a prohibition-completeness probe — a two-stage prose pass (adversarial recall → precision classifier) that surfaces the unwritten *must-NOT* constraints (values/safety/ethics) the spec never forbids. Each is resolved to `resolved` (a NEGATIVE acceptance criterion, carrying a `test` or `judgment` verification tier) / `dismissed` (reason required) / `unresolved`, recorded in a `## Prohibitions (must-NOT)` SPEC section. Resolved prohibitions are lifted into plan-phase `must_haves.prohibitions`; judgment-tier items soft-gate at verify time (never silent, never hard-halt) and unwired test-tier items fail closed. Under `--auto` the probe **never auto-dismisses**; canon-bound concerns (OWASP / GDPR / fairness) are referred to `/gsd:secure-phase`.
+
+**Prerequisites:** `.planning/ROADMAP.md` exists
+**Produces:** `{phase}-SPEC.md` (with a `## Edge Coverage` section)
+
+```bash
+/gsd-spec-phase 1                  # Interactive spec + edge probe for phase 1
+/gsd-spec-phase 3 --auto           # Auto-select defaults; never auto-dismisses an edge
+/gsd-spec-phase 2 --text           # Plain-text menus for remote sessions
 ```
 
 ---
@@ -205,7 +235,7 @@ See [Package Legitimacy Gate in the User Guide](USER-GUIDE.md#package-legitimacy
 
 ### `/gsd-plan-review-convergence`
 
-Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Runs `plan-phase → review → replan → re-review` cycles (max 3 cycles by default). Spawns isolated agents for planning and review; orchestrator handles loop control, HIGH-concern counting, stall detection, and escalation.
+Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain and no actionable MEDIUM/LOW findings remain outside `PLAN.md`. Runs `plan-phase → review → replan → re-review` cycles (max 3 cycles by default). Plan-phase runs inline (bare Skill at depth 0 so it can spawn gsd-planner/gsd-plan-checker at depth 1); only gsd-review runs in an isolated Agent. Orchestrator handles loop control, unresolved review counting (HIGH + actionable non-HIGH), stall detection, and escalation.
 
 | Argument / Flag | Required | Description |
 |-----------------|----------|-------------|
@@ -214,7 +244,7 @@ Cross-AI plan convergence loop — replan with review feedback until no HIGH con
 | `--all` | No | Run every configured reviewer in parallel |
 | `--max-cycles N` | No | Override cycle cap (default 3) |
 
-**Exit behavior:** Loop exits when HIGH count hits zero. Stall detection warns when HIGH count is not decreasing across cycles. Escalation gate asks the user to proceed or review manually when `--max-cycles` is hit with HIGH concerns still open.
+**Exit behavior:** Loop exits when both `current_high` and `current_actionable` hit zero. Stall detection warns when the total unresolved review count is not decreasing across cycles. Escalation gate asks the user to proceed or review manually when `--max-cycles` is hit with HIGH or actionable non-HIGH concerns still open.
 
 ```bash
 /gsd-plan-review-convergence 3                    # Default reviewers, 3 cycles
@@ -281,6 +311,29 @@ For browser-backed UAT, use a configured browser MCP server. The current Open GS
 
 ```bash
 /gsd-verify-work 1                  # UAT for phase 1
+```
+
+**Coverage-aware UAT routing (#1602).** When a SUMMARY.md carries a `coverage:` frontmatter block, `verify-work` classifies each deliverable deterministically instead of prompting for every prose bullet: deliverables proven by passing tests are auto-passed (recorded with `source: automated`, no prompt) and only judgment-dependent deliverables are presented for human sign-off. SUMMARYs without a `coverage:` block fall back to the previous prose-based extraction unchanged. See the [`coverage:` block reference](#summary-coverage-block) below.
+
+#### SUMMARY `coverage:` block
+
+A SUMMARY.md may carry an optional `coverage:` frontmatter block — a list of per-deliverable entries that joins requirements → tests → verification status:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Stable identifier (`D1`, `D2`…), unique within the SUMMARY |
+| `description` | The deliverable in human-readable form |
+| `requirement` | Optional REQ-ID linking to REQUIREMENTS.md |
+| `verification[].kind` | `unit` \| `integration` \| `e2e` \| `automated_ui` \| `manual_procedural` \| `other` |
+| `verification[].ref` | Test path + descriptor, screenshot ref, or command |
+| `verification[].status` | `pass` \| `fail` \| `unknown` |
+| `human_judgment` | Required boolean. `true` always routes to a human |
+| `rationale` | Required when `human_judgment: true` |
+
+A deliverable is auto-passed **only** when `human_judgment: false`, its `verification` list is non-empty, and every entry's `status` is `pass`. Anything else — `human_judgment: true`, an empty `verification`, a non-`pass` status, or a schema error — is presented to a human (fail-safe). Inspect the classification directly with:
+
+```bash
+node gsd-tools.cjs uat classify-coverage --summary .planning/phases/01-foundation/01-01-SUMMARY.md
 ```
 
 ---
@@ -490,6 +543,37 @@ Retroactively audit and fill Nyquist validation gaps.
 
 ---
 
+### `phase uat-passed <N> [--require-verification]`
+
+Runtime-neutral predicate that evaluates HUMAN-UAT results for a phase and reports whether all required checks passed. Uses markdown-aware parsing that ignores false-positive contexts (YAML frontmatter, fenced code blocks, HTML comments, and blockquotes), so incomplete checkbox fragments in prose sections never trigger a false pass.
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `N` | **Yes** | Phase number to evaluate |
+| `--require-verification` | No | Require at least one `*-VERIFICATION.md` file alongside UAT results; fails if none are found |
+
+**Output fields (JSON):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `passed` | `boolean` | `true` only when at least one check exists AND all checks pass AND no blockers — fail-closed (no vacuous pass) |
+| `uat_files` | `string[]` | Filenames of `*-UAT.md` files evaluated |
+| `verification_files` | `string[]` | Filenames of `*-VERIFICATION.md` files evaluated |
+| `checks[]` | `{ file, test, name, result, passing }[]` | Per-item evaluation results parsed from heading blocks |
+| `blockers[]` | `string[]` | Human-readable reasons for failure (frontmatter issues, failing/missing test items, policy violations, malformed markdown) — NOT a subset of `checks[]` |
+| `no_uat_artifacts` | `boolean` | `true` when no real UAT test items were parsed (no `*-UAT.md` files, unreadable dir, or files with no test blocks); when `true`, `passed` is always `false` |
+| `policy.require_verification` | `boolean` | Whether `--require-verification` was active |
+
+**Programmatic access:** `node gsd-tools.cjs phase uat-passed <N> [--require-verification] [--raw]` — see [CLI Tools Reference](CLI-TOOLS.md)
+
+```bash
+node gsd-tools.cjs phase uat-passed 3                        # Evaluate UAT for phase 3
+node gsd-tools.cjs phase uat-passed 3 --require-verification # Also require VERIFICATION.md
+node gsd-tools.cjs phase uat-passed 3 --raw                  # Machine-readable JSON output
+```
+
+---
+
 ## Navigation Commands
 
 ### `/gsd-progress`
@@ -499,13 +583,17 @@ Show status, next steps, and automatically advance to the next logical workflow 
 | Flag | Description |
 |------|-------------|
 | `--next` | Automatically advance to the next logical workflow step without manual route selection |
+| `--next --auto` | Like `--next`, but chains steps automatically until milestone completion or a blocking decision |
+| `--next --converge` | When the next action is planning, route it through `/gsd-plan-review-convergence`; requires `workflow.plan_review_convergence=true` |
+| `--cross-ai` | Alias for `--converge` |
+| Reviewer flags | With `--converge`, pass through `--codex`, `--gemini`, `--claude`, `--opencode`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--all`, and `--max-cycles N` |
 | `--do "task description"` | Analyze freeform intent and dispatch to the most appropriate GSD command |
 | `--forensic` | Append a 6-check integrity audit after the standard report (STATE consistency, orphaned handoffs, deferred scope drift, memory-flagged pending work, blocking todos, uncommitted code) |
 
 **Auto-routing behavior (`--next`):**
 - No project → suggests `/gsd-new-project`
 - Phase needs discussion → runs `/gsd-discuss-phase`
-- Phase needs planning → runs `/gsd-plan-phase`
+- Phase needs planning → runs `/gsd-plan-phase` (or `/gsd-plan-review-convergence` when `--converge` is set)
 - Phase needs execution → runs `/gsd-execute-phase`
 - Phase needs verification → runs `/gsd-verify-work`
 - All phases complete → suggests `/gsd-complete-milestone`
@@ -513,6 +601,8 @@ Show status, next steps, and automatically advance to the next logical workflow 
 ```bash
 /gsd-progress                       # "Where am I? What's next?" with auto-routing
 /gsd-progress --next                # Advance to next step automatically
+/gsd-progress --next --auto         # Chain steps automatically until completion
+/gsd-progress --next --auto --converge  # Hands-free run with plan-review convergence
 /gsd-progress --do "fix the auth bug"  # Dispatch freeform intent to best GSD command
 /gsd-progress --forensic            # Standard report + integrity audit
 ```
@@ -546,7 +636,7 @@ Interactive command center for managing multiple phases from one terminal.
 **Behavior:**
 - Dashboard of all phases with visual status indicators
 - Recommends optimal next actions based on dependencies and progress
-- Dispatches work: discuss runs inline, plan/execute run as background agents
+- Dispatches work: discuss runs inline; plan/execute run as background agents on runtimes that support nested background dispatch, or inline on Claude Code
 - Designed for power users parallelizing work across phases from one terminal
 - Supports per-step passthrough flags via `manager.flags` config (see [Configuration](CONFIGURATION.md#manager-passthrough-flags))
 
@@ -724,6 +814,9 @@ Run all remaining phases autonomously.
 | `--to N` | Stop after completing a specific phase number |
 | `--only N` | Restrict execution to phase N; lifecycle step is skipped |
 | `--interactive` | Lean context with user input |
+| `--converge` | Route each planning step through `/gsd-plan-review-convergence`; requires `workflow.plan_review_convergence=true` |
+| `--cross-ai` | Alias for `--converge` |
+| Reviewer flags | With `--converge`, pass through `--codex`, `--gemini`, `--claude`, `--opencode`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--all`, and `--max-cycles N` |
 | `--text` | Replace `AskUserQuestion` prompts with plain numbered lists |
 
 ```bash
@@ -732,6 +825,8 @@ Run all remaining phases autonomously.
 /gsd-autonomous --to 5              # Run up to and including phase 5
 /gsd-autonomous --from 3 --to 5     # Run phases 3 through 5
 /gsd-autonomous --only 4            # Run only phase 4
+/gsd-autonomous --only 4 --converge # Run one phase with plan convergence
+/gsd-autonomous --converge --all --max-cycles 5
 /gsd-autonomous --text              # Run with text-mode prompts
 ```
 
@@ -1043,6 +1138,32 @@ Toggle which skills are surfaced — apply a profile, list, or disable a cluster
 /gsd-surface reset                  # Restore install-time profile
 ```
 
+### `gsd capability`
+
+Manage GSD capabilities — first-party (shipped) and third-party overlays. CLI form `gsd capability <subcommand>`. See the [`gsd capability` command reference](reference/gsd-capability-command.md) for the full contract, source-spec forms, and install layout.
+
+| Subcommand | Description |
+|------------|-------------|
+| `install <spec> [--integrity …] [--scope global\|project] [--yes] [--shared-file <rel>]…` | Resolve, verify, consent-gate, and install a capability from a registry / git / npm / tarball / local source |
+| `update [<id> \| --all] [--scope …] [--yes]` | Re-resolve a capability's recorded source and upgrade it (atomic stage-then-swap) |
+| `remove <id> [--purge-data] [--scope …]` | Remove an installed overlay capability's files + marker-isolated shared edits (first-party cannot be removed here) |
+| `list [--json]` | List first-party + installed overlay capabilities as a JSON array |
+| `outdated [--json] [--scope …]` | Light-peek each installed overlay's recorded source and report which have a newer version available (per-source matrix; npm ranges resolve the highest matching version; `pinned` for immutable/explicit git refs or exact npm versions; `manual`/`unknown` for sources that can't be auto-checked) |
+| `disable <id>` / `enable <id>` | Toggle a capability's activation state (same as `capability set <id> --off`/`--on`) |
+| `state` / `set <id> …` | Inspect resolved capability state / set activation + per-hook gates |
+
+```bash
+gsd capability list --json                           # All capabilities as JSON
+gsd capability install ./my-cap --scope project      # Install a local capability into the project
+gsd capability install npm:@org/gsd-cap-x@^1 --yes   # Install from npm, granting executable-surface consent
+gsd capability update my-cap                          # Upgrade from its recorded source
+gsd capability outdated --json                         # Which installed overlays have a newer version?
+gsd capability disable ui                             # Turn a FIRST-PARTY capability off (disable/enable/set are first-party only)
+gsd capability remove my-cap --scope project          # Turn the installed overlay off — remove it from the scope it was installed in
+```
+
+**Programmatic access:** `node gsd-tools.cjs capability <subcommand>` — see [CLI Tools Reference](CLI-TOOLS.md).
+
 ---
 
 ## Brownfield Commands
@@ -1092,6 +1213,41 @@ Build, query, and inspect the project knowledge graph stored in `.planning/graph
 ```
 
 **Programmatic access:** `node gsd-tools.cjs graphify <build|query|status|diff|snapshot>` — see [CLI Tools Reference](CLI-TOOLS.md).
+
+### `/gsd-mempalace-recall`
+
+Recall prior decisions, patterns, and surprises from MemPalace into `MEMORY-RECALL.md` before planning. Reads `CONTEXT.md` to derive a search query, runs `mempalace wake-up` + `mempalace_search` + `mempalace_kg_query`/timeline, and writes a deduped recall document. When MemPalace is unavailable the skill writes a stub and continues. Opt-in via `mempalace.enabled: true` and `mempalace.recall_on_plan: true` (see [Configuration Reference](CONFIGURATION.md#mempalace-settings)).
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `phase-slug` | No | Phase slug used to scope the search query (defaults to the active phase from CONTEXT.md) |
+
+**Produces:** `MEMORY-RECALL.md` in the active phase directory (or an "unavailable" stub when MemPalace is unreachable)
+
+```bash
+/gsd-mempalace-recall          # Recall for the current phase
+/gsd-mempalace-recall 03-auth  # Recall scoped to a specific phase slug
+```
+
+---
+
+### `/gsd-mempalace-capture`
+
+File a phase artifact (`CONTEXT.md`, `PLAN.md`, or `SUMMARY.md`) verbatim into MemPalace and mirror decision facts into its temporal knowledge graph. Uses `mempalace_check_duplicate` before filing, so re-running the same phase is idempotent. Opt-in via `mempalace.enabled: true` and `mempalace.capture_artifacts: true` (see [Configuration Reference](CONFIGURATION.md#mempalace-settings)).
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `CONTEXT.md\|PLAN.md\|SUMMARY.md` | No | Artifact to capture (defaults to `CONTEXT.md` when called at `discuss:post`) |
+
+**Produces:** A drawer in the appropriate MemPalace room (`decisions`, `planning`, or `milestones`) plus KG facts when `mempalace.mirror_kg: true`
+
+```bash
+/gsd-mempalace-capture CONTEXT.md   # File CONTEXT.md → decisions room
+/gsd-mempalace-capture PLAN.md      # File PLAN.md → planning room
+/gsd-mempalace-capture SUMMARY.md   # File SUMMARY.md → milestones room
+```
+
+---
 
 ### `gsd-tools intel api-surface`
 
@@ -1237,6 +1393,8 @@ Execute a trivial task inline — no subagents, no planning overhead. For typo f
 
 Cross-AI peer review of phase plans from external AI CLIs.
 
+Reviewers are prompted to verify the plan's claims against the actual repository source — opening the referenced files and citing `file:line` evidence with the mechanism — rather than reviewing the plan text in isolation. A reviewer that has no file access flags what it cannot verify instead of asserting it, and `file:line`-grounded findings are weighted more heavily during consensus synthesis.
+
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `--phase N` | **Yes** | Phase number to review |
@@ -1352,10 +1510,11 @@ Capture ideas, tasks, notes, and seeds to their appropriate destination. Default
 | `--backlog <description>` | Add to the backlog parking lot using 999.x numbering |
 | `--seed [idea summary]` | Capture a forward-looking idea with trigger conditions |
 | `--list` | List pending todos and select one to work on |
+| `--list-seeds [status]` | List/audit captured seeds, optionally filtered by status (read-only) |
 | `--global` | Use global scope (for note operations) |
 
 **Backlog:** 999.x numbering keeps items outside the active phase sequence; phase directories are created immediately so `/gsd-discuss-phase` and `/gsd-plan-phase` work on them.
-**Seeds:** Preserve full WHY, WHEN to surface, and breadcrumbs — consumed by `/gsd-new-milestone`.
+**Seeds:** Preserve full WHY, WHEN to surface, and breadcrumbs — consumed by `/gsd-new-milestone`. Audit parked seeds anytime with `--list-seeds` (optionally `--list-seeds dormant`).
 
 **Produces:** `.planning/todos/` (default), note files (--note), ROADMAP.md backlog section (--backlog), `.planning/seeds/SEED-NNN-slug.md` (--seed)
 
@@ -1367,6 +1526,8 @@ Capture ideas, tasks, notes, and seeds to their appropriate destination. Default
 /gsd-capture --backlog "GraphQL API layer"         # Add to backlog
 /gsd-capture --seed "Add real-time collaboration when WebSocket infra is in place"
 /gsd-capture --list                                # Browse and act on todos
+/gsd-capture --list-seeds                          # Audit all captured seeds
+/gsd-capture --list-seeds dormant                  # Filter seeds by status
 ```
 
 ---
@@ -1534,6 +1695,16 @@ npm run lint:descriptions
 ```
 
 The check is also run as part of `npm test` via `tests/enh-2789-description-budget.test.cjs`.
+
+---
+
+## Capability commands (third-party)
+
+A capability can ship its own command family by declaring `commands: [{ family, module, router }]` in its `capability.json` (ADR-1244 D7). Once the capability is **active**, running `gsd-tools <family> …` (equivalently the `gsd <family>` wrapper) dispatches to the capability's router. The first-party families `graphify`, `intel`, and `audit-uat`/`audit-open` use exactly this registry-driven seam.
+
+For a **project-scoped** third-party capability, "active" is decided by the **user-owned consent store** (`${GSD_HOME:-~}/.gsd/consent.json`), not by the in-repo ledger. Since #1459, the authoritative project-scope activation gate is a consent record on **this machine**, bound to the project root and the exact bundle content; a forged or cloned in-repo `.gsd-capabilities.json` ledger that *looks* committed activates nothing on its own — see [The capability trust model](explanation/capability-trust-model.md#the-project-scope-trust-boundary). A **global** capability (under your own home) is trusted without a per-project record.
+
+Command dispatch is then gated **twice**. Beyond that primary activation gate, the router module is loaded **only from the capability's own install root** (a bare `.cjs` basename, traversal- and symlink-confined), and dispatch additionally requires a **committed** (non-`_pending`) entry in the per-runtime `.gsd-capabilities.json` ledger — a *secondary* signal that the install actually completed. A capability that is merely present on disk without a committed ledger entry is not command-dispatchable; a project-scoped one is not even *active* without the consent record. (A project ledger lives in the repo tree and is only as trustworthy as the repository — which is precisely why the consent store, not the ledger, is the project-scope activation gate.)
 
 ---
 

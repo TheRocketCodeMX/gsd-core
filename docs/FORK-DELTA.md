@@ -1,6 +1,8 @@
 # FORK-DELTA — what this fork owns on top of upstream
 
-**Base:** upstream `open-gsd/gsd-core` v1.4.0 = commit `7eb4d286`. Everything below is `git diff 7eb4d286..HEAD` on `next` (the fork's content source of truth), with pure branding excluded (see *Branding-only*).
+**Base:** upstream `TheRocketCodeMX/gsd-core` v1.4.0 = commit `7eb4d286`. Everything below is `git diff 7eb4d286..HEAD` on `next` (the fork's content source of truth), with pure branding excluded (see *Branding-only*).
+
+**v2.0.0 realignment status (Epic #13):** the `realign/2.0.0` tree is upstream **v1.6.1** (`1c352d1e`) + this delta, re-ported. Entries below are reconciled to that ported reality — features upstream absorbed between v1.4.0 and v1.6.1 are noted as **upstream-absorbed** and no longer tracked as fork patches.
 
 This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 
@@ -17,11 +19,11 @@ This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 | `exploration` | Mandatory parallel phase exploration (scout-codebase doctrine) |
 | `dod` | Cross-cutting Definition-of-Done requirements (`[CROSS-CUTTING]`) |
 | `learn` | `/gsd:learn` teaching system (catalog, progress, visual server) |
-| `seeds` | `--list-seeds` read-only seed browser |
+| `seeds` | `--list-seeds` read-only seed browser — **upstream-absorbed** (#722): upstream v1.6.1 ships `list-seeds` natively (gsd-tools case, workflow, capture routing, help rows); only the fork's extra test coverage remains fork-owned |
 | `context-monitor` | Deliberate no-op'ing of the upstream context-monitor hook |
 | `no-context-fork` | Removal of `context: fork` from heavy skills (it breaks subagent spawning) |
 | `identity` | Fork identity: npm coordinate, repo slug, legacy-cleanup extension, rider config lines |
-| `release` | Fork release plumbing: NPM token auth, update-changelog-preview tooling, sync-upstream script |
+| `release` | Fork release plumbing: NPM token auth, update-changelog-preview tooling, sync-upstream script. The changeset-payload shipping + dual-layout requires are **upstream-absorbed** (#935/#938: upstream installs `scripts/changeset/` as a sibling of `gsd-core/`, so the repo-relative requires resolve installed) |
 
 A file may carry blocks from more than one feature; it then has one FORK-PATCHES entry **per feature**.
 
@@ -95,10 +97,9 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 
 - `gsd-core/references/ai-test-quality.md`
 - `gsd-core/references/engineering-standards.md`
-- `gsd-core/references/execute-phase-between-wave-reset.md`
-- `gsd-core/references/execute-phase-wave-guard.md`
-- `gsd-core/references/untrusted-input-boundary.md`
 - `tests/source-fidelity-contracts.test.cjs`
+
+Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned; do not restore over upstream's copies): `gsd-core/references/execute-phase-between-wave-reset.md`, `gsd-core/references/execute-phase-wave-guard.md`, `gsd-core/references/untrusted-input-boundary.md`.
 
 ### grounding — source-grounding resolver, gate, hook
 
@@ -132,10 +133,11 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `tests/learn-catalog.test.cjs`
 - `tests/learn-visual.test.cjs`
 
-### seeds — --list-seeds browser
+### seeds — --list-seeds browser (upstream-absorbed #722)
 
-- `gsd-core/workflows/list-seeds.md`
 - `tests/feat-list-seeds.test.cjs`
+
+The feature itself is upstream-native as of v1.6.1 (`gsd-core/workflows/list-seeds.md`, the `list-seeds` gsd-tools case, `commands/gsd/capture.md` routing, and the help rows all ship upstream). Only the fork's extra test coverage remains fork-owned.
 
 ### release — fork release plumbing
 
@@ -152,13 +154,30 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `docs/superpowers/plans/2026-06-26-source-grounding-slice1.md`
 - `docs/superpowers/specs/2026-06-25-gsd-learn-design.md`
 - `docs/superpowers/specs/2026-06-26-source-grounding-design.md`
+- `docs/superpowers/specs/2026-07-13-upstream-adoption-analysis.md`
+- `docs/superpowers/specs/2026-07-13-upstream-realignment-proposal.md`
+- `docs/FORK-DELTA.md`
+- `docs/FORK-PATCHES.json`
+- `tests/fork-delta-manifest.test.cjs`
+- `.changeset/fork-delta-guard.md`
+
+### realignment-extracted (Epic #13) — new files created DURING the v2.0.0 port
+
+Size-budgeted upstream workflows/agents could not absorb the fork blocks inline, so the port extracted these steps/references. Fork-owned; upstream has no version of them:
+
+- `gsd-core/references/plan-checker-strategy-compliance.md`
+- `gsd-core/references/verifier-fidelity-gates.md`
+- `gsd-core/workflows/autonomous/blocker-handling.md`
+- `gsd-core/workflows/discuss-phase/resume.md`
+- `gsd-core/workflows/execute-phase/steps/failure-classification.md`
+- `gsd-core/workflows/plan-phase/modes/prd-express.md`
 
 ### Do NOT restore (accidental / transient additions)
 
 These are also new since the fork base but must **not** be carried through a realignment:
 
-- `hooks/gsd-context-monitor.js.tmp.27634.318d8b7b56ab` — an accidentally committed atomic-write temp artifact; delete it.
-- `.changeset/daring-ravens-snooze.md` — a transient changeset consumed by the release pipeline; carry it only if it has not been released yet.
+- `hooks/gsd-context-monitor.js.tmp.27634.318d8b7b56ab` — an accidentally committed atomic-write temp artifact; delete it. (Done — not carried into the 2.0.0 tree.)
+- `.changeset/daring-ravens-snooze.md` — a transient changeset consumed by the release pipeline; carry it only if it has not been released yet. (Released — not carried into the 2.0.0 tree.)
 
 ---
 
@@ -196,13 +215,14 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-ui-checker.md` | fidelity | markers | FE-architecture/Mode tables + design-override principle |
 | `agents/gsd-ui-researcher.md` | fidelity | markers | Mode/FE-architecture tables; one-line import (anchor) |
 | `agents/gsd-verifier.md` | fidelity | markers | reward-hacking + architecture/strategy/design/mode-fit gates |
-| `bin/install.js` | release | markers | ships scripts/changeset payload for the update preview |
-| `commands/gsd/capture.md` | seeds | anchors-only | frontmatter + table rows for `--list-seeds` |
+| `bin/lib/ui-safety-gate.cjs` | fidelity, strategy | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard + UI-hint authority |
+| `commands/gsd/ns-manage.md` | learn | anchors-only | `learn` in requires + gsd-learn routing row |
+| `commands/gsd/ns-project.md` | strategy | anchors-only | 9 strategy skills in requires + routing rows |
 | `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row: "Inert no-op in this fork" |
 | `eslint.config.mjs` | identity | anchors-only | `_reference/**` ignore + generated-lib rider lines |
 | `.gitignore` | identity | anchors-only | generated project/grounding/learn .cjs + `_reference/` riders |
 | `.github/workflows/release.yml` | release | anchors-only | `NODE_AUTH_TOKEN` env on publish/dry-run steps |
-| `gsd-core/bin/gsd-tools.cjs` | strategy, seeds, learn, grounding | markers | `case 'project'/'list-seeds'/'learn'/'grounding'` + require/usage lines (anchors) |
+| `gsd-core/bin/gsd-tools.cjs` | strategy, learn, grounding | markers | `case 'project'/'learn'/'grounding'` + require/usage lines (anchors); `list-seeds` is upstream-native (#722) |
 | `gsd-core/bin/lib/legacy-cleanup.cjs` | identity | markers | upstream-signal consts, legacy caches, empty-legacy-runtime-dir scan + apply guard |
 | `gsd-core/bin/shared/config-defaults.manifest.json` | grounding | anchors-only | JSON; `grounding_gate: true` |
 | `gsd-core/bin/shared/config-schema.manifest.json` | grounding | anchors-only | JSON; `workflow.grounding_gate` key |
@@ -217,7 +237,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
 | `gsd-core/workflows/discuss-phase.md` | exploration | anchors-only | SIZE-GATED (29995/30000 bytes!); mandatory-exploration scout step + engineering-standards/canonical-refs lines |
 | `gsd-core/workflows/execute-phase.md` | fidelity | anchors-only | SIZE-GATED (89972/90000 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle |
-| `gsd-core/workflows/help/modes/full.md` | strategy, learn, seeds | markers | registration blocks for strategy commands, `/gsd:learn`, `--list-seeds` |
+| `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
 | `gsd-core/workflows/new-milestone.md` | strategy | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors) |
 | `gsd-core/workflows/new-project.md` | strategy | markers | design detection, brief/legacy/design grounding, `## Mode` fill, Step 7.6; Step-9 on-ramp rewrite (anchors) |
@@ -231,19 +251,17 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `hooks/hooks.json` | grounding | anchors-only | JSON; grounding-index-refresh matcher entry |
 | `hooks/managed-hooks-registry.cjs` | grounding | anchors-only | one array line |
 | `package.json` | identity | anchors-only | JSON; fork name/author/repo + **zero runtime dependencies** (upstream's `dependencies` block deliberately removed) |
-| `scripts/changeset/cli.cjs` | release | markers | dual-layout `requireCoreLib` |
-| `scripts/changeset/github-release-notes.cjs` | release | markers | dual-layout identity resolve |
 | `scripts/prompt-injection-scan.sh` | fidelity | anchors-only | allowlist entry for untrusted-input-boundary.md |
-| `src/audit.cts` | seeds | markers | `listSeeds()` (+ export line, anchor) |
 | `src/check-command-router.cts` | grounding | markers | grounding import, gate toggle + `cmdGroundingPlan`, route arm (+field lines, anchors) |
 | `src/clusters.cts` | strategy, learn | markers | strategy skill cluster rows (marked); `'learn'` row (anchors) |
 | `src/command-aliases.cts` | strategy | markers | `PROJECT_COMMAND_ALIASES` + `PROJECT_SUBCOMMANDS` |
 | `src/init-command-router.cts` | strategy | markers | `--design/--no-design` route (+interface line, anchor) |
 | `src/init.cts` | strategy | markers | provided-design detection + result fields (+signature, anchor) |
 | `src/installer-migration-report.cts` | grounding | anchors-only | one whitelist line |
-| `src/profile-output.cts` | grounding, identity | markers | Sources-of-Truth section generator + managed-section wiring (anchors); GEMINI.md ambient-file branch |
+| `src/profile-output.cts` | grounding | markers | Sources-of-Truth section generator + managed-section wiring (anchors); the fork's GEMINI.md ambient-file branch is upstream-absorbed (`getProjectInstructionFile` runtime policy) |
 | `src/ui-safety-gate.cts` | fidelity | markers | negation guard const + skip logic |
 | `tests/bug-685-windowshide-spawn.test.cjs` | context-monitor | anchors-only | removed record-session assertion + explanatory note |
+| `tests/ci-test-scope.test.cjs` | context-monitor | anchors-only | A1 fixture swapped off the deleted bug-1974 context-monitor test |
 | `tests/claude-md.test.cjs` | grounding | anchors-only | 7-section + sources assertions |
 | `tests/enh-2790-skill-consolidation.test.cjs` | strategy | anchors-only | new skills in KNOWN_SKILLS set |
 | `tests/enh-769-context-fork-effort.install.test.cjs` | no-context-fork | anchors-only | inverted assertions: heavy skills must NOT carry `context: fork` |
@@ -254,7 +272,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 ### Deletion-only deltas (nothing to anchor — guarded by tests instead)
 
 - `commands/gsd/autonomous.md`, `commands/gsd/execute-phase.md`, `commands/gsd/plan-phase.md` — the fork **removed** `context: fork` from the frontmatter (it forks heavy skills into a context that cannot spawn subagents). Re-apply by deleting the line again after an upstream merge. CI tripwire: `tests/enh-769-context-fork-effort.install.test.cjs` asserts the line is absent — an upstream merge restoring it fails the suite.
-- Deleted tests: `tests/bug-1974-context-exhaustion-record.test.cjs`, `tests/bug-2451-context-monitor-over-report.test.cjs`, `tests/perf-317-context-monitor-fs.test.cjs` — they tested the upstream context-monitor behavior this fork removed. Delete them again if an upstream merge resurrects them.
+- Deleted tests: `tests/bug-1974-context-exhaustion-record.test.cjs`, `tests/bug-2451-context-monitor-over-report.test.cjs`, `tests/perf-317-context-monitor-fs.test.cjs`, `tests/bug-925-context-monitor-hook-event-name.test.cjs` (deleted during the 2.0.0 realignment — same class: it pinned the active hook's event-name behavior, which the inert no-op does not have) — they tested the upstream context-monitor behavior this fork removed. Delete them again if an upstream merge resurrects them. `tests/ci-test-scope.test.cjs` A1 rides on a swapped fixture for the same reason (see the modified table).
 
 ### No-op / cosmetic (no restore needed)
 
@@ -277,7 +295,7 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 ## Branding-only (handled by `scripts/sync-upstream.sh`)
 
-~223 files differ from the base **only** by the six branding forms (`@opengsd/gsd-core` → `@therocketcode/gsd-core`, `open-gsd/gsd-core` → `TheRocketCodeMX/gsd-core`, `opengsd-gsd-core` → `therocketcode-gsd-core`, the escaped/encoded variants). Do not track them here — after any upstream merge, run `./scripts/sync-upstream.sh` (whole tree) and the identity-drift lint. This includes all runtime-launcher `npx @…/gsd-core` one-liners across workflows/agents, README translations, docs/, `gsd-core/bin/lib/package-identity.cjs`, `gsd-core/bin/check-latest-version.cjs`, `gsd-core/workflows/update.md`, `src/phase-lifecycle.cts`, `src/validate.cts`, and similar.
+~223 files differ from the base **only** by the six branding forms (`@therocketcode/gsd-core` → `@therocketcode/gsd-core`, `TheRocketCodeMX/gsd-core` → `TheRocketCodeMX/gsd-core`, `therocketcode-gsd-core` → `therocketcode-gsd-core`, the escaped/encoded variants). Do not track them here — after any upstream merge, run `./scripts/sync-upstream.sh` (whole tree) and the identity-drift lint. This includes all runtime-launcher `npx @…/gsd-core` one-liners across workflows/agents, README translations, docs/, `gsd-core/bin/lib/package-identity.cjs`, `gsd-core/bin/check-latest-version.cjs`, `gsd-core/workflows/update.md`, `src/phase-lifecycle.cts`, `src/validate.cts`, and similar.
 
 ---
 
@@ -285,6 +303,8 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 - `docs/INVENTORY.md`, `docs/INVENTORY-MANIFEST.json` — regenerate with the inventory tooling after the port.
 - `package-lock.json` — regenerate with `npm install` (the fork is zero-runtime-deps; the lock reflects devDependencies only).
+- `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 10 fork skills + the ns-router skill bodies are projections of `commands/gsd/*.md`).
+- `tests/agent-size-baseline.json`, `tests/workflow-size-baseline.json` — regenerate with `npm run size:baseline` after ports change agent/workflow sizes.
 
 ---
 

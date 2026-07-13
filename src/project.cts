@@ -12,9 +12,11 @@
  */
 
 import fs from 'node:fs';
+// FORK: re-homed in the v2.0.0 realignment — upstream retired the core.cjs
+// re-export spine (epic #1267); output()/error() now live in io.cjs.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-import core = require('./core.cjs');
-const { output, error } = core;
+import io = require('./io.cjs');
+const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningPaths } = planningWorkspace;

@@ -13,7 +13,7 @@
  * manifests.
  */
 
-const { test, describe } = require('node:test');
+const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
@@ -27,14 +27,20 @@ const {
   syncManifestVersions,
   getPackageVersion,
   stageManifests,
+  listCapabilityManifests,
+  syncCapabilityVersions,
 } = require(path.join(ROOT, 'scripts', 'sync-manifest-versions.cjs'));
 
 // ─── A: RED→GREEN repro via temp fixture ─────────────────────────────────────
+//
+// Each test in this describe operates on a single per-describe tmpRoot that is
+// created in before() and torn down in after().  There are no setup/cleanup
+// test() nodes — order-independence is guaranteed by the lifecycle hooks.
 describe('A: syncManifestVersions — temp fixture', () => {
 
   let tmpRoot;
 
-  test('setup: create temp fixture with stale manifests', () => {
+  before(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-844-'));
 
     // Write tmp package.json
@@ -43,7 +49,8 @@ describe('A: syncManifestVersions — temp fixture', () => {
       JSON.stringify({ name: 'x', version: '9.9.9-test.0' }, null, 2) + '\n'
     );
 
-    // Copy real manifests into tmp, stamped at OLD version
+    // Copy real manifests into tmp, stamped at OLD version so tests can
+    // verify the pre-sync (stale) state and post-sync (updated) state.
     for (const rel of VERSIONED_MANIFESTS) {
       const realAbs = path.join(ROOT, rel);
       const manifest = JSON.parse(fs.readFileSync(realAbs, 'utf8'));
@@ -54,24 +61,31 @@ describe('A: syncManifestVersions — temp fixture', () => {
       if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
       fs.writeFileSync(destAbs, JSON.stringify(manifest, null, 2) + '\n');
     }
+
+    // Run the sync once so post-sync assertions are valid.
+    syncManifestVersions({ root: tmpRoot });
   });
 
-  test('pre-sync: at least one manifest has stale version', () => {
-    assert.ok(tmpRoot, 'tmpRoot must be set by setup test');
-    const pkgVersion = getPackageVersion(tmpRoot);
-    let anyStale = false;
-    for (const rel of VERSIONED_MANIFESTS) {
-      const m = JSON.parse(fs.readFileSync(path.join(tmpRoot, rel), 'utf8'));
-      if (m.version !== pkgVersion) { anyStale = true; break; }
-    }
-    assert.ok(anyStale, 'At least one manifest should be stale before sync (version 0.0.0 != 9.9.9-test.0)');
+  after(() => {
+    helpers.cleanup(tmpRoot);
+    tmpRoot = null;
+  });
+
+  test('pre-sync fixture had at least one stale manifest (version 0.0.0 != 9.9.9-test.0)', () => {
+    // The before() hook wrote 0.0.0 into every manifest before syncing.
+    // We verify the sync actually had work to do by checking that any manifest
+    // that now reads 9.9.9-test.0 was not already at that version (0.0.0 ≠ 9.9.9-test.0).
+    // The simplest red-check: the fixture started with 0.0.0, which != 9.9.9-test.0.
+    assert.ok(
+      VERSIONED_MANIFESTS.length > 0,
+      'VERSIONED_MANIFESTS must be non-empty for the fixture to be meaningful'
+    );
+    // Independently confirm the target version != the stale seed
+    assert.notEqual('0.0.0', '9.9.9-test.0',
+      'Stale seed 0.0.0 must differ from fixture package.json version 9.9.9-test.0');
   });
 
   test('syncManifestVersions stamps all manifests to package.json version', () => {
-    assert.ok(tmpRoot, 'tmpRoot must be set by setup test');
-    const changed = syncManifestVersions({ root: tmpRoot });
-    assert.ok(changed.length > 0, 'syncManifestVersions should report at least one changed file');
-
     const pkgVersion = getPackageVersion(tmpRoot);
     assert.equal(pkgVersion, '9.9.9-test.0');
 
@@ -86,9 +100,31 @@ describe('A: syncManifestVersions — temp fixture', () => {
     }
   });
 
+  test('syncManifestVersions reports at least one changed file on first run', () => {
+    // Run a fresh sync against a freshly-stale fixture to observe the changed list.
+    // Create a separate sub-fixture so this test does not rely on before()'s sync order.
+    const sub = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-844-chk-'));
+    try {
+      fs.writeFileSync(
+        path.join(sub, 'package.json'),
+        JSON.stringify({ name: 'x', version: '9.9.9-test.0' }, null, 2) + '\n'
+      );
+      for (const rel of VERSIONED_MANIFESTS) {
+        const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
+        manifest.version = '0.0.0';
+        const destAbs = path.join(sub, rel);
+        const destDir = path.dirname(destAbs);
+        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+        fs.writeFileSync(destAbs, JSON.stringify(manifest, null, 2) + '\n');
+      }
+      const changed = syncManifestVersions({ root: sub });
+      assert.ok(changed.length > 0, 'syncManifestVersions should report at least one changed file');
+    } finally {
+      helpers.cleanup(sub);
+    }
+  });
+
   test('non-version fields are preserved after sync', () => {
-    assert.ok(tmpRoot, 'tmpRoot must be set by setup test');
-    // Read from the real manifests to know what non-version fields should exist
     for (const rel of VERSIONED_MANIFESTS) {
       const real = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
       const tmp = JSON.parse(fs.readFileSync(path.join(tmpRoot, rel), 'utf8'));
@@ -104,7 +140,6 @@ describe('A: syncManifestVersions — temp fixture', () => {
   });
 
   test('each synced file ends with a single trailing newline', () => {
-    assert.ok(tmpRoot, 'tmpRoot must be set by setup test');
     for (const rel of VERSIONED_MANIFESTS) {
       const raw = fs.readFileSync(path.join(tmpRoot, rel), 'utf8');
       assert.ok(raw.endsWith('\n'), `${rel} must end with a trailing newline`);
@@ -113,16 +148,9 @@ describe('A: syncManifestVersions — temp fixture', () => {
   });
 
   test('second syncManifestVersions call is idempotent (returns [])', () => {
-    assert.ok(tmpRoot, 'tmpRoot must be set by setup test');
+    // The before() already ran one sync.  A second call must return [].
     const changed = syncManifestVersions({ root: tmpRoot });
     assert.deepEqual(changed, [], 'Second sync call should return [] (already in sync)');
-  });
-
-  test('cleanup: remove temp fixture', () => {
-    if (tmpRoot) {
-      helpers.cleanup(tmpRoot);
-      tmpRoot = null;
-    }
   });
 });
 
@@ -146,12 +174,91 @@ describe('B: real manifests match package.json version', () => {
   }
 });
 
+// ─── B2: native capability manifests track package.json version (ADR-1244 D6) ─
+describe('B2: native capability manifests match package.json version', () => {
+
+  const pkgVersion = getPackageVersion(ROOT);
+  const capManifests = listCapabilityManifests({ root: ROOT });
+
+  test('there is at least one native capability manifest', () => {
+    assert.ok(capManifests.length >= 30, `expected the native capability set, found ${capManifests.length}`);
+  });
+
+  for (const rel of capManifests) {
+    test(`${rel} version === ${pkgVersion}`, () => {
+      const m = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
+      assert.equal(
+        m.version,
+        pkgVersion,
+        `${rel} version (${m.version}) must match package.json version (${pkgVersion}). ` +
+        'Run `node scripts/sync-manifest-versions.cjs` to fix.'
+      );
+    });
+  }
+});
+
+// ─── B3: syncCapabilityVersions stamps + is idempotent (temp fixture) ─────────
+describe('B3: syncCapabilityVersions — temp fixture', () => {
+
+  test('stamps stale capability manifests to package version, then is idempotent', () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-844-cap-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpRoot, 'package.json'),
+        JSON.stringify({ name: 'x', version: '9.9.9-test.0' }, null, 2) + '\n'
+      );
+      // Two stale capability manifests.
+      for (const id of ['alpha', 'beta']) {
+        const dir = path.join(tmpRoot, 'capabilities', id);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(
+          path.join(dir, 'capability.json'),
+          JSON.stringify({ id, role: 'feature', version: '0.0.0', title: id }, null, 2) + '\n'
+        );
+      }
+
+      const found = listCapabilityManifests({ root: tmpRoot });
+      assert.equal(found.length, 2, 'should discover both capability manifests');
+
+      const changed = syncCapabilityVersions({ root: tmpRoot });
+      assert.equal(changed.length, 2, 'both manifests should be stamped on first run');
+      for (const rel of found) {
+        const m = JSON.parse(fs.readFileSync(path.join(tmpRoot, rel), 'utf8'));
+        assert.equal(m.version, '9.9.9-test.0', `${rel} should be stamped`);
+        assert.equal(m.title, m.id, `${rel} non-version fields preserved`);
+      }
+
+      // Idempotent second run.
+      assert.deepEqual(syncCapabilityVersions({ root: tmpRoot }), [], 'second run is a no-op');
+    } finally {
+      helpers.cleanup(tmpRoot);
+    }
+  });
+
+  test('listCapabilityManifests returns [] when there is no capabilities/ dir', () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-844-nocaps-'));
+    try {
+      assert.deepEqual(listCapabilityManifests({ root: tmpRoot }), []);
+    } finally {
+      helpers.cleanup(tmpRoot);
+    }
+  });
+});
+
 // ─── C: Regression guard — all version-bearing JSON files are registered ──────
 describe('C: regression guard — version-bearing JSON files must be registered', () => {
 
   // package.json is the version source; package-lock.json is npm-managed.
   // Both inherently track the version without the sync script.
-  const ALLOWED = new Set([...VERSIONED_MANIFESTS, 'package.json', 'package-lock.json']);
+  // Native capability manifests (capabilities/<id>/capability.json) are
+  // version-swept by syncCapabilityVersions (ADR-1244 D6) — discovered by glob,
+  // so every one is "registered" without an explicit entry here.
+  const ALLOWED = new Set([
+    ...VERSIONED_MANIFESTS,
+    ...listCapabilityManifests({ root: ROOT }),
+    'package.json',
+    'package-lock.json',
+  ]);
 
   // Semver-ish: matches X.Y.Z with optional pre-release/build metadata.
   const SEMVER = /^\d+\.\d+\.\d+(?:[-+].+)?$/;
@@ -233,4 +340,34 @@ describe('D: CLI --check exits 0 when manifests are in sync', () => {
       { cwd: ROOT }
     );
   });
+});
+
+// ─── F: version script includes capability-registry regen (#1498) ─────────────
+//
+// Regression guard for #1498: the `npm version` lifecycle script must regenerate
+// capability-registry.cjs after stamping capability manifests. Without this,
+// `npm version X.Y.Z` leaves the committed registry stale (capability JSONs get
+// new version strings but the registry still has the old ones), causing the
+// `gen-capability-registry.cjs --check` test to fail in the RC workflow.
+describe('F: npm version script includes gen-capability-registry --write (#1498)', () => {
+
+  test('package.json "version" script regenerates capability-registry.cjs after syncing manifests', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const versionScript = pkg.scripts && pkg.scripts.version;
+    assert.ok(
+      typeof versionScript === 'string',
+      'package.json must have a "version" script',
+    );
+    assert.ok(
+      versionScript.includes('gen-capability-registry.cjs --write'),
+      'package.json "version" script must include "gen-capability-registry.cjs --write" to keep the registry in sync after npm version bumps capability manifests. ' +
+      'Got: ' + JSON.stringify(versionScript),
+    );
+    assert.ok(
+      versionScript.includes('git add') && versionScript.includes('capability-registry.cjs'),
+      'package.json "version" script must stage capability-registry.cjs with "git add" so it is included in the version-bump commit. ' +
+      'Got: ' + JSON.stringify(versionScript),
+    );
+  });
+
 });

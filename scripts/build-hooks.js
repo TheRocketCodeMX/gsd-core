@@ -26,6 +26,13 @@ const STAGE_DIR = path.join(HOOKS_DIR, `.dist-staging-${process.pid}`);
 const HOOKS_TO_COPY = [
   'gsd-check-update-worker.js',
   'gsd-check-update.js',
+  // SessionStart canonical-path bootstrap (#997). In a Claude Code marketplace
+  // plugin install, ~/.claude/gsd-core is never created, so every
+  // `@~/.claude/gsd-core/...` include in agents/commands/templates resolves to
+  // nothing. This hook symlinks the canonical path's immutable subdirs to the
+  // plugin's bundled gsd-core/ tree; no-op in classic installs. Must ship to
+  // dist so the installer copies it into the target hooks/ dir.
+  'gsd-ensure-canonical-path.js',
   // Required by gsd-check-update-worker.js at runtime — must ship alongside it
   // so require('./managed-hooks-registry.cjs') resolves in the installed hooks/ dir.
   'managed-hooks-registry.cjs',
@@ -37,6 +44,12 @@ const HOOKS_TO_COPY = [
   // .planning/config.json changes mid-session. Must ship to dist so the
   // installer can copy it to the target hooks/ dir and register FileChanged.
   'gsd-config-reload.js',
+  // Fork FileChanged hook (grounding, #11) — refreshes the Sources-of-Truth
+  // grounding index when a strategy/source doc lands mid-session. Referenced by
+  // the plugin manifest (hooks/hooks.json) AND registered into settings.json by
+  // applySettingsJsonHooks; must ship to dist so classic (non-plugin) installs
+  // receive the file the registration points at.
+  'gsd-grounding-index-refresh.js',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',
   'gsd-read-injection-scanner.js',

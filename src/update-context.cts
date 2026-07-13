@@ -24,7 +24,10 @@ export const RUNTIME_DIRS: RuntimeDirEntry[] = [
   ['antigravity', '.gemini/antigravity-ide'],
   ['antigravity', '.gemini/antigravity-cli'],
   ['antigravity', '.gemini/antigravity'],
-  ['antigravity', '.agent'], // local Antigravity install dir (#503; bin/install.js getDirName('antigravity'))
+  ['antigravity', '.agents'], // local Antigravity install dir canonical (#791; bin/install.js getDirName('antigravity'))
+  ['antigravity', '.agent'], // local Antigravity install dir legacy (#503; backward-compat with pre-#791 installs)
+  ['windsurf', '.windsurf'], // local Windsurf workflow dir canonical (#1615; bin/install.js getDirName('windsurf'))
+  ['windsurf', '.devin'],    // local Devin Desktop install dir legacy (#1085; backward-compat)
   ['gemini', '.gemini'],
   ['kilo', '.config/kilo'],
   ['kilo', '.kilo'],

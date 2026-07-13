@@ -36,7 +36,8 @@ const path = require('node:path');
 const os = require('node:os');
 
 const { makeFakeClock } = require('./helpers/clock.cjs');
-const { acquireStateLock, releaseStateLock, readModifyWriteStateMd } = require('../gsd-core/bin/lib/state.cjs');
+const stateMod = require('../gsd-core/bin/lib/state.cjs');
+const { acquireStateLock, releaseStateLock, readModifyWriteStateMd } = stateMod;
 const { withPlanningLock } = require('../gsd-core/bin/lib/planning-workspace.cjs');
 const { createTempProject, cleanup, runGsdTools } = require('./helpers.cjs');
 
@@ -124,6 +125,670 @@ describe('acquireStateLock clock seam', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 1a. acquireStateLock PID-liveness staleness (audit M1)
+//
+// mtime is a leaky proxy for "holder is alive": a live-but-slow holder whose
+// critical section runs past staleThresholdMs ages out and gets its lock stolen
+// by a waiter → two writers in STATE.md's critical section → lost update.
+// The fix gates the steal on a real liveness signal (process.kill(pid,0),
+// injected via the _setLockProbes seam) and orders the deadman ceiling ABOVE the
+// wait budget so a verified-live holder is NEVER stolen within budget. A dead
+// holder is stolen promptly regardless of age. A garbage/legacy body is treated
+// as not-verified-live so corrupt locks stay recoverable under the deadman ceiling.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock PID-liveness staleness (audit M1)', () => {
+  let tmpDir;
+  let statePath;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-liveness-state-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+  });
+
+  afterEach(() => {
+    stateMod._resetLockProbes();
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('exports _setLockProbes / _resetLockProbes seams', () => {
+    assert.ok(typeof stateMod._setLockProbes === 'function', '_setLockProbes seam must be exported');
+    assert.ok(typeof stateMod._resetLockProbes === 'function', '_resetLockProbes seam must be exported');
+  });
+
+  test('live holder is NOT stolen even when aged past the stale threshold (waiter budgets out)', () => {
+    const lockPath = statePath + '.lock';
+    const livePid = 4242;
+    fs.writeFileSync(lockPath, String(livePid));
+
+    // Holder pid reads as ALIVE via the injected probe (deterministic, no real pid).
+    stateMod._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
+    // Drive the clock so the lock is aged WELL past the 10 000 ms stale threshold
+    // (stale < age) but the waiter only ever budgets out at maxWaitMs (30 000 ms).
+    // sleep advances time; once the 30 000 ms budget is exhausted it must throw,
+    // and it must NOT have unlinked the live holder's lock.
+    const clock = makeFakeClock(60000); // age = now - mtime ≫ 10 000 ms
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'a verified-live holder must never be stolen within the wait budget — waiter must time out instead'
+    );
+
+    // The live holder's lock body must be intact (never unlinked + re-created).
+    assert.ok(fs.existsSync(lockPath), 'live holder lock must still exist (not stolen)');
+    assert.strictEqual(fs.readFileSync(lockPath, 'utf-8'), String(livePid), 'live holder lock body must be unchanged');
+
+    fs.unlinkSync(lockPath);
+  });
+
+  test('dead holder is stolen promptly without waiting out the full budget', () => {
+    const lockPath = statePath + '.lock';
+    const deadPid = 777;
+    fs.writeFileSync(lockPath, String(deadPid));
+
+    // Holder pid reads as DEAD via the injected probe → eligible for immediate steal.
+    stateMod._setLockProbes({ isPidAlive: () => false });
+
+    // Fresh, NON-aged lock (mtime ≈ now). Without liveness the old mtime-only gate
+    // would refuse to steal a <10 000 ms lock and force a long wait; with liveness
+    // a dead holder is stolen immediately regardless of age.
+    const clock = makeFakeClock(Date.now());
+    const acquired = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(acquired), 'dead holder lock must be stolen and re-acquired');
+    assert.strictEqual(
+      clock.sleepCalls.length, 0,
+      'a dead holder must be stolen promptly — no wait/backoff sleeps before acquisition'
+    );
+    releaseStateLock(acquired);
+  });
+
+  test('garbage/legacy lock body → not-verified-live → recoverable under the deadman ceiling, never an infinite block', () => {
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, 'not-a-pid\x00garbage'); // unreadable / non-numeric body
+
+    // Probe would say "alive" for ANY pid — proves the steal does not depend on a
+    // bogus parse succeeding: an unparseable body is treated as not-verified-live.
+    stateMod._setLockProbes({ isPidAlive: () => true });
+
+    // Age the body past the deadman ceiling (above maxWaitMs) so the corrupt lock
+    // is recoverable rather than blocking forever.
+    const clock = makeFakeClock(Date.now() + 120000);
+    const acquired = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(acquired), 'corrupt/legacy lock must be recoverable (stolen under the deadman ceiling)');
+    releaseStateLock(acquired);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1c. Steal-safety windows (PR #1532 review — trek-e)
+//
+// The PID-liveness backport (audit M1) dropped two pieces of capability-lock.cts's
+// race-free steal machinery, reopening the #500/#905/#1230 lost-update family:
+//
+//   (a) Empty-body create window — acquireStateLock creates the lock with O_EXCL and
+//       writes the pid in a SEPARATE writeSync. A lock observed in that window has an
+//       EMPTY body → _stateHolderVerifiedLive('') is false → the no-floor steal gate
+//       robs it at age ≈ 0, mid-creation. capability-lock never steals a FRESH lock
+//       (age <= LOCK_STALE_MS) regardless of body, which is what protects that window.
+//
+//   (b) Double-steal — the steal is a bare fs.unlinkSync with no identity re-confirm
+//       between the decision and the unlink. A racer that steals + recreates a fresh
+//       lock in that gap has its replacement deleted by the first stealer's unlink →
+//       two concurrent holders. capability-lock re-confirms (dev,ino) immediately
+//       before an ATOMIC rename-steal so only one racer can win.
+//
+// Both are driven deterministically through the lock seams (clock + pid probe +
+// onLoopIteration + beforeSteal) — no wall-clock, no real concurrency.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock steal-safety windows (PR #1532)', () => {
+  let tmpDir;
+  let statePath;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-stealsafety-state-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+  });
+
+  afterEach(() => {
+    stateMod._resetLockProbes();
+    stateMod._resetStateLockTestHooks();
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('a FRESH empty-body lock (mid-creation) is NOT stolen at age ~0 — acquirer backs off', () => {
+    const lockPath = statePath + '.lock';
+    // Simulate the create→pid-write window of a CONCURRENT acquirer: the lockfile
+    // exists (O_EXCL create succeeded) but the pid has not been written yet → empty body.
+    fs.writeFileSync(lockPath, '');
+    const freshTime = new Date();
+    fs.utimesSync(lockPath, freshTime, freshTime); // mtime ≈ now → age ≈ 0 (fresh)
+
+    // The body is empty, so liveness cannot be determined from it — the probe value is
+    // irrelevant. The (buggy) no-floor gate steals it regardless; the fix must wait.
+    stateMod._setLockProbes({ isPidAlive: () => false });
+
+    // After the first encounter, clear the empty lock so the (correctly-waiting) acquirer
+    // can complete instead of budgeting out — keeps the test bounded and the assertion
+    // about the FIRST decision, not the eventual outcome.
+    stateMod._setStateLockTestHooks({
+      onLoopIteration: ({ iteration }) => {
+        if (iteration >= 1) { try { fs.unlinkSync(lockPath); } catch { /* already gone */ } }
+      },
+    });
+
+    const clock = makeFakeClock(freshTime.getTime());
+    const acquired = acquireStateLock(statePath, clock);
+
+    assert.ok(fs.existsSync(acquired), 'lock must eventually be acquired');
+    assert.ok(
+      clock.sleepCalls.length >= 1,
+      'a fresh empty-body lock is mid-creation and must NOT be stolen at age ~0 — ' +
+      'the acquirer must back off (sleep) at least once, not unlink + steal immediately'
+    );
+    releaseStateLock(acquired);
+  });
+
+  test('a dead holder whose lock is recreated by a racer mid-steal is NOT double-stolen (identity re-confirm)', () => {
+    const lockPath = statePath + '.lock';
+    const deadPid = 4040;
+    const livePid = 5050;
+    // Decision-time holder: a DEAD pid → eligible for steal.
+    fs.writeFileSync(lockPath, String(deadPid));
+    const t = new Date();
+    fs.utimesSync(lockPath, t, t);
+
+    stateMod._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
+    // Inject a concurrent waiter that, in the gap between our steal-DECISION and our
+    // steal, already stole + recreated a FRESH lock owned by a LIVE pid. A correct
+    // (identity-re-confirming) acquirer must notice the lock instance changed and must
+    // NOT delete the racer's live replacement.
+    let injected = false;
+    stateMod._setStateLockTestHooks({
+      beforeSteal: () => {
+        if (injected) return;
+        injected = true;
+        try { fs.unlinkSync(lockPath); } catch { /* ok */ }
+        fs.writeFileSync(lockPath, String(livePid)); // different identity + live holder
+        const f = new Date();
+        fs.utimesSync(lockPath, f, f);
+      },
+    });
+
+    const clock = makeFakeClock(t.getTime());
+    // The racer's replacement is held by a LIVE pid → the acquirer must wait on it and
+    // budget out rather than stealing it. (A double-steal would instead delete it and
+    // succeed.)
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      (err) => err && err.lockBudgetExceeded === true,
+      'acquirer must not double-steal the racer\'s live replacement — it must wait + budget out'
+    );
+    assert.strictEqual(
+      fs.readFileSync(lockPath, 'utf-8'), String(livePid),
+      'the racer\'s freshly-recreated live lock must survive — never deleted by a stale-decision unlink'
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1b. Regression #1217 — acquireStateLock ENOENT (recoverable errno) busy-spin
+//
+// Prior to the fix the recoverable-errno branch (`continue`) never called
+// clock.sleep() or checked the budget, so a permanently-failing ENOENT from
+// a deleted parent dir spun at 100% CPU forever.  With the fix every retry
+// path must (a) advance the clock via sleep() and (b) throw when the 30 000 ms
+// budget is exhausted.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock recoverable errno budget + backoff (#1217)', () => {
+  let tmpDir;
+  let statePath;
+  let origOpenSync;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-clock-1217-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+    origOpenSync = fs.openSync;
+  });
+
+  afterEach(() => {
+    // Restore openSync if a test patched it
+    fs.openSync = origOpenSync;
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('persistent ENOENT throws budget-exceeded error (not busy-spin) — clock must advance via sleep', () => {
+    // Arrange: always-ENOENT openSync (parent dir permanently gone scenario)
+    const enoentErr = Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+    fs.openSync = () => { throw enoentErr; };
+
+    const clock = makeFakeClock(0);
+
+    // Act + Assert: must throw (not hang) with budget-exceeded message
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'must throw budget-exceeded error when ENOENT persists beyond maxWaitMs'
+    );
+
+    // The clock must have advanced by at least maxWaitMs (30 000 ms).
+    // Before the fix: no sleep() ever called → nowValue stays at 0 → spins forever.
+    // After the fix: every retry sleeps → nowValue ≥ 30 000 ms → budget throws.
+    assert.ok(
+      clock.nowValue >= 30000,
+      `clock must have advanced ≥ 30 000 ms via sleep() calls (got ${clock.nowValue}ms); a value of 0 means the errno branch never slept (busy-spin)`
+    );
+
+    // At least one sleep call must have been recorded
+    assert.ok(
+      clock.sleepCalls.length >= 1,
+      `sleep must be called at least once on recoverable errno retry (got ${clock.sleepCalls.length} calls)`
+    );
+  });
+
+  test('transient ENOENT (a few retries then success) acquires lock normally', () => {
+    // Arrange: fail twice with ENOENT, then succeed
+    const enoentErr = Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+    let callCount = 0;
+    fs.openSync = (...args) => {
+      callCount++;
+      if (callCount <= 2) throw enoentErr;
+      // Restore and delegate to real openSync for the successful attempt
+      fs.openSync = origOpenSync;
+      return origOpenSync.apply(fs, args);
+    };
+
+    const clock = makeFakeClock(0);
+
+    // Act: should succeed (not throw) because ENOENT was transient
+    const lockPath = acquireStateLock(statePath, clock);
+
+    // Assert: lock file exists
+    assert.ok(fs.existsSync(lockPath), 'lock must be acquired after transient ENOENT retries');
+    // 2 retries → at least 2 sleep calls
+    assert.ok(clock.sleepCalls.length >= 2, `expected ≥2 sleep calls for 2 ENOENT retries, got ${clock.sleepCalls.length}`);
+
+    releaseStateLock(lockPath);
+    assert.ok(!fs.existsSync(lockPath), 'lock must be released after releaseStateLock');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1c. Boundary coverage + backoff-range for the recoverable-errno retry path
+//
+// RULESET.TESTS.boundary-coverage: inputs at limit-1, limit, and limit+1
+// for the 30 000 ms maxWaitMs budget.
+//
+// Each sleep advances the clock by retryDelay (200 ms) + exactly 0 jitter
+// (achieved via a deterministic-jitter clock wrapper).  We then control how
+// much additional time to add so the budget check lands at the desired point.
+//
+// Scenario A — budget NOT yet exhausted: error clears just before limit
+// Scenario B — budget exactly at limit (>= check): must throw
+// Scenario C — budget over limit: must throw immediately
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock boundary coverage — recoverable-errno budget (#1217)', () => {
+  let tmpDir;
+  let statePath;
+  let origOpenSync;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-clock-boundary-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+    origOpenSync = fs.openSync;
+  });
+
+  afterEach(() => {
+    fs.openSync = origOpenSync;
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  /**
+   * Build a fake clock where every sleep() advances time by exactly fixedSleepMs
+   * regardless of the requested delay.  This gives us deterministic elapsed-time
+   * sequences without depending on Math.random() jitter.
+   */
+  function makeFixedSleepClock(startMs, fixedSleepMs) {
+    let _now = startMs;
+    const _sleepCalls = [];
+    return {
+      now() { return _now; },
+      sleep(ms) {
+        // Record the actual ms value requested by the production code (for range checks)
+        // but advance by fixedSleepMs so total elapsed is predictable.
+        _sleepCalls.push(ms);
+        _now += fixedSleepMs;
+      },
+      get sleepCalls() { return _sleepCalls; },
+      get nowValue() { return _now; },
+    };
+  }
+
+  test('backoff-range contract: every sleep call is in [retryDelay, retryDelay + jitterMax) range', () => {
+    // Scenario: persistent ENOENT for 3 retries then succeed.
+    // retryDelay=200, jitter ∈ [0,49] → sleep value must be in [200, 249].
+    const enoentErr = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    let calls = 0;
+    fs.openSync = (...args) => {
+      calls++;
+      if (calls <= 3) throw enoentErr;
+      fs.openSync = origOpenSync;
+      return origOpenSync.apply(fs, args);
+    };
+
+    // Use real makeFakeClock (sleep advances by requested ms, so time moves at 200-249ms per sleep)
+    const clock = makeFakeClock(0);
+    const lockPath = acquireStateLock(statePath, clock);
+    releaseStateLock(lockPath);
+
+    assert.strictEqual(clock.sleepCalls.length, 3, 'must have exactly 3 sleep calls for 3 ENOENT retries');
+    for (let i = 0; i < clock.sleepCalls.length; i++) {
+      const delayMs = clock.sleepCalls[i];
+      assert.ok(
+        delayMs >= 200 && delayMs <= 249,
+        `sleep[${i}] = ${delayMs}ms must be in [200, 249] (retryDelay=200 + jitter 0..49)`
+      );
+    }
+  });
+
+  test('budget just UNDER limit: error clears at 29 999 ms elapsed — lock acquired, no throw', () => {
+    // Arrange: openSync fails with ENOENT for 30 iterations, then succeeds.
+    // Sleeps 1-29 each advance 1000 ms (total 29 000 ms after 29 sleeps).
+    // Sleep 30 advances only 999 ms (total 29 999 ms) — still under the 30 000 ms budget.
+    // openSync succeeds on the 31st attempt BEFORE elapsed reaches 30 000 ms.
+    const enoentErr = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    let calls = 0;
+    const maxFails = 30; // 30 ENOENT failures → 30 sleeps → final elapsed = 29 999 ms
+    fs.openSync = (...args) => {
+      calls++;
+      if (calls <= maxFails) throw enoentErr;
+      fs.openSync = origOpenSync;
+      return origOpenSync.apply(fs, args);
+    };
+
+    // Custom clock: first 29 sleeps advance 1000 ms each; the 30th advances 999 ms.
+    // Total elapsed at success = 29 × 1000 + 1 × 999 = 29 999 ms (< 30 000 ms).
+    let _now = 0;
+    const _sleepCalls = [];
+    const clock = {
+      now() { return _now; },
+      sleep(ms) {
+        _sleepCalls.push(ms);
+        // The 30th sleep advances by 999 ms; all others advance by 1000 ms.
+        _now += _sleepCalls.length === 30 ? 999 : 1000;
+      },
+      get sleepCalls() { return _sleepCalls; },
+      get nowValue() { return _now; },
+    };
+
+    // Should NOT throw — budget not yet exhausted at 29 999 ms
+    const lockPath = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(lockPath), 'lock must be acquired when error clears before budget');
+    releaseStateLock(lockPath);
+    assert.strictEqual(clock.sleepCalls.length, maxFails, `expected ${maxFails} sleep calls`);
+    assert.strictEqual(clock.nowValue, 29999, `elapsed must be exactly 29 999 ms at success (got ${clock.nowValue}ms)`);
+  });
+
+  test('budget AT limit (elapsed === 30 000 ms): must throw budget-exceeded error', () => {
+    // Arrange: openSync always fails — budget is hit exactly at 30 000 ms.
+    // fixedSleepMs=1000, after 30 sleeps elapsed=30000 → >= check fires.
+    const enoentErr = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    fs.openSync = () => { throw enoentErr; };
+
+    const clock = makeFixedSleepClock(0, 1000);
+
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'must throw budget-exceeded when elapsed equals maxWaitMs'
+    );
+    // After 30 sleeps (30 × 1000 = 30 000 ms) the budget fires
+    assert.ok(clock.nowValue >= 30000, `clock must be at or past 30 000 ms (got ${clock.nowValue}ms)`);
+  });
+
+  test('budget OVER limit (elapsed > 30 000 ms): must throw immediately', () => {
+    // Arrange: openSync always fails.
+    // Use a clock that starts already past the budget so the first budget check
+    // on the SECOND iteration fires immediately (after one sleep).
+    const enoentErr = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    fs.openSync = () => { throw enoentErr; };
+
+    // fixedSleepMs=35000 — one sleep puts elapsed at 35000 > 30000
+    const clock = makeFixedSleepClock(0, 35000);
+
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'must throw budget-exceeded when elapsed exceeds maxWaitMs'
+    );
+    // Only one sleep call needed to exceed the budget
+    assert.strictEqual(clock.sleepCalls.length, 1, 'budget must fire after a single over-budget sleep');
+    assert.ok(clock.nowValue > 30000, `clock must be past 30 000 ms (got ${clock.nowValue}ms)`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1d. Regression #1217 — statSync and unlinkSync spin paths in stale-lock branch
+//
+// Prior to the fix in this PR, two paths in the EEXIST handler were unbounded:
+//  • persistent fs.statSync failure → catch { continue; } (no sleep, no budget)
+//  • persistent fs.unlinkSync failure → catch swallowed, then continue (no sleep, no budget)
+// Both would spin at 100% CPU forever.  After the fix, both call checkBudgetAndSleep
+// before continuing, so they throw within maxWaitMs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('acquireStateLock statSync/steal spin paths bounded (#1217)', () => {
+  let tmpDir;
+  let statePath;
+  let origStatSync;
+  let origUnlinkSync;
+  let origRenameSync;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-clock-spin-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    statePath = path.join(tmpDir, '.planning', 'STATE.md');
+    fs.writeFileSync(statePath, '# State\n');
+    origStatSync = fs.statSync;
+    origUnlinkSync = fs.unlinkSync;
+    origRenameSync = fs.renameSync;
+    // Force the recorded holder (pid 99999) DEAD so the steal path is exercised
+    // deterministically — these tests probe the steal's bounded-backoff, not liveness.
+    stateMod._setLockProbes({ isPidAlive: () => false });
+  });
+
+  afterEach(() => {
+    fs.statSync = origStatSync;
+    fs.unlinkSync = origUnlinkSync;
+    fs.renameSync = origRenameSync;
+    stateMod._resetLockProbes();
+    try { fs.unlinkSync(statePath + '.lock'); } catch { /* ok */ }
+    cleanup(tmpDir);
+  });
+
+  test('persistent statSync failure throws budget-exceeded (not busy-spin)', () => {
+    // Set up EEXIST condition: pre-create lock file so openSync hits EEXIST
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, '99999'); // non-current PID
+
+    // Make statSync always throw a transient error (e.g. NFS hiccup)
+    const statErr = Object.assign(new Error('EIO: I/O error'), { code: 'EIO' });
+    fs.statSync = (p) => {
+      if (p === lockPath) throw statErr;
+      return origStatSync(p);
+    };
+
+    // Use a fixed-sleep clock so the budget is hit predictably
+    let _now = 0;
+    const sleepCalls = [];
+    const clock = {
+      now() { return _now; },
+      sleep(ms) { sleepCalls.push(ms); _now += 1000; }, // advance 1000ms each sleep
+    };
+
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'persistent statSync failure must throw budget-exceeded, not spin forever'
+    );
+
+    // Must have slept at least once (not a busy-spin)
+    assert.ok(sleepCalls.length >= 1, `sleep must have been called at least once (got ${sleepCalls.length}); zero means busy-spin`);
+    assert.ok(_now >= 30000, `clock must be at or past 30 000 ms after exhausting budget (got ${_now}ms)`);
+
+    // Clean up patched lock
+    fs.unlinkSync = origUnlinkSync;
+    try { origUnlinkSync(lockPath); } catch { /* ok */ }
+  });
+
+  test('persistent renameSync failure in steal path throws budget-exceeded (not busy-spin)', () => {
+    // Set up an EEXIST condition with a steal-eligible DEAD holder (pid 99999 — not us,
+    // not alive). The steal is an ATOMIC rename (PR #1532); a persistent rename failure
+    // (e.g. EPERM — file locked by an AV scanner) must back off + budget out, not spin.
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, '99999');
+
+    // Make renameSync always fail for the steal of our lock path.
+    const renameErr = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+    fs.renameSync = (from, to) => {
+      if (from === lockPath) throw renameErr;
+      return origRenameSync(from, to);
+    };
+
+    // Clock where now() returns current real time so the steal branch fires,
+    // but sleep advances a fixed 1000ms per call so budget is hit deterministically.
+    const realNow = Date.now();
+    let _elapsed = 0;
+    const sleepCalls = [];
+    const clock = {
+      now() { return realNow + _elapsed; },
+      sleep(ms) { sleepCalls.push(ms); _elapsed += 1000; },
+    };
+
+    assert.throws(
+      () => acquireStateLock(statePath, clock),
+      /acquireStateLock.*exceeded.*30000ms budget/,
+      'persistent renameSync failure in steal path must throw budget-exceeded, not spin forever'
+    );
+
+    assert.ok(sleepCalls.length >= 1, `sleep must have been called at least once (got ${sleepCalls.length}); zero means busy-spin`);
+    assert.ok(_elapsed >= 30000, `elapsed must reach 30 000 ms budget (got ${_elapsed}ms)`);
+
+    // Restore renameSync for cleanup
+    fs.renameSync = origRenameSync;
+    try { origUnlinkSync(lockPath); } catch { /* ok */ }
+  });
+
+  test('persistent renameSync failure error message names steal cause, not statSync (#1217 diagnostic)', () => {
+    // Regression guard for the misleading-error-context bug: when the steal's renameSync
+    // fails and checkBudgetAndSleep throws at the budget boundary, the outer statSync
+    // catch must NOT re-wrap it with "statSync failed after EEXIST".  The thrown error
+    // must name the real cause ("stale lock steal lost to racer") so operators can
+    // identify it.
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, '99999');
+
+    // renameSync always fails — the budget will be exhausted on the first sleep.
+    const renameErr = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+    fs.renameSync = (from, to) => {
+      if (from === lockPath) throw renameErr;
+      return origRenameSync(from, to);
+    };
+
+    const realNow = Date.now();
+    let _elapsed = 0;
+    const clock = {
+      now() { return realNow + _elapsed; },
+      sleep(_ms) { _elapsed += 35000; }, // jump past the 30 000 ms budget on first sleep
+    };
+
+    let thrownErr;
+    try {
+      acquireStateLock(statePath, clock);
+    } catch (e) {
+      thrownErr = e;
+    }
+
+    assert.ok(thrownErr, 'must throw when renameSync persistently fails and budget is exhausted');
+    assert.ok(
+      /stale lock steal lost to racer/.test(thrownErr.message),
+      `error message must contain "stale lock steal lost to racer" (got: ${thrownErr.message})`
+    );
+    assert.ok(
+      !/statSync failed after EEXIST/.test(thrownErr.message),
+      `error message must NOT contain "statSync failed after EEXIST" (the misleading re-wrap) (got: ${thrownErr.message})`
+    );
+
+    fs.renameSync = origRenameSync;
+    try { origUnlinkSync(lockPath); } catch { /* ok */ }
+  });
+
+  test('successful stale-lock steal acquires immediately even when budget is already exhausted — no throw (#1217 regression)', () => {
+    // Regression guard: the OLD code called checkBudgetAndSleep() unconditionally
+    // after fs.unlinkSync, so a successful steal when elapsed >= maxWaitMs would
+    // throw budget-exceeded even though the lock was already freed.  The fix lets
+    // a successful steal `continue` immediately without a budget check.
+    //
+    // Arrange: stale lock with mtime well in the past.
+    const lockPath = statePath + '.lock';
+    fs.writeFileSync(lockPath, '99999');
+    const staleMs = 20000;
+    const staledTime = new Date(Date.now() - staleMs);
+    fs.utimesSync(lockPath, staledTime, staledTime);
+
+    // Clock: now() returns a time that is (a) past the stale threshold AND
+    // (b) already >= maxWaitMs ahead of startedAt.  The stale branch fires,
+    // unlinkSync SUCCEEDS (we do NOT patch it), and with the fix the lock is
+    // immediately acquired — budget-exceeded must NOT be thrown.
+    const realNow = Date.now();
+    // startedAt = realNow; clock.now() on first call = realNow (startedAt captured).
+    // After the stale branch unlinks, clock.now() is still realNow → elapsed = 0 < 30000.
+    // To prove the regression, advance the clock so that elapsed is past the budget
+    // at the moment the budget check WOULD have fired (i.e. > 30000 ms ahead of startedAt).
+    // We use a clock where now() starts at 0 (for startedAt) then jumps to 30001 after
+    // the first call, simulating 30001 ms having passed when the stale lock is found.
+    let nowCallCount = 0;
+    const sleepCalls = [];
+    const clock = {
+      now() {
+        nowCallCount++;
+        // First call (captured as startedAt) returns 0.
+        // All subsequent calls return 30001 — so elapsed = 30001 >= 30000.
+        // The stale check: clock.now() - stat.mtimeMs = 30001 - (realNow - staleMs).
+        // We need that to be > staleThresholdMs (10000).  realNow - (realNow-staleMs) = staleMs=20000 > 10000 ✓
+        // But we need the mtime in absolute terms to make the stale check fire.
+        // Use realNow-based absolute clock: startedAt=realNow, elapsed on 2nd call=30001ms.
+        return nowCallCount === 1 ? realNow : realNow + 30001;
+      },
+      sleep(ms) { sleepCalls.push(ms); },
+    };
+
+    // Should NOT throw — successful steal must continue immediately even at elapsed > maxWaitMs.
+    const acquired = acquireStateLock(statePath, clock);
+    assert.ok(fs.existsSync(acquired), 'lock must be acquired after successful stale-lock steal');
+    // No sleep calls: the steal succeeded, so the fast-path `continue` was taken.
+    assert.strictEqual(sleepCalls.length, 0, 'no sleep should occur on a successful stale-lock steal');
+    releaseStateLock(acquired);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 2. readModifyWriteStateMd — lock released on error path
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -201,58 +866,38 @@ describe('withPlanningLock clock seam', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', '.lock')), 'lock must be released even when fn() throws');
   });
 
-  test('timeout fires when clock exceeds lockTimeout (10 000 ms)', () => {
+  test('timeout fires (sleep seam exercised) when a LIVE holder is contended past lockTimeout', () => {
+    // Audit M1 rewrite: the prior version asserted the now-REMOVED force-steal
+    // fallback (timeout → unconditional unlink + re-acquire). That fallback robbed
+    // live writers; the fix replaces it with a clear timeout throw. This test now
+    // pins the new contract: a verified-LIVE holder held past lockTimeout makes the
+    // waiter exercise the clock.sleep seam and then throw — never force-stolen.
     const lockPath = path.join(tmpDir, '.planning', '.lock');
-    fs.writeFileSync(lockPath, String(process.pid)); // simulate held lock
+    const livePid = 9191;
+    fs.writeFileSync(lockPath, JSON.stringify({ pid: livePid, cwd: tmpDir, acquired: new Date().toISOString() }));
 
-    // Clock that advances past lockTimeout on every sleep call so the while
-    // condition trips immediately after the first retry.
+    // Holder reads as ALIVE via the injected probe → waited on, never stolen.
+    require('../gsd-core/bin/lib/planning-workspace.cjs')._setLockProbes({ isPidAlive: (pid) => pid === livePid });
+
     let nowValue = 0;
-
-    // withPlanningLock exits the while loop (timeout), deletes the lock, then
-    // calls runWithHeldLock() which tries writeFileSync with { flag: 'wx' }.
-    // Since our lock file is still there (we placed it), runWithHeldLock throws EEXIST.
-    // That exception propagates — so we get an error (either EEXIST or the
-    // function succeeds on the post-timeout acquisition attempt depending on timing).
-    // What we need to assert: the clock.sleep was invoked (timeout path was reached).
-    //
-    // Because withPlanningLock removes the lock file at timeout and re-acquires,
-    // and we placed the lock file ourselves (not via withPlanningLock), the re-acquire
-    // will SUCCEED (wx open on an absent file). So the function returns normally.
-    // Remove our self-placed lock so withPlanningLock can take it over.
-    fs.unlinkSync(lockPath);
-
-    // Now seed the lock AFTER withPlanningLock starts by using a wrapper that
-    // creates the lock file on the first sleep call.
-    let seeded = false;
-    nowValue = 0;
     const clock2 = {
       now() { return nowValue; },
-      sleep(ms) {
-        if (!seeded) {
-          seeded = true;
-          // The test: verify withPlanningLock calls clock.sleep when contended
-          // (confirms the seam is wired, not that Atomics.wait is called).
-        }
-        nowValue += ms + 11000;
-      },
+      sleep(ms) { nowValue += ms + 11000; }, // advance past lockTimeout on first sleep
     };
 
-    // Re-seed the lock (simulating a competing process)
-    fs.writeFileSync(lockPath, '12345'); // non-existent PID; stale check uses mtime
-
-    // Set mtime to now so the stale check (>30s) does NOT fire
-    const now = new Date();
-    fs.utimesSync(lockPath, now, now);
-
-    // With the lock fresh and held, withPlanningLock will enter the retry loop
-    // and call clock2.sleep at least once. After advancing past lockTimeout,
-    // it exits the while loop and tries to recover by unlinking and re-acquiring.
-    const result = withPlanningLock(tmpDir, () => 'recovered', clock2);
-    assert.strictEqual(result, 'recovered', 'must succeed after timeout recovery path');
-    // clock2.sleep was called, confirming the seam was exercised
-    // (the sleep method must have advanced nowValue past lockTimeout)
-    assert.ok(nowValue > 10000, 'clock must have advanced past lockTimeout via sleep calls');
+    try {
+      assert.throws(
+        () => withPlanningLock(tmpDir, () => 'should-not-run', clock2),
+        /exceeded.*10000ms budget/,
+        'a live holder held past lockTimeout must throw a clear timeout error (not force-steal)'
+      );
+      // The sleep seam must have been exercised (timeout path reached).
+      assert.ok(nowValue > 10000, 'clock must have advanced past lockTimeout via the sleep seam');
+      // The live holder's lock must be intact (never unlinked).
+      assert.ok(fs.existsSync(lockPath), 'live holder lock must survive the timeout (not force-stolen)');
+    } finally {
+      require('../gsd-core/bin/lib/planning-workspace.cjs')._resetLockProbes();
+    }
   });
 });
 

@@ -332,10 +332,13 @@ describe('changeset cli extract: version-range changelog extraction (#3496)', ()
   test('F1: workflows/update.md contains concrete extract subcommand invocation', (_t) => {
     const workflowPath = path.join(ROOT, 'gsd-core', 'workflows', 'update.md');
     const workflowText = fs.readFileSync(workflowPath, 'utf8');
-    // The invocation is: node "$GSD_DIR/gsd-core/scripts/changeset/cli.cjs" extract
-    // so the literal substring is 'cli.cjs" extract' (quote between script path and subcommand)
+    // The invocation uses either a direct path or an intermediate variable:
+    //   node "$GSD_DIR/scripts/changeset/cli.cjs" extract
+    //   node "$GSD_CHANGESET_CLI" extract
+    // Accept either form so future refactors don't immediately trip this anchor.
     assert.ok(
-      workflowText.includes('cli.cjs" extract') || workflowText.includes('cli.cjs extract'),
+      workflowText.includes('cli.cjs" extract') || workflowText.includes('cli.cjs extract') ||
+      (workflowText.includes('GSD_CHANGESET_CLI') && workflowText.includes('" extract')),
       'update.md must invoke cli.cjs extract (fix for #3496 BLOCKER 1)',
     );
     assert.ok(
@@ -349,6 +352,40 @@ describe('changeset cli extract: version-range changelog extraction (#3496)', ()
     assert.ok(
       workflowText.includes('EXTRACT_EXIT') || workflowText.includes('EXTRACT_JSON'),
       'update.md must capture exit code or JSON output from extract',
+    );
+  });
+
+  // F2: update.md must use the INSTALLED path ($GSD_DIR/scripts/changeset/cli.cjs),
+  // NOT the old broken path ($GSD_DIR/gsd-core/scripts/changeset/cli.cjs).
+  // The installer copies scripts/changeset/ into <configDir>/scripts/changeset/,
+  // so the runtime path is $GSD_DIR/scripts/changeset/cli.cjs (#935).
+  // allow-test-rule: reads a product workflow .md file (not CJS source) to verify
+  // the runtime install path contract; there is no behavioural runtime to invoke.
+  test('F2: update.md CLI path is $GSD_DIR/scripts/changeset/cli.cjs (not gsd-core/scripts/…) (#935)', (_t) => {
+    const workflowPath = path.join(ROOT, 'gsd-core', 'workflows', 'update.md');
+    const workflowText = fs.readFileSync(workflowPath, 'utf8');
+    // The correct installed path must appear somewhere in the update workflow
+    assert.ok(
+      workflowText.includes('scripts/changeset/cli.cjs'),
+      'update.md must reference scripts/changeset/cli.cjs',
+    );
+    // The old broken path ($GSD_DIR/gsd-core/scripts/changeset/cli.cjs) must not appear
+    assert.ok(
+      !workflowText.includes('gsd-core/scripts/changeset/cli.cjs'),
+      'update.md must NOT reference the old gsd-core/scripts/changeset/cli.cjs path (fix for #935)',
+    );
+  });
+
+  // F3: update.md must guard against the CLI being missing (not pure silent-swallow)
+  // allow-test-rule: reads a product workflow .md file (not CJS source) to verify
+  // the guard is present; there is no behavioural runtime to invoke.
+  test('F3: update.md has an explicit guard when changeset CLI is missing (#935)', (_t) => {
+    const workflowPath = path.join(ROOT, 'gsd-core', 'workflows', 'update.md');
+    const workflowText = fs.readFileSync(workflowPath, 'utf8');
+    // The workflow must check for CLI existence before invoking it
+    assert.ok(
+      workflowText.includes('GSD_CHANGESET_CLI') && workflowText.includes('! -f'),
+      'update.md must guard against a missing changeset CLI with [ ! -f "$GSD_CHANGESET_CLI" ] (#935)',
     );
   });
 });
@@ -1035,5 +1072,43 @@ describe('changeset cli render --preview (#759)', () => {
       before,
       'CHANGELOG.md must be byte-identical after --preview',
     );
+  });
+
+  // Regression (#939 / rc-job crash): a fragment that fails to parse (e.g. an
+  // un-backfilled `pr: 0` placeholder) makes cmdRender early-return WITHOUT a
+  // `preview` key. Before the fix, main() wrote report.preview unguarded, so
+  // `process.stdout.write(undefined)` threw ERR_INVALID_ARG_TYPE and the rc
+  // "Preview CHANGELOG" step died with a cryptic TypeError that masked the real
+  // cause. The preview failure path must now exit non-zero and NAME the bad
+  // fragment, identical to a non-preview render.
+  test('render --preview with an unparseable fragment fails cleanly (names the file, no TypeError crash)', () => {
+    // pr: 0 is the never-backfilled placeholder → parseFragment returns invalid_pr.
+    writeFragment('bad-fragment', 'Fixed', 0, '**Bad** — placeholder never backfilled. (#123)');
+
+    // The crash lived on the NON-json path: process.stdout.write(report.preview)
+    // with report.preview === undefined. Exercise it directly and assert it no
+    // longer crashes — non-zero exit and NO TypeError stack in the output (QA
+    // matrix: "No stack trace in non-debug failure output").
+    const raw = runRenderRaw(['--version', '9.9.0', '--date', '2026-01-02', '--preview']);
+    assert.notStrictEqual(raw.status, 0, `parse-failure preview must exit non-zero; stdout=${raw.stdout} stderr=${raw.stderr}`);
+    const combined = `${raw.stdout}\n${raw.stderr}`;
+    assert.ok(
+      !combined.includes('ERR_INVALID_ARG_TYPE'),
+      `preview must NOT crash with ERR_INVALID_ARG_TYPE; got: ${combined}`,
+    );
+
+    // Structured surface (--json) proves the failure NAMES the offending fragment
+    // and reports the typed parse reason — asserted on the typed report shape,
+    // not on rendered prose.
+    const json = runRender(['--version', '9.9.0', '--date', '2026-01-02', '--preview']);
+    assert.notStrictEqual(json.status, 0, 'json preview must also exit non-zero on parse failure');
+    assert.ok(Array.isArray(json.report.failures), `report.failures must be an array; got: ${JSON.stringify(json.report)}`);
+    const bad = json.report.failures.find((f) => f.file.endsWith('bad-fragment.md'));
+    assert.ok(bad, `failures must name the offending fragment; got: ${JSON.stringify(json.report.failures)}`);
+    assert.equal(bad.reason, 'invalid_pr', `failure reason must be the typed invalid_pr; got: ${bad && bad.reason}`);
+
+    // Still non-destructive: no CHANGELOG.md written, fragment left in place.
+    assert.ok(!fs.existsSync(path.join(tmp, 'CHANGELOG.md')), 'CHANGELOG.md must NOT be created by a failed preview');
+    assert.ok(fs.existsSync(path.join(tmp, '.changeset', 'bad-fragment.md')), 'fragment must still exist after failed preview');
   });
 });

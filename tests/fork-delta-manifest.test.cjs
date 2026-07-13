@@ -184,7 +184,10 @@ describe('FORK anchors: every anchor regex matches its file content', () => {
 // ─── (d) additive files all exist ────────────────────────────────────────────
 
 describe('FORK-DELTA.md: every additive (fork-owned) file exists', () => {
-  const additive = bulletPaths(mdSection('Additive files'));
+  // The "### Do NOT restore" subsection lists transient artifacts deliberately
+  // dropped by the v2.0.0 realignment (Phase 2) — they must NOT be required here.
+  const additiveBody = mdSection('Additive files').split(/\n### Do NOT restore/)[0];
+  const additive = bulletPaths(additiveBody);
 
   test('the additive list parsed non-trivially', () => {
     assert.ok(additive.length >= 90, `expected ~98 additive files, parsed ${additive.length} — list format drifted?`);
