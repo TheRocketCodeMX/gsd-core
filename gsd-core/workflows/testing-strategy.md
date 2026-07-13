@@ -90,8 +90,9 @@ Write to `.planning/TEST-STRATEGY.md`.
 ## Step 8: Commit
 
 ```bash
+gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md
+  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md
 else
   echo "TEST-STRATEGY.md written but not committed (commit_docs is false)."
 fi

@@ -20,6 +20,7 @@ const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningPaths } = planningWorkspace;
+import { platformWriteSync } from './shell-command-projection.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -219,8 +220,77 @@ function cmdProjectStrategySkipped(cwd: string, skill: string | undefined, raw: 
   output({ found: true, skill: target, skipped: false, reason: null, date: null }, raw, 'false');
 }
 
+// ─── project.strategy-done ──────────────────────────────────────────────────────
+
+/**
+ * Deterministic WRITE verb: flip a `## Strategy Plan` table row's status to `done`.
+ *
+ * Closes the Strategy-Plan lifecycle loop (issue #21 P0-1): every strategy skill
+ * calls this at its commit step. Without the flip, rows stay `recommended` forever,
+ * `query grounding required` returns [] and the grounding gate passes vacuously.
+ *
+ * Contract:
+ *   - idempotent — an already-`done` row reports { changed: false } and does not rewrite
+ *   - unknown step / placeholder-only table / missing PROJECT.md → hard error
+ *     (a write verb must not no-op silently: the caller believes the flip happened)
+ */
+function cmdProjectStrategyDone(cwd: string, step: string | undefined, raw: boolean): void {
+  const target = (step || '').trim();
+  if (!target) { error('project strategy-done requires a <step> argument'); return; }
+
+  const projectPath = planningPaths(cwd).project;
+  if (!fs.existsSync(projectPath)) {
+    error('project strategy-done: .planning/PROJECT.md not found');
+    return;
+  }
+  const content = fs.readFileSync(projectPath, 'utf-8');
+
+  const section = extractSection(content, 'Strategy Plan');
+  if (section === null) {
+    error('project strategy-done: PROJECT.md has no ## Strategy Plan section');
+    return;
+  }
+
+  // Rewrite line-by-line, but only inside the Strategy Plan section, so a
+  // same-named row in another table elsewhere in PROJECT.md can never be touched.
+  const lines = content.split('\n');
+  let inSection = false;
+  let matched = false;
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^##\s+Strategy Plan\s*$/.test(line)) { inSection = true; continue; }
+    if (inSection && /^##\s/.test(line)) break;
+    if (!inSection || !line.trim().startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length < 2) continue;
+    const [stepCell, statusCell] = cells;
+    if (/^step$/i.test(stepCell) || /^:?-+:?$/.test(stepCell)) continue;          // header / separator
+    if (/^\[.*\]$/.test(stepCell) || /^\[.*\]$/.test(statusCell)) continue;       // unfilled placeholder
+    if (stepCell.toLowerCase() !== target.toLowerCase()) continue;
+    matched = true;
+    if (statusCell.toLowerCase() === 'done') break; // idempotent no-op
+    // Preserve any extra columns; only the Status cell changes.
+    const newCells = [...cells];
+    newCells[1] = 'done';
+    lines[i] = `| ${newCells.join(' | ')} |`;
+    changed = true;
+    break;
+  }
+
+  if (!matched) {
+    error(`project strategy-done: step "${target}" not found in ## Strategy Plan`);
+    return;
+  }
+  if (changed) {
+    platformWriteSync(projectPath, lines.join('\n'));
+  }
+  output({ found: true, step: target, status: 'done', changed }, raw, changed ? 'done' : 'already-done');
+}
+
 export = {
   cmdProjectMode,
   cmdProjectStrategyPlan,
   cmdProjectStrategySkipped,
+  cmdProjectStrategyDone,
 };

@@ -58,16 +58,20 @@ describe('gsd-project-researcher agent registration (#2419)', () => {
     );
   });
 
-  test('new-project.md reports required-agent and skill-payload diagnostics separately', () => {
+  test('new-project.md agent diagnostics are keyed on fields init actually emits (#21 P2a)', () => {
+    // init.new-project emits agents_installed / missing_agents / agent_runtime /
+    // agents_dir — it never emitted required_agents_installed /
+    // missing_required_agents / agent_skill_payloads_available. The doc used to
+    // template a warning on those phantom keys, which could never render.
     const content = fs.readFileSync(NEW_PROJECT_PATH, 'utf-8');
-    assert.ok(content.includes('required_agents_installed'),
-      'new-project.md must parse required_agents_installed from init JSON');
-    assert.ok(content.includes('missing_required_agents'),
-      'new-project.md must report missing required new-project agents separately');
-    assert.ok(content.includes('agent_skill_payloads_available'),
-      'new-project.md must distinguish skill payload availability from agent definitions');
-    assert.ok(content.includes('agents_dir'),
-      'new-project.md must show which agents directory was checked');
+    for (const realKey of ['agents_installed', 'missing_agents', 'agent_runtime', 'agents_dir']) {
+      assert.ok(content.includes(realKey),
+        `new-project.md must key its agent diagnostics on the real init field ${realKey}`);
+    }
+    for (const phantom of ['required_agents_installed', 'missing_required_agents', 'agent_skill_payloads_available', 'agent_skill_payload_agents']) {
+      assert.ok(!content.includes(phantom),
+        `new-project.md references ${phantom}, but init.new-project never emits it — the warning template can never render that field`);
+    }
   });
 
   test('new-milestone.md parses agents_installed from init JSON', () => {

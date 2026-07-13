@@ -32,6 +32,16 @@ describe('grounding citation + cross-check', () => {
     assert.equal(g.crossCheck('TEST-STRATEGY', 'pricing', 'medium', ts).ok, false, 'the non-leading token must not pass as primary');
   });
 
+  test('key near-miss (parenthetical qualifier) gets a did-you-mean reason (#21 P2e)', () => {
+    const adr = '### Axis A\n| Subdomain | Type | Rung | Why |\n|---|---|---|---|\n| pricing (core) | Core | Domain Model | rich |\n';
+    const r = g.crossCheck('ADR', 'pricing', 'Domain Model', adr);
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /did you mean "pricing \(core\)"\?/,
+      'a qualifier-only miss should teach the exact row key');
+    const rGhost = g.crossCheck('ADR', 'ghost', 'Domain Model', adr);
+    assert.ok(!/did you mean/.test(rGhost.reason), 'a genuine fabrication gets no suggestion');
+  });
+
   test('DESIGN-INVENTORY cross-check on (field) source enum', () => {
     const di = '## User-facing fields\n| Field | Surface / screen | Source | Required? | Backs | Captured shape | Notes |\n|---|---|---|---|---|---|---|\n| address | signup | design | yes | — | single free-text input | — |\n';
     assert.ok(g.crossCheck('DESIGN-INVENTORY', 'address @ signup', 'design / single input', di).ok);
@@ -92,6 +102,58 @@ describe('grounding gate (blocking)', () => {
   test('workflow.grounding_gate=false → skipped/pass', () => {
     const { dir, phaseDir } = gateProject('## Objective\nno grounding\n', { workflow: { grounding_gate: false } });
     assert.equal(runGate(dir, phaseDir).passed, true);
+    cleanup(dir);
+  });
+
+  test('ALL citations must pass: a valid line cannot carry a bogus sibling (#21 P1-1)', () => {
+    // Pre-fix, ONE valid citation per artifact satisfied the gate (anyOk), so a
+    // fabricated sibling line rode through unchecked. Every line must now pass.
+    const { dir, phaseDir } = gateProject(
+      '## Grounding\n- ADR · pricing → Domain Model\n- ADR · billing → Event Sourcing\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, false, 'the fabricated sibling citation must block');
+    assert.match(j.message, /billing/, 'the failing line is reported');
+    cleanup(dir);
+  });
+
+  test('every failing line is reported individually', () => {
+    const { dir, phaseDir } = gateProject(
+      '## Grounding\n- ADR · pricing → Transaction Script\n- ADR · ghost → Domain Model\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, false);
+    assert.match(j.message, /pricing/, 'mismatched rung line reported');
+    assert.match(j.message, /ghost/, 'unknown subdomain line reported');
+    cleanup(dir);
+  });
+
+  test('multiple valid citations for one artifact still pass', () => {
+    const { dir, phaseDir } = gateProject(
+      '## Grounding\n- ADR · pricing → Domain Model\n- ADR · pricing → Domain Model\n## Tasks\n- do\n');
+    assert.equal(runGate(dir, phaseDir).passed, true);
+    cleanup(dir);
+  });
+
+  test('reports plans_scanned so a vacuous pass is visible (#21 P1-4)', () => {
+    const { dir, phaseDir } = gateProject('## Grounding\n- ADR · pricing → Domain Model\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, true);
+    assert.equal(j.plans_scanned, 1, 'the matched *-PLAN.md count is reported');
+    cleanup(dir);
+  });
+
+  test('plan-like files that do not match *-PLAN.md produce a warning, not a silent pass (#21 P1-4)', () => {
+    // A phase dir containing only e.g. 01-01-plan.md (wrong case) previously
+    // returned passed:true with no signal that ZERO plans were actually read.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-gate-'));
+    const phaseDir = path.join(dir, '.planning', 'phase');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'), '# P\n');
+    fs.writeFileSync(path.join(phaseDir, '01-01-plan.md'), '## Grounding\n\n## Tasks\n- do\n');
+    const j = runGate(dir, phaseDir);
+    assert.equal(j.passed, true, 'passed semantics unchanged (nothing required)');
+    assert.equal(j.plans_scanned, 0);
+    assert.ok(Array.isArray(j.warnings) && j.warnings.some((w) => /01-01-plan\.md/.test(w)),
+      `expected a near-miss warning naming 01-01-plan.md, got: ${JSON.stringify(j.warnings)}`);
     cleanup(dir);
   });
 });

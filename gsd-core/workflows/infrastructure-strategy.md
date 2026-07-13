@@ -108,8 +108,9 @@ Write to `.planning/INFRA-STRATEGY.md`.
 ## Step 9: Commit
 
 ```bash
+gsd_run project strategy-done infrastructure-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add infrastructure strategy (serverless-container default)" --files .planning/INFRA-STRATEGY.md
+  gsd_run query commit "docs: add infrastructure strategy (serverless-container default)" --files .planning/INFRA-STRATEGY.md .planning/PROJECT.md
 else
   echo "INFRA-STRATEGY.md written but not committed (commit_docs is false)."
 fi

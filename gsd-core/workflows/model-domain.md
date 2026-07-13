@@ -159,8 +159,9 @@ Write to `.planning/DOMAIN-MODEL.md`. **Do not include any architecture recommen
 ## Step 7: Commit
 
 ```bash
+gsd_run project strategy-done model-domain 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add domain model (ubiquitous language + subdomain distillation)" --files .planning/DOMAIN-MODEL.md
+  gsd_run query commit "docs: add domain model (ubiquitous language + subdomain distillation)" --files .planning/DOMAIN-MODEL.md .planning/PROJECT.md
 else
   echo "DOMAIN-MODEL.md written but not committed (commit_docs is false)."
 fi

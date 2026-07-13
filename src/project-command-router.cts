@@ -17,6 +17,7 @@ interface ProjectModule {
   cmdProjectMode(cwd: string, raw: boolean): void;
   cmdProjectStrategyPlan(cwd: string, raw: boolean): void;
   cmdProjectStrategySkipped(cwd: string, skill: string | undefined, raw: boolean): void;
+  cmdProjectStrategyDone(cwd: string, step: string | undefined, raw: boolean): void;
 }
 
 interface RouteProjectCommandOptions {
@@ -40,6 +41,7 @@ function routeProjectCommand({ project, args, cwd, raw, error }: RouteProjectCom
       'mode': () => project.cmdProjectMode(cwd, raw),
       'strategy-plan': () => project.cmdProjectStrategyPlan(cwd, raw),
       'strategy-skipped': () => project.cmdProjectStrategySkipped(cwd, args[2], raw),
+      'strategy-done': () => project.cmdProjectStrategyDone(cwd, args[2], raw),
     },
   });
 }

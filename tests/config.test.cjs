@@ -594,6 +594,32 @@ describe('config-new-project command', () => {
     assert.strictEqual(config.hooks.context_warnings, true);
   });
 
+  test('fresh config-new-project output loads with ZERO unknown-key warnings (#21 P1-3)', () => {
+    // config-new-project seeds tavily_search / ref_search / perplexity / jina
+    // (real research toggles), but the schema whitelist didn't register them —
+    // so every loadConfig() on a fresh project warned "unknown config key(s)".
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const config = readConfig(tmpDir);
+    for (const key of ['tavily_search', 'ref_search', 'perplexity', 'jina']) {
+      assert.strictEqual(typeof config[key], 'boolean', `${key} is seeded by config-new-project`);
+    }
+
+    const { loadConfig } = require('../gsd-core/bin/lib/config-loader.cjs');
+    let stderrCapture = '';
+    const origStderrWrite = process.stderr.write;
+    process.stderr.write = (chunk) => { stderrCapture += chunk; return true; };
+    try {
+      loadConfig(tmpDir);
+    } finally {
+      process.stderr.write = origStderrWrite;
+    }
+    assert.ok(
+      !stderrCapture.includes('unknown config key'),
+      `a fresh config-new-project output must load warning-free, got: ${stderrCapture}`
+    );
+  });
+
   test('user choices override defaults', () => {
     const choices = JSON.stringify({
       mode: 'yolo',

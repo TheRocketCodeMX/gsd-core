@@ -65,7 +65,7 @@ AGENT_SKILLS_SYNTHESIZER=$(gsd_run query agent-skills gsd-research-synthesizer)
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper)
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_design_hint`, `design_pointer`, `design_hint_source`, `design_dismissed`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `project_root`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`. (This is the key set `init.new-project` actually emits — do not expect others.)
 
 **If `agents_installed` is false:** Display a warning before proceeding:
 ```text
@@ -74,18 +74,9 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 
 Runtime checked: {agent_runtime}
 Agents directory checked: {agents_dir}
-Required new-project agents missing:
-  {missing_required_agents joined with newline, or "none"}
-
-Agent skill payloads available: {agent_skill_payloads_available}
-Agent skill payload agents:
-  {agent_skill_payload_agents joined with newline, or "none"}
-
-Skill payloads only provide prompt context. Named subagent spawns still require agent
-definitions to be installed for this runtime.
 
 Subagent spawns (gsd-project-researcher, gsd-research-synthesizer, gsd-roadmapper) will fail
-with "agent type not found" if `required_agents_installed` is false. Run the installer with --global to make agents available:
+with "agent type not found" while they are missing. Run the installer with --global to make agents available:
 
   npx @therocketcode/gsd-core@latest --global
 
@@ -128,7 +119,7 @@ All subsequent references to the project instruction file use `$INSTRUCTION_FILE
 
 **If auto mode:** Skip the interactive router and go to Step 4, but set Origin from `is_brownfield`/`has_existing_code` (existing code → brownfield-extend; else greenfield) — do not blindly assume greenfield. Synthesize PROJECT.md from the provided document.
 
-**If `needs_codebase_map` is true** (from init — existing code detected but no codebase map):
+**If `needs_codebase_map` is true** (from init — existing code detected but no codebase map): **but first, if `.planning/LEGACY-INVENTORY.md` already exists, exploration is DONE** — a prior `/gsd:legacy-inventory` run produced it; do NOT re-route to the exploration router. Set Origin/Code-quality for Step 4 from its `**Mode:**` header (rewrite-* → Origin: rewrite/refactor; vibe-coded-harden → Code-quality: vibe-coded-to-harden) and continue to Step 3. Otherwise:
 
 This routes BOTH the right exploration AND the `## Mode` Origin/Code-quality recorded in Step 4 — the three intents are not the same (see `@~/.claude/gsd-core/references/strategy-flow.md`). **Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number (required for non-Claude runtimes where `AskUserQuestion` is unavailable).
 
@@ -458,6 +449,13 @@ Synthesize all context into `.planning/PROJECT.md` using the template from `temp
 - **Design input:** none · a provided design to ingest (a design-tool export / prototype / generated-design artifact the user supplied) · an existing design system to honor.
 - **Code-quality baseline:** clean · legacy-debt · vibe-coded-to-harden (AI-prototyped, thin on tests/seams).
 Record the named combination (e.g. "greenfield-rewrite + new-design + salvageable-old-code"). When a dimension is genuinely unclear, ask one targeted question rather than guessing.
+
+**Record `## Sources` rows (the literal-source registry) as you fill `## Mode`.** One line per literal source this project grounds in — `- <kind> · <path-or-url> — <note>`, kinds `design` / `legacy` / `vibe` / `context-app`:
+- provided design → `- design · <the Design-input pointer> — <form, e.g. Stitch export>` (mirrors Design-input);
+- Origin rewrite/refactor → `- legacy · <old codebase root> — behavior source (rewrite)`;
+- Code-quality vibe-coded-to-harden → `- vibe · <prototype root> — intent source; do not pin its behavior`;
+- any additional reference/context app the user pointed at → `- context-app · <path-or-url> — <what it evidences>`.
+`gsd_run query grounding required` reads these (the `sources` field) and downstream agents explore them directly — an unrecorded source is invisible to the grounding loop.
 
 **Multi-surface nudge.** If you detect multiple *independent* surfaces with genuinely different archetypes (e.g. a backend service **and** a separate frontend app **and** a CLI in one repo), say so: GSD models **one surface per project** (`@~/.claude/gsd-core/references/strategy-flow.md`). Recommend running GSD **per package/surface**, or ask the user to pick the **primary** surface for this project and record its Mode — do not average divergent surfaces into one Mode.
 <!-- FORK:strategy END -->
@@ -1543,7 +1541,7 @@ This ensures new projects get the default GSD workflow-enforcement guidance and 
 **Commit roadmap (after approval or auto mode):**
 
 ```bash
-gsd_run query commit "docs: create roadmap ([N] phases)" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"
+gsd_run query commit "docs: create roadmap ([N] phases)" --files .planning/PROJECT.md .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"
 ```
 
 ## 9. Done

@@ -90,6 +90,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/testing-strategy.md`
 - `src/project-command-router.cts`
 - `src/project.cts`
+- `tests/feat-project-strategy-done.test.cjs`
 - `tests/project-query-verbs.test.cjs`
 - `tests/strategy-config-and-marker-contracts.test.cjs`
 
@@ -111,6 +112,7 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 - `tests/feat-grounding-index-refresh-hook.test.cjs`
 - `tests/feat-grounding-resolver.test.cjs`
 - `tests/feat-grounding-sources.test.cjs`
+- `tests/grounding-shipped-template-fixtures.test.cjs`
 - `tests/grounding-fixture-ablation.test.cjs`
 
 ### exploration
@@ -239,8 +241,8 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/execute-phase.md` | fidelity | anchors-only | SIZE-GATED (89972/90000 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
-| `gsd-core/workflows/new-milestone.md` | strategy | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors) |
-| `gsd-core/workflows/new-project.md` | strategy | markers | design detection, brief/legacy/design grounding, `## Mode` fill, Step 7.6; Step-9 on-ramp rewrite (anchors) |
+| `gsd-core/workflows/new-milestone.md` | strategy, validation | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors) |
+| `gsd-core/workflows/new-project.md` | strategy, validation | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors) |
 | `gsd-core/workflows/plan-phase.md` | grounding | anchors-only | SIZE-GATED (89119/90000 bytes!); elaboration gate, grounding gate, UI-hint authority, oracle files |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
 | `gsd-core/workflows/secure-phase.md` | grounding | markers | SECURITY-STRATEGY posture read |

@@ -69,8 +69,9 @@ Record the safe sequence: **expand schema (additive) → dual-write/backfill →
 Render `@~/.claude/gsd-core/templates/legacy-inventory.md` → `.planning/LEGACY-INVENTORY.md` (the coverage matrix + the three-way gap map + salvage dispositions + characterization gates + reuse-infra plan + the VERIFIED/INFERRED split + named open questions).
 
 ```bash
+gsd_run project strategy-done legacy-inventory 2>/dev/null || true  # flip the Strategy Plan row (when present) — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: legacy inventory (rewrite/salvage)" --files .planning/LEGACY-INVENTORY.md
+  gsd_run query commit "docs: legacy inventory (rewrite/salvage)" --files .planning/LEGACY-INVENTORY.md .planning/PROJECT.md
 else
   echo "LEGACY-INVENTORY.md written but not committed (commit_docs is false)."
 fi
