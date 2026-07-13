@@ -209,6 +209,7 @@ const { resolveActiveWorkstream, applyResolvedWorkstreamEnv } = require('./lib/a
 const state = require('./lib/state.cjs');
 const phase = require('./lib/phase.cjs');
 const roadmap = require('./lib/roadmap.cjs');
+const project = require('./lib/project.cjs');
 const verify = require('./lib/verify.cjs');
 const config = require('./lib/config.cjs');
 const template = require('./lib/template.cjs');
@@ -234,6 +235,7 @@ const { routePhaseCommand } = require('./lib/phase-command-router.cjs');
 const { routePhasesCommand } = require('./lib/phases-command-router.cjs');
 const { routeValidateCommand } = require('./lib/validate-command-router.cjs');
 const { routeRoadmapCommand } = require('./lib/roadmap-command-router.cjs');
+const { routeProjectCommand } = require('./lib/project-command-router.cjs');
 const { routeAgentCommand } = require('./lib/agent-command-router.cjs');
 const { routeCheckCommand } = require('./lib/check-command-router.cjs');
 const { routeTaskCommand } = require('./lib/task-command-router.cjs');
@@ -1309,6 +1311,19 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       });
       break;
     }
+
+// FORK:strategy BEGIN
+    case 'project': {
+      routeProjectCommand({
+        project,
+        args,
+        cwd,
+        raw,
+        error,
+      });
+      break;
+    }
+// FORK:strategy END
 
     case 'requirements': {
       const subcommand = args[1];

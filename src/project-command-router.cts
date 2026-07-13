@@ -6,12 +6,7 @@
  * gsd-core/bin/lib/project-command-router.cjs at pack/test time.
  */
 
-// FORK: Phase-2 temporary (v2.0.0 realignment, Epic #13) — PROJECT_SUBCOMMANDS
-// is exported by the FORK:strategy marked patch on command-aliases.cts, which is
-// re-applied in Phase 3. Until then it is defined locally; Phase 3 restores:
-//   import { PROJECT_SUBCOMMANDS } from './command-aliases.cjs';
-// and deletes this local copy (must stay in sync with PROJECT_COMMAND_ALIASES).
-const PROJECT_SUBCOMMANDS: string[] = ['mode', 'strategy-plan', 'strategy-skipped'];
+import { PROJECT_SUBCOMMANDS } from './command-aliases.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import cjsCommandRouterAdapter = require('./cjs-command-router-adapter.cjs');
 const { routeCjsCommandFamily } = cjsCommandRouterAdapter;
