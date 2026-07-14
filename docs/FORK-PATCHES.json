@@ -26,7 +26,6 @@
     { "path": "agents/gsd-domain-researcher.md", "feature": "fidelity", "mode": "anchors-only", "anchors": ["untrusted-input-boundary\\.md"] },
     { "path": "agents/gsd-research-synthesizer.md", "feature": "fidelity", "mode": "anchors-only", "anchors": ["untrusted-input-boundary\\.md"] },
     { "path": "agents/gsd-project-researcher.md", "feature": "fidelity", "mode": "markers", "markers": 1, "anchors": ["untrusted-input-boundary\\.md", "Source grounding \\(before any web research\\)"] },
-    { "path": "gsd-core/bin/gsd-tools.cjs", "feature": "strategy", "mode": "markers", "markers": 1, "anchors": ["routeProjectCommand"] },
     { "path": "gsd-core/bin/lib/legacy-cleanup.cjs", "feature": "identity", "mode": "markers", "markers": 4, "anchors": ["OLD_PACKAGE_SIGNALS", "empty-legacy-runtime-dir"] },
     { "path": "gsd-core/references/planner-source-audit.md", "feature": "fidelity", "mode": "markers", "markers": 2, "anchors": ["Five Source Types", "address-failure"] },
     { "path": "gsd-core/references/planner-source-audit.md", "feature": "grounding", "mode": "markers", "markers": 1, "anchors": ["check\\.grounding-plan", "grounding-citations\\.md"] },

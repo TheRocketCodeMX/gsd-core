@@ -1699,6 +1699,48 @@ const capabilities = {
     "contributions": [],
     "gates": []
   },
+  "rocket-strategy": {
+    "id": "rocket-strategy",
+    "role": "feature",
+    "version": "1.0.0",
+    "title": "Rocket strategy chain",
+    "description": "Discovery/strategy chain (Rocket capability pack): the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "cicd-strategy",
+      "discover-product",
+      "frontend-architecture",
+      "infrastructure-strategy",
+      "legacy-inventory",
+      "model-domain",
+      "recommend-architecture",
+      "security-strategy",
+      "testing-strategy"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "project",
+        "module": "project-command-router.cjs",
+        "router": "routeProjectCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "schema-gate": {
     "id": "schema-gate",
     "role": "feature",
@@ -2099,6 +2141,15 @@ const bySkill = {
   "validate-phase": "nyquist",
   "profile-user": "profile-pipeline",
   "learn": "rocket-learn",
+  "cicd-strategy": "rocket-strategy",
+  "discover-product": "rocket-strategy",
+  "frontend-architecture": "rocket-strategy",
+  "infrastructure-strategy": "rocket-strategy",
+  "legacy-inventory": "rocket-strategy",
+  "model-domain": "rocket-strategy",
+  "recommend-architecture": "rocket-strategy",
+  "security-strategy": "rocket-strategy",
+  "testing-strategy": "rocket-strategy",
   "secure-phase": "security",
   "ui-phase": "ui",
   "ui-review": "ui"
@@ -3829,6 +3880,11 @@ const commandFamilies = {
     "module": "profile-pipeline-command-router.cjs",
     "router": "routeProfileSample"
   },
+  "project": {
+    "capId": "rocket-strategy",
+    "module": "project-command-router.cjs",
+    "router": "routeProjectCommand"
+  },
   "scan-sessions": {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
@@ -3863,6 +3919,17 @@ const capabilityClusters = {
   ],
   "rocket-learn": [
     "learn"
+  ],
+  "rocket-strategy": [
+    "cicd-strategy",
+    "discover-product",
+    "frontend-architecture",
+    "infrastructure-strategy",
+    "legacy-inventory",
+    "model-domain",
+    "recommend-architecture",
+    "security-strategy",
+    "testing-strategy"
   ],
   "security": [
     "secure-phase"
@@ -3916,6 +3983,12 @@ const profileMembership = {
       "full"
     ]
   },
+  "rocket-strategy": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
   "security": {
     "tier": "full",
     "profiles": [
@@ -3961,6 +4034,7 @@ const _requiresGraph = {
   "research": [],
   "rocket-grounding": [],
   "rocket-learn": [],
+  "rocket-strategy": [],
   "schema-gate": [],
   "security": [],
   "tdd": [],

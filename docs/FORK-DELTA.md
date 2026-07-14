@@ -224,7 +224,6 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `eslint.config.mjs` | identity | anchors-only | `_reference/**` ignore + generated-lib rider lines |
 | `.gitignore` | identity | anchors-only | generated project/grounding/learn .cjs + `_reference/` riders |
 | `.github/workflows/release.yml` | release | anchors-only | `NODE_AUTH_TOKEN` env on publish/dry-run steps |
-| `gsd-core/bin/gsd-tools.cjs` | strategy, learn, grounding | markers | `case 'project'/'learn'/'grounding'` + require/usage lines (anchors); `list-seeds` is upstream-native (#722) |
 | `gsd-core/bin/lib/legacy-cleanup.cjs` | identity | markers | upstream-signal consts, legacy caches, empty-legacy-runtime-dir scan + apply guard |
 | `gsd-core/references/planner-source-audit.md` | fidelity, grounding | markers | DESIGN source + address-failure guard; `## Grounding` fill instructions (fenced DESIGN table row: anchors) |
 | `gsd-core/templates/claude-md.md` | grounding | anchors-only | 7-section / sources-of-truth prose (template body) |
