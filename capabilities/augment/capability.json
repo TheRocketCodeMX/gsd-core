@@ -1,7 +1,7 @@
 {
   "id": "augment",
   "role": "runtime",
-  "version": "2.0.0",
+  "version": "2.1.0-rc.1",
   "title": "Augment Code",
   "description": "Augment Code CLI — commands + nested-skill artifact layout; settings-json hook surface; Claude hook event dialect; tier-2 support.",
   "tier": "core",
