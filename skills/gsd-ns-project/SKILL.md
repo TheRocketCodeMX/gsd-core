@@ -17,6 +17,7 @@ run the project-level Strategy Plan steps (normally sequenced by
 |---|---|
 | Start a new project | gsd-new-project |
 | Create a new milestone | gsd-new-milestone |
+| Generate or regenerate the project roadmap | gsd-roadmap |
 | Complete the current milestone | gsd-complete-milestone |
 | Audit a milestone for issues | gsd-audit-milestone |
 | Summarize milestone status | gsd-milestone-summary |

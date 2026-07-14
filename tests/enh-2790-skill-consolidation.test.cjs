@@ -62,6 +62,7 @@ const KNOWN_SKILLS = new Set([
   'profile-user.md',
   'progress.md',
   'quick.md',
+  'roadmap.md',
   'recommend-architecture.md',
   'security-strategy.md',
   'frontend-architecture.md',

@@ -44,6 +44,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `commands/gsd/legacy-inventory.md`
 - `commands/gsd/model-domain.md`
 - `commands/gsd/recommend-architecture.md`
+- `commands/gsd/roadmap.md`
 - `commands/gsd/security-strategy.md`
 - `commands/gsd/testing-strategy.md`
 - `gsd-core/references/application-telemetry.md`
@@ -87,6 +88,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/model-domain.md`
 - `gsd-core/workflows/plan-phase/modes/strategy-elaboration.md`
 - `gsd-core/workflows/recommend-architecture.md`
+- `gsd-core/workflows/roadmap.md`
 - `gsd-core/workflows/security-strategy.md`
 - `gsd-core/workflows/strategy-chain/modes/advance.md`
 - `gsd-core/workflows/testing-strategy.md`
@@ -161,6 +163,7 @@ The feature itself is upstream-native as of v1.6.1 (`gsd-core/workflows/list-see
 - `docs/specs/2026-06-08-fork-methodology.md`
 - `docs/superpowers/plans/2026-06-25-gsd-learn.md`
 - `docs/superpowers/plans/2026-06-26-source-grounding-slice1.md`
+- `docs/superpowers/plans/2026-07-14-roadmap-after-strategy-chain.md`
 - `docs/superpowers/specs/2026-06-25-gsd-learn-design.md`
 - `docs/superpowers/specs/2026-06-26-source-grounding-design.md`
 - `docs/superpowers/specs/2026-07-13-upstream-adoption-analysis.md`
