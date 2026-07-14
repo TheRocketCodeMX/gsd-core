@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-07-14
+
+### Changed
+
+- Convert the fork's registration surfaces into first-party capability bundles (`capabilities/rocket-{learn,strategy,grounding}/`): the learn/project/grounding command families now dispatch through upstream's ADR-959 capability registry instead of hardcoded switch cases, and `workflow.grounding_gate` lives in rocket-grounding's federated config slice. Behavior is unchanged (grounding ablation and all suites prove equivalence); the fork's patch surface on gsd-tools.cjs and the shared config manifests drops to zero, with a tripwire test guarding against future re-shadowing. (#26)
+
+### Fixed
+
+- Restore three exact stub-detection grep recipes (hardcoded-empty-data with test exclusion, props-with-empty-literals, console.log-only-with-context) and two doctrine phrasings (deviation-tagged strategy-honor framing in the executor spawn prompt; REQUIRED-input/observable-shape in the verifier design-oracle handoff) that a sentence-level content-fidelity audit found were the realignment migration's only losses. (#24)
+
 ## [2.0.0] - 2026-07-13
 
 ### Added
