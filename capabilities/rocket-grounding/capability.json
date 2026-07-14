@@ -1,0 +1,38 @@
+{
+  "id": "rocket-grounding",
+  "role": "feature",
+  "version": "2.0.0-dev.0",
+  "title": "Rocket source-grounding enforcement",
+  "description": "Source-grounding enforcement (Rocket capability pack): the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
+  "tier": "full",
+  "requires": [],
+  "engines": {
+    "gsd": ">=1.6.0"
+  },
+  "runtimeCompat": {
+    "supported": [
+      "*"
+    ],
+    "unsupported": []
+  },
+  "skills": [],
+  "agents": [],
+  "hooks": [],
+  "config": {
+    "workflow.grounding_gate": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
+    }
+  },
+  "commands": [
+    {
+      "family": "grounding",
+      "module": "grounding-command-router.cjs",
+      "router": "routeGroundingCommand"
+    }
+  ],
+  "steps": [],
+  "contributions": [],
+  "gates": []
+}

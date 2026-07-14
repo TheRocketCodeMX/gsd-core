@@ -1447,11 +1447,9 @@ if [ "$GATE_CFG" != "false" ]; then
     exit 1
   }
 fi
-GG=$(gsd_run query config-get workflow.grounding_gate 2>/dev/null || echo "true")
-if [ "$GG" != "false" ]; then
-  GR=$(gsd_run query check.grounding-plan "${PHASE_DIR}")
-  echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
-fi
+# check.grounding-plan enforces workflow.grounding_gate itself (off => passed+skipped; #1169)
+GR=$(gsd_run query check.grounding-plan "${PHASE_DIR}")
+echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
 ```
 
 The handler returns JSON `{ passed, skipped, total, covered, uncovered[{id,text,category}], message }`.

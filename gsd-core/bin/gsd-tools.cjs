@@ -209,7 +209,6 @@ const { resolveActiveWorkstream, applyResolvedWorkstreamEnv } = require('./lib/a
 const state = require('./lib/state.cjs');
 const phase = require('./lib/phase.cjs');
 const roadmap = require('./lib/roadmap.cjs');
-const project = require('./lib/project.cjs');
 const verify = require('./lib/verify.cjs');
 const config = require('./lib/config.cjs');
 const template = require('./lib/template.cjs');
@@ -235,7 +234,6 @@ const { routePhaseCommand } = require('./lib/phase-command-router.cjs');
 const { routePhasesCommand } = require('./lib/phases-command-router.cjs');
 const { routeValidateCommand } = require('./lib/validate-command-router.cjs');
 const { routeRoadmapCommand } = require('./lib/roadmap-command-router.cjs');
-const { routeProjectCommand } = require('./lib/project-command-router.cjs');
 const { routeAgentCommand } = require('./lib/agent-command-router.cjs');
 const { routeCheckCommand } = require('./lib/check-command-router.cjs');
 const { routeTaskCommand } = require('./lib/task-command-router.cjs');
@@ -1153,31 +1151,6 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
-// FORK:learn BEGIN
-    case 'learn': {
-      // /gsd:learn backing: read the concept catalog (index) and the user-global
-      // learning-progress state. Teaching itself is inline in the agent; this only
-      // owns the catalog graph + the persisted progress (state-safe writes).
-      const learn = require('./lib/learn.cjs');
-      const learnSub = args[1];
-      if (learnSub === 'catalog') {
-        output(learn.cmdCatalog(), raw);
-      } else if (learnSub === 'node') {
-        if (!args[2]) error('learn node requires a node id', ERROR_REASON.USAGE);
-        output(learn.cmdNode(args[2]), raw);
-      } else if (learnSub === 'progress-read') {
-        output(learn.cmdProgressRead(), raw);
-      } else if (learnSub === 'progress-update') {
-        output(learn.cmdProgressUpdate(args.slice(2)), raw);
-      } else if (learnSub === 'next') {
-        output(learn.cmdNext(), raw);
-      } else {
-        error('Unknown learn subcommand. Available: catalog, node, progress-read, progress-update, next', ERROR_REASON.SDK_UNKNOWN_COMMAND);
-      }
-      break;
-    }
-// FORK:learn END
-
     case 'verify-path-exists': {
       commands.cmdVerifyPathExists(cwd, args[1], raw);
       break;
@@ -1337,19 +1310,6 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
-// FORK:strategy BEGIN
-    case 'project': {
-      routeProjectCommand({
-        project,
-        args,
-        cwd,
-        raw,
-        error,
-      });
-      break;
-    }
-// FORK:strategy END
-
     case 'requirements': {
       const subcommand = args[1];
       if (subcommand === 'mark-complete') {
@@ -1408,22 +1368,6 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       commands.cmdProgressRender(cwd, subcommand, raw);
       break;
     }
-
-// FORK:grounding BEGIN
-    case 'grounding': {
-      // Source-grounding backing: compute the required source set from the
-      // project's ## Strategy Plan (done steps + present oracles). The gate
-      // (check.grounding-plan) consumes this to enforce the plan's ## Grounding.
-      const g = require('./lib/grounding.cjs');
-      const sub = args[1];
-      if (sub === 'required') {
-        output(g.resolveRequiredSources(cwd), raw);
-      } else {
-        error('Unknown grounding subcommand. Available: required', ERROR_REASON.SDK_UNKNOWN_COMMAND);
-      }
-      break;
-    }
-// FORK:grounding END
 
     case 'uat': {
       const subcommand = args[1];

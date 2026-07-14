@@ -85,3 +85,39 @@ describe('MARKER: roadmap-elaboration idempotency contract (plan-phase ⇄ gsd-r
     );
   });
 });
+
+describe('TRIPWIRE: capability-owned command families are not re-shadowed in gsd-tools.cjs (issue #25)', () => {
+  // The Rocket capability pack converted the fork's three hardcoded command
+  // families (learn / project / grounding) to ADR-959 capability dispatch:
+  // capabilities/rocket-{learn,strategy,grounding}/capability.json own the
+  // families; the routers live in src/*-command-router.cts. The switch in
+  // gsd-tools.cjs falls through to dispatchCapabilityCommand for them.
+  //
+  // A hardcoded `case '<family>'` re-introduced by an upstream merge would
+  // SILENTLY shadow the capability router (the switch wins over the default
+  // arm), so this pins its absence. Deliberately a source-grep: the shadowing
+  // is a property of the dispatcher's source text, not of any one behavior.
+  const gsdToolsSrc = fs.readFileSync(
+    path.join(ROOT, 'gsd-core', 'bin', 'gsd-tools.cjs'),
+    'utf8'
+  );
+
+  for (const family of ['learn', 'project', 'grounding']) {
+    test(`gsd-tools.cjs has no hardcoded case '${family}' (owned by a rocket capability)`, () => {
+      const caseRe = new RegExp(`^\\s*case '${family}'\\s*:`, 'm');
+      assert.ok(
+        !caseRe.test(gsdToolsSrc),
+        `gsd-tools.cjs contains a hardcoded \`case '${family}'\` — this shadows the ` +
+          `capability-registered router (capabilities/rocket-*/capability.json). ` +
+          `Delete the case; the default arm dispatches the family via dispatchCapabilityCommand.`
+      );
+    });
+  }
+
+  test('the registry owns all three families via the rocket capability pack', () => {
+    const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
+    assert.equal(registry.commandFamilies.learn.capId, 'rocket-learn');
+    assert.equal(registry.commandFamilies.project.capId, 'rocket-strategy');
+    assert.equal(registry.commandFamilies.grounding.capId, 'rocket-grounding');
+  });
+});

@@ -1,0 +1,42 @@
+{
+  "id": "rocket-strategy",
+  "role": "feature",
+  "version": "2.0.0-dev.0",
+  "title": "Rocket strategy chain",
+  "description": "Discovery/strategy chain (Rocket capability pack): the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
+  "tier": "full",
+  "requires": [],
+  "engines": {
+    "gsd": ">=1.6.0"
+  },
+  "runtimeCompat": {
+    "supported": [
+      "*"
+    ],
+    "unsupported": []
+  },
+  "skills": [
+    "cicd-strategy",
+    "discover-product",
+    "frontend-architecture",
+    "infrastructure-strategy",
+    "legacy-inventory",
+    "model-domain",
+    "recommend-architecture",
+    "security-strategy",
+    "testing-strategy"
+  ],
+  "agents": [],
+  "hooks": [],
+  "config": {},
+  "commands": [
+    {
+      "family": "project",
+      "module": "project-command-router.cjs",
+      "router": "routeProjectCommand"
+    }
+  ],
+  "steps": [],
+  "contributions": [],
+  "gates": []
+}

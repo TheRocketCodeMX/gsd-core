@@ -157,3 +157,74 @@ describe('grounding gate (blocking)', () => {
     cleanup(dir);
   });
 });
+
+describe('grounding capability dispatch (Rocket capability pack, issue #25)', () => {
+  // The `grounding` family is registered by
+  // capabilities/rocket-grounding/capability.json and dispatched via the
+  // ADR-959 capability path — no hardcoded `case 'grounding'` remains in
+  // gsd-tools.cjs. The workflow.grounding_gate key federates from the
+  // capability's config slice (moved OUT of both central manifests).
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { cleanup } = require('./helpers.cjs');
+  const ROOT = path.resolve(__dirname, '..');
+  const TOOLS = path.join(ROOT, 'gsd-core', 'bin', 'gsd-tools.cjs');
+
+  test('the grounding family is owned by rocket-grounding in the capability registry', () => {
+    const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
+    assert.equal(registry.commandFamilies.grounding.capId, 'rocket-grounding');
+    assert.equal(registry.commandFamilies.grounding.module, 'grounding-command-router.cjs');
+    assert.equal(registry.commandFamilies.grounding.router, 'routeGroundingCommand');
+  });
+
+  test('workflow.grounding_gate lives in the capability config slice, NOT the central manifests (atomic move)', () => {
+    const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
+    const slice = registry.configSchema['workflow.grounding_gate'];
+    assert.ok(slice, 'registry.configSchema must federate workflow.grounding_gate');
+    assert.equal(slice.type, 'boolean');
+    assert.equal(slice.default, true);
+    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, 'gsd-core', 'bin', 'shared', 'config-schema.manifest.json'), 'utf8'));
+    assert.ok(!schema.validKeys.includes('workflow.grounding_gate'),
+      'workflow.grounding_gate must be REMOVED from the central config-schema (generator errors on dual ownership)');
+    const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, 'gsd-core', 'bin', 'shared', 'config-defaults.manifest.json'), 'utf8'));
+    assert.ok(!('grounding_gate' in (defaults.workflow || {})),
+      'grounding_gate must be REMOVED from the central config-defaults');
+  });
+
+  test('gsd-tools grounding required answers through capability dispatch; config-set/get round-trips', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-grounding-cap-'));
+    fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'config.json'), '{}');
+    const run = (args) => execFileSync(process.execPath, [TOOLS, ...args], { cwd: dir, encoding: 'utf8' });
+
+    const required = JSON.parse(run(['grounding', 'required']));
+    assert.ok(Array.isArray(required.required), 'resolver output shape preserved');
+
+    // config-set validates against the federated slice (isCapabilityConfigKey);
+    // round-trip false → the plan-phase bash gate reads it verbatim.
+    run(['config-set', 'workflow.grounding_gate', 'false']);
+    assert.equal(run(['config-get', 'workflow.grounding_gate']).trim(), 'false');
+    run(['config-set', 'workflow.grounding_gate', 'true']);
+    assert.equal(run(['config-get', 'workflow.grounding_gate']).trim(), 'true');
+    cleanup(dir);
+  });
+
+  test('an unknown grounding verb exits 1 with the exact legacy message and sdk_unknown_command reason', () => {
+    try {
+      execFileSync(process.execPath, [TOOLS, 'grounding', 'bogus'], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, GSD_JSON_ERRORS: '1' },
+      });
+      assert.fail('expected non-zero exit');
+    } catch (err) {
+      if (err.code === 'ERR_ASSERTION') throw err;
+      assert.equal(err.status, 1);
+      const parsed = JSON.parse(err.stderr.toString());
+      assert.equal(parsed.ok, false);
+      assert.equal(parsed.reason, 'sdk_unknown_command');
+      assert.equal(parsed.message, 'Unknown grounding subcommand. Available: required');
+    }
+  });
+});

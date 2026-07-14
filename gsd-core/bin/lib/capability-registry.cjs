@@ -1627,6 +1627,120 @@ const capabilities = {
     "contributions": [],
     "gates": []
   },
+  "rocket-grounding": {
+    "id": "rocket-grounding",
+    "role": "feature",
+    "version": "2.0.0-dev.0",
+    "title": "Rocket source-grounding enforcement",
+    "description": "Source-grounding enforcement (Rocket capability pack): the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [],
+    "agents": [],
+    "hooks": [],
+    "config": {
+      "workflow.grounding_gate": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
+      }
+    },
+    "commands": [
+      {
+        "family": "grounding",
+        "module": "grounding-command-router.cjs",
+        "router": "routeGroundingCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
+  "rocket-learn": {
+    "id": "rocket-learn",
+    "role": "feature",
+    "version": "2.0.0-dev.0",
+    "title": "Rocket learn teaching system",
+    "description": "The /gsd:learn teaching system (Rocket capability pack): concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "learn"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "learn",
+        "module": "learn-command-router.cjs",
+        "router": "routeLearnCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
+  "rocket-strategy": {
+    "id": "rocket-strategy",
+    "role": "feature",
+    "version": "2.0.0-dev.0",
+    "title": "Rocket strategy chain",
+    "description": "Discovery/strategy chain (Rocket capability pack): the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "cicd-strategy",
+      "discover-product",
+      "frontend-architecture",
+      "infrastructure-strategy",
+      "legacy-inventory",
+      "model-domain",
+      "recommend-architecture",
+      "security-strategy",
+      "testing-strategy"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "project",
+        "module": "project-command-router.cjs",
+        "router": "routeProjectCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "schema-gate": {
     "id": "schema-gate",
     "role": "feature",
@@ -2026,6 +2140,16 @@ const bySkill = {
   "mempalace-capture": "mempalace",
   "validate-phase": "nyquist",
   "profile-user": "profile-pipeline",
+  "learn": "rocket-learn",
+  "cicd-strategy": "rocket-strategy",
+  "discover-product": "rocket-strategy",
+  "frontend-architecture": "rocket-strategy",
+  "infrastructure-strategy": "rocket-strategy",
+  "legacy-inventory": "rocket-strategy",
+  "model-domain": "rocket-strategy",
+  "recommend-architecture": "rocket-strategy",
+  "security-strategy": "rocket-strategy",
+  "testing-strategy": "rocket-strategy",
   "secure-phase": "security",
   "ui-phase": "ui",
   "ui-review": "ui"
@@ -2513,6 +2637,7 @@ const configKeys = {
   "workflow.pattern_mapper": "pattern-mapper",
   "profile-pipeline.enabled": "profile-pipeline",
   "workflow.research": "research",
+  "workflow.grounding_gate": "rocket-grounding",
   "workflow.schema_push_detection": "schema-gate",
   "workflow.security_enforcement": "security",
   "workflow.security_asvs_level": "security",
@@ -2681,6 +2806,12 @@ const configSchema = {
     "type": "boolean",
     "default": true,
     "description": "Run phase research before planning when research artifacts are missing or explicitly refreshed."
+  },
+  "workflow.grounding_gate": {
+    "owner": "rocket-grounding",
+    "type": "boolean",
+    "default": true,
+    "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
   },
   "workflow.schema_push_detection": {
     "owner": "schema-gate",
@@ -3724,10 +3855,20 @@ const commandFamilies = {
     "module": "graphify-command-router.cjs",
     "router": "routeGraphifyCommand"
   },
+  "grounding": {
+    "capId": "rocket-grounding",
+    "module": "grounding-command-router.cjs",
+    "router": "routeGroundingCommand"
+  },
   "intel": {
     "capId": "intel",
     "module": "intel-command-router.cjs",
     "router": "routeIntelCommand"
+  },
+  "learn": {
+    "capId": "rocket-learn",
+    "module": "learn-command-router.cjs",
+    "router": "routeLearnCommand"
   },
   "profile-questionnaire": {
     "capId": "profile-pipeline",
@@ -3738,6 +3879,11 @@ const commandFamilies = {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
     "router": "routeProfileSample"
+  },
+  "project": {
+    "capId": "rocket-strategy",
+    "module": "project-command-router.cjs",
+    "router": "routeProjectCommand"
   },
   "scan-sessions": {
     "capId": "profile-pipeline",
@@ -3770,6 +3916,20 @@ const capabilityClusters = {
   ],
   "profile-pipeline": [
     "profile-user"
+  ],
+  "rocket-learn": [
+    "learn"
+  ],
+  "rocket-strategy": [
+    "cicd-strategy",
+    "discover-product",
+    "frontend-architecture",
+    "infrastructure-strategy",
+    "legacy-inventory",
+    "model-domain",
+    "recommend-architecture",
+    "security-strategy",
+    "testing-strategy"
   ],
   "security": [
     "secure-phase"
@@ -3812,6 +3972,18 @@ const profileMembership = {
     ]
   },
   "profile-pipeline": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
+  "rocket-learn": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
+  "rocket-strategy": {
     "tier": "full",
     "profiles": [
       "full"
@@ -3860,6 +4032,9 @@ const _requiresGraph = {
   "profile-pipeline": [],
   "qwen": [],
   "research": [],
+  "rocket-grounding": [],
+  "rocket-learn": [],
+  "rocket-strategy": [],
   "schema-gate": [],
   "security": [],
   "tdd": [],
