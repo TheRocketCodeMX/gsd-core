@@ -33,7 +33,7 @@ Also usable standalone to regenerate a roadmap.
 <context>
 **Flags:**
 - `--auto` — auto-approve the roadmap and chain onward into the build loop (`/gsd:discuss-phase 1 --auto`).
-- `--milestone` — extend an existing roadmap with the current milestone's phases, then return control to the caller (no onward chain). Used by `/gsd:new-milestone`.
+- `--milestone` — extend an existing roadmap with the current milestone's phases, then return control to the caller (no onward chain). Used by the new-milestone workflow.
 - `--reset-phase-numbers` — with `--milestone`, restart phase numbering at 1 for the new milestone.
 
 **When to run:** normally reached automatically at the end of the strategy chain (`strategy-chain/modes/advance.md`) or from `new-project` when no strategy steps are recommended. Requires `.planning/PROJECT.md` + `.planning/REQUIREMENTS.md`.

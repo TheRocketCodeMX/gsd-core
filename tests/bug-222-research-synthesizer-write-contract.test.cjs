@@ -100,16 +100,20 @@ describe('bug #222 recurrence: orchestrator self-heals when synthesizer returns 
         `${name}: self-heal must distinguish the brief ## SYNTHESIS COMPLETE confirmation from the real document.`);
     });
 
-    test(`${name} runs the #222 self-heal AFTER the synthesizer and BEFORE gsd-roadmapper`, () => {
+    test(`${name} runs the #222 self-heal AFTER the synthesizer and BEFORE the roadmap step`, () => {
+      // The roadmapper spawn moved out of new-project/new-milestone into the shared
+      // gsd-roadmap skill (2026-07-14 roadmap-after-strategy reorder), so the ordering
+      // guard now anchors on the roadmap hand-off (the `gsd-roadmap` skill dispatch /
+      // pointer) instead of an inline `subagent_type="gsd-roadmapper"` spawn.
       const text = fs.readFileSync(wf, 'utf8');
       const synthIdx = text.indexOf('subagent_type="gsd-research-synthesizer"');
       const healIdx = text.indexOf('Synthesizer output self-heal (#222)');
-      const roadIdx = text.indexOf('subagent_type="gsd-roadmapper"');
+      const roadIdx = text.search(/Skill\(skill="gsd-roadmap"|\/gsd:roadmap/);
       assert.ok(synthIdx >= 0, `${name}: synthesizer dispatch not found`);
       assert.ok(healIdx >= 0, `${name}: #222 self-heal block not found`);
-      assert.ok(roadIdx >= 0, `${name}: gsd-roadmapper dispatch not found`);
+      assert.ok(roadIdx >= 0, `${name}: gsd-roadmap dispatch/pointer not found`);
       assert.ok(healIdx > synthIdx, `${name}: self-heal must come AFTER the synthesizer dispatch`);
-      assert.ok(roadIdx > healIdx, `${name}: self-heal must come BEFORE the gsd-roadmapper dispatch`);
+      assert.ok(roadIdx > healIdx, `${name}: self-heal must come BEFORE the roadmap step`);
     });
   }
 });
