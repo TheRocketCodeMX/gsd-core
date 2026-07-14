@@ -482,90 +482,15 @@ gsd_run query commit "docs: define milestone v[X.Y] requirements" --files .plann
 
 ## 10. Create Roadmap
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- GSD ► CREATING ROADMAP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The `gsd-roadmapper` spawn is no longer inlined here — it is owned by the `gsd-roadmap` skill (the single roadmapper spawn point shared with `new-project` and the strategy chain). Dispatch it in **milestone-extend** mode: it appends THIS milestone's phases to the existing ROADMAP.md (respecting the numbering mode), presents them for approval, commits, and **returns control here** (it does not chain onward, so Steps 10.5 and 11 still run). Because this milestone's own strategy artifacts are produced *after* this step (via the Step-11 on-ramp), the extend pass leaves the new phases **unmarked**, so plan-phase §1.6 (and the chain-end `gsd-roadmap` elaborate pass) later details them against the milestone's locked decisions.
 
-◆ Spawning roadmapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
-```
-
-**Starting phase number:**
-- If `--reset-phase-numbers` is active, start at **Phase 1**
-- Otherwise, continue from the previous milestone's last phase number (v1.0 ended at phase 5 → v1.1 starts at phase 6)
-
-```text
-Agent(prompt="
-<planning_context>
-<files_to_read>
-- .planning/PROJECT.md
-- .planning/REQUIREMENTS.md
-- .planning/research/SUMMARY.md (if exists)
-- .planning/config.json
-- .planning/MILESTONES.md
-</files_to_read>
-
-${AGENT_SKILLS_ROADMAPPER}
-
-</planning_context>
-
-<instructions>
-Create roadmap for milestone v[X.Y]:
-1. Respect the selected numbering mode:
-   - `--reset-phase-numbers` → start at Phase 1
-   - default behavior → continue from the previous milestone's last phase number
-2. Derive phases from THIS MILESTONE's requirements only
-3. Map every requirement to exactly one phase
-4. Derive 2-5 success criteria per phase (observable user behaviors)
-4b. Detail only the near-horizon phase(s); keep later phases coarse (milestone-level) — they are elaborated against locked decisions (or at plan-phase), not baked now
-5. Validate 100% coverage
-6. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability)
-7. Return ROADMAP CREATED with summary
-
-Write files first, then return.
-</instructions>
-", subagent_type="gsd-roadmapper", model="{roadmapper_model}", description="Create roadmap")
-```
-
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
-
-**Handle return:**
-
-**If `## ROADMAP BLOCKED`:** Present blocker, work with user, re-spawn.
-
-**If `## ROADMAP CREATED`:** Read ROADMAP.md, present inline:
+Dispatch via the **Skill** tool, forwarding `--auto` in auto mode and `--reset-phase-numbers` when it is active:
 
 ```
-## Proposed Roadmap
-
-**[N] phases** | **[X] requirements mapped** | All covered ✓
-
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| [N] | [Name] | [Goal] | [REQ-IDs] | [count] |
-
-### Phase Details
-
-**Phase [N]: [Name]**
-Goal: [goal]
-Requirements: [REQ-IDs]
-Success criteria:
-1. [criterion]
-2. [criterion]
+Skill(skill="gsd-roadmap", args="--milestone")            # + " --auto" in auto mode; + " --reset-phase-numbers" when active
 ```
 
-**Ask for approval** via AskUserQuestion:
-- "Approve" — Commit and continue
-- "Adjust phases" — Tell me what to change
-- "Review full file" — Show raw ROADMAP.md
-
-**If "Adjust":** Get notes, re-spawn roadmapper with revision context, loop until approved.
-**If "Review":** Display raw ROADMAP.md, re-ask.
-
-**Commit roadmap** (after approval):
-```bash
-gsd_run query commit "docs: create milestone v[X.Y] roadmap ([N] phases)" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md
-```
+`gsd-roadmap` reads `## Current Milestone` / STATE.md `current_milestone`, `MILESTONES.md`, `config.json` (`phase_id_convention`), REQUIREMENTS.md, and every existing strategy artifact, then spawns `gsd-roadmapper` in extend-mode (append this milestone's phases, preserve all prior milestones' phases/numbering/edits) and commits `docs: extend roadmap for milestone ([N] phases added)`. When it returns, ROADMAP.md exists with the new phases — continue below.
 
 ## 10.5. Link Pending Todos to Roadmap Phases
 
@@ -667,7 +592,7 @@ Also: `/gsd:plan-phase [N] ${GSD_WS}` — skip discussion, plan directly
 - [ ] Research completed (if selected) — 4 parallel agents, milestone-aware
 - [ ] Requirements gathered and scoped per category
 - [ ] REQUIREMENTS.md created with REQ-IDs
-- [ ] gsd-roadmapper spawned with phase numbering context
+- [ ] `gsd-roadmap --milestone` dispatched (extend-mode; owns the roadmapper spawn) with phase-numbering context; returned control before Steps 10.5/11
 - [ ] Roadmap files written immediately (not draft)
 - [ ] User feedback incorporated (if any)
 - [ ] Phase numbering mode respected (continued or reset)

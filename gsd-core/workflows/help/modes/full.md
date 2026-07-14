@@ -48,6 +48,15 @@ Creates all `.planning/` artifacts:
 
 Usage: `/gsd:new-project`
 
+**`/gsd:roadmap [--auto] [--milestone]`**
+Generate — or bring current — the project roadmap after the strategy chain, then hand off to the build loop.
+
+- Runs the roadmapper **once**, at the strategy-chain → build-loop transition, so the roadmap is born fully-informed by the locked strategy decisions
+- Idempotent: creates if absent, elaborates a coarse roadmap against the strategy, extends for a new milestone (`--milestone`), or passes through if already current
+- Normally reached automatically at the end of the strategy chain; also usable standalone to regenerate a roadmap
+
+Usage: `/gsd:roadmap`
+
 **`/gsd:map-codebase [--fast] [--focus <area>] [--query <term>]`**
 Map an existing codebase for brownfield projects.
 

@@ -33,9 +33,21 @@ Run /gsd:new-project to start a new project.
 
 Exit.
 
-If missing STATE.md: suggest `/gsd:new-project`.
+**Strategy chain in progress (roadmap pending).** The roadmap is now generated once, at the end of the strategy chain, by `/gsd:roadmap`. So a fresh project that is mid-chain has PROJECT.md but no ROADMAP.md / STATE.md yet — that is expected, not an error. If `project_exists` is true, `roadmap_exists` is false, `state_exists` is false, AND PROJECT.md contains a `## Strategy Plan` section, the strategy chain is still running:
 
-**If ROADMAP.md missing but PROJECT.md exists:**
+```
+Strategy chain in progress — roadmap pending.
+
+Your strategy plan is being worked through; the roadmap is generated once, at the end.
+Continue with your next strategy step, or run /gsd:roadmap to generate the roadmap now
+(it will use whatever strategy artifacts exist so far, then point you into the build loop).
+```
+
+Then exit (do not fall through to Route F or the missing-STATE suggestion).
+
+If missing STATE.md (and not the mid-chain case above): suggest `/gsd:new-project`.
+
+**If ROADMAP.md missing but PROJECT.md exists** (and not mid-chain per above):
 
 This means a milestone was completed and archived. Go to **Route F** (between milestones).
 

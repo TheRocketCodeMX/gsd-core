@@ -14,7 +14,7 @@ AUTO_MODE=$(gsd_run query check auto-mode --pick active 2>/dev/null || echo "fal
 gsd_run query project strategy-plan 2>/dev/null   # { steps:[{step,status}], next_recommended }
 ```
 
-**If `AUTO_MODE` is not `true` (interactive / manual):** do NOT dispatch. Print the calling step's `Next:` pointer with the `/clear then:` hint and stop — the user drives the next step. (The driver is a no-op beyond this in interactive mode; the printed pointer is the existing behavior.)
+**If `AUTO_MODE` is not `true` (interactive / manual):** do NOT dispatch. Print the calling step's `Next:` pointer with the `/clear then:` hint and stop — the user drives the next step. (The driver is a no-op beyond this in interactive mode; the printed pointer is the existing behavior.) **When no strategy target remains** (this was the last step and the next target is the build loop), the terminal pointer is `/gsd:roadmap` — print `Next: /gsd:roadmap` (it generates the now-fully-informed roadmap, then points onward to `/gsd:discuss-phase 1`), **not** `/gsd:discuss-phase 1` directly.
 
 **If `AUTO_MODE` is `true`:** pick the next step from the Strategy Plan's **ordered** `steps` and dispatch it:
 1. **Cold on-ramp** (`CURRENT` empty): target = `next_recommended` (the first step with status `recommended`).
@@ -23,9 +23,10 @@ gsd_run query project strategy-plan 2>/dev/null   # { steps:[{step,status}], nex
    ```
    Skill(skill="gsd-recommend-architecture", args="--auto")
    ```
-4. **If no target remains** (every recommended step is done or skipped), the strategy chain is complete — land in the build loop:
+4. **If no target remains** (every recommended step is done or skipped), the strategy chain is complete — generate the roadmap **now** (it is finally fully-informed by every locked strategy artifact), which then chains onward into the build loop:
    ```
-   Skill(skill="gsd-discuss-phase", args="1 --auto")
+   Skill(skill="gsd-roadmap", args="--auto")
    ```
+   `gsd-roadmap` creates (or elaborates/extends) ROADMAP.md and ends by dispatching `Skill(gsd-discuss-phase, "1 --auto")`, so the chain continues. Dispatch it via the **Skill** tool — never an `Agent` spawn (flat-chain rule #686); `gsd-roadmap` performs the `gsd-roadmapper` Agent spawn itself, at the top level of its own session. ✓ compliant.
 
-> If `## Strategy Plan` is absent or empty (a project that skipped the recommender), there is no strategy path to traverse — land directly in the build loop (`Skill(skill="gsd-discuss-phase", args="1 --auto")`).
+> If `## Strategy Plan` is absent or empty (a project that skipped the recommender), there is no strategy path to traverse — go straight to the roadmap-then-build transition (`Skill(skill="gsd-roadmap", args="--auto")`).

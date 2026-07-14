@@ -91,6 +91,8 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 **If `planning_exists` is false:** Error — run `/gsd:new-project` first.
 
+**If `planning_exists` is true but `roadmap_exists` is false** (no ROADMAP.md yet): print `No roadmap yet — run /gsd:roadmap first.` and exit (distinct from §1.6, which elaborates an *existing* coarse roadmap).
+
 ## 1.5. Closed-Phase Gate (#3569)
 
 The init JSON includes `phase_status` — one of `Pending | Planned | In Progress | Executed | Complete | Needs Review`. `Complete` means the phase has all summaries AND a `VERIFICATION.md` with `status: passed`. Replanning a closed phase silently rewrites plan docs that no longer match the shipped code, so the workflow must hard-stop here unless the operator explicitly overrides.
