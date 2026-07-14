@@ -24,6 +24,7 @@ The `gsd-roadmapper` **agent** (elaborate-mode / milestone-numbering spec) and t
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "$HOME/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="$HOME/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
 AUTO_MODE=false; case " $ARGUMENTS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
 MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
+RESET_PHASES=false; case " $ARGUMENTS " in *" --reset-phase-numbers "*) RESET_PHASES=true;; esac
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper 2>/dev/null)
 ```
 
@@ -139,11 +140,11 @@ ${AGENT_SKILLS_ROADMAPPER}
 
 <instructions>
 EXTEND the existing roadmap for the current milestone — do NOT regenerate:
-1. Respect the numbering mode from config/STATE (continue from the previous milestone's last phase number, or reset to 1 when the milestone was started with --reset-phase-numbers).
+1. Numbering: {when RESET_PHASES=true → "restart phase numbering at 1 for this milestone (the previous milestone's directories were already archived)"; else → "continue from the previous milestone's last phase number (v1.0 ended at phase 5 → v1.1 starts at phase 6)"}. Honor `phase_id_convention` from config.
 2. Derive phases from THIS MILESTONE's requirements only; map each to exactly one phase.
 3. Preserve all prior milestones' phases, numbering, requirement mappings, and user edits.
-4. Detail the near-horizon phase(s); keep later phases coarse — elaborated against locked decisions (or at plan-phase).
-5. Where strategy artifacts exist, shape the new phases against them and (re)write the `**Elaborated against strategy:** <artifacts> (<date>)` marker.
+4. Detail the near-horizon phase(s); keep this milestone's later phases coarse — they get elaborated against this milestone's locked decisions at the end of ITS strategy chain (or at plan-phase §1.6), not baked now.
+5. Do **NOT** write the `Elaborated against strategy` marker for the appended phases, and REMOVE any existing marker line: this milestone's strategy artifacts run AFTER this step, so the roadmap must stay unmarked until the chain-end elaborate pass (or plan-phase §1.6) details the new phases against the fresh decisions. Leaving it marked would suppress that elaboration.
 6. Apply the phase-template mode: {MVP template rule if PROJECT_MODE=mvp, else standard}
 7. Validate 100% coverage of this milestone's requirements. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability), then return ROADMAP CREATED with a summary.
 </instructions>
