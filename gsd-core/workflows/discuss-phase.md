@@ -128,7 +128,7 @@ Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phas
 **If `phase_found` is false:**
 ```
 Phase [X] not found in roadmap.
-Use /gsd:progress ${GSD_WS} to see available phases.
+No ROADMAP.md yet? Run /gsd:roadmap. Else /gsd:progress ${GSD_WS} for phases.
 ```
 Exit workflow.
 
