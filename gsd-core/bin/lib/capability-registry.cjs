@@ -1630,7 +1630,7 @@ const capabilities = {
   "rocket-grounding": {
     "id": "rocket-grounding",
     "role": "feature",
-    "version": "2.0.0-dev.0",
+    "version": "2.0.0",
     "title": "Rocket source-grounding enforcement",
     "description": "Source-grounding enforcement (Rocket capability pack): the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
     "tier": "full",
@@ -1668,7 +1668,7 @@ const capabilities = {
   "rocket-learn": {
     "id": "rocket-learn",
     "role": "feature",
-    "version": "2.0.0-dev.0",
+    "version": "2.0.0",
     "title": "Rocket learn teaching system",
     "description": "The /gsd:learn teaching system (Rocket capability pack): concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
     "tier": "full",
@@ -1702,7 +1702,7 @@ const capabilities = {
   "rocket-strategy": {
     "id": "rocket-strategy",
     "role": "feature",
-    "version": "2.0.0-dev.0",
+    "version": "2.0.0",
     "title": "Rocket strategy chain",
     "description": "Discovery/strategy chain (Rocket capability pack): the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
     "tier": "full",
