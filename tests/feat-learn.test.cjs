@@ -99,3 +99,50 @@ describe('learn next', () => {
     cleanup(dir);
   });
 });
+
+describe('learn capability dispatch (Rocket capability pack, issue #25)', () => {
+  // The `learn` family is registered by capabilities/rocket-learn/capability.json
+  // and dispatched via the ADR-959 capability path (default →
+  // dispatchCapabilityCommand → learn-command-router.cjs) — no hardcoded
+  // `case 'learn'` remains in gsd-tools.cjs. These pin the error-path
+  // equivalence with the old inline case arm.
+
+  function runLearnErr(args, env = {}) {
+    try {
+      execFileSync(process.execPath, [TOOLS_PATH, 'learn', ...args], {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, ...env },
+      });
+      assert.fail(`expected non-zero exit for: learn ${args.join(' ')}`);
+    } catch (err) {
+      if (err.code === 'ERR_ASSERTION') throw err;
+      return { status: err.status, stderr: err.stderr ? err.stderr.toString() : '' };
+    }
+  }
+
+  test('the learn family is owned by rocket-learn in the capability registry', () => {
+    const registry = require(path.resolve(__dirname, '..', 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
+    assert.equal(registry.commandFamilies.learn.capId, 'rocket-learn');
+    assert.equal(registry.commandFamilies.learn.module, 'learn-command-router.cjs');
+    assert.equal(registry.commandFamilies.learn.router, 'routeLearnCommand');
+  });
+
+  test('an unknown learn verb exits 1 with the exact legacy message and sdk_unknown_command reason', () => {
+    const r = runLearnErr(['bogus-verb'], { GSD_JSON_ERRORS: '1' });
+    assert.equal(r.status, 1);
+    const parsed = JSON.parse(r.stderr);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.reason, 'sdk_unknown_command');
+    assert.equal(parsed.message, 'Unknown learn subcommand. Available: catalog, node, progress-read, progress-update, next');
+  });
+
+  test('learn node without an id exits 1 with the legacy usage message and reason', () => {
+    const r = runLearnErr(['node'], { GSD_JSON_ERRORS: '1' });
+    assert.equal(r.status, 1);
+    const parsed = JSON.parse(r.stderr);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.reason, 'usage');
+    assert.equal(parsed.message, 'learn node requires a node id');
+  });
+});

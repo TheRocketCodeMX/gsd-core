@@ -232,7 +232,9 @@ reports/mutation/
 .crabbox.yaml
 .crabbox.local.yaml
 /gsd-core/bin/lib/grounding.cjs
+/gsd-core/bin/lib/grounding-command-router.cjs
 /gsd-core/bin/lib/learn.cjs
+/gsd-core/bin/lib/learn-command-router.cjs
 /gsd-core/bin/lib/project.cjs
 /gsd-core/bin/lib/project-command-router.cjs
 
