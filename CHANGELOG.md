@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-13
+
+### Added
+
+- Add the fork-delta safety net for the v2.0.0 upstream realignment: `docs/FORK-DELTA.md` + `docs/FORK-PATCHES.json` manifests enumerating every fork-owned file and marked core patch, inline `<!-- FORK:<feature> -->` markers on patch sites, and a CI guard (`tests/fork-delta-manifest.test.cjs`) that fails loudly if an upstream sync ever clobbers a fork feature. (#17)
+
+### Changed
+
+- **BREAKING — new lineage.** The fork is realigned onto upstream `open-gsd/gsd-core` v1.6.1 via a merge-anchored realignment: upstream is now a recorded git ancestor, so future upstream adoptions become incremental merges. All fork features ride along, re-expressed on the new base — strategy suite + Strategy Plan flow, source-fidelity gates, source-grounding (gate, resolver, Sources-of-Truth index, FileChanged refresh — now also shipped on classic installs), gsd-learn, mode persistence, cross-cutting DoD — plus ~619 commits of upstream improvements (capability registry, ns-router skills, expanded runtime support, deeper test harness). Breaking for project-local installs: slash commands become `/gsd-<cmd>` (hyphen) per upstream #1367; the old colon layout is cleaned automatically on update. The 1.x line ends at 1.14.0 (kept on a `1.x` dist-tag). The 1.14.0→2.0.0 update path is guarded by a committed fixture matrix. (#19)
+
+### Fixed
+
+- Fix the beta.1 realistic-validation findings: strategy skills now flip their Strategy Plan step to `done` via the new `project strategy-done` verb (closing a silent path where the grounding gate could pass zero-citation plans), the grounding parser accepts oracles written from the shipped templates (the honoring path was unreachable out of the box), every citation must now pass its cross-check (a valid citation no longer lets a fabricated sibling ride), LEGACY-INVENTORY citations are mechanically row-checked, config-new-project no longer seeds keys its own validator warns about, the grounding gate reports how many plans it scanned, and new-project explicitly instructs recording every literal source (design/legacy/vibe/context-app) in `## Sources`. (#22)
+
 ## [1.14.0] - 2026-06-26
 
 ### Added
