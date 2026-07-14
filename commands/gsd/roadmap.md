@@ -1,6 +1,6 @@
 ---
 name: gsd:roadmap
-description: Generate or bring-current the project roadmap after the strategy chain, then hand off to the build loop
+description: Generate the project roadmap after the strategy chain, then hand off to the build loop
 argument-hint: "[--auto] [--milestone] [--reset-phase-numbers]"
 allowed-tools:
   - Read
