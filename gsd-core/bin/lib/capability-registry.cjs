@@ -1627,6 +1627,40 @@ const capabilities = {
     "contributions": [],
     "gates": []
   },
+  "rocket-learn": {
+    "id": "rocket-learn",
+    "role": "feature",
+    "version": "1.0.0",
+    "title": "Rocket learn teaching system",
+    "description": "The /gsd:learn teaching system (Rocket capability pack): concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "learn"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "learn",
+        "module": "learn-command-router.cjs",
+        "router": "routeLearnCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "schema-gate": {
     "id": "schema-gate",
     "role": "feature",
@@ -2026,6 +2060,7 @@ const bySkill = {
   "mempalace-capture": "mempalace",
   "validate-phase": "nyquist",
   "profile-user": "profile-pipeline",
+  "learn": "rocket-learn",
   "secure-phase": "security",
   "ui-phase": "ui",
   "ui-review": "ui"
@@ -3729,6 +3764,11 @@ const commandFamilies = {
     "module": "intel-command-router.cjs",
     "router": "routeIntelCommand"
   },
+  "learn": {
+    "capId": "rocket-learn",
+    "module": "learn-command-router.cjs",
+    "router": "routeLearnCommand"
+  },
   "profile-questionnaire": {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
@@ -3771,6 +3811,9 @@ const capabilityClusters = {
   "profile-pipeline": [
     "profile-user"
   ],
+  "rocket-learn": [
+    "learn"
+  ],
   "security": [
     "secure-phase"
   ],
@@ -3812,6 +3855,12 @@ const profileMembership = {
     ]
   },
   "profile-pipeline": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
+  "rocket-learn": {
     "tier": "full",
     "profiles": [
       "full"
@@ -3860,6 +3909,7 @@ const _requiresGraph = {
   "profile-pipeline": [],
   "qwen": [],
   "research": [],
+  "rocket-learn": [],
   "schema-gate": [],
   "security": [],
   "tdd": [],
