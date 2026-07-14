@@ -4,6 +4,8 @@
 
 **v2.0.0 realignment status (Epic #13):** the `realign/2.0.0` tree is upstream **v1.6.1** (`1c352d1e`) + this delta, re-ported. Entries below are reconciled to that ported reality — features upstream absorbed between v1.4.0 and v1.6.1 are noted as **upstream-absorbed** and no longer tracked as fork patches.
 
+**Rocket capability pack (issue #25):** the fork's three hardcoded gsd-tools command families (`learn`, `project`, `grounding`) and the `workflow.grounding_gate` config key were converted from upstream-file patches into first-party capabilities built on upstream's own ADR-959 extension architecture (`capabilities/rocket-learn/`, `capabilities/rocket-strategy/`, `capabilities/rocket-grounding/` + `src/{learn,grounding,project}-command-router.cts`). `gsd-core/bin/gsd-tools.cjs` and both `gsd-core/bin/shared/config-*.manifest.json` manifests now carry **zero** fork patches. Measured FORK-PATCHES entry count: **90 → 85** (−3 gsd-tools entries, −2 config-manifest entries; the new surface is additive files, not patches). A tripwire in `tests/strategy-config-and-marker-contracts.test.cjs` fails loudly if an upstream merge re-introduces a hardcoded `case 'learn'|'project'|'grounding'` that would shadow the capability routers.
+
 This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 
 - it tells the realignment **exactly what to restore or re-apply** after re-basing onto a newer upstream, and
@@ -14,11 +16,11 @@ This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 | Tag | Feature |
 |---|---|
 | `fidelity` | Source-fidelity + senior-quality contract (engineering-standards, design/mode/rung gates, TEST-INTEGRITY, untrusted-input boundary, AI-test quality) |
-| `strategy` | Strategy chain + Mode + Waves 0–5 (discover-product → model-domain → architecture → security/testing/infra/cicd, Strategy Plan, design detection, roadmap elaboration) |
-| `grounding` | Source-grounding enforcement (`## Grounding` block, `check.grounding-plan` gate, grounding resolver + index-refresh hook, Sources of Truth) |
+| `strategy` | Strategy chain + Mode + Waves 0–5 (discover-product → model-domain → architecture → security/testing/infra/cicd, Strategy Plan, design detection, roadmap elaboration); the `project` command family is capability-owned (`capabilities/rocket-strategy/`, issue #25) |
+| `grounding` | Source-grounding enforcement (`## Grounding` block, `check.grounding-plan` gate, grounding resolver + index-refresh hook, Sources of Truth); the `grounding` command family + `workflow.grounding_gate` config slice are capability-owned (`capabilities/rocket-grounding/`, issue #25) |
 | `exploration` | Mandatory parallel phase exploration (scout-codebase doctrine) |
 | `dod` | Cross-cutting Definition-of-Done requirements (`[CROSS-CUTTING]`) |
-| `learn` | `/gsd:learn` teaching system (catalog, progress, visual server) |
+| `learn` | `/gsd:learn` teaching system (catalog, progress, visual server); the `learn` command family is capability-owned (`capabilities/rocket-learn/`, issue #25) |
 | `seeds` | `--list-seeds` read-only seed browser — **upstream-absorbed** (#722): upstream v1.6.1 ships `list-seeds` natively (gsd-tools case, workflow, capture routing, help rows); only the fork's extra test coverage remains fork-owned |
 | `context-monitor` | Deliberate no-op'ing of the upstream context-monitor hook |
 | `no-context-fork` | Removal of `context: fork` from heavy skills (it breaks subagent spawning) |
@@ -88,6 +90,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/security-strategy.md`
 - `gsd-core/workflows/strategy-chain/modes/advance.md`
 - `gsd-core/workflows/testing-strategy.md`
+- `capabilities/rocket-strategy/capability.json`
 - `src/project-command-router.cts`
 - `src/project.cts`
 - `tests/feat-project-strategy-done.test.cjs`
@@ -104,10 +107,12 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 ### grounding — source-grounding resolver, gate, hook
 
+- `capabilities/rocket-grounding/capability.json`
 - `gsd-core/references/grounding-citations.md`
 - `gsd-core/references/plan-phase-coverage-gate.md`
 - `hooks/gsd-grounding-index-refresh.js`
 - `src/grounding.cts`
+- `src/grounding-command-router.cts`
 - `tests/feat-grounding-gate.test.cjs`
 - `tests/feat-grounding-index-refresh-hook.test.cjs`
 - `tests/feat-grounding-resolver.test.cjs`
@@ -121,6 +126,7 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 ### learn — /gsd:learn teaching system
 
+- `capabilities/rocket-learn/capability.json`
 - `commands/gsd/learn.md`
 - `gsd-core/references/learn-catalog.md`
 - `gsd-core/references/teaching-pattern.md`
@@ -131,6 +137,7 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 - `gsd-core/visual/stop-server.sh`
 - `gsd-core/workflows/learn.md`
 - `src/learn.cts`
+- `src/learn-command-router.cts`
 - `tests/feat-learn.test.cjs`
 - `tests/learn-catalog.test.cjs`
 - `tests/learn-visual.test.cjs`
@@ -304,6 +311,7 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 - `package-lock.json` — regenerate with `npm install` (the fork is zero-runtime-deps; the lock reflects devDependencies only).
 - `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 10 fork skills + the ns-router skill bodies are projections of `commands/gsd/*.md`).
 - `tests/agent-size-baseline.json`, `tests/workflow-size-baseline.json` — regenerate with `npm run size:baseline` after ports change agent/workflow sizes.
+- `gsd-core/bin/lib/capability-registry.cjs`, `docs/reference/capability-matrix.md` — committed generated artifacts that now include the rocket capability pack; regenerate with `node scripts/gen-capability-registry.cjs --write && node scripts/gen-capability-matrix.cjs --write` (their own staleness tests fail loudly if an upstream merge clobbers the rocket entries).
 
 ---
 
