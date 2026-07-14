@@ -97,6 +97,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `src/project.cts`
 - `tests/feat-project-strategy-done.test.cjs`
 - `tests/project-query-verbs.test.cjs`
+- `tests/roadmap-after-strategy.test.cjs`
 - `tests/strategy-config-and-marker-contracts.test.cjs`
 
 ### fidelity — quality contract + execute-phase guards
