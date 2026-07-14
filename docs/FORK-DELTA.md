@@ -226,8 +226,6 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `.github/workflows/release.yml` | release | anchors-only | `NODE_AUTH_TOKEN` env on publish/dry-run steps |
 | `gsd-core/bin/gsd-tools.cjs` | strategy, learn, grounding | markers | `case 'project'/'learn'/'grounding'` + require/usage lines (anchors); `list-seeds` is upstream-native (#722) |
 | `gsd-core/bin/lib/legacy-cleanup.cjs` | identity | markers | upstream-signal consts, legacy caches, empty-legacy-runtime-dir scan + apply guard |
-| `gsd-core/bin/shared/config-defaults.manifest.json` | grounding | anchors-only | JSON; `grounding_gate: true` |
-| `gsd-core/bin/shared/config-schema.manifest.json` | grounding | anchors-only | JSON; `workflow.grounding_gate` key |
 | `gsd-core/references/planner-source-audit.md` | fidelity, grounding | markers | DESIGN source + address-failure guard; `## Grounding` fill instructions (fenced DESIGN table row: anchors) |
 | `gsd-core/templates/claude-md.md` | grounding | anchors-only | 7-section / sources-of-truth prose (template body) |
 | `gsd-core/templates/phase-prompt.md` | grounding | anchors-only | `## Grounding` block (inside fenced template body) |

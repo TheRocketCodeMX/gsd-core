@@ -1384,22 +1384,6 @@ async function runCommand(command, args, cwd, raw, defaultValue, originalCommand
       break;
     }
 
-// FORK:grounding BEGIN
-    case 'grounding': {
-      // Source-grounding backing: compute the required source set from the
-      // project's ## Strategy Plan (done steps + present oracles). The gate
-      // (check.grounding-plan) consumes this to enforce the plan's ## Grounding.
-      const g = require('./lib/grounding.cjs');
-      const sub = args[1];
-      if (sub === 'required') {
-        output(g.resolveRequiredSources(cwd), raw);
-      } else {
-        error('Unknown grounding subcommand. Available: required', ERROR_REASON.SDK_UNKNOWN_COMMAND);
-      }
-      break;
-    }
-// FORK:grounding END
-
     case 'uat': {
       const subcommand = args[1];
       if (subcommand === 'render-checkpoint') {
