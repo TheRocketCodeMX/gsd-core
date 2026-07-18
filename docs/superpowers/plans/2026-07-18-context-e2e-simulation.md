@@ -166,9 +166,11 @@ test -s "$TRANSCRIPT" || echo "NO TRANSCRIPT — assert (a) degrades to operator
 grep -Eq 'context verify (--file|--phase)' "$TRANSCRIPT" && echo "GATE-RAN-OK" || { echo "FAIL: no context-verify call in the plan-phase transcript — freshness gate did not run"; }
 # corroboration (optional): the gate prints the verify summary to the user when stale+missing > 0
 grep -Eq '"(stale|missing)":' "$TRANSCRIPT" && echo "SUMMARY-PRINTED-OK (corroboration)"
-# side-effect corroboration: if any anchor drifted since seeding, the gate's verify left a
-# today-dated [STALE] annotation in the capsule
-grep -Eq "\[STALE — $(date +%Y-%m-%d)" "$CAP" || echo "NOTE: no drift to annotate (acceptable if tree unchanged since seed)"
+# NOTE: a capsule-side [STALE — <today>] grep is deliberately OMITTED as a corroborator here.
+# Scenario 1 already annotated this same $CAP with a same-day [STALE — <today>] tamper marker,
+# so a capsule grep cannot distinguish a gate-authored annotation from Scenario 1's — it
+# false-positives. The transcript summary grep above (SUMMARY-PRINTED-OK) is the unambiguous
+# corroborator: it evidences the gate's OWN verify output, scoped to this run's transcript.
 ```
 > **If a transcript is genuinely not capturable in your runtime** (no `-p` driver, no JSONL transcript path): this assert **degrades to operator-observed** — a human must watch the plan-phase run and attest they saw the `context verify` call fire before the planner spawn. Record the scenario as `OPERATOR-OBSERVED`, not `PASS`; do not fake the grep.
 
@@ -260,7 +262,7 @@ Skill: gsd-resume-work     (or gsd-resume-project)
 gsd_run context verify --phase 1 --raw | grep -q '"total":' && echo OK
 # the re-anchor procedure is discoverable/wired in the workflow the fixture ran
 grep -q 'MASTER-CONTEXT' <repo>/gsd-core/workflows/resume-project.md && echo OK
-grep -Eq 're-?anchor' <repo>/gsd-core/workflows/resume-project.md && echo OK
+grep -Eiq 're-?anchor' <repo>/gsd-core/workflows/resume-project.md && echo OK
 # resume silently no-ops when MASTER-CONTEXT is absent (zero-capability invariant)
 mv .planning/MASTER-CONTEXT.md /tmp/mc.bak
 #   re-run resume → must not error on the missing index
