@@ -195,6 +195,21 @@ else MSG="docs: create roadmap ([N] phases)"; fi
 gsd_run query commit "$MSG" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md
 ```
 
+## Step 5.5: Offer capsule seeding
+
+Right after roadmap approval is when this session's context is richest — the whole doctrine of context lifecycle is "plans are perishable; context is durable." Offer to seed phase context capsules now, before that context decays.
+
+```bash
+CL_ENABLED=$(gsd_run query config-get context_lifecycle.enabled --raw 2>/dev/null || echo true)
+SEED_OFFER=$(gsd_run query config-get context_lifecycle.seed_offer --default prompt 2>/dev/null || echo prompt)
+```
+
+- `CL_ENABLED=false` or `SEED_OFFER=off` → skip silently, continue to Step 5 unchanged.
+- `SEED_OFFER=auto`, OR `AUTO_MODE=true` → `Skill(skill="gsd-context", args="seed --milestone --auto")`, then continue to Step 5.
+- `SEED_OFFER=prompt` (interactive) → ONE AskUserQuestion (header "Context") — "Seed phase context capsules now, while this session's context is richest? Recommended right after roadmap approval." → "Yes" (seed) / "Skip" (TEXT_MODE: numbered-list fallback). "Yes" → `Skill(skill="gsd-context", args="seed --milestone")`, then continue to Step 5. "Skip" → continue to Step 5 unchanged.
+
+Seeding quality is stamped honestly — a thin session produces `artifact-distilled` capsules, and that is fine.
+
 ## Step 5: Route onward
 
 **If `MILESTONE_MODE=true`:** do NOT chain. Return control to the caller (`new-milestone` finishes its own remaining steps — todo linking, on-ramp). Print a one-line confirmation and stop.

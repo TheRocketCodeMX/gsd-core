@@ -17,3 +17,11 @@ describe('discuss-phase capsule append contract', () => {
     assert.match(dp, /DISCUSSION-LOG\.md/, 'discussion log wiring');
   });
 });
+
+describe('roadmap capsule seed offer', () => {
+  test('roadmap offers context seeding at the strategy->build transition', () => {
+    const wf = read('gsd-core/workflows/roadmap.md');
+    assert.match(wf, /gsd-context.*seed --milestone/, 'dispatches gsd-context seed --milestone');
+    assert.match(wf, /seed_offer/, 'reads context_lifecycle.seed_offer');
+  });
+});
