@@ -80,6 +80,7 @@ These six routers are descriptor-only entries that the model picks first; the bo
 |---------|------|--------|
 | `/gsd-new-project` | Initialize a new project with deep context gathering and PROJECT.md. | [commands/gsd/new-project.md](../commands/gsd/new-project.md) |
 | `/gsd-roadmap` | Generate or bring-current the project roadmap after the strategy chain, then hand off to the build loop. | [commands/gsd/roadmap.md](../commands/gsd/roadmap.md) |
+| `/gsd-context` | Seed, verify, and grow durable project knowledge — quality-stamped context capsules, MASTER-CONTEXT index, scout/flush/master curation. | [commands/gsd/context.md](../commands/gsd/context.md) |
 | `/gsd-workspace` | Manage GSD workspaces — create (`--new`), list (`--list`), or remove (`--remove`) isolated workspace environments. | [commands/gsd/workspace.md](../commands/gsd/workspace.md) |
 | `/gsd-discuss-phase` | Gather phase context through adaptive questioning before planning. | [commands/gsd/discuss-phase.md](../commands/gsd/discuss-phase.md) |
 | `/gsd-mvp-phase` | Plan a phase as a vertical MVP slice — user story, SPIDR splitting, then plan-phase. | [commands/gsd/mvp-phase.md](../commands/gsd/mvp-phase.md) |
@@ -191,6 +192,7 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `code-review-fix.md` | Auto-fix issues from REVIEW.md via gsd-code-fixer with per-fix atomic commits. | `/gsd-code-review --fix` |
 | `code-review.md` | Review phase source changes via gsd-code-reviewer; produces REVIEW.md. | `/gsd-code-review` |
 | `complete-milestone.md` | Mark a shipped version as complete — MILESTONES.md entry, PROJECT.md evolution, tag. | `/gsd-complete-milestone` |
+| `context.md` | Knowledge lifecycle — seed quality-stamped context capsules + MASTER-CONTEXT, scout confirm-or-refute, calm flush checkpoint, master curation. | `/gsd-context` |
 | `diagnose-issues.md` | Orchestrate parallel debug agents to investigate UAT gaps and find root causes. | `/gsd-verify-work` (auto-diagnosis) |
 | `discovery-phase.md` | Execute discovery at the appropriate depth level. | `/gsd-new-project` (discovery path) |
 | `discuss-phase-assumptions.md` | Assumptions-mode discuss — extract implementation decisions via codebase-first analysis. | `/gsd-discuss-phase` (when `discuss_mode=assumptions`) |
