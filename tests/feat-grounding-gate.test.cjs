@@ -160,7 +160,7 @@ describe('grounding gate (blocking)', () => {
 
 describe('grounding capability dispatch (Rocket capability pack, issue #25)', () => {
   // The `grounding` family is registered by
-  // capabilities/rocket-grounding/capability.json and dispatched via the
+  // capabilities/grounding/capability.json and dispatched via the
   // ADR-959 capability path — no hardcoded `case 'grounding'` remains in
   // gsd-tools.cjs. The workflow.grounding_gate key federates from the
   // capability's config slice (moved OUT of both central manifests).
@@ -171,9 +171,9 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
   const ROOT = path.resolve(__dirname, '..');
   const TOOLS = path.join(ROOT, 'gsd-core', 'bin', 'gsd-tools.cjs');
 
-  test('the grounding family is owned by rocket-grounding in the capability registry', () => {
+  test('the grounding family is owned by grounding in the capability registry', () => {
     const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
-    assert.equal(registry.commandFamilies.grounding.capId, 'rocket-grounding');
+    assert.equal(registry.commandFamilies.grounding.capId, 'grounding');
     assert.equal(registry.commandFamilies.grounding.module, 'grounding-command-router.cjs');
     assert.equal(registry.commandFamilies.grounding.router, 'routeGroundingCommand');
   });

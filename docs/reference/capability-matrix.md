@@ -58,17 +58,17 @@ points.
 | `drift` | feature | full | `>=1.6.0` | `plan:pre`, `execute:wave:post` | gate | first-party |
 | `gap-analysis` | feature | standard | `>=1.6.0` | `plan:post` | gate | first-party |
 | `graphify` | feature | full | `>=1.6.0` | — | — | first-party |
+| `grounding` | feature | full | `>=1.6.0` | — | — | first-party |
 | `intel` | feature | full | `>=1.6.0` | `plan:pre` | step | first-party |
+| `learn` | feature | full | `>=1.6.0` | — | — | first-party |
 | `mempalace` | feature | full | `>=1.6.0` | `discuss:pre`, `discuss:post`, `plan:pre`, `plan:post`, `execute:wave:post`, `verify:post`, `ship:post` | step, contribution | first-party |
 | `nyquist` | feature | full | `>=1.6.0` | `verify:post` | step | first-party |
 | `pattern-mapper` | feature | full | `>=1.6.0` | `plan:pre` | step | first-party |
 | `profile-pipeline` | feature | full | `>=1.6.0` | — | — | first-party |
 | `research` | feature | standard | `>=1.6.0` | `plan:pre` | step | first-party |
-| `rocket-grounding` | feature | full | `>=1.6.0` | — | — | first-party |
-| `rocket-learn` | feature | full | `>=1.6.0` | — | — | first-party |
-| `rocket-strategy` | feature | full | `>=1.6.0` | — | — | first-party |
 | `schema-gate` | feature | full | `>=1.6.0` | `plan:pre` | contribution | first-party |
 | `security` | feature | full | `>=1.6.0` | `plan:pre`, `verify:post`, `ship:pre` | step, contribution, gate | first-party |
+| `strategy` | feature | full | `>=1.6.0` | — | — | first-party |
 | `tdd` | feature | full | `>=1.6.0` | `plan:pre`, `execute:post` | contribution, gate | first-party |
 | `ui` | feature | full | `>=1.6.0` | `plan:pre`, `execute:wave:post`, `verify:post` | step, gate | first-party |
 

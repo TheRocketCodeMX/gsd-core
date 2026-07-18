@@ -101,7 +101,7 @@ describe('learn next', () => {
 });
 
 describe('learn capability dispatch (Rocket capability pack, issue #25)', () => {
-  // The `learn` family is registered by capabilities/rocket-learn/capability.json
+  // The `learn` family is registered by capabilities/learn/capability.json
   // and dispatched via the ADR-959 capability path (default →
   // dispatchCapabilityCommand → learn-command-router.cjs) — no hardcoded
   // `case 'learn'` remains in gsd-tools.cjs. These pin the error-path
@@ -121,9 +121,9 @@ describe('learn capability dispatch (Rocket capability pack, issue #25)', () => 
     }
   }
 
-  test('the learn family is owned by rocket-learn in the capability registry', () => {
+  test('the learn family is owned by learn in the capability registry', () => {
     const registry = require(path.resolve(__dirname, '..', 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
-    assert.equal(registry.commandFamilies.learn.capId, 'rocket-learn');
+    assert.equal(registry.commandFamilies.learn.capId, 'learn');
     assert.equal(registry.commandFamilies.learn.module, 'learn-command-router.cjs');
     assert.equal(registry.commandFamilies.learn.router, 'routeLearnCommand');
   });

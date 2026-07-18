@@ -8,7 +8,7 @@
  * a FORK:strategy patch block) to the ADR-959 capability dispatch path:
  *   default → dispatchCapabilityCommand → require(project-command-router.cjs)
  *   → routeProjectCommand. The family is registered by
- *   capabilities/rocket-strategy/capability.json.
+ *   capabilities/strategy/capability.json.
  *
  * The family name stays `project` (67 call sites across fork workflows/agents;
  * locked design decision) — a tripwire test in

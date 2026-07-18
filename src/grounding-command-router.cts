@@ -7,7 +7,7 @@
  * a FORK:grounding patch block) to the ADR-959 capability dispatch path:
  *   default → dispatchCapabilityCommand → require(grounding-command-router.cjs)
  *   → routeGroundingCommand. The family is registered by
- *   capabilities/rocket-grounding/capability.json.
+ *   capabilities/grounding/capability.json.
  *
  * Behaviour is preserved byte-for-behaviour from the prior inline case:
  * source-grounding backing — compute the required source set from the project's
@@ -19,7 +19,7 @@
  * plan-phase §13a deterministic bash gate stays in
  * gsd-core/workflows/plan-phase.md and reads `workflow.grounding_gate`
  * verbatim via `config-get`; that key now federates from this capability's
- * config slice (see capabilities/rocket-grounding/capability.json).
+ * config slice (see capabilities/grounding/capability.json).
  *
  * Router signature: { args, cwd, raw, error } — identical to the existing
  * host/capability routers (template: src/intel-command-router.cts).
