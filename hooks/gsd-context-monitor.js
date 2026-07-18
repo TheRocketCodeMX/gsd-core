@@ -51,11 +51,16 @@ function readConfig(cwd) {
       if (nested[nestedKey] !== undefined) return nested[nestedKey];
       return undefined;
     };
-    const enabled = get('context_lifecycle.hook_enabled', 'hook_enabled');
+    // Master switch: context_lifecycle.enabled silences EVERYTHING when false.
+    // The hook fires only when master AND hook_enabled are both on (both default true).
+    const master = get('context_lifecycle.enabled', 'enabled');
+    const hookEnabled = get('context_lifecycle.hook_enabled', 'hook_enabled');
+    const masterOn = (master === undefined) ? DEFAULTS.enabled : Boolean(master);
+    const hookOn = (hookEnabled === undefined) ? DEFAULTS.enabled : Boolean(hookEnabled);
     const warn = get('context_lifecycle.hook_warn_pct', 'hook_warn_pct');
     const urge = get('context_lifecycle.hook_urge_pct', 'hook_urge_pct');
     return {
-      enabled: (enabled === undefined) ? DEFAULTS.enabled : Boolean(enabled),
+      enabled: masterOn && hookOn,
       warnPct: (typeof warn === 'number') ? warn : DEFAULTS.warnPct,
       urgePct: (typeof urge === 'number') ? urge : DEFAULTS.urgePct,
     };

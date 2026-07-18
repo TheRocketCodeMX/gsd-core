@@ -18,7 +18,7 @@ A "capsule" is a seeded `<N>-CONTEXT.md`. It holds durable knowledge; the PLAN.m
 
 | Belongs in the capsule (CONTEXT.md) | Belongs in the PLAN.md |
 |---|---|
-| Verified facts, each anchored `path:line` or doc-ref | Task breakdown, ordering, waves |
+| Verified facts, each `[anchor: path "substring"]` | Task breakdown, ordering, waves |
 | Locked decisions **+ why** | The concrete edits/commands for this phase |
 | Cross-repo touchpoints, seams | File-by-file change list |
 | Phase-scoped pitfalls | Verification steps for these tasks |
@@ -40,12 +40,12 @@ A pre-seeded capsule (one carrying `context_provenance` frontmatter) is **never 
 
 ## Anchor grammar + `[STALE]`
 
-Every claim in **Verified Facts** (and MASTER-CONTEXT's load-bearing facts) is anchored so it can be re-verified:
+Every claim in **Verified Facts** (and MASTER-CONTEXT's load-bearing facts) carries an inline anchor so it can be re-verified:
 
-- `path/to/file.ext:line — <the fact>` — a source-line anchor (line numbers advisory; the fact substring must be present).
-- `doc:<relative-path> — <the fact>` — a document anchor.
+- `[anchor: <path>[:<line>] "<substring>"]` — the `path` is repo-relative; the `:line` is optional and **advisory** (never enforced); the quoted `"<substring>"` is what verify greps for (case-insensitive) inside the file.
+- `[anchor: ext:<repo>/path "<substring>"]` — the `ext:` prefix marks an external/other-repo path; verify reports it as `external` and skips it (manual check).
 
-`context verify` parses each anchor, checks the file exists and the fact substring is present, and for a failed claim **appends** an inline `[STALE — <date>]` annotation (the claim is marked, never removed). STALE is advisory: it surfaces the claim to the planner as untrusted; it never fails a run.
+`context verify` parses each anchor, checks the file exists and the substring is present, and for a failed claim **appends** an inline `[STALE — <date>: <reason>]` annotation (the claim is marked, never removed). STALE is advisory: it surfaces the claim to the planner as untrusted; it never fails a run.
 
 ## Quality stamps
 

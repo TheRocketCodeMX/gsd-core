@@ -201,6 +201,22 @@ describe('feat: context-monitor calm knowledge-flush hook', () => {
     }
   });
 
+  // Case 7b: master switch context_lifecycle.enabled=false → silent even at 96%
+  // (master switch overrides hook_enabled's default-on).
+  test('config context_lifecycle.enabled=false → empty stdout at 96%', () => {
+    const sid = uniqueSession();
+    const dir = makeProject({ config: { 'context_lifecycle.enabled': false } });
+    try {
+      writeMetrics(sid, 96);
+      const out = runHook({ sid, cwd: dir });
+      assert.equal(parse(out), null, 'master switch off must emit nothing');
+      const pre = runHook({ sid, cwd: dir, event: 'PreCompact' });
+      assert.equal(parse(pre), null, 'master switch off must stay silent on PreCompact too');
+    } finally {
+      purge(sid, dir);
+    }
+  });
+
   // Case 8: TONE LINT — every emitted message (warn, urge, PreCompact) is calm.
   test('tone contract: no CRITICAL/URGENT/immediately/STOP in any emitted message', () => {
     const messages = [];

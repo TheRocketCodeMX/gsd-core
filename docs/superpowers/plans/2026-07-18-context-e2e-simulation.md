@@ -71,8 +71,8 @@ gsd_run context provenance --file "$CAP" --raw | grep -q '"date":'
 **Drive:**
 ```bash
 CAP=$(ls .planning/phases/*/*-CONTEXT.md | head -1)
-# pick a Verified-Facts anchor of the form `path:line — <fact>` and break the fact substring
-grep -nE '^[-*].*:[0-9]+ — ' "$CAP" | head -1        # inspect an anchor
+# pick a Verified-Facts anchor of the form `[anchor: path[:line] "substring"]` and break the fact substring
+grep -nE '\[anchor: [^ ]+ "' "$CAP" | head -1        # inspect an anchor
 # edit the referenced SOURCE file so the anchored fact substring no longer matches
 #   (change the identifier/string the fact asserts), then:
 gsd_run context verify --file "$CAP"
@@ -83,7 +83,7 @@ gsd_run context verify --file "$CAP"
 # the failed claim gained an inline [STALE — <date>] annotation, in-place
 grep -q '\[STALE' "$CAP" && echo OK
 # the claim text itself was NOT deleted (ledger is append-only / annotate-only)
-grep -q ' — ' "$CAP" && echo OK
+grep -Eq '\[anchor: [^ ]+ "' "$CAP" && echo OK
 # verify surfaced a nonzero stale/missing count but still exited 0 (advisory)
 gsd_run context verify --file "$CAP" --raw; echo "exit=$?"   # exit=0 expected
 gsd_run context verify --file "$CAP" --raw | grep -Eq '"(stale|missing)": [1-9]'

@@ -45,13 +45,14 @@ Then execute the matching mode below, end-to-end.
 
 ```bash
 INIT=$(gsd_run query init.phase-op "${N}"); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
-# parse: phase_dir, padded_phase → capsule = ${phase_dir}/${padded_phase}-CONTEXT.md
-gsd_run context provenance --file "${phase_dir}/${padded_phase}-CONTEXT.md" 2>/dev/null
+# parse: phase_dir, padded_phase → CAPSULE="${phase_dir}/${padded_phase}-CONTEXT.md"
+# Decide absence MECHANICALLY with test -f; consult provenance ONLY for existing files.
+if [ ! -f "$CAPSULE" ]; then echo "ABSENT"; else gsd_run context provenance --file "$CAPSULE" 2>/dev/null; fi
 ```
 
-- **No file** → Read `gsd-core/templates/context-capsule.md` now (lazily). It is RENDER-DIRECT: copy its body as the skeleton (frontmatter starts at byte 0), REPLACE every `[placeholder]`, and **STRIP all HTML guidance comments AND the placeholder example bullets** (e.g. the `src/example.js:42` anchor line) before writing — leftovers make `context verify` flag phantom anchors at birth.
+- **`ABSENT`** (`test -f` false — no capsule on disk) → Read `gsd-core/templates/context-capsule.md` now (lazily). It is RENDER-DIRECT: copy its body as the skeleton (frontmatter starts at byte 0), REPLACE every `[placeholder]`, and **STRIP all HTML guidance comments AND the placeholder example bullets** (e.g. the `src/example.js:42` anchor line) before writing — leftovers make `context verify` flag phantom anchors at birth.
 - **File exists WITH provenance** (non-null) → append a `## Seed refresh (<date>)` layer at the bottom ONLY — new/updated facts, decisions, pitfalls. Never edit, reorder, or delete earlier layers; later layers supersede.
-- **File exists WITHOUT provenance** (plain discuss-phase output) → do NOT touch it; list it in the final report as "already has discussion context — left as-is".
+- **File exists WITHOUT provenance** (`null` — plain discuss-phase output) → do NOT touch it; list it in the final report as "already has discussion context — left as-is".
 
 **4. Anchor every Verified Fact:** `[anchor: path[:line] "exact substring from the file"]` — line advisory; the substring is what verify greps. `ext:<repo>/path` for other repos (skipped by verify). No anchor → not a Verified Fact: move it to Locked Decisions or drop it.
 
