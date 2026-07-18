@@ -61,3 +61,43 @@ describe('gsd-phase-researcher.md: reads ADR + DOMAIN-MODEL.md before researchin
     assert.match(content, /\.planning\/adr\/[^\n]*BEFORE researching|BEFORE researching[^\n]*\.planning\/adr\//s);
   });
 });
+
+/**
+ * Task 16: Enforcement — deviations in SUMMARY frontmatter.
+ *
+ * Forward-loss flaw: executor deviations are recorded in SUMMARY.md's
+ * `## Deviations from Plan` PROSE section — but under the default context
+ * budget, the next phase's planner reads SUMMARY frontmatter only, so phase
+ * N's deviations are invisible to phase N+1 planning. Fix: a structured
+ * `deviations:` frontmatter field mirroring the prose section.
+ */
+
+describe('templates/summary.md: deviations: frontmatter field mirrors the prose section', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'gsd-core', 'templates', 'summary.md'), 'utf8');
+
+  test('has a deviations: frontmatter example with rule/what/why keys', () => {
+    const devBlockMatch = content.match(/deviations:[\s\S]*?\n\n/);
+    assert.ok(devBlockMatch, 'expected a deviations: frontmatter example block');
+    const block = devBlockMatch[0];
+    for (const key of ['rule:', 'what:', 'why:']) {
+      assert.ok(block.includes(key), `deviations: example must include ${key}, got:\n${block}`);
+    }
+  });
+
+  test('guidance states frontmatter-only readers cannot see the prose section', () => {
+    assert.match(content, /frontmatter-only readers/i);
+    assert.match(content, /prose section is invisible/i);
+  });
+});
+
+describe('gsd-executor.md: summary-writing instruction mirrors deviations into frontmatter', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'agents', 'gsd-executor.md'), 'utf8');
+
+  test('matches deviations:/frontmatter cross-reference', () => {
+    assert.match(content, /deviations:.*frontmatter|frontmatter.*deviations:/s);
+  });
+
+  test('instructs mirroring each Deviations from Plan entry into the deviations: list', () => {
+    assert.match(content, /mirror every.*Deviations from Plan.*deviations:/is);
+  });
+});

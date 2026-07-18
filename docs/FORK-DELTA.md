@@ -218,7 +218,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-doc-classifier.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-doc-synthesizer.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-domain-researcher.md` | fidelity | anchors-only | one-line import |
-| `agents/gsd-executor.md` | fidelity | markers | senior-quality contract, Mode awareness, TEST-INTEGRITY RULE |
+| `agents/gsd-executor.md` | fidelity, context | markers | senior-quality contract, Mode awareness, TEST-INTEGRITY RULE; mirror-deviations-to-frontmatter instruction (1 context marker pair) |
 | `agents/gsd-integration-checker.md` | fidelity | markers | seam/telemetry + design-source stance |
 | `agents/gsd-intel-updater.md` | grounding | markers | `<source_grounding>` block |
 | `agents/gsd-pattern-mapper.md` | fidelity | markers | senior-quality + code-quality/source awareness |
@@ -245,6 +245,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/templates/phase-prompt.md` | grounding | anchors-only | `## Grounding` block (inside fenced template body) |
 | `gsd-core/templates/project.md` | strategy, grounding | anchors-only | `## Mode`, `## Sources`, `## Strategy Plan` + Skip-ledger (inside fenced template body) |
 | `gsd-core/templates/requirements.md` | dod | anchors-only | `[CROSS-CUTTING]` traceability row |
+| `gsd-core/templates/summary.md` | context | anchors-only | `deviations:` frontmatter field + guidance (structured mirror of `## Deviations from Plan`, inside fenced template body) |
 | `gsd-core/templates/verification-report.md` | fidelity | anchors-only | Mode & Source Fidelity verdict table (inside fenced template body) |
 | `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
