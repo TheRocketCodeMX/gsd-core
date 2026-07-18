@@ -1,7 +1,7 @@
 {
   "id": "rocket-learn",
   "role": "feature",
-  "version": "2.2.0",
+  "version": "2.2.0-rc.1",
   "title": "Rocket learn teaching system",
   "description": "The /gsd:learn teaching system (Rocket capability pack): concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
   "tier": "full",
