@@ -1,47 +1,60 @@
-# Context Window Monitor — Disabled in this fork
+# Context Monitor — calm knowledge-flush nudge
 
-> **This feature is intentionally disabled in `@therocketcode/gsd-core`.**
-> The `gsd-context-monitor.js` hook still ships and is still wired (so updates
-> cleanly overwrite any previously-installed active version), but it is an inert
-> **no-op**: it reads and discards its input, injects **nothing** into the agent,
-> and exits 0. Agents never receive context-limit warnings.
+> **In this fork the `gsd-context-monitor.js` hook is revived with a new purpose.**
+> Upstream shipped it as a panicked context-limit warner; this fork replaced it
+> with a **calm knowledge-flush nudge**. Same mechanism, opposite tone: at high
+> context usage it gently suggests a knowledge checkpoint (`/gsd:context flush`)
+> so durable knowledge is written down before compaction — it never nags the
+> user about the context window itself.
 
-## Why we removed it
+## What it does now
 
-Upstream GSD shipped a `PostToolUse` / `Stop` / `SubagentStop` / `PreCompact`
-hook that injected "CONTEXT WARNING" / "CONTEXT CRITICAL" messages into the
-agent's own conversation as the context window filled. In practice this:
+The hook is part of the [`context` capability](../gsd-core/references/context-lifecycle.md) — the knowledge lifecycle. It fires on `PostToolUse` (metrics-driven) and `PreCompact` (unconditional final flush) and only in the **main session**:
 
-- **stresses the model** and derails it mid-task,
-- **overrides the user's judgment** about when to wrap up or pause, and
-- fires on a timer the agent can't see coming.
+- The statusline hook writes context metrics to `{os.tmpdir()}/claude-ctx-{session_id}.json`.
+- On `PostToolUse` this hook reads those metrics and, when `used_pct` crosses a threshold, injects one calm flush suggestion as `additionalContext`.
+- On `PreCompact` it always emits a final flush + re-anchor reminder (append unsaved knowledge to the capsule + `MASTER-CONTEXT.md`; after compaction, re-anchor first).
+- `Stop` / `SubagentStop` are silent. Subagents (no metrics file) are silent — the nudge is main-session-only.
 
-This fork's position: context usage is the **user's** call. The statusline still
-shows context usage passively to the user (see `gsd-statusline.js`) — that is
-enough. The agent is not nagged.
+### Thresholds and debounce
 
-## What this means in practice
+| `used_pct` | Level | Behavior |
+|---|---|---|
+| `< hook_warn_pct` (default **90**) | Normal | No message |
+| `≥ hook_warn_pct` (default **90**) | warn | One calm flush suggestion |
+| `≥ hook_urge_pct` (default **95**) | urge | A single firmer repeat |
 
-- **Fresh installs:** the hook is present but inert — no warnings, ever.
-- **Existing installs (upgrading from an older GSD):** because the hook stays in
-  the managed-hooks set, the normal update **overwrites** the old active version
-  with this inert one — so the warning behavior is removed everywhere on update,
-  not just on fresh installs.
-- The statusline still writes its `/tmp/claude-ctx-{session_id}.json` bridge file
-  (harmless); nothing reads it anymore.
+Debounce: `DEBOUNCE_CALLS` (5) tool uses between repeated warnings. A `warn → urge` escalation bypasses the debounce and fires once.
 
-## Re-enabling (not recommended)
+## Tone contract (CI-linted)
 
-There is no supported toggle to turn the warnings back on in this fork — the
-behavior was removed at the source. If you genuinely want it back, restore the
-upstream `hooks/gsd-context-monitor.js` implementation; the event wiring in
-`hooks/hooks.json` and the installer is unchanged, so a restored implementation
-would activate without further configuration.
+`tests/feat-context-hook.test.cjs` asserts the messages this hook emits **never** contain "CRITICAL", "URGENT", "immediately", or "STOP". The mechanism was never the problem — the upstream *tone* ("CONTEXT CRITICAL… STOP") derailed agents. The calm curation purpose is the whole point: a knowledge checkpoint, not an emergency save.
+
+## Gates and safety
+
+- **GSD-active gate:** fires only when `.planning/STATE.md` exists under the cwd.
+- **Enable gate:** fires only when the context-lifecycle hook is enabled in `.planning/config.json`.
+- Every fs op is guarded; any error → silent exit 0. The hook never crashes the session and never spawns child processes. A 3s stdin timeout guards against pipe hangs (#775).
+
+## Configuration
+
+Keys live in the `context_lifecycle` config slice (flat `context_lifecycle.*` or nested form both read):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `context_lifecycle.hook_enabled` | `true` | Enable the calm flush messages (main session only). |
+| `context_lifecycle.hook_warn_pct` | `90` | `used_pct` threshold for the first calm flush suggestion. |
+| `context_lifecycle.hook_urge_pct` | `95` | `used_pct` threshold for the single firmer repeat. |
+
+## Multi-runtime
+
+On Claude Code and Gemini the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd:context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
 
 ---
 
 ## Related
 
+- [Context Lifecycle reference](../gsd-core/references/context-lifecycle.md)
 - [Architecture](ARCHITECTURE.md)
 - [Configuration](CONFIGURATION.md)
 - [docs index](README.md)

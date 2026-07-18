@@ -22,7 +22,7 @@ This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 | `dod` | Cross-cutting Definition-of-Done requirements (`[CROSS-CUTTING]`) |
 | `learn` | `/gsd:learn` teaching system (catalog, progress, visual server); the `learn` command family is capability-owned (`capabilities/learn/`, issue #25) |
 | `seeds` | `--list-seeds` read-only seed browser — **upstream-absorbed** (#722): upstream v1.6.1 ships `list-seeds` natively (gsd-tools case, workflow, capture routing, help rows); only the fork's extra test coverage remains fork-owned |
-| `context-monitor` | Deliberate no-op'ing of the upstream context-monitor hook |
+| `context-monitor` | The `gsd-context-monitor.js` hook — revived as the **calm knowledge-flush nudge** (same mechanism as upstream, opposite tone; part of the `context` capability), plus the removed upstream context-monitor tests |
 | `no-context-fork` | Removal of `context: fork` from heavy skills (it breaks subagent spawning) |
 | `identity` | Fork identity: npm coordinate, repo slug, legacy-cleanup extension, rider config lines |
 | `release` | Fork release plumbing: NPM token auth, update-changelog-preview tooling, sync-upstream script. The changeset-payload shipping + dual-layout requires are **upstream-absorbed** (#935/#938: upstream installs `scripts/changeset/` as a sibling of `gsd-core/`, so the repo-relative requires resolve installed) |
@@ -127,9 +127,25 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 - `gsd-core/references/exploration-and-adaptability.md`
 
-### context — context-lifecycle capability (doctrine reference)
+### context — context-lifecycle capability (knowledge lifecycle: capsules, MASTER-CONTEXT, verify, calm flush hook)
 
+- `capabilities/context/capability.json`
+- `commands/gsd/context.md`
 - `gsd-core/references/context-lifecycle.md`
+- `gsd-core/templates/context-capsule.md`
+- `gsd-core/templates/master-context.md`
+- `gsd-core/templates/milestone-capsule.md`
+- `gsd-core/workflows/context.md`
+- `src/context.cts`
+- `src/context-command-router.cts`
+- `tests/feat-context-append.test.cjs`
+- `tests/feat-context-core.test.cjs`
+- `tests/feat-context-enforcement.test.cjs`
+- `tests/feat-context-hook.test.cjs`
+- `tests/feat-context-router.test.cjs`
+- `tests/feat-context-skill.test.cjs`
+
+The `context` command family is capability-owned (`capabilities/context/capability.json` + `src/context-command-router.cts`, backed by `src/context.cts`) and contributes a `plan:pre` fragment into the planner (freshness gate + `## Orchestrator curation` layer). The revived `hooks/gsd-context-monitor.js` calm flush nudge and the fork's context markers in `execute-phase.md`, `discuss-phase.md`, `resume-project.md`, `transition.md`, `new-project.md`, `new-milestone.md`, `complete-milestone.md` and the executor/verifier/researcher agents are tracked as modified-file patches below (feature `context`). `skills/gsd-context/SKILL.md` is a generated projection of `commands/gsd/context.md` (see *Generated / regenerable*).
 
 ### learn — /gsd:learn teaching system
 
@@ -235,7 +251,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `bin/lib/ui-safety-gate.cjs` | fidelity, strategy | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard + UI-hint authority |
 | `commands/gsd/ns-manage.md` | learn | anchors-only | `learn` in requires + gsd-learn routing row |
 | `commands/gsd/ns-project.md` | strategy | anchors-only | 9 strategy skills in requires + routing rows |
-| `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row: "Inert no-op in this fork" |
+| `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row + thresholds section: the calm knowledge-flush nudge (revived hook) |
 | `eslint.config.mjs` | identity | anchors-only | `_reference/**` ignore + generated-lib rider lines |
 | `.gitignore` | identity | anchors-only | generated project/grounding/learn .cjs + `_reference/` riders |
 | `.github/workflows/release.yml` | release | anchors-only | `NODE_AUTH_TOKEN` env on publish/dry-run steps |
@@ -304,8 +320,8 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 
 The fork version replaces upstream wholesale; during realignment keep the fork file and reconcile upstream changes into it by hand (not vice versa):
 
-- `hooks/gsd-context-monitor.js` — deliberately an **inert no-op** (reads and discards stdin, exits 0). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation.
-- `docs/context-monitor.md` — rewritten to document the disablement.
+- `hooks/gsd-context-monitor.js` — the fork's **calm knowledge-flush nudge** (part of the `context` capability). Same PostToolUse/PreCompact mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests `/gsd:context flush`; on PreCompact it emits a final flush + re-anchor reminder. Main-session-only, gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`, calm-by-contract (CI-linted tone). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation.
+- `docs/context-monitor.md` — rewritten to document the revived calm knowledge-flush nudge (thresholds, tone contract, config keys).
 - `gsd-core/references/scout-codebase.md` — upstream's lazy map-selection table was rewritten into the fork's mandatory-exploration doctrine (parallel explorer agents, rationalization-killers, confirm-or-refute gate); the map-selection table survives inside it.
 - `CHANGELOG.md` — fork-owned release history (fork versions 1.5.0+). Keep ours; upstream's changelog is not merged.
 
@@ -321,9 +337,9 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 - `docs/INVENTORY.md`, `docs/INVENTORY-MANIFEST.json` — regenerate with the inventory tooling after the port.
 - `package-lock.json` — regenerate with `npm install` (the fork is zero-runtime-deps; the lock reflects devDependencies only).
-- `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 10 fork skills + the ns-router skill bodies are projections of `commands/gsd/*.md`).
+- `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 11 fork skills — including `skills/gsd-context/SKILL.md` — + the ns-router skill bodies are projections of `commands/gsd/*.md`).
 - `tests/agent-size-baseline.json`, `tests/workflow-size-baseline.json` — regenerate with `npm run size:baseline` after ports change agent/workflow sizes.
-- `gsd-core/bin/lib/capability-registry.cjs`, `docs/reference/capability-matrix.md` — committed generated artifacts that now include the rocket capability pack; regenerate with `node scripts/gen-capability-registry.cjs --write && node scripts/gen-capability-matrix.cjs --write` (their own staleness tests fail loudly if an upstream merge clobbers the rocket entries).
+- `gsd-core/bin/lib/capability-registry.cjs`, `docs/reference/capability-matrix.md` — committed generated artifacts that now include the rocket capability pack **and the `context` capability**; regenerate with `node scripts/gen-capability-registry.cjs --write && node scripts/gen-capability-matrix.cjs --write` (their own staleness tests fail loudly if an upstream merge clobbers the entries).
 
 ---
 
