@@ -254,6 +254,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/new-project.md` | strategy, validation | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors) |
 | `gsd-core/workflows/plan-phase.md` | grounding | anchors-only | SIZE-GATED (89119/90000 bytes!); elaboration gate, grounding gate, UI-hint authority, oracle files |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
+| `gsd-core/workflows/resume-project.md` | context | markers | load_state re-anchor: read MASTER-CONTEXT.md + active capsule (via `context provenance`) + last SUMMARY, then `context verify --phase`; skips silently when MASTER-CONTEXT.md is absent (1 marker pair) |
 | `gsd-core/workflows/secure-phase.md` | grounding | markers | SECURITY-STRATEGY posture read |
 | `gsd-core/workflows/transition.md` | strategy | markers | `## Mode` drift check |
 | `gsd-core/workflows/ui-phase.md` | fidelity | anchors-only | two in-list files_to_read lines |

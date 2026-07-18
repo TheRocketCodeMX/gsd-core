@@ -63,6 +63,14 @@ describe('plan-phase freshness gate + curation (capability plan:pre contribution
   });
 });
 
+describe('resume-project re-anchor step', () => {
+  test('resume-project re-anchors against MASTER-CONTEXT.md and verifies capsule freshness', () => {
+    const wf = read('gsd-core/workflows/resume-project.md');
+    assert.match(wf, /MASTER-CONTEXT\.md/, 're-anchor reads the global knowledge index');
+    assert.match(wf, /context verify/, 're-anchor runs the freshness-verify subcommand');
+  });
+});
+
 describe('execute-phase sectional capsule injection', () => {
   test('executor spawn reads only the binding capsule sections', () => {
     const wf = read('gsd-core/workflows/execute-phase.md');

@@ -58,6 +58,23 @@ cat .planning/PROJECT.md
 - **Key Decisions**: Full decision log with outcomes
 - **Constraints**: Hard limits on implementation
 
+<!-- FORK:context BEGIN -->
+**Re-anchor (when `.planning/MASTER-CONTEXT.md` exists):**
+
+```bash
+ls .planning/MASTER-CONTEXT.md 2>/dev/null || true
+```
+
+If present:
+
+1. Read `.planning/MASTER-CONTEXT.md` (the global knowledge index).
+2. Read the active phase's capsule — confirm it via `gsd_run context provenance --file <phase-dir>/<N>-CONTEXT.md`.
+3. Read the last completed phase's SUMMARY.
+4. Run `gsd_run context verify --phase <active>` and spot-check anything STALE-annotated before continuing.
+
+This is the standing first act of any resumed or post-compaction session. If MASTER-CONTEXT.md is absent, skip silently.
+<!-- FORK:context END -->
+
 </step>
 
 <step name="check_incomplete_work">
