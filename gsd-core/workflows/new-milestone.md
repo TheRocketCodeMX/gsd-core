@@ -33,7 +33,7 @@ If the flag is absent, keep the current behavior of continuing phase numbering f
 - Check for MILESTONE-CONTEXT.md (from /gsd-discuss-milestone)
 
 <!-- FORK:context BEGIN -->
-- **Consume a forward capsule (if any):** check `.planning/milestones/next/` for a `<label>-CAPSULE.md` whose milestone matches the one being started (match on the label/version once known — see Step 3). If found, read it and fold its `## Carried-forward decisions & deferrals`, `## Verified Facts`, and `## Open questions` into this milestone's context (they seed requirements in Step 9 and MASTER-CONTEXT.md when reseeded). Then mark it consumed by moving it to `.planning/milestones/consumed/` (create that directory if absent). If no matching capsule exists, skip silently.
+- **Detect forward capsules (do NOT consume yet):** list any `<label>-CAPSULE.md` files in `.planning/milestones/next/` and note them for Step 3.1 — matching and consumption happen only after the milestone version is resolved in Step 3. If none exist, skip silently.
 <!-- FORK:context END -->
 - **Assess the existing system (brownfield default):** read `.planning/codebase/*.md` if present (or suggest `/gsd:map-codebase` first when the milestone touches unfamiliar/large areas) so this milestone's requirements + roadmap are grounded in the existing code's reality — integration points, blast radius, what's already built — per `@~/.claude/gsd-core/references/brownfield-adaptation.md` (assess what exists, then extend)
 
@@ -105,6 +105,12 @@ AskUserQuestion(
 - Parse last version from MILESTONES.md
 - Suggest next version (v1.0 → v1.1, or v2.0 for major)
 - Confirm with user
+
+<!-- FORK:context BEGIN -->
+## 3.1. Consume the Matching Forward Capsule
+
+If Step 1 detected capsules, match the now-confirmed milestone label/version against each `<label>-CAPSULE.md`. If exactly one matches, read it and fold its `## Carried-forward decisions & deferrals`, `## Verified Facts`, and `## Open questions` into this milestone's context (they seed requirements in Step 9 and MASTER-CONTEXT.md when reseeded), then mark it consumed by moving it to `.planning/milestones/consumed/` (create that directory if absent). Leave non-matching capsules untouched in `milestones/next/`; if nothing matches, skip silently.
+<!-- FORK:context END -->
 
 ## 3.5. Verify Milestone Understanding
 
