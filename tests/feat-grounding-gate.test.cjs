@@ -158,6 +158,25 @@ describe('grounding gate (blocking)', () => {
   });
 });
 
+describe('resolveRequiredSources: recommended-row grounding hole (Task 15, issue #21 P0-1c)', () => {
+  test('recommended + artifact exists → required, with a strategy-done note; recommended + missing artifact stays out of required', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-gate-recommended-'));
+    fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'),
+      '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| model-domain | recommended |\n| testing-strategy | recommended |\n');
+    fs.writeFileSync(path.join(dir, '.planning', 'DOMAIN-MODEL.md'), '## Subdomains\n| Subdomain | Type |\n|---|---|\n| pricing | Core |\n');
+    // testing-strategy stays recommended but TEST-STRATEGY.md is never written — missing artifact.
+
+    const result = g.resolveRequiredSources(dir);
+    const domainModel = result.required.find((r) => r.artifact === 'DOMAIN-MODEL');
+    assert.ok(domainModel, 'existing-but-unflipped DOMAIN-MODEL must be required, not just a warning');
+    assert.match(domainModel.notes || '', /strategy-done/, 'the required entry must note the strategy-done flip');
+    assert.ok(!result.required.some((r) => r.artifact === 'TEST-STRATEGY'),
+      'recommended + missing artifact must stay OUT of required');
+    cleanup(dir);
+  });
+});
+
 describe('grounding capability dispatch (Rocket capability pack, issue #25)', () => {
   // The `grounding` family is registered by
   // capabilities/grounding/capability.json and dispatched via the

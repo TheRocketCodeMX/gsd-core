@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-interface RequiredSource { id: string; path: string; artifact: string; }
+interface RequiredSource { id: string; path: string; artifact: string; notes?: string; }
 interface LiteralSource { kind: string; path: string; note: string; }
 interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; sources: LiteralSource[]; warnings: string[]; }
 
@@ -71,14 +71,23 @@ function resolveRequiredSources(cwd: string): ResolveResult {
       const p = map.rel === 'adr' ? newestAdr(planning) : path.join(planning, map.rel);
       if (p && fs.existsSync(p)) required.push({ id: step, path: p, artifact: map.artifact });
     } else if (status === 'recommended') {
-      pending.push(step);
-      // Inconsistency surface (issue #21 P0-1c): the artifact exists on disk but the
-      // Strategy Plan row was never flipped to `done` — the step ran but skipped its
-      // `project strategy-done` wrap-up, so the gate is under-requiring. Warn loudly
-      // so orchestrators can flip the row instead of trusting a vacuous pass.
+      // FORK:context — issue #21 P0-1c: a `recommended` row whose artifact already
+      // exists on disk is a real, citable source (the step ran; only the Strategy
+      // Plan row's flip to `done` is missing). Under-requiring it let plans skip
+      // citing a source that genuinely grounds them. Promote it to `required` with
+      // a note prompting the `strategy-done` flip, instead of leaving it a mere
+      // warning. `recommended` + no artifact yet stays the pending/warning path.
       const p = map.rel === 'adr' ? newestAdr(planning) : path.join(planning, map.rel);
       if (p && fs.existsSync(p)) {
+        required.push({
+          id: step,
+          path: p,
+          artifact: map.artifact,
+          notes: `artifact exists but Strategy Plan row is unflipped — run \`gsd-tools project strategy-done ${step}\``,
+        });
         warnings.push(`unflipped: ${step} — artifact exists (${path.basename(p)}) but Strategy Plan status is still 'recommended'; run \`project strategy-done ${step}\``);
+      } else {
+        pending.push(step);
       }
     }
   }
