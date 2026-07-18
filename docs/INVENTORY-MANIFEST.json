@@ -366,6 +366,7 @@
       "config-types.cjs",
       "config.cjs",
       "configuration.cjs",
+      "context-command-router.cjs",
       "context-utilization.cjs",
       "context.cjs",
       "core-utils.cjs",

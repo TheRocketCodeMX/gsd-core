@@ -518,6 +518,79 @@ const capabilities = {
       "extendedHookEvents": []
     }
   },
+  "context": {
+    "id": "context",
+    "role": "feature",
+    "version": "2.1.0",
+    "title": "Context lifecycle — durable project knowledge",
+    "description": "The knowledge lifecycle: MASTER-CONTEXT index, quality-stamped phase capsules inside <N>-CONTEXT.md, append-only layers, deterministic anchor verification (gsd-tools context verify), the calm context-pressure flush hook, and the re-anchor procedure. Doctrine: plans are perishable; context is durable.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [],
+    "agents": [],
+    "hooks": [],
+    "config": {
+      "context_lifecycle.enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists."
+      },
+      "context_lifecycle.seed_offer": {
+        "type": "string",
+        "default": "prompt",
+        "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off."
+      },
+      "context_lifecycle.curation": {
+        "type": "boolean",
+        "default": true,
+        "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs."
+      },
+      "context_lifecycle.hook_enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)."
+      },
+      "context_lifecycle.hook_warn_pct": {
+        "type": "number",
+        "default": 90,
+        "description": "used_pct threshold for the first calm flush suggestion."
+      },
+      "context_lifecycle.hook_urge_pct": {
+        "type": "number",
+        "default": 95,
+        "description": "used_pct threshold for the single firmer repeat."
+      },
+      "context_lifecycle.verify_max_age_commits": {
+        "type": "number",
+        "default": 50,
+        "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion."
+      },
+      "context_lifecycle.discussion_logs": {
+        "type": "boolean",
+        "default": true,
+        "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md."
+      }
+    },
+    "commands": [
+      {
+        "family": "context",
+        "module": "context-command-router.cjs",
+        "router": "routeContextCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "copilot": {
     "id": "copilot",
     "role": "runtime",
@@ -2616,6 +2689,14 @@ const configKeys = {
   "workflow.ai_integration_phase": "ai-integration",
   "workflow.code_review": "code-review",
   "workflow.code_review_depth": "code-review",
+  "context_lifecycle.enabled": "context",
+  "context_lifecycle.seed_offer": "context",
+  "context_lifecycle.curation": "context",
+  "context_lifecycle.hook_enabled": "context",
+  "context_lifecycle.hook_warn_pct": "context",
+  "context_lifecycle.hook_urge_pct": "context",
+  "context_lifecycle.verify_max_age_commits": "context",
+  "context_lifecycle.discussion_logs": "context",
   "workflow.drift_threshold": "drift",
   "workflow.drift_action": "drift",
   "workflow.schema_drift_gate": "drift",
@@ -2671,6 +2752,54 @@ const configSchema = {
       "standard",
       "deep"
     ]
+  },
+  "context_lifecycle.enabled": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists."
+  },
+  "context_lifecycle.seed_offer": {
+    "owner": "context",
+    "type": "string",
+    "default": "prompt",
+    "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off."
+  },
+  "context_lifecycle.curation": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs."
+  },
+  "context_lifecycle.hook_enabled": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)."
+  },
+  "context_lifecycle.hook_warn_pct": {
+    "owner": "context",
+    "type": "number",
+    "default": 90,
+    "description": "used_pct threshold for the first calm flush suggestion."
+  },
+  "context_lifecycle.hook_urge_pct": {
+    "owner": "context",
+    "type": "number",
+    "default": 95,
+    "description": "used_pct threshold for the single firmer repeat."
+  },
+  "context_lifecycle.verify_max_age_commits": {
+    "owner": "context",
+    "type": "number",
+    "default": 50,
+    "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion."
+  },
+  "context_lifecycle.discussion_logs": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md."
   },
   "workflow.drift_threshold": {
     "owner": "drift",
@@ -3830,6 +3959,11 @@ const commandFamilies = {
     "module": "audit-command-router.cjs",
     "router": "routeAuditUat"
   },
+  "context": {
+    "capId": "context",
+    "module": "context-command-router.cjs",
+    "router": "routeContextCommand"
+  },
   "extract-messages": {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
@@ -4013,6 +4147,7 @@ const _requiresGraph = {
   "code-review": [],
   "codebuddy": [],
   "codex": [],
+  "context": [],
   "copilot": [],
   "cursor": [],
   "drift": [],

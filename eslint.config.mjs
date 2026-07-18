@@ -186,6 +186,8 @@ export default tseslint.config(
       'gsd-core/bin/lib/markdown-sectionizer.cjs',
       // feat/context-lifecycle: tsc-generated runtime artifact — lint the src/context.cts source.
       'gsd-core/bin/lib/context.cjs',
+      // feat/context-lifecycle: tsc-generated runtime artifact — lint the src/context-command-router.cts source.
+      'gsd-core/bin/lib/context-command-router.cjs',
     ],
   },
 

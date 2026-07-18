@@ -44,7 +44,7 @@ Core package and are stamped with the package version at release (per
 ADR-1244 D6). They are not subject to the consent or integrity-pin flow applied
 to third-party capabilities.
 
-### Feature capabilities (role: feature) — 19
+### Feature capabilities (role: feature) — 20
 
 Feature capabilities extend what the loop does — contributing research,
 planning, execution, verification, or ship artefacts at the loop extension
@@ -55,6 +55,7 @@ points.
 | `ai-integration` | feature | full | `>=1.6.0` | `plan:pre` | step | first-party |
 | `audit` | feature | full | `>=1.6.0` | — | — | first-party |
 | `code-review` | feature | full | `>=1.6.0` | `execute:post` | step | first-party |
+| `context` | feature | full | `>=1.6.0` | — | — | first-party |
 | `drift` | feature | full | `>=1.6.0` | `plan:pre`, `execute:wave:post` | gate | first-party |
 | `gap-analysis` | feature | standard | `>=1.6.0` | `plan:post` | gate | first-party |
 | `graphify` | feature | full | `>=1.6.0` | — | — | first-party |
