@@ -86,3 +86,22 @@ describe('execute-phase sectional capsule injection', () => {
     assert.match(wf, /What Done Looks Like/, 'verifier slice: What Done Looks Like');
   });
 });
+
+describe('forward routing: phase-end promotion + cross-milestone capsule (Task 12)', () => {
+  test('transition promotes phase discoveries into MASTER-CONTEXT.md', () => {
+    const wf = read('gsd-core/workflows/transition.md');
+    assert.match(wf, /MASTER-CONTEXT\.md/, 'transition promotes into the master knowledge index');
+    assert.match(wf, /Load-bearing verified facts|Standing rules/, 'promotion targets a MASTER section');
+  });
+
+  test('complete-milestone routes acknowledged deferrals into a next-milestone capsule', () => {
+    const wf = read('gsd-core/workflows/complete-milestone.md');
+    assert.match(wf, /milestones\/next\/.*-CAPSULE\.md/, 'deferrals route into milestones/next/<label>-CAPSULE.md');
+  });
+
+  test('new-milestone consumes a matching forward capsule at opening', () => {
+    const wf = read('gsd-core/workflows/new-milestone.md');
+    assert.match(wf, /-CAPSULE\.md/, 'new-milestone folds in a matching capsule');
+    assert.match(wf, /milestones\/consumed/, 'consumed capsule is moved aside');
+  });
+});

@@ -245,18 +245,19 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
+| `gsd-core/workflows/complete-milestone.md` | context | markers | acknowledge step routes each deferral into `.planning/milestones/next/<label>-CAPSULE.md` (create from template if absent), in addition to the STATE.md Deferred Items entry (1 marker pair) |
 | `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | SIZE-GATED (32000 budget); mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log (2 marker pairs) |
 | `gsd-core/workflows/discuss-phase/resume.md` | context | markers | capsule-aware existing-CONTEXT branch: provenance non-null → "Extend it" (append a Discussion-additions layer); provenance-null path byte-identical (1 marker pair) |
 | `gsd-core/workflows/execute-phase.md` | fidelity, context | anchors-only + markers | SIZE-GATED (93583/93600 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle (anchors); executor reads capsule Locked Decisions + Phase-Scoped Pitfalls, verifier reads capsule What Done Looks Like (2 marker pairs) |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
-| `gsd-core/workflows/new-milestone.md` | strategy, validation | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors) |
+| `gsd-core/workflows/new-milestone.md` | strategy, validation, context | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors); Load-Context consumes a matching `milestones/next/<label>-CAPSULE.md`, folds carried-forward items, then moves it to `milestones/consumed/` (1 context marker pair) |
 | `gsd-core/workflows/new-project.md` | strategy, validation | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors) |
 | `gsd-core/workflows/plan-phase.md` | grounding | anchors-only | SIZE-GATED (89119/90000 bytes!); elaboration gate, grounding gate, UI-hint authority, oracle files |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
 | `gsd-core/workflows/resume-project.md` | context | markers | load_state re-anchor: read MASTER-CONTEXT.md + active capsule (via `context provenance`) + last SUMMARY, then `context verify --phase`; skips silently when MASTER-CONTEXT.md is absent (1 marker pair) |
 | `gsd-core/workflows/secure-phase.md` | grounding | markers | SECURITY-STRATEGY posture read |
-| `gsd-core/workflows/transition.md` | strategy | markers | `## Mode` drift check |
+| `gsd-core/workflows/transition.md` | strategy, context | markers | `## Mode` drift check; phase-end promotion of master-worthy discoveries into MASTER-CONTEXT.md (Load-bearing verified facts / Standing rules) + `## Orchestrator curation` layer on later-phase capsules (1 context marker pair) |
 | `gsd-core/workflows/ui-phase.md` | fidelity | anchors-only | two in-list files_to_read lines |
 | `gsd-core/workflows/ui-review.md` | grounding | anchors-only | one in-list design-oracle line |
 | `gsd-core/workflows/ultraplan-phase.md` | grounding | markers | grounding carried into the cloud prompt (in-fence part: anchors) |

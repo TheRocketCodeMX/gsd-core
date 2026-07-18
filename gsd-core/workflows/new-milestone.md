@@ -31,6 +31,10 @@ If the flag is absent, keep the current behavior of continuing phase numbering f
 - Read MILESTONES.md (what shipped previously)
 - Read STATE.md (pending todos, blockers)
 - Check for MILESTONE-CONTEXT.md (from /gsd-discuss-milestone)
+
+<!-- FORK:context BEGIN -->
+- **Consume a forward capsule (if any):** check `.planning/milestones/next/` for a `<label>-CAPSULE.md` whose milestone matches the one being started (match on the label/version once known — see Step 3). If found, read it and fold its `## Carried-forward decisions & deferrals`, `## Verified Facts`, and `## Open questions` into this milestone's context (they seed requirements in Step 9 and MASTER-CONTEXT.md when reseeded). Then mark it consumed by moving it to `.planning/milestones/consumed/` (create that directory if absent). If no matching capsule exists, skip silently.
+<!-- FORK:context END -->
 - **Assess the existing system (brownfield default):** read `.planning/codebase/*.md` if present (or suggest `/gsd:map-codebase` first when the milestone touches unfamiliar/large areas) so this milestone's requirements + roadmap are grounded in the existing code's reality — integration points, blast radius, what's already built — per `@~/.claude/gsd-core/references/brownfield-adaptation.md` (assess what exists, then extend)
 
 ## 2. Gather Milestone Goals

@@ -215,6 +215,13 @@ cat .planning/phases/XX-current/*-SUMMARY.md
    - Extract decisions from SUMMARY.md files
    - Add to Key Decisions table with outcome if known
 
+<!-- FORK:context BEGIN -->
+4b. **Promote phase discoveries forward (when `.planning/MASTER-CONTEXT.md` exists):**
+   - Promote master-worthy discoveries from this phase's SUMMARY — deviations, new invariants, disproven assumptions — into MASTER-CONTEXT.md: durable facts into `## Load-bearing verified facts` (WITH `[anchor: path:line "substring"]`), cross-phase constraints into `## Standing rules`. Keep MASTER an index (≤150 lines) — promote only what later phases must not re-derive.
+   - For items relevant to a specific later phase, append them to that phase's `<N>-CONTEXT.md` capsule as an `## Orchestrator curation (<date>)` layer entry (append-only, never overwrite).
+   - If MASTER-CONTEXT.md is absent, skip silently.
+<!-- FORK:context END -->
+
 5. **"What This Is" still accurate?**
    - If the product has meaningfully changed, update the description
    - Keep it current and accurate
