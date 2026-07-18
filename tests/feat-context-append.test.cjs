@@ -5,6 +5,36 @@ const path = require('node:path');
 const fs = require('node:fs');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
+describe('elicitation discussion logs (Task 13)', () => {
+  const ELICITATION_WORKFLOWS = [
+    'new-project.md',
+    'model-domain.md',
+    'recommend-architecture.md',
+    'security-strategy.md',
+    'testing-strategy.md',
+    'frontend-architecture.md',
+    'infrastructure-strategy.md',
+    'cicd-strategy.md',
+    'legacy-inventory.md',
+    'discover-product.md',
+  ];
+
+  for (const file of ELICITATION_WORKFLOWS) {
+    test(`${file} appends elicitation rounds to PROJECT-DISCUSSION-LOG.md`, () => {
+      const wf = read(`gsd-core/workflows/${file}`);
+      assert.match(wf, /PROJECT-DISCUSSION-LOG\.md/, `${file} must wire the project discussion log`);
+      assert.match(wf, /references\/context-lifecycle\.md/, `${file} must defer the procedure to the reference doc`);
+    });
+  }
+
+  test('context-lifecycle reference doc exists and carries the doctrine + enable check', () => {
+    const doc = read('gsd-core/references/context-lifecycle.md');
+    assert.match(doc, /plans are perishable/i, 'doctrine line present');
+    assert.match(doc, /context_lifecycle\.discussion_logs/, 'decidable enable-check for the discussion-log flag');
+    assert.match(doc, /PROJECT-DISCUSSION-LOG\.md/, 'project-level log location');
+  });
+});
+
 describe('discuss-phase capsule append contract', () => {
   test('discuss-phase honors the capsule append contract', () => {
     const wf = read('gsd-core/workflows/discuss-phase.md');

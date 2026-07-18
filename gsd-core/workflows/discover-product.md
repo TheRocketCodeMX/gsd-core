@@ -78,6 +78,10 @@ Run the ordered question set from the reference. **Posture: the first answer is 
 - **Step 8 — Scope & prioritization:** the end-to-end journey → the thin first slice; RICE the candidate list; record explicit "not in scope." **RICE fits feature-list products.** When sequencing is strategy-driven (a milestone ladder, credibility-before-product, infrastructure-before-features), the ladder IS the prioritization — record it as a named strategic override and skip the arithmetic rather than forcing fake scores.
 - **Step 9 — Success:** the **outcome metric** (a change in customer behavior or business result) + by when; the PMF check, **pre-registered**: define now the Sean Ellis criterion (≥40% "very disappointed") to survey once ≥N pilots have used the core (only users who used it) — a *planned measurement*, never a founder prediction. **Reject vanity/output metrics — signups, waitlist size, downloads, page views, "launched" — and push to the behavior/result they proxy for (retained paying users, task completion, % of the target behavior achieved). A user-count is an output unless tied to retained value.**
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 10: Write PRODUCT-BRIEF.md
 
 Render `@~/.claude/gsd-core/templates/product-brief.md` (fill `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md or — if none exists — a short **outcome-level** working title that does NOT encode the solution, marked "(working title)"). Keep the outcome at the behavior/metric level — **do not encode a solution or architecture**. Fill the **measurable desired-outcomes** table (per segment if heterogeneous), the **Assumptions to re-test** table (riskiest first, each with its cheapest next test), and the Handoff notes for `model-domain` (the job + journey + key domain nouns).

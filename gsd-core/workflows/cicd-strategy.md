@@ -110,6 +110,10 @@ Recommend the **free six** — each ≤ hours of work, each counters a real 2023
 
 Before writing, audit every choice against the meta-tell: **if you cannot point to a current, concrete requirement justifying a capability** — a real compliance boundary for cloud-native CI, real merge volume for a queue, real SLIs+traffic for canary, a real migration to rehearse for pre-prod — **it's over-engineering: defer it with a recorded trigger.** Conversely, if a concrete requirement exists and the strategy ignores it — high blast radius with no flags/revertable schema path, a target that can't federate with no rotation plan, >10 merges/day with no queue — **that's under-engineering: fix it now.**
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 9: Write CICD-STRATEGY.md
 
 Render `@~/.claude/gsd-core/templates/cicd-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`). Fill: platform + why, auth method (OIDC config incl. the `sub` condition), the secrets table, the pipeline map with time budgets, the flaky policy, the ladder rung + promotion triggers, the supply-chain checklist, anti-patterns acknowledged, deferred items, and handoff notes for plan-phase.

@@ -63,6 +63,10 @@ From DOMAIN-MODEL's actors/roles (or ask): record the authz model — **RBAC** (
 - **Secrets/key strategy** — workload-identity-first; the secret-manager rung. Pointer to `infrastructure-strategy` for the cloud-specific config.
 - **Security DoD** — which CI gates block at this tier (floor: SCA + secret-scan + lockfile + SAST-on-changed; L2+: SAST-blocking + DAST-on-staging + authz/crypto tests; consumed by `cicd-strategy`).
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 7: Present & write
 
 **Recommend, don't dictate.** Present via `AskUserQuestion` (header "Security"): the derived posture in one paragraph (classification + ASVS level + authz/auth + the DoD), and any rung above the floor with its trigger. Once approved, render `@~/.claude/gsd-core/templates/security-strategy.md` and write to `.planning/SECURITY-STRATEGY.md`. Keep it half-a-page for L1; grow only with the tier.

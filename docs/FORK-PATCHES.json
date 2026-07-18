@@ -53,6 +53,7 @@
     { "path": "gsd-core/workflows/new-milestone.md", "feature": "context", "mode": "markers", "markers": 2, "anchors": ["milestones/next", "-CAPSULE\\.md", "milestones/consumed"] },
     { "path": "gsd-core/workflows/new-project.md", "feature": "strategy", "mode": "markers", "markers": 4, "anchors": ["Strategy Plan", "has_design_hint", "strategy-flow\\.md"] },
     { "path": "gsd-core/workflows/new-project.md", "feature": "validation", "mode": "anchors-only", "anchors": ["do not expect others", "exploration is DONE"] },
+    { "path": "gsd-core/workflows/new-project.md", "feature": "context", "mode": "markers", "markers": 1, "anchors": ["PROJECT-DISCUSSION-LOG\\.md"] },
     { "path": "gsd-core/workflows/plan-phase.md", "feature": "grounding", "mode": "anchors-only", "anchors": ["grounding_gate", "check\\.grounding-plan", "Elaborated against strategy", "strategy-elaboration\\.md", "DESIGN-INVENTORY\\.md", "UI hint"] },
     { "path": "gsd-core/workflows/progress.md", "feature": "strategy", "mode": "markers", "markers": 1, "anchors": ["Strategy Plan awareness"] },
     { "path": "gsd-core/workflows/resume-project.md", "feature": "context", "mode": "markers", "markers": 1, "anchors": ["MASTER-CONTEXT\\.md", "[Rr]e-anchor"] },

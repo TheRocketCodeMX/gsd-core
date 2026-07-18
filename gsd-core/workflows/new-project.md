@@ -437,6 +437,10 @@ If "Keep exploring" — ask what they want to add, or identify gaps and probe na
 
 Loop until "Create PROJECT.md" selected.
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## 4. Write PROJECT.md
 
 **If auto mode:** Synthesize from provided document. No "Ready?" gate was shown — proceed directly to commit.

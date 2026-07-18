@@ -127,6 +127,10 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 - `gsd-core/references/exploration-and-adaptability.md`
 
+### context — context-lifecycle capability (doctrine reference)
+
+- `gsd-core/references/context-lifecycle.md`
+
 ### learn — /gsd:learn teaching system
 
 - `capabilities/learn/capability.json`
@@ -252,7 +256,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
 | `gsd-core/workflows/new-milestone.md` | strategy, validation, context | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors); Step-1 detects `milestones/next/<label>-CAPSULE.md` files, Step 3.1 matches on the resolved label, folds carried-forward items, then moves the capsule to `milestones/consumed/` (2 context marker pairs) |
-| `gsd-core/workflows/new-project.md` | strategy, validation | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors) |
+| `gsd-core/workflows/new-project.md` | strategy, validation, context | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors); after the deep-questioning loop, append each elicitation round to `.planning/PROJECT-DISCUSSION-LOG.md` (1 context marker pair) |
 | `gsd-core/workflows/plan-phase.md` | grounding | anchors-only | SIZE-GATED (89119/90000 bytes!); elaboration gate, grounding gate, UI-hint authority, oracle files |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
 | `gsd-core/workflows/resume-project.md` | context | markers | load_state re-anchor: read MASTER-CONTEXT.md + active capsule (via `context provenance`) + last SUMMARY, then `context verify --phase`; skips silently when MASTER-CONTEXT.md is absent (1 marker pair) |

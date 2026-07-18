@@ -237,6 +237,7 @@
       "cicd-strategy.md",
       "common-bug-patterns.md",
       "context-budget.md",
+      "context-lifecycle.md",
       "continuation-format.md",
       "contract-testing.md",
       "data-environments.md",

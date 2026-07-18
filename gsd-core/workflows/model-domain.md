@@ -146,6 +146,10 @@ If set, run a **Big-Picture** pass (timeline of events, not aggregates):
 
 **Process-level pass (optional, only for one genuinely contested boundary):** walk a single flow's commands → policies ("whenever X, then Y") → read-models to sharpen that one boundary and its hand-offs. Don't drop to aggregates. Skip entirely if Big-Picture already settled the boundaries.
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 6: Write DOMAIN-MODEL.md
 
 Render `@~/.claude/gsd-core/templates/domain-model.md` (fill `[DATE]` with today's date and `[PROJECT_TITLE]` from PROJECT.md), filling:

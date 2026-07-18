@@ -92,6 +92,10 @@ Record the chosen libraries **dated** in the artifact ("as of YYYY-MM-DD; re-ver
 - **FE side of the seam:** the contract mechanism (from Step 5) + the rule that the FE branches on the machine `code`, owns the localized user copy, and has a fallback for unknown codes (per `fe-be-seam.md`). 
 - **FE-signal telemetry:** the FE logs only client-only signals (unhandled errors, web-vitals, network failures); analytics journey events fire client-side from the typed catalog; trace context (`traceparent`) propagates FE→BE (per `application-telemetry.md`).
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 7: Present recommendation & write the artifact
 
 **Recommend, don't dictate.** Present via `AskUserQuestion` (header "Frontend"): your recommended FE architecture in one paragraph (floor + the chosen rungs + the verified libraries + the design-system/insulation decision + the seam side), how it follows the backend topology, and 1–2 alternatives with trade-offs. options: "Accept", "Adjust (I'll tell you what)", "Show alternatives".
