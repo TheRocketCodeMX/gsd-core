@@ -256,6 +256,7 @@ describe('plan:pre all-off — empty resolution', () => {
         plan_drift_precheck: false,
       },
       intel: { enabled: false },
+      context_lifecycle: { enabled: false },
     });
   });
   after(() => cleanup(tmpDir));
