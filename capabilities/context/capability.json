@@ -1,36 +1,88 @@
 {
   "id": "context",
   "role": "feature",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "title": "Context lifecycle — durable project knowledge",
   "description": "The knowledge lifecycle: MASTER-CONTEXT index, quality-stamped phase capsules inside <N>-CONTEXT.md, append-only layers, deterministic anchor verification (gsd-tools context verify), the calm context-pressure flush hook, and the re-anchor procedure. Doctrine: plans are perishable; context is durable.",
   "tier": "full",
   "requires": [],
-  "engines": { "gsd": ">=1.6.0" },
-  "runtimeCompat": { "supported": ["*"], "unsupported": [] },
+  "engines": {
+    "gsd": ">=1.6.0"
+  },
+  "runtimeCompat": {
+    "supported": [
+      "*"
+    ],
+    "unsupported": []
+  },
   "skills": [],
   "agents": [],
   "hooks": [],
   "config": {
-    "context_lifecycle.enabled": { "type": "boolean", "default": true, "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists." },
-    "context_lifecycle.seed_offer": { "type": "string", "default": "prompt", "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off." },
-    "context_lifecycle.curation": { "type": "boolean", "default": true, "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs." },
-    "context_lifecycle.hook_enabled": { "type": "boolean", "default": true, "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)." },
-    "context_lifecycle.hook_warn_pct": { "type": "number", "default": 90, "description": "used_pct threshold for the first calm flush suggestion." },
-    "context_lifecycle.hook_urge_pct": { "type": "number", "default": 95, "description": "used_pct threshold for the single firmer repeat." },
-    "context_lifecycle.verify_max_age_commits": { "type": "number", "default": 50, "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion." },
-    "context_lifecycle.discussion_logs": { "type": "boolean", "default": true, "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md." }
+    "context_lifecycle.enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists."
+    },
+    "context_lifecycle.seed_offer": {
+      "type": "string",
+      "default": "prompt",
+      "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off."
+    },
+    "context_lifecycle.curation": {
+      "type": "boolean",
+      "default": true,
+      "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs."
+    },
+    "context_lifecycle.hook_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)."
+    },
+    "context_lifecycle.hook_warn_pct": {
+      "type": "number",
+      "default": 90,
+      "description": "used_pct threshold for the first calm flush suggestion."
+    },
+    "context_lifecycle.hook_urge_pct": {
+      "type": "number",
+      "default": 95,
+      "description": "used_pct threshold for the single firmer repeat."
+    },
+    "context_lifecycle.verify_max_age_commits": {
+      "type": "number",
+      "default": 50,
+      "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion."
+    },
+    "context_lifecycle.discussion_logs": {
+      "type": "boolean",
+      "default": true,
+      "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md."
+    }
   },
-  "commands": [ { "family": "context", "module": "context-command-router.cjs", "router": "routeContextCommand" } ],
+  "commands": [
+    {
+      "family": "context",
+      "module": "context-command-router.cjs",
+      "router": "routeContextCommand"
+    }
+  ],
   "steps": [],
   "contributions": [
     {
       "point": "plan:pre",
       "into": "planner",
-      "fragment": { "inline": "<context_capsule_lifecycle>\nCapsule lifecycle directives (context capability). `$context_path` is the phase CONTEXT.md resolved from init JSON in step 4. If it is null, or the file carries no `context_provenance` frontmatter, every part below skips silently — the pre-capsule flow is untouched.\n\n**1. Freshness gate — plan-phase orchestrator, run when reading this hook at plan:pre (before any planner spawn); it NEVER blocks:**\n\n```bash\nPROV_DATE=$(gsd_run context provenance --file \"$context_path\" --raw 2>/dev/null | jq -r '.date // empty')\nif [ -n \"$PROV_DATE\" ]; then\n  MAX_AGE=$(gsd_run query config-get context_lifecycle.verify_max_age_commits 2>/dev/null || echo 50)\n  AGE=$(git rev-list --count --since=\"$PROV_DATE\" HEAD 2>/dev/null || echo 0)\n  [ \"$AGE\" -gt \"$MAX_AGE\" ] && gsd_run context verify --file \"$context_path\" --raw\nfi\n```\n\nIf the verify report shows `stale + missing > 0`, print its summary (`total`/`ok`/`stale`/`missing`) to the user and continue — failing bullets are now annotated `[STALE — <date>: <reason>]` inside the capsule itself, so the planner sees them marked.\n\n**2. Planner (this fragment is injected into your prompt):** treat `[STALE — ...]`-annotated claims in CONTEXT.md as untrusted — do not build plans on them without re-verifying against the current code; prefer what the code says now over a stale claim.\n\n**3. Curation — plan-phase orchestrator, after planner output returns and BEFORE spawning gsd-plan-checker:** when `context_lifecycle.curation` resolves true (this hook's `configValues.curation`; default true) AND `PROV_DATE` was non-empty, review the returned plan(s) against `.planning/MASTER-CONTEXT.md` and the capsule — topology, standing rules, protect list, locked decisions — and append corrections/re-boundings as a `## Orchestrator curation (<date>)` layer to the capsule (append-only; prior layers stay byte-identical). Only then spawn the checker. Curation off or no capsule → skip silently.\n</context_capsule_lifecycle>" },
-      "configValues": { "verify_max_age_commits": "context_lifecycle.verify_max_age_commits", "curation": "context_lifecycle.curation" },
+      "fragment": {
+        "inline": "<context_capsule_lifecycle>\nCapsule lifecycle directives (context capability). `$context_path` is the phase CONTEXT.md resolved from init JSON in step 4. If it is null, or the file carries no `context_provenance` frontmatter, every part below skips silently — the pre-capsule flow is untouched.\n\n**1. Freshness gate — plan-phase orchestrator, run when reading this hook at plan:pre (before any planner spawn); it NEVER blocks:**\n\n```bash\nPROV_DATE=$(gsd_run context provenance --file \"$context_path\" --raw 2>/dev/null | jq -r '.date // empty')\nif [ -n \"$PROV_DATE\" ]; then\n  MAX_AGE=$(gsd_run query config-get context_lifecycle.verify_max_age_commits 2>/dev/null || echo 50)\n  AGE=$(git rev-list --count --since=\"$PROV_DATE\" HEAD 2>/dev/null || echo 0)\n  [ \"$AGE\" -gt \"$MAX_AGE\" ] && gsd_run context verify --file \"$context_path\" --raw\nfi\n```\n\nIf the verify report shows `stale + missing > 0`, print its summary (`total`/`ok`/`stale`/`missing`) to the user and continue — failing bullets are now annotated `[STALE — <date>: <reason>]` inside the capsule itself, so the planner sees them marked.\n\n**2. Planner (this fragment is injected into your prompt):** treat `[STALE — ...]`-annotated claims in CONTEXT.md as untrusted — do not build plans on them without re-verifying against the current code; prefer what the code says now over a stale claim.\n\n**3. Curation — plan-phase orchestrator, after planner output returns and BEFORE spawning gsd-plan-checker:** when `context_lifecycle.curation` resolves true (this hook's `configValues.curation`; default true) AND `PROV_DATE` was non-empty, review the returned plan(s) against `.planning/MASTER-CONTEXT.md` and the capsule — topology, standing rules, protect list, locked decisions — and append corrections/re-boundings as a `## Orchestrator curation (<date>)` layer to the capsule (append-only; prior layers stay byte-identical). Only then spawn the checker. Curation off or no capsule → skip silently.\n</context_capsule_lifecycle>"
+      },
+      "configValues": {
+        "verify_max_age_commits": "context_lifecycle.verify_max_age_commits",
+        "curation": "context_lifecycle.curation"
+      },
       "produces": [],
-      "consumes": ["CONTEXT.md"],
+      "consumes": [
+        "CONTEXT.md"
+      ],
       "when": "context_lifecycle.enabled",
       "onError": "skip"
     }
