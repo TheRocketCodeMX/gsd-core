@@ -667,6 +667,9 @@ increases monotonically across waves. `{status}` is `complete` (success),
        - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
        - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
        - ${PROJECT_ROOT}/.planning/adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md under .planning/ (if they exist — the chosen rung and test levels; any autonomous deviation must honor them: build to the rung fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
+<!-- FORK:context BEGIN -->
+       - If ${PROJECT_ROOT}/{phase_dir}/{padded}-CONTEXT.md carries `context_provenance` (check `gsd_run context provenance`), read ONLY its `## Locked Decisions` and `## Phase-Scoped Pitfalls` sections (plus superseding `## Scout corrections` / `## Orchestrator curation` layers) — they bind autonomous deviation as the ADR does. (Skip if the ≥500K full-CONTEXT branch above applied.)
+<!-- FORK:context END -->
        </files_to_read>
 
        ${AGENT_SKILLS}
@@ -1342,6 +1345,9 @@ Read these files before verification:
 - {phase_dir}/*-SUMMARY.md (All summaries — cross-reference claimed vs actual)
 - .planning/REQUIREMENTS.md (Requirement traceability)
 - .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle — REQUIRED input for the Design-fit check when `## Mode` records a provided design; diff the built observable shape against these, never the raw design)
+<!-- FORK:context BEGIN -->
+- capsule `## What Done Looks Like` section of {phase_dir}/*-CONTEXT.md (when provenance present) — acceptance-shaping input alongside roadmap success criteria; it can ADD checks, never remove roadmap criteria.
+<!-- FORK:context END -->
 ${CONTEXT_WINDOW >= 500000 ? `- {phase_dir}/*-CONTEXT.md (User decisions — verify they were honored)
 - {phase_dir}/*-RESEARCH.md (Known pitfalls — check for traps)
 - Prior VERIFICATION.md files from earlier phases (regression check)

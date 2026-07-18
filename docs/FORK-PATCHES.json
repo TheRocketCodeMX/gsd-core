@@ -43,6 +43,7 @@
     { "path": "gsd-core/workflows/discuss-phase.md", "feature": "context", "mode": "markers", "markers": 2, "anchors": ["## Discussion additions", "DISCUSSION-LOG\\.md"] },
     { "path": "gsd-core/workflows/discuss-phase/resume.md", "feature": "context", "mode": "markers", "markers": 1, "anchors": ["context_provenance", "Extend it"] },
     { "path": "gsd-core/workflows/execute-phase.md", "feature": "fidelity", "mode": "anchors-only", "anchors": ["execute-phase-wave-guard\\.md", "execute-phase-between-wave-reset\\.md", "engineering-standards\\.md", "DESIGN-INVENTORY\\.md"] },
+    { "path": "gsd-core/workflows/execute-phase.md", "feature": "context", "mode": "markers", "markers": 2, "anchors": ["Phase-Scoped Pitfalls", "What Done Looks Like"] },
     { "path": "gsd-core/workflows/help/modes/full.md", "feature": "learn", "mode": "markers", "markers": 1, "anchors": ["/gsd:learn"] },
     { "path": "gsd-core/workflows/help/modes/full.md", "feature": "strategy", "mode": "markers", "markers": 3, "anchors": ["/gsd:model-domain", "/gsd:cicd-strategy"] },
     { "path": "gsd-core/workflows/help/modes/topic.md", "feature": "learn", "mode": "anchors-only", "anchors": ["learning`, `concepts"] },

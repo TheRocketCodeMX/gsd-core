@@ -247,7 +247,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
 | `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | SIZE-GATED (32000 budget); mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log (2 marker pairs) |
 | `gsd-core/workflows/discuss-phase/resume.md` | context | markers | capsule-aware existing-CONTEXT branch: provenance non-null → "Extend it" (append a Discussion-additions layer); provenance-null path byte-identical (1 marker pair) |
-| `gsd-core/workflows/execute-phase.md` | fidelity | anchors-only | SIZE-GATED (89972/90000 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle |
+| `gsd-core/workflows/execute-phase.md` | fidelity, context | anchors-only + markers | SIZE-GATED (93583/93600 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle (anchors); executor reads capsule Locked Decisions + Phase-Scoped Pitfalls, verifier reads capsule What Done Looks Like (2 marker pairs) |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
 | `gsd-core/workflows/new-milestone.md` | strategy, validation | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors) |

@@ -25,3 +25,19 @@ describe('roadmap capsule seed offer', () => {
     assert.match(wf, /seed_offer/, 'reads context_lifecycle.seed_offer');
   });
 });
+
+describe('execute-phase sectional capsule injection', () => {
+  test('executor spawn reads only the binding capsule sections', () => {
+    const wf = read('gsd-core/workflows/execute-phase.md');
+    assert.match(
+      wf,
+      /Locked Decisions.*Phase-Scoped Pitfalls|Phase-Scoped Pitfalls.*Locked Decisions/s,
+      'executor slice: Locked Decisions + Phase-Scoped Pitfalls'
+    );
+  });
+
+  test('verifier spawn reads the capsule What Done Looks Like section', () => {
+    const wf = read('gsd-core/workflows/execute-phase.md');
+    assert.match(wf, /What Done Looks Like/, 'verifier slice: What Done Looks Like');
+  });
+});
