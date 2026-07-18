@@ -67,3 +67,13 @@ describe('context core', () => {
     } finally { cleanup(dir); }
   });
 });
+
+test('capsule template parses with core module (provenance + anchor grammar)', () => {
+  const tpl = fs.readFileSync(path.resolve(__dirname, '..', 'gsd-core', 'templates', 'context-capsule.md'), 'utf8');
+  const p = ctx.parseContextProvenance(tpl);
+  assert.ok(p, 'template frontmatter must carry context_provenance');
+  assert.ok(ctx.extractAnchors(tpl).length >= 1, 'template must demonstrate the anchor grammar');
+  for (const f of ['master-context.md', 'milestone-capsule.md']) {
+    assert.ok(fs.existsSync(path.resolve(__dirname, '..', 'gsd-core', 'templates', f)), `${f} missing`);
+  }
+});
