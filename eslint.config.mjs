@@ -184,6 +184,8 @@ export default tseslint.config(
       'gsd-core/bin/lib/teams-status.cjs',
       // ADR-1372: tsc-generated runtime artifact — lint the src/markdown-sectionizer.cts source.
       'gsd-core/bin/lib/markdown-sectionizer.cjs',
+      // feat/context-lifecycle: tsc-generated runtime artifact — lint the src/context.cts source.
+      'gsd-core/bin/lib/context.cjs',
     ],
   },
 
