@@ -144,30 +144,49 @@ gsd_run context provenance --file "$CAP" --raw | jq -r '.date'   # confirm a rea
 sha256sum "$CAP" | cut -d' ' -f1 > /tmp/cap_pre_plan.sha
 ```
 
-**Drive:**
+**Drive — with the session transcript captured** (assert (a) greps it; without a transcript the assert cannot be mechanical — see the fallback note below):
 ```
 Skill: gsd-plan-phase       (target the seeded, now-old phase)
 ```
-
-**Assert — (a) the freshness verify actually ran on the old capsule:**
 ```bash
-# the plan-phase transcript / STATE trail shows a context verify was run at plan:pre
-#   (grep the run transcript OR re-derive: the capsule shows fresh [STALE] annotations
-#    dated today if any anchor had drifted since seeding)
-gsd_run context verify --file "$CAP" --raw | grep -Eq '"total": [1-9]'   # capsule was verifiable
-# If any anchor drifted, a today-dated [STALE] annotation is present:
-grep -Eq "\[STALE — $(date +%Y-%m-%d)" "$CAP" || echo "NOTE: no drift to annotate (acceptable if tree unchanged since seed)"
+# TRANSCRIPT CAPTURE — pick the form that matches how you are driving the fixture:
+#  - Scripted/headless drive (claude -p / SDK runner): tee the full run output:
+#      <your-driver-command> 2>&1 | tee /tmp/plan-phase-transcript.log
+#      TRANSCRIPT=/tmp/plan-phase-transcript.log
+#  - Interactive Claude Code session: the runtime writes a JSONL transcript per session;
+#    grab the newest one for the fixture project after the run:
+#      TRANSCRIPT=$(ls -t ~/.claude/projects/*"$(basename "$FIX" | tr '/' '-')"*/*.jsonl 2>/dev/null | head -1)
+test -s "$TRANSCRIPT" || echo "NO TRANSCRIPT — assert (a) degrades to operator-observed (see below)"
 ```
 
-**Assert — (b) an Orchestrator curation layer was appended BEFORE the checker ran:**
+**Assert — (a) the plan-phase orchestrator ACTUALLY ran the freshness verify (transcript is the evidence):**
+```bash
+# the orchestrator's own tool calls must show a context-verify invocation during the run —
+# this proves plan-phase RAN the gate, not merely that the capsule is verifiable
+grep -Eq 'context verify (--file|--phase)' "$TRANSCRIPT" && echo "GATE-RAN-OK" || { echo "FAIL: no context-verify call in the plan-phase transcript — freshness gate did not run"; }
+# corroboration (optional): the gate prints the verify summary to the user when stale+missing > 0
+grep -Eq '"(stale|missing)":' "$TRANSCRIPT" && echo "SUMMARY-PRINTED-OK (corroboration)"
+# side-effect corroboration: if any anchor drifted since seeding, the gate's verify left a
+# today-dated [STALE] annotation in the capsule
+grep -Eq "\[STALE — $(date +%Y-%m-%d)" "$CAP" || echo "NOTE: no drift to annotate (acceptable if tree unchanged since seed)"
+```
+> **If a transcript is genuinely not capturable in your runtime** (no `-p` driver, no JSONL transcript path): this assert **degrades to operator-observed** — a human must watch the plan-phase run and attest they saw the `context verify` call fire before the planner spawn. Record the scenario as `OPERATOR-OBSERVED`, not `PASS`; do not fake the grep.
+
+**Assert — (b) an Orchestrator curation layer was appended BEFORE the checker ran (mtime ordering — failable):**
 ```bash
 # the curation layer exists, dated today
-grep -Eq "## Orchestrator curation \($(date +%Y-%m-%d)\)" "$CAP" && echo "CURATION-OK"
+grep -Eq "## Orchestrator curation \($(date +%Y-%m-%d)\)" "$CAP" && echo "CURATION-OK" || echo "FAIL: no curation layer"
 # it was appended (capsule changed since pre-plan snapshot)
-test "$(sha256sum "$CAP" | cut -d' ' -f1)" != "$(cat /tmp/cap_pre_plan.sha)" && echo "APPENDED-OK"
-# ordering: the curation layer is in the capsule that the checker read — REVIEW/CHECK
-#   artifacts for this phase exist and postdate the curation append
-ls "$PH"*CHECK*.md "$PH"REVIEW.md 2>/dev/null | head -1
+test "$(sha256sum "$CAP" | cut -d' ' -f1)" != "$(cat /tmp/cap_pre_plan.sha)" && echo "APPENDED-OK" || echo "FAIL: capsule unchanged"
+# ORDERING: the curation append must precede the checker artifact's creation.
+# Evidence source: file mtimes — reliable here because in this flow the curation append is
+# the capsule's LAST write (nothing touches it between curation and the checker verdict),
+# so capsule-mtime <= earliest checker-artifact-mtime iff curation happened first.
+# (git commit times are NOT usable: plan-phase commits capsule + plan + verdict together.)
+CURATION_TS=$(stat -c %Y "$CAP")
+CHECK_TS=$(stat -c %Y "$PH"*CHECK*.md "$PH"REVIEW.md 2>/dev/null | sort -n | head -1)
+test -n "$CHECK_TS" || echo "FAIL: no checker artifact found — checker never ran"
+[ "$CURATION_TS" -le "$CHECK_TS" ] && echo "ORDERING-OK" || echo "FAIL: checker artifact predates the curation append — checker ran BEFORE curation (ordering violation)"
 ```
 
 **Assert — planner grounded on the capsule:**
@@ -176,9 +195,9 @@ ls "$PH"*CHECK*.md "$PH"REVIEW.md 2>/dev/null | head -1
 grep -Eiq 'locked decision|per (the )?capsule|CONTEXT\.md' "$PH"PLAN.md && echo OK
 ```
 
-**Pass:** the freshness verify ran against the old capsule AND a today-dated `## Orchestrator curation` layer was appended (capsule hash changed) AND that layer predates the checker artifacts AND the plan references the capsule.
+**Pass:** the transcript grep proves the orchestrator ran `context verify` during plan-phase (`GATE-RAN-OK`) AND a today-dated `## Orchestrator curation` layer was appended (capsule hash changed) AND the mtime ordering check proves the curation append predates the earliest checker artifact (`ORDERING-OK`) AND the plan references the capsule. Transcript unavailable → record `OPERATOR-OBSERVED` at best, never `PASS`.
 
-**FALLBACK (record if Scenario 3 is soft):** if `## Orchestrator curation` is **absent** or was appended **after** the checker ran (ordering violation), the soft delivery has failed in practice. The recorded remediation (per Task 10 ledger) is: **add a single plan-phase.md directive line after an upstream shrink/extraction frees bytes** — an explicit host-loop instruction to run the plan:pre freshness verify and append the curation layer before spawning the checker, replacing the memory-only envelope read. File this as a follow-up issue with the transcript evidence; do not hand-patch plan-phase.md over its byte ceiling.
+**FALLBACK (record if Scenario 3 is soft):** if the transcript shows **no** context-verify call, or `## Orchestrator curation` is **absent**, or the ordering check fails (checker artifact predates the curation append), the soft delivery has failed in practice. The recorded remediation (per Task 10 ledger) is: **add a single plan-phase.md directive line after an upstream shrink/extraction frees bytes** — an explicit host-loop instruction to run the plan:pre freshness verify and append the curation layer before spawning the checker, replacing the memory-only envelope read. File this as a follow-up issue with the transcript evidence; do not hand-patch plan-phase.md over its byte ceiling.
 
 ---
 
@@ -258,7 +277,7 @@ mv /tmp/mc.bak .planning/MASTER-CONTEXT.md
 | 0 | Seed at transition, provenance + quality stamps | `verify --milestone` = stale 0 / missing 0 |
 | 1 | Anchor verification + `[STALE]` annotation | annotation present, claim intact, exit 0 |
 | 2 | Append-never-replace + discussion log | old bytes are exact prefix of new capsule |
-| 3 | **plan:pre freshness gate + curation (soft)** | verify ran on old capsule + `## Orchestrator curation` appended before checker |
+| 3 | **plan:pre freshness gate + curation (soft)** | transcript shows the verify call + `## Orchestrator curation` appended with mtime <= earliest checker artifact |
 | 4 | Calm flush hook + tone contract + flush mode | nudge present, zero panic words, PreCompact re-anchor |
 | 5 | Re-anchor on resume | MASTER + capsule + SUMMARY reads + phase verify |
 
