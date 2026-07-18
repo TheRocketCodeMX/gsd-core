@@ -23,6 +23,17 @@
   },
   "commands": [ { "family": "context", "module": "context-command-router.cjs", "router": "routeContextCommand" } ],
   "steps": [],
-  "contributions": [],
+  "contributions": [
+    {
+      "point": "plan:pre",
+      "into": "planner",
+      "fragment": { "inline": "<context_capsule_lifecycle>\nCapsule lifecycle directives (context capability). `$context_path` is the phase CONTEXT.md resolved from init JSON in step 4. If it is null, or the file carries no `context_provenance` frontmatter, every part below skips silently — the pre-capsule flow is untouched.\n\n**1. Freshness gate — plan-phase orchestrator, run when reading this hook at plan:pre (before any planner spawn); it NEVER blocks:**\n\n```bash\nPROV_DATE=$(gsd_run context provenance --file \"$context_path\" --raw 2>/dev/null | jq -r '.date // empty')\nif [ -n \"$PROV_DATE\" ]; then\n  MAX_AGE=$(gsd_run query config-get context_lifecycle.verify_max_age_commits 2>/dev/null || echo 50)\n  AGE=$(git rev-list --count --since=\"$PROV_DATE\" HEAD 2>/dev/null || echo 0)\n  [ \"$AGE\" -gt \"$MAX_AGE\" ] && gsd_run context verify --file \"$context_path\" --raw\nfi\n```\n\nIf the verify report shows `stale + missing > 0`, print its summary (`total`/`ok`/`stale`/`missing`) to the user and continue — failing bullets are now annotated `[STALE — <date>: <reason>]` inside the capsule itself, so the planner sees them marked.\n\n**2. Planner (this fragment is injected into your prompt):** treat `[STALE — ...]`-annotated claims in CONTEXT.md as untrusted — do not build plans on them without re-verifying against the current code; prefer what the code says now over a stale claim.\n\n**3. Curation — plan-phase orchestrator, after planner output returns and BEFORE spawning gsd-plan-checker:** when `context_lifecycle.curation` resolves true (this hook's `configValues.curation`; default true) AND `PROV_DATE` was non-empty, review the returned plan(s) against `.planning/MASTER-CONTEXT.md` and the capsule — topology, standing rules, protect list, locked decisions — and append corrections/re-boundings as a `## Orchestrator curation (<date>)` layer to the capsule (append-only; prior layers stay byte-identical). Only then spawn the checker. Curation off or no capsule → skip silently.\n</context_capsule_lifecycle>" },
+      "configValues": { "verify_max_age_commits": "context_lifecycle.verify_max_age_commits", "curation": "context_lifecycle.curation" },
+      "produces": [],
+      "consumes": ["CONTEXT.md"],
+      "when": "context_lifecycle.enabled",
+      "onError": "skip"
+    }
+  ],
   "gates": []
 }
