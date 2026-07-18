@@ -245,7 +245,8 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
-| `gsd-core/workflows/discuss-phase.md` | exploration | anchors-only | SIZE-GATED (29995/30000 bytes!); mandatory-exploration scout step + engineering-standards/canonical-refs lines |
+| `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | SIZE-GATED (32000 budget); mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log (2 marker pairs) |
+| `gsd-core/workflows/discuss-phase/resume.md` | context | markers | capsule-aware existing-CONTEXT branch: provenance non-null → "Extend it" (append a Discussion-additions layer); provenance-null path byte-identical (1 marker pair) |
 | `gsd-core/workflows/execute-phase.md` | fidelity | anchors-only | SIZE-GATED (89972/90000 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |

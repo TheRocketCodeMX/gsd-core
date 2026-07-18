@@ -4,6 +4,14 @@ Lazy-loaded by the parent `check_existing` step (#717 thin-dispatcher budget). F
 
 ## CONTEXT.md already exists
 
+<!-- FORK:context BEGIN -->
+**Capsule check first (context lifecycle):** run `gsd_run context provenance --file "${phase_dir}/${padded_phase}-CONTEXT.md"`.
+
+**If non-null** (the file carries `context_provenance` frontmatter — a pre-seeded capsule): the choice is **"Extend it"**, not "Update it". Load the capsule and present it to the user as *pre-seeded context* — summarize its Verified Facts + Locked Decisions and note its `quality` stamp: `thin`/`artifact-distilled` capsules are starting points (ask more), a `rich` capsule is pre-answered ground (ask only what it does not cover). Ask ONLY questions the capsule leaves open, then instruct `write_context` to **append** a `## Discussion additions` layer (never rewrite). `--auto` auto-selects **Extend it**.
+
+**If null/absent:** the plain-file behavior below is unchanged.
+<!-- FORK:context END -->
+
 **If `--auto`:** Auto-select "Update it" — load existing context and continue to `analyze_phase`. Log: `[auto] Context exists — updating with auto-selected decisions.`
 
 **Otherwise:** AskUserQuestion (header: "Context"; question: "Phase [X] already has context. What do you want to do?"; options: "Update it" / "View it" / "Skip"). Branch accordingly.

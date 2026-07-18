@@ -41,21 +41,17 @@ Do not Read mode files unless the corresponding flag/condition is set.
 </progressive_disclosure>
 
 <downstream_awareness>
-**CONTEXT.md feeds into:**
+**CONTEXT.md feeds gsd-phase-researcher** (WHAT to research) and **gsd-planner** (WHAT decisions are locked).
 
-1. **gsd-phase-researcher** — Reads CONTEXT.md to know WHAT to research
-2. **gsd-planner** — Reads CONTEXT.md to know WHAT decisions are locked
-
-**Your job:** Capture decisions clearly enough that downstream agents can act on them without asking the user again.
-**Not your job:** Figure out HOW to implement. That's what research and planning do with the decisions you capture.
+**Your job:** capture decisions clearly enough that downstream agents act on them without re-asking the user. **Not your job:** figure out HOW to implement — research and planning do that.
 </downstream_awareness>
 
 <philosophy>
 **User = founder/visionary. Claude = builder.**
 
-The user knows: how they imagine it working, what it should look/feel like, what's essential vs nice-to-have, specific behaviors or references they have in mind.
+The user knows: how they imagine it working, look/feel, essential vs nice-to-have, specific behaviors or references in mind.
 
-The user doesn't know (and shouldn't be asked): codebase patterns (researcher reads the code), technical risks (researcher identifies these), implementation approach (planner figures this out), success metrics (inferred from the work).
+Don't ask (Claude/researcher/planner own these): codebase patterns, technical risks, implementation approach, success metrics.
 
 Ask about vision and implementation choices. Capture decisions for downstream agents.
 </philosophy>
@@ -63,21 +59,11 @@ Ask about vision and implementation choices. Capture decisions for downstream ag
 <scope_guardrail>
 **CRITICAL: No scope creep.** The phase boundary comes from ROADMAP.md and is FIXED. Discussion clarifies HOW to implement what's scoped, never WHETHER to add new capabilities.
 
-**Allowed (clarifying ambiguity):** "How should posts be displayed?" (layout), "What happens on empty state?" (within the feature), "Pull to refresh or manual?" (behavior choice).
+**Allowed (clarifying ambiguity):** "How should posts be displayed?" (layout), "What happens on empty state?", "Pull to refresh or manual?" (behavior).
 
-**Not allowed (scope creep):** "Should we also add comments?" / "What about search/filtering?" / "Maybe include bookmarking?" — those are new capabilities and belong in their own phase.
+**Not allowed (scope creep):** "Should we also add comments/search/bookmarking?" — new capabilities belong in their own phase.
 
-**Heuristic:** Does this clarify how we implement what's already in the phase, or does it add a new capability that could be its own phase?
-
-**When user suggests scope creep:**
-```
-"[Feature X] would be a new capability — that's its own phase.
-Want me to note it for the roadmap backlog?
-
-For now, let's focus on [phase domain]."
-```
-
-Capture the idea in a "Deferred Ideas" section. Don't lose it, don't act on it.
+**When user suggests scope creep:** reply that "[Feature X] would be a new capability — its own phase; want it noted for the roadmap backlog? For now, let's focus on [phase domain]." Capture the idea in a "Deferred Ideas" section — don't lose it, don't act on it.
 </scope_guardrail>
 
 <gray_area_identification>
@@ -91,9 +77,7 @@ Gray areas are **implementation decisions the user cares about** — things that
 
 ```
 Phase: "User authentication"     → Session handling, Error responses, Multi-device policy, Recovery flow
-Phase: "Organize photo library"  → Grouping criteria, Duplicate handling, Naming convention, Folder structure
 Phase: "CLI for database backups"→ Output format, Flag design, Progress reporting, Error recovery
-Phase: "API documentation"       → Structure/navigation, Code examples depth, Versioning approach, Interactive elements
 ```
 
 **Claude handles these (don't ask):** technical implementation details, architecture patterns, performance optimization, scope (roadmap defines this).
@@ -102,7 +86,7 @@ Phase: "API documentation"       → Structure/navigation, Code examples depth, 
 <answer_validation>
 **IMPORTANT: Answer validation** — After every AskUserQuestion call, if the response is empty/whitespace-only:
 
-- **"Other" with empty text** (the user wants to type freeform): output `"What would you like to discuss?"`, STOP generating, wait for the user's next message, then reflect it back and continue. Do NOT retry AskUserQuestion or call any tools.
+- **"Other" with empty text** (user wants freeform): output `"What would you like to discuss?"`, STOP, wait for the user's next message, reflect it back and continue. Do NOT retry AskUserQuestion or call any tools.
 - **Any other empty response:** retry once with the same parameters; if still empty, present options as a plain-text numbered list. Never proceed with empty input.
 
 **Text mode** (`--text` or `workflow.text_mode: true`): follow `workflows/discuss-phase/modes/text.md` — do not use AskUserQuestion at all.
@@ -322,9 +306,6 @@ We'll clarify HOW to implement this. (New capabilities belong in other phases.)
   ```
   ☐ Layout style — Cards vs list vs timeline?
     (You already have a Card component with shadow/rounded variants. Reusing it keeps the app consistent.)
-
-  ☐ Loading behavior — Infinite scroll or pagination?
-    (You chose infinite scroll in Phase 4. useInfiniteQuery hook already set up.)
   ```
 
 **Do NOT include a "skip" or "you decide" option.** User ran this command to discuss — give real choices.
@@ -354,6 +335,9 @@ All modes preserve the universal rules below.
 - **Scope creep** — if user mentions something outside the phase domain, capture as deferred idea and redirect.
 - **Incremental checkpoint** — after each area completes, write `${phase_dir}/${padded_phase}-DISCUSS-CHECKPOINT.json`. Read `workflows/discuss-phase/templates/checkpoint.json` for the schema. The checkpoint is structured state, not the canonical CONTEXT.md (`write_context` produces the canonical output). On session resume, the parent's `check_existing` step detects the checkpoint and offers to resume.
 - **Discussion log accumulation** — for each question asked, accumulate area name, options presented, user's selection, follow-up notes. Used by `git_commit` to write DISCUSSION-LOG.md.
+<!-- FORK:context BEGIN -->
+- **Per-round discussion log** — when the `context_lifecycle.discussion_logs` capability config is enabled, append `### <date> — <topic>` (`Q:`/`A:`/`Rejected/considered:`) to `${phase_dir}/${padded_phase}-DISCUSSION-LOG.md` after each Q&A round. Format + the config read: `references/context-lifecycle.md`.
+<!-- FORK:context END -->
 </step>
 
 <step name="write_context">
@@ -371,6 +355,10 @@ mkdir -p "${expected_phase_dir}"
 Set `phase_dir="${expected_phase_dir}"` after creation.
 
 **File location:** `${phase_dir}/${padded_phase}-CONTEXT.md`
+
+<!-- FORK:context BEGIN -->
+**Capsule-aware write** — if `gsd_run context provenance --file "${phase_dir}/${padded_phase}-CONTEXT.md"` is non-null, the file is a pre-seeded capsule: **never overwrite it**. Append a `## Discussion additions (<date>)` layer holding this discussion's `<decisions>`/`<deferred>` blocks; prior layers stay byte-identical. Null/absent → write the template below. See `references/context-lifecycle.md`.
+<!-- FORK:context END -->
 
 **Read the CONTEXT.md template now (lazy-loaded):**
 ```
