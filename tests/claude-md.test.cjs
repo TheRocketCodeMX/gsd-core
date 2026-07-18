@@ -132,10 +132,13 @@ describe('new-project workflow includes CLAUDE.md generation', () => {
   test('new-project workflow generates instruction file before final commit', () => {
     const content = fs.readFileSync(workflowPath, 'utf-8');
     assert.ok(content.includes('generate-claude-md'));
-    // Codex fix: workflow now uses $INSTRUCTION_FILE (AGENTS.md for Codex, CLAUDE.md otherwise)
+    // 2026-07-14 roadmap-after-strategy reorder: the roadmap (ROADMAP.md / STATE.md)
+    // is no longer created in new-project — it is generated after the strategy chain by
+    // gsd-roadmap. new-project's final commit now stages only PROJECT + REQUIREMENTS +
+    // the instruction file (uses $INSTRUCTION_FILE: AGENTS.md for Codex, CLAUDE.md otherwise).
     assert.ok(
-      content.includes('.planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"'),
-      'final roadmap commit should stage ROADMAP, STATE, REQUIREMENTS, and instruction file'
+      content.includes('.planning/PROJECT.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"'),
+      'final new-project commit should stage PROJECT, REQUIREMENTS, and the instruction file (ROADMAP/STATE are deferred to gsd-roadmap)'
     );
   });
 

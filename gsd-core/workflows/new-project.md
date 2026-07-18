@@ -1360,6 +1360,12 @@ Ask the user how they want to structure the project. Use `AskUserQuestion` with 
 
 Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=standard`.
 
+**Persist the choice for the deferred roadmap.** The roadmap is no longer created here — it is generated after the strategy chain by `/gsd:roadmap` (`gsd-roadmap`), which runs in a later session and cannot see this shell variable. Record the choice as a marker in PROJECT.md so the deferred roadmap applies the correct per-phase template:
+
+```bash
+grep -qi 'roadmap-mode:' .planning/PROJECT.md 2>/dev/null || printf '\n<!-- roadmap-mode: %s -->\n' "$PROJECT_MODE" >> .planning/PROJECT.md
+```
+
 When `TEXT_MODE=true` (per the workflow's existing TEXT_MODE handling for non-Claude runtimes), present the same two options as a plain-text numbered list and ask the user to type their choice number.
 
 <!-- FORK:strategy BEGIN -->
@@ -1375,160 +1381,9 @@ Context is now ready (PROJECT.md + `## Mode` + REQUIREMENTS + any PRODUCT-BRIEF)
 The Step-9 handoff then leads with the **first recommended step** of this plan. (The coarse roadmap below stays coarse; `plan-phase`'s elaboration gate refines it against whatever strategy artifacts get produced.)
 <!-- FORK:strategy END -->
 
-## 8. Create Roadmap
+## 8. Finalize project context
 
-Display stage banner:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- GSD ► CREATING ROADMAP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-◆ Spawning roadmapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
-```
-
-**ROADMAP.md template — mode-aware emit.** When generating the initial ROADMAP.md:
-
-- If `PROJECT_MODE=mvp`: under each `### Phase N:` header, emit `**Mode:** mvp` on the line immediately following `**Goal:**`. This sets every initial phase to MVP mode (per Phase-4-Persistence decision: per-phase mode, not project-wide config).
-- If `PROJECT_MODE=standard`: emit the standard ROADMAP.md template with no `**Mode:**` lines (Horizontal Layers standard template — no behavioral change for users who pick Horizontal Layers).
-
-Example MVP-mode emit for Phase 1:
-
-```markdown
-### Phase 1: [Name]
-**Goal:** [Goal]
-**Mode:** mvp
-**Success Criteria**:
-1. [Criterion]
-```
-
-Pass `PROJECT_MODE` to the roadmapper so it applies the correct template.
-
-Spawn gsd-roadmapper agent with path references:
-
-```text
-Agent(prompt="
-<planning_context>
-
-<files_to_read>
-- .planning/PROJECT.md (Project context)
-- .planning/REQUIREMENTS.md (v1 Requirements)
-- .planning/research/SUMMARY.md (Research findings - if exists)
-- .planning/config.json (Granularity and mode settings)
-</files_to_read>
-
-${AGENT_SKILLS_ROADMAPPER}
-
-</planning_context>
-
-<instructions>
-Create roadmap:
-1. Derive phases from requirements (don't impose structure)
-2. Map every v1 requirement to exactly one phase
-3. Derive 2-5 success criteria per phase (observable user behaviors)
-4. Validate 100% coverage
-5. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability)
-6. Return ROADMAP CREATED with summary
-
-Write files first, then return. This ensures artifacts persist even if context is lost.
-</instructions>
-", subagent_type="gsd-roadmapper", model="{roadmapper_model}", description="Create roadmap")
-```
-
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
-
-**Handle roadmapper return:**
-
-**If `## ROADMAP BLOCKED`:**
-
-- Present blocker information
-- Work with user to resolve
-- Re-spawn when resolved
-
-**If `## ROADMAP CREATED`:**
-
-Read the created ROADMAP.md and present it nicely inline:
-
-```
----
-
-## Proposed Roadmap
-
-**[N] phases** | **[X] requirements mapped** | All v1 requirements covered ✓
-
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 1 | [Name] | [Goal] | [REQ-IDs] | [count] |
-| 2 | [Name] | [Goal] | [REQ-IDs] | [count] |
-| 3 | [Name] | [Goal] | [REQ-IDs] | [count] |
-...
-
-### Phase Details
-
-**Phase 1: [Name]**
-Goal: [goal]
-Requirements: [REQ-IDs]
-Success criteria:
-1. [criterion]
-2. [criterion]
-3. [criterion]
-
-**Phase 2: [Name]**
-Goal: [goal]
-Requirements: [REQ-IDs]
-Success criteria:
-1. [criterion]
-2. [criterion]
-
-[... continue for all phases ...]
-
----
-```
-
-**If auto mode:** Skip approval gate — auto-approve and commit directly.
-
-**CRITICAL: Ask for approval before committing (interactive mode only):**
-
-Use AskUserQuestion:
-
-- header: "Roadmap"
-- question: "Does this roadmap structure work for you?"
-- options:
-  - "Approve" — Commit and continue
-  - "Adjust phases" — Tell me what to change
-  - "Review full file" — Show raw ROADMAP.md
-
-**If "Approve":** Continue to commit.
-
-**If "Adjust phases":**
-
-- Get user's adjustment notes
-- Re-spawn roadmapper with revision context:
-
-  ```text
-  Agent(prompt="
-  <revision>
-  User feedback on roadmap:
-  [user's notes]
-
-  <files_to_read>
-  - .planning/ROADMAP.md (Current roadmap to revise)
-  </files_to_read>
-
-  ${AGENT_SKILLS_ROADMAPPER}
-
-  Update the roadmap based on feedback. Edit files in place.
-  Return ROADMAP REVISED with changes made.
-  </revision>
-  ", subagent_type="gsd-roadmapper", model="{roadmapper_model}", description="Revise roadmap")
-  ```
-
-  > **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
-
-- Present revised roadmap
-- Loop until user approves
-
-**If "Review full file":** Display raw `cat .planning/ROADMAP.md`, then re-ask.
+The roadmap is **no longer created here.** It is generated once, after the strategy chain, by `/gsd:roadmap` (`gsd-roadmap`) — so it is born fully-informed against the locked strategy artifacts instead of coarse-then-patched. This step just finalizes the project instruction file and commits the context artifacts; the Step-9 handoff routes into the strategy chain (or straight to `/gsd:roadmap` when no strategy steps are recommended).
 
 **Generate or refresh project instruction file before final commit:**
 
@@ -1538,10 +1393,10 @@ gsd_run query generate-claude-md --output "$INSTRUCTION_FILE"
 
 This ensures new projects get the default GSD workflow-enforcement guidance and current project context in `$INSTRUCTION_FILE`.
 
-**Commit roadmap (after approval or auto mode):**
+**Commit project context (ROADMAP.md / STATE.md do not exist yet — they are written later by `/gsd:roadmap`):**
 
 ```bash
-gsd_run query commit "docs: create roadmap ([N] phases)" --files .planning/PROJECT.md .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"
+gsd_run query commit "docs: finalize project context" --files .planning/PROJECT.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"
 ```
 
 ## 9. Done
@@ -1561,7 +1416,7 @@ Present completion summary:
 | Config         | `.planning/config.json`     |
 | Research       | `.planning/research/`       |
 | Requirements   | `.planning/REQUIREMENTS.md` |
-| Roadmap        | `.planning/ROADMAP.md`      |
+| Roadmap        | created after your strategy chain |
 | Project guide  | `$INSTRUCTION_FILE`         |
 
 **[N] phases** | **[X] requirements** | Ready to build ✓
@@ -1584,7 +1439,7 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the f
   ║  AUTO-ADVANCING → STRATEGY: ${NEXT_STRATEGY}
   ╚══════════════════════════════════════════╝
   ```
-- **Else** (no strategy steps recommended): exit and invoke `SlashCommand("/gsd:discuss-phase 1 --auto")`.
+- **Else** (no strategy steps recommended — prototype archetype, or the user skipped to build): there is no strategy chain to carry the transition, so create the roadmap now — exit and invoke `SlashCommand("/gsd:roadmap --auto")`. `gsd-roadmap` creates the roadmap (coarse, since no strategy artifacts exist) and then chains onward to `/gsd:discuss-phase 1 --auto`.
 
 **If interactive mode AND `NEXT_STRATEGY` is set:**
 
@@ -1602,7 +1457,7 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the f
 ---
 
 **Also available:**
-- /gsd:discuss-phase 1 — skip strategy and start building directly
+- /gsd:roadmap — skip strategy and start building directly (creates the roadmap now, then points to discuss-phase)
   (declining a recommended step records a skip-ledger entry; the build loop honors whatever artifacts exist)
 
 ───────────────────────────────────────────────────────────────
@@ -1610,52 +1465,18 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the f
 
 **If interactive mode AND `NEXT_STRATEGY` is empty** (straight to build):
 
-Check if Phase 1 has UI indicators (look for `**UI hint**: yes` in Phase 1 detail section of ROADMAP.md):
-
-```bash
-PHASE1_SECTION=$(gsd_run query roadmap.get-phase 1 2>/dev/null)
-PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" || echo "false")
-```
-
-**If Phase 1 has UI (`PHASE1_HAS_UI` is `true`):**
+No strategy chain carries this transition and no ROADMAP.md exists yet, so the next step is to create the roadmap. Point the user at `/gsd:roadmap` — it creates the roadmap (coarse, since no strategy artifacts exist) and then points onward to `/gsd:discuss-phase 1`:
 
 ```
 ───────────────────────────────────────────────────────────────
 
 ## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
 
-**Phase 1: [Phase Name]** — [Goal from ROADMAP.md]
+**[${PROJECT_CODE}] ${PROJECT_TITLE}** — requirements scoped; roadmap pending
 
 /clear then:
 
-/gsd:discuss-phase 1 — gather context and clarify approach
-
----
-
-**Also available:**
-- /gsd:ui-phase 1 — generate UI design contract (recommended for frontend phases)
-- /gsd:plan-phase 1 — skip discussion, plan directly
-
-───────────────────────────────────────────────────────────────
-```
-
-**If Phase 1 has no UI:**
-
-```
-───────────────────────────────────────────────────────────────
-
-## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
-
-**Phase 1: [Phase Name]** — [Goal from ROADMAP.md]
-
-/clear then:
-
-/gsd:discuss-phase 1 — gather context and clarify approach
-
----
-
-**Also available:**
-- /gsd:plan-phase 1 — skip discussion, plan directly
+/gsd:roadmap — generate the roadmap, then start building
 
 ───────────────────────────────────────────────────────────────
 ```
@@ -1673,8 +1494,8 @@ PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" 
   - `PITFALLS.md`
   - `SUMMARY.md`
 - `.planning/REQUIREMENTS.md`
-- `.planning/ROADMAP.md`
-- `.planning/STATE.md`
+- `.planning/ROADMAP.md` — **not written here**; created after the strategy chain by `/gsd:roadmap`
+- `.planning/STATE.md` — **not written here**; seeded by the roadmapper via `/gsd:roadmap`
 - `$INSTRUCTION_FILE` (runtime-derived via the shared `getProjectInstructionFile` policy: `AGENTS.md` for codex/opencode/kilo/kimi, `.github/copilot-instructions.md` for copilot, `GEMINI.md` for gemini/antigravity, `.claude/CLAUDE.md` for claude)
 
 </output>
@@ -1691,14 +1512,10 @@ PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" 
 - [ ] Requirements gathered (from research or conversation)
 - [ ] User scoped each category (v1/v2/out of scope)
 - [ ] REQUIREMENTS.md created with REQ-IDs → **committed**
-- [ ] gsd-roadmapper spawned with context
-- [ ] Roadmap files written immediately (not draft)
-- [ ] User feedback incorporated (if any)
-- [ ] ROADMAP.md created with phases, requirement mappings, success criteria
-- [ ] STATE.md initialized
-- [ ] REQUIREMENTS.md traceability updated
+- [ ] Roadmap **deferred** to `/gsd:roadmap` (created once after the strategy chain, born fully-informed) — not spawned here
+- [ ] `<!-- roadmap-mode: ... -->` marker persisted in PROJECT.md (Step 7.5) so the deferred roadmap applies the correct MVP/standard template
 - [ ] `$INSTRUCTION_FILE` generated with GSD workflow guidance (runtime-derived via the shared `getProjectInstructionFile` policy — `AGENTS.md` for codex/opencode/kilo/kimi, `.github/copilot-instructions.md` for copilot, `GEMINI.md` for gemini/antigravity, `.claude/CLAUDE.md` for claude; an existing hand-crafted file without GSD markers is left untouched unless `--force`)
-- [ ] `## Strategy Plan` written from the archetype (Step 7.6); user directed to its first recommended step (or to `/gsd:discuss-phase 1` when no strategy steps are recommended)
+- [ ] `## Strategy Plan` written from the archetype (Step 7.6); user directed to its first recommended step (or to `/gsd:roadmap` when no strategy steps are recommended)
 
 **Atomic commits:** Each phase commits its artifacts immediately. If context is lost, artifacts persist.
 

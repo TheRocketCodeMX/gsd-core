@@ -9,24 +9,32 @@ const fs = require('fs');
 const path = require('path');
 
 const WORKFLOW = path.join(__dirname, '..', 'gsd-core', 'workflows', 'new-project.md');
+// 2026-07-14 roadmap-after-strategy reorder: new-project still owns the Vertical MVP /
+// Horizontal Layers PROMPT (Step 7.5) and persists the choice as a `roadmap-mode:`
+// marker, but the ROADMAP.md per-phase template rule (`**Mode:** mvp` vs standard) moved
+// into the deferred gsd-roadmap skill, which now creates the roadmap. Assert each contract
+// against the file that now owns it.
+const ROADMAP_WF = path.join(__dirname, '..', 'gsd-core', 'workflows', 'roadmap.md');
 
-function parseNewProjectContract(content) {
-  const lines = content.split(/\r?\n/);
-  const lowerLines = lines.map(line => line.toLowerCase());
+function parseNewProjectContract(content, roadmapContent) {
+  const lowerLines = content.split(/\r?\n/).map(line => line.toLowerCase());
+  const roadmapLower = roadmapContent.toLowerCase();
   return {
     hasVerticalMvpOption: lowerLines.some(line => line.includes('vertical mvp')),
     hasHorizontalLayersOption: lowerLines.some(line => line.includes('horizontal layers')),
-    hasModeMvpTemplateLine: lowerLines.some(line => line.includes('**mode:** mvp')),
-    hasHorizontalStandardFallback: lowerLines.some(line =>
-      (line.includes('horizontal') && line.includes('standard')) ||
-      (line.includes('standard') && line.includes('horizontal')) ||
-      (line.includes('no mode line'))
-    ),
+    // new-project must persist the choice for the deferred roadmap.
+    persistsRoadmapModeMarker: content.includes('roadmap-mode:'),
+    // The template rule now lives in the gsd-roadmap skill.
+    hasModeMvpTemplateLine: roadmapLower.includes('**mode:** mvp'),
+    hasStandardFallback: roadmapLower.includes('standard') && roadmapLower.includes('no `**mode:**`'),
   };
 }
 
 describe('new-project — MVP mode prompt', () => {
-  const contract = parseNewProjectContract(fs.readFileSync(WORKFLOW, 'utf-8'));
+  const contract = parseNewProjectContract(
+    fs.readFileSync(WORKFLOW, 'utf-8'),
+    fs.readFileSync(ROADMAP_WF, 'utf-8'),
+  );
 
   test('workflow includes Vertical MVP option in mode prompt', () => {
     assert.ok(contract.hasVerticalMvpOption, 'must mention Vertical MVP option');
@@ -36,12 +44,16 @@ describe('new-project — MVP mode prompt', () => {
     assert.ok(contract.hasHorizontalLayersOption, 'must mention Horizontal Layers option');
   });
 
-  test('ROADMAP template emits **Mode:** mvp under Vertical MVP path', () => {
-    assert.ok(contract.hasModeMvpTemplateLine, 'must emit **Mode:** mvp on initial roadmap phases under Vertical MVP');
+  test('new-project persists the roadmap-mode choice for the deferred roadmap', () => {
+    assert.ok(contract.persistsRoadmapModeMarker, 'must persist a roadmap-mode marker for gsd-roadmap');
   });
 
-  test('workflow falls back to standard template when Horizontal Layers picked', () => {
-    assert.ok(contract.hasHorizontalStandardFallback, 'must specify fallback to standard template');
+  test('gsd-roadmap template emits **Mode:** mvp under Vertical MVP path', () => {
+    assert.ok(contract.hasModeMvpTemplateLine, 'gsd-roadmap must emit **Mode:** mvp on phases under Vertical MVP');
+  });
+
+  test('gsd-roadmap falls back to standard template when Horizontal Layers picked', () => {
+    assert.ok(contract.hasStandardFallback, 'gsd-roadmap must specify the standard (no **Mode:**) fallback');
   });
 });
 
