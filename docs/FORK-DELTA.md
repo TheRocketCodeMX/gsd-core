@@ -222,7 +222,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-integration-checker.md` | fidelity | markers | seam/telemetry + design-source stance |
 | `agents/gsd-intel-updater.md` | grounding | markers | `<source_grounding>` block |
 | `agents/gsd-pattern-mapper.md` | fidelity | markers | senior-quality + code-quality/source awareness |
-| `agents/gsd-phase-researcher.md` | fidelity | markers | rung-fit + source-grounding paras; one-line import (anchor) |
+| `agents/gsd-phase-researcher.md` | fidelity, context | markers | rung-fit + source-grounding paras; one-line import (anchor); ADR/DOMAIN-MODEL grounding para |
 | `agents/gsd-plan-checker.md` | fidelity | anchors-only | 983/1000-line LARGE budget; Canonical-References row + 3 gate bullets |
 | `agents/gsd-planner.md` | fidelity | anchors-only | size-gated (XL); senior-quality + Mode paras + Ship-Fast caveat |
 | `agents/gsd-project-researcher.md` | fidelity | markers | source-grounding para; one-line import (anchor) |
@@ -231,7 +231,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-security-auditor.md` | strategy | markers | SECURITY-STRATEGY parent bullet |
 | `agents/gsd-ui-checker.md` | fidelity | markers | FE-architecture/Mode tables + design-override principle |
 | `agents/gsd-ui-researcher.md` | fidelity | markers | Mode/FE-architecture tables; one-line import (anchor) |
-| `agents/gsd-verifier.md` | fidelity | markers | reward-hacking + architecture/strategy/design/mode-fit gates |
+| `agents/gsd-verifier.md` | fidelity, context | markers | reward-hacking + architecture/strategy/design/mode-fit gates; DOMAIN-MODEL/TEST-STRATEGY strategy-fit extension |
 | `bin/lib/ui-safety-gate.cjs` | fidelity, strategy | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard + UI-hint authority |
 | `commands/gsd/ns-manage.md` | learn | anchors-only | `learn` in requires + gsd-learn routing row |
 | `commands/gsd/ns-project.md` | strategy | anchors-only | 9 strategy skills in requires + routing rows |

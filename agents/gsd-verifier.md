@@ -422,10 +422,13 @@ Also run the empty-implementation / hardcoded-empty-data / log-only stub greps f
 
 <!-- FORK:fidelity BEGIN -->
 **Source-fidelity & integrity gates** — full procedures: @~/.claude/gsd-core/references/verifier-fidelity-gates.md
-- **Reward-hacking gate** (per `engineering-standards.md`): a check made to pass by tampering (weakened/skipped/trivially-passing test, hardcoded expected output) → 🛑.
-- **Architecture-fit:** the universal floor applies ALWAYS (skipped floor 🛑); ADR rung-fit both ways (under-build 🛑, over-build ⚠️).
+- **Reward-hacking gate** (per `engineering-standards.md`): a check made to pass by tampering → 🛑.
+- **Architecture-fit:** universal floor ALWAYS (skipped 🛑); ADR rung-fit both ways (under 🛑, over ⚠️).
 - **Strategy-fit:** honor `FRONTEND-ARCHITECTURE.md` + `SECURITY-STRATEGY.md` when present — 🛑 by blast radius, else ⚠️.
-- **Design-fit check** (when `gsd-tools query project mode` → `has_provided_design: true`): diff the built observable shape against the oracle (`.planning/DESIGN-INVENTORY.md` / UI-SPEC), never the raw design; fires on any field that backs a design-covered surface (schema/migration/DTO — not only UI). Invented or dropped user-facing field → 🛑 (the address-failure guard); none → "design-fit: N/A".
+<!-- FORK:context BEGIN -->
+Also honor `DOMAIN-MODEL.md` (subdomain classification) + `TEST-STRATEGY.md` (per-subdomain test levels) when present — a violation is a gap, same severity.
+<!-- FORK:context END -->
+- **Design-fit check** (when `gsd-tools query project mode` → `has_provided_design: true`): diff the built shape against the oracle, never the raw design; fires on any field that backs a design-covered surface. Invented or dropped user-facing field → 🛑 (the address-failure guard); none → "design-fit: N/A".
 - **Mode-fit:** *preserve/refactor* regions need parity evidence (unapproved drift 🛑); `design-delta` regions are parity-EXEMPT (Design-fit governs); vibe-coded-to-harden is intent-hardening, NOT behavior-parity; a silently-dropped LEGACY-INVENTORY capability 🛑.
 <!-- FORK:fidelity END -->
 

@@ -95,6 +95,9 @@ Your RESEARCH.md is consumed by `gsd-planner`:
 <!-- FORK:fidelity BEGIN -->
 **Source grounding (before any web research).** If PROJECT.md `## Mode` records a provided design (`gsd-tools query project mode` → `has_provided_design: true`) or `.planning/LEGACY-INVENTORY.md` / `.planning/DESIGN-INVENTORY.md` exists, **read those literal sources first** (per `@~/.claude/gsd-core/references/design-ingestion.md` / the inventory) and ground the phase's research in them. Never research the web for what the provided design or old code already answers, and never recommend an approach that contradicts the design's observable shape or the legacy's behavior-to-preserve (§ Source precedence in `exploration-and-adaptability.md`).
 <!-- FORK:fidelity END -->
+<!-- FORK:context BEGIN -->
+**ADR + domain grounding (before any web research).** Read the latest `.planning/adr/*.md` and `.planning/DOMAIN-MODEL.md` if they exist BEFORE researching: recommendations must fit the decided rung and subdomain types. If research argues for breaking a rung, flag it explicitly in RESEARCH.md — never silently contradict the ADR.
+<!-- FORK:context END -->
 
 ## Research Plan via Code Seam
 
