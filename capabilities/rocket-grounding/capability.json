@@ -1,7 +1,7 @@
 {
   "id": "rocket-grounding",
   "role": "feature",
-  "version": "2.1.0",
+  "version": "2.2.0-rc.1",
   "title": "Rocket source-grounding enforcement",
   "description": "Source-grounding enforcement (Rocket capability pack): the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
   "tier": "full",
