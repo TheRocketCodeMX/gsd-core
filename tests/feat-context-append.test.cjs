@@ -57,9 +57,11 @@ describe('roadmap capsule seed offer', () => {
 });
 
 describe('plan-phase freshness gate + curation (capability plan:pre contribution)', () => {
-  // The plan-phase host is frozen (phase6 shrink ceiling + #1169 config-leak
-  // guard), so the context capability delivers both behaviors as a plan:pre
-  // loop-hook contribution — no inline plan-phase.md patch.
+  // The context capability delivers both behaviors as a plan:pre loop-hook
+  // contribution; two marked FORK:context directive lines in plan-phase.md
+  // (§5.6 + §10) hard-route the fragment's orchestrator-scoped parts to the
+  // host (E2E Scenario 3 fix — ceiling raised to 94900, user-approved
+  // 2026-07-18; the fragment stays the single source of behavior + config).
   const capPath = 'capabilities/context/capability.json';
 
   test('context capability declares the plan:pre contribution carrying both behaviors', () => {
@@ -84,12 +86,28 @@ describe('plan-phase freshness gate + curation (capability plan:pre contribution
     assert.match(reg, /## Orchestrator curation \(<date>\)/, 'registry must include the curation layer heading');
   });
 
-  test('plan-phase renders plan:pre hooks in-context (upstream delivery path, unpatched)', () => {
+  test('plan-phase renders plan:pre hooks in-context (upstream delivery path)', () => {
     const wf = read('gsd-core/workflows/plan-phase.md');
     assert.match(wf, /loop render-hooks plan:pre/, 'plan:pre render-hooks call site');
     assert.match(wf, /Read the `activeHooks` array directly/, 'orchestrator reads the hook envelope in-context');
     assert.match(wf, /into\s*==\s*"planner"/, 'generic planner-contribution injection into the planner prompt');
-    assert.doesNotMatch(wf, /FORK:context/, 'plan-phase.md itself stays unpatched (frozen host)');
+  });
+
+  test('plan-phase hard-delivers the orchestrator parts via marked directives (E2E Scenario 3 fix)', () => {
+    const wf = read('gsd-core/workflows/plan-phase.md');
+    // §5.6 directive: host runs the fragment's freshness verify pre-planner.
+    assert.match(wf, /\*\*Context freshness gate:\*\*.*`context verify`.*never blocks/,
+      'host directive to run the freshness verify before any planner spawn');
+    assert.match(wf, /context_provenance/, 'gated on provenance (file evidence), not inline config');
+    // §10 directive: host applies curation before the checker spawn.
+    assert.match(wf, /\*\*Curation first:\*\*.*## Orchestrator curation \(<date>\).*pre-checker/,
+      'host directive to append the curation layer before spawning the checker');
+    // Both ride inside balanced FORK:context markers (2 pairs, manifest-tracked).
+    const pairs = (wf.match(/<!-- FORK:context BEGIN -->/g) || []).length;
+    assert.equal(pairs, 2, 'exactly 2 FORK:context marker pairs in plan-phase.md');
+    // #1169 stays satisfied: no inline config-get of a capability-owned key.
+    assert.doesNotMatch(wf, /config-get\s+context_lifecycle\./,
+      'directives must not read context_lifecycle.* config inline (#1169)');
   });
 });
 
