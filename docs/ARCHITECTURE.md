@@ -288,7 +288,7 @@ Runtime hooks that integrate with the host AI agent:
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `gsd-statusline.js` | `statusLine` | Displays model, task, directory, and context usage bar |
-| `gsd-context-monitor.js` | `PostToolUse` / `AfterTool` | **Inert no-op in this fork** — upstream injected agent-facing context warnings; this fork disabled it (kept wired so updates overwrite active versions). See [context-monitor.md](context-monitor.md). |
+| `gsd-context-monitor.js` | `PostToolUse` / `PreCompact` | **Calm knowledge-flush nudge in this fork** — same mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests a knowledge checkpoint (`/gsd:context flush`); on `PreCompact` it emits a final flush + re-anchor reminder. Main-session-only; gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`. See [context-monitor.md](context-monitor.md). |
 | `gsd-check-update.js` | `SessionStart` | Foreground trigger for the background update check |
 | `gsd-ensure-canonical-path.js` | `SessionStart` | For Claude Code plugin installs, symlinks `~/.claude/gsd-core/{bin,contexts,references,templates,workflows}` to the plugin's bundled tree so `@~/.claude/gsd-core/...` includes resolve; runs first in `SessionStart`, no-op in classic installs, self-heals after `claude plugin update` (#997) |
 | `gsd-check-update-worker.js` | (helper) | Background worker spawned by `gsd-check-update.js`; no direct event registration |
@@ -743,9 +743,9 @@ Runtime Engine (Claude Code / Gemini CLI)
     │   Reads: stdin (session JSON)
     │   Writes: stdout (formatted status), /tmp/claude-ctx-{session}.json (bridge)
     │
-    ├── PostToolUse/AfterTool event ──► gsd-context-monitor.js
+    ├── PostToolUse/PreCompact event ──► gsd-context-monitor.js
     │   Reads: stdin (tool event JSON), /tmp/claude-ctx-{session}.json (bridge)
-    │   Writes: stdout (hookSpecificOutput with additionalContext warning)
+    │   Writes: stdout (hookSpecificOutput with additionalContext flush nudge)
     │
     └── SessionStart event
         ├──► gsd-ensure-canonical-path.js   (runs first)
@@ -757,17 +757,18 @@ Runtime Engine (Claude Code / Gemini CLI)
              Writes: ~/.claude/cache/gsd-update-check.json (spawns background process)
 ```
 
-### Context Monitor Thresholds
+### Context Monitor Thresholds (calm knowledge-flush nudge)
 
+This fork repurposed the hook: instead of panicked context-limit warnings it emits a calm suggestion to checkpoint durable knowledge (`/gsd:context flush`) before compaction. Thresholds are on `used_pct` (higher = more context consumed) and configurable via the `context_lifecycle` slice.
 
-| Remaining Context | Level    | Agent Behavior                          |
-| ----------------- | -------- | --------------------------------------- |
-| > 35%             | Normal   | No warning injected                     |
-| ≤ 35%             | WARNING  | "Avoid starting new complex work"       |
-| ≤ 25%             | CRITICAL | "Context nearly exhausted, inform user" |
+| `used_pct`                          | Level | Agent Behavior                                             |
+| ----------------------------------- | ----- | ---------------------------------------------------------- |
+| < `hook_warn_pct` (default 90)      | Normal | No message injected                                       |
+| ≥ `hook_warn_pct` (default 90)      | warn  | One calm flush suggestion (knowledge checkpoint)           |
+| ≥ `hook_urge_pct` (default 95)      | urge  | A single firmer repeat                                     |
+| `PreCompact` (any usage)            | —     | Unconditional final flush + re-anchor reminder             |
 
-
-Debounce: 5 tool uses between repeated warnings. Severity escalation (WARNING→CRITICAL) bypasses debounce.
+Debounce: 5 tool uses between repeated messages. A `warn → urge` escalation bypasses the debounce and fires once. Main-session-only: subagents (no metrics file) stay silent.
 
 ### Safety Properties
 
@@ -775,7 +776,7 @@ Debounce: 5 tool uses between repeated warnings. Severity escalation (WARNING→
 - stdin timeout guard (3s) prevents hanging on pipe issues
 - Stale metrics (>60s old) are ignored
 - Missing bridge files handled gracefully (subagents, fresh sessions)
-- Context monitor is advisory — never issues imperative commands that override user preferences
+- Context monitor is advisory and calm-by-contract — it suggests a knowledge checkpoint, never issues imperative or panic-toned commands (CI-linted: no "CRITICAL"/"URGENT"/"immediately"/"STOP")
 
 ### Package Legitimacy Gate (v1.42.1)
 

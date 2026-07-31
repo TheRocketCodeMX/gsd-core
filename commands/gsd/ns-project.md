@@ -5,7 +5,7 @@ argument-hint: ""
 allowed-tools:
   - Read
   - Skill
-requires: [new-project, new-milestone, roadmap, complete-milestone, audit-milestone, milestone-summary, import, ingest-docs, profile-user, review-backlog, discover-product, model-domain, recommend-architecture, security-strategy, frontend-architecture, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory]
+requires: [new-project, new-milestone, roadmap, context, complete-milestone, audit-milestone, milestone-summary, import, ingest-docs, profile-user, review-backlog, discover-product, model-domain, recommend-architecture, security-strategy, frontend-architecture, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory]
 ---
 
 Route to the appropriate project / milestone skill based on the user's intent.
@@ -19,6 +19,7 @@ run the project-level Strategy Plan steps (normally sequenced by
 | Start a new project | gsd-new-project |
 | Create a new milestone | gsd-new-milestone |
 | Generate or regenerate the project roadmap | gsd-roadmap |
+| Seed/verify/grow durable project knowledge (context capsules) | gsd-context |
 | Complete the current milestone | gsd-complete-milestone |
 | Audit a milestone for issues | gsd-audit-milestone |
 | Summarize milestone status | gsd-milestone-summary |

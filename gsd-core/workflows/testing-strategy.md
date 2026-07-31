@@ -81,6 +81,10 @@ Ask (AskUserQuestion, header "E2E", or a text list): "Which flows are so essenti
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
 - **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them. **If it's absent (greenfield):** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline, write them into TEST-STRATEGY.md's Notes as the initial standards, and offer to generate `TESTING-STANDARDS.md` from them.
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 7: Write TEST-STRATEGY.md
 
 Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, the **CI execution map** (which tiers run at the PR gate vs merge-to-main vs nightly — it feeds `/gsd:cicd-strategy`), and TDD stance (render `tdd_mode=false` as "off", `true` as "on").

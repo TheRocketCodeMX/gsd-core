@@ -4,7 +4,7 @@
 
 **v2.0.0 realignment status (Epic #13):** the `realign/2.0.0` tree is upstream **v1.6.1** (`1c352d1e`) + this delta, re-ported. Entries below are reconciled to that ported reality — features upstream absorbed between v1.4.0 and v1.6.1 are noted as **upstream-absorbed** and no longer tracked as fork patches.
 
-**Rocket capability pack (issue #25):** the fork's three hardcoded gsd-tools command families (`learn`, `project`, `grounding`) and the `workflow.grounding_gate` config key were converted from upstream-file patches into first-party capabilities built on upstream's own ADR-959 extension architecture (`capabilities/rocket-learn/`, `capabilities/rocket-strategy/`, `capabilities/rocket-grounding/` + `src/{learn,grounding,project}-command-router.cts`). `gsd-core/bin/gsd-tools.cjs` and both `gsd-core/bin/shared/config-*.manifest.json` manifests now carry **zero** fork patches. Measured FORK-PATCHES entry count: **90 → 85** (−3 gsd-tools entries, −2 config-manifest entries; the new surface is additive files, not patches). A tripwire in `tests/strategy-config-and-marker-contracts.test.cjs` fails loudly if an upstream merge re-introduces a hardcoded `case 'learn'|'project'|'grounding'` that would shadow the capability routers.
+**Rocket capability pack (issue #25):** the fork's three hardcoded gsd-tools command families (`learn`, `project`, `grounding`) and the `workflow.grounding_gate` config key were converted from upstream-file patches into first-party capabilities built on upstream's own ADR-959 extension architecture (`capabilities/learn/`, `capabilities/strategy/`, `capabilities/grounding/` + `src/{learn,grounding,project}-command-router.cts`). `gsd-core/bin/gsd-tools.cjs` and both `gsd-core/bin/shared/config-*.manifest.json` manifests now carry **zero** fork patches. Measured FORK-PATCHES entry count: **90 → 85** (−3 gsd-tools entries, −2 config-manifest entries; the new surface is additive files, not patches). A tripwire in `tests/strategy-config-and-marker-contracts.test.cjs` fails loudly if an upstream merge re-introduces a hardcoded `case 'learn'|'project'|'grounding'` that would shadow the capability routers.
 
 This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 
@@ -16,13 +16,13 @@ This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 | Tag | Feature |
 |---|---|
 | `fidelity` | Source-fidelity + senior-quality contract (engineering-standards, design/mode/rung gates, TEST-INTEGRITY, untrusted-input boundary, AI-test quality) |
-| `strategy` | Strategy chain + Mode + Waves 0–5 (discover-product → model-domain → architecture → security/testing/infra/cicd, Strategy Plan, design detection, roadmap elaboration); the `project` command family is capability-owned (`capabilities/rocket-strategy/`, issue #25) |
-| `grounding` | Source-grounding enforcement (`## Grounding` block, `check.grounding-plan` gate, grounding resolver + index-refresh hook, Sources of Truth); the `grounding` command family + `workflow.grounding_gate` config slice are capability-owned (`capabilities/rocket-grounding/`, issue #25) |
+| `strategy` | Strategy chain + Mode + Waves 0–5 (discover-product → model-domain → architecture → security/testing/infra/cicd, Strategy Plan, design detection, roadmap elaboration); the `project` command family is capability-owned (`capabilities/strategy/`, issue #25) |
+| `grounding` | Source-grounding enforcement (`## Grounding` block, `check.grounding-plan` gate, grounding resolver + index-refresh hook, Sources of Truth); the `grounding` command family + `workflow.grounding_gate` config slice are capability-owned (`capabilities/grounding/`, issue #25) |
 | `exploration` | Mandatory parallel phase exploration (scout-codebase doctrine) |
 | `dod` | Cross-cutting Definition-of-Done requirements (`[CROSS-CUTTING]`) |
-| `learn` | `/gsd:learn` teaching system (catalog, progress, visual server); the `learn` command family is capability-owned (`capabilities/rocket-learn/`, issue #25) |
+| `learn` | `/gsd:learn` teaching system (catalog, progress, visual server); the `learn` command family is capability-owned (`capabilities/learn/`, issue #25) |
 | `seeds` | `--list-seeds` read-only seed browser — **upstream-absorbed** (#722): upstream v1.6.1 ships `list-seeds` natively (gsd-tools case, workflow, capture routing, help rows); only the fork's extra test coverage remains fork-owned |
-| `context-monitor` | Deliberate no-op'ing of the upstream context-monitor hook |
+| `context-monitor` | The `gsd-context-monitor.js` hook — revived as the **calm knowledge-flush nudge** (same mechanism as upstream, opposite tone; part of the `context` capability), plus the removed upstream context-monitor tests |
 | `no-context-fork` | Removal of `context: fork` from heavy skills (it breaks subagent spawning) |
 | `identity` | Fork identity: npm coordinate, repo slug, legacy-cleanup extension, rider config lines |
 | `release` | Fork release plumbing: NPM token auth, update-changelog-preview tooling, sync-upstream script. The changeset-payload shipping + dual-layout requires are **upstream-absorbed** (#935/#938: upstream installs `scripts/changeset/` as a sibling of `gsd-core/`, so the repo-relative requires resolve installed) |
@@ -92,7 +92,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/security-strategy.md`
 - `gsd-core/workflows/strategy-chain/modes/advance.md`
 - `gsd-core/workflows/testing-strategy.md`
-- `capabilities/rocket-strategy/capability.json`
+- `capabilities/strategy/capability.json`
 - `src/project-command-router.cts`
 - `src/project.cts`
 - `tests/feat-project-strategy-done.test.cjs`
@@ -110,7 +110,7 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 ### grounding — source-grounding resolver, gate, hook
 
-- `capabilities/rocket-grounding/capability.json`
+- `capabilities/grounding/capability.json`
 - `gsd-core/references/grounding-citations.md`
 - `gsd-core/references/plan-phase-coverage-gate.md`
 - `hooks/gsd-grounding-index-refresh.js`
@@ -127,9 +127,29 @@ Upstream-absorbed (shipped natively by upstream v1.6.1 — no longer fork-owned;
 
 - `gsd-core/references/exploration-and-adaptability.md`
 
+### context — context-lifecycle capability (knowledge lifecycle: capsules, MASTER-CONTEXT, verify, calm flush hook)
+
+- `capabilities/context/capability.json`
+- `commands/gsd/context.md`
+- `gsd-core/references/context-lifecycle.md`
+- `gsd-core/templates/context-capsule.md`
+- `gsd-core/templates/master-context.md`
+- `gsd-core/templates/milestone-capsule.md`
+- `gsd-core/workflows/context.md`
+- `src/context.cts`
+- `src/context-command-router.cts`
+- `tests/feat-context-append.test.cjs`
+- `tests/feat-context-core.test.cjs`
+- `tests/feat-context-enforcement.test.cjs`
+- `tests/feat-context-hook.test.cjs`
+- `tests/feat-context-router.test.cjs`
+- `tests/feat-context-skill.test.cjs`
+
+The `context` command family is capability-owned (`capabilities/context/capability.json` + `src/context-command-router.cts`, backed by `src/context.cts`) and contributes a `plan:pre` fragment into the planner (freshness gate + `## Orchestrator curation` layer). The revived `hooks/gsd-context-monitor.js` calm flush nudge and the fork's context markers in `execute-phase.md`, `discuss-phase.md`, `resume-project.md`, `transition.md`, `new-project.md`, `new-milestone.md`, `complete-milestone.md` and the executor/verifier/researcher agents are tracked as modified-file patches below (feature `context`). `skills/gsd-context/SKILL.md` is a generated projection of `commands/gsd/context.md` (see *Generated / regenerable*).
+
 ### learn — /gsd:learn teaching system
 
-- `capabilities/rocket-learn/capability.json`
+- `capabilities/learn/capability.json`
 - `commands/gsd/learn.md`
 - `gsd-core/references/learn-catalog.md`
 - `gsd-core/references/teaching-pattern.md`
@@ -214,11 +234,11 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-doc-classifier.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-doc-synthesizer.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-domain-researcher.md` | fidelity | anchors-only | one-line import |
-| `agents/gsd-executor.md` | fidelity | markers | senior-quality contract, Mode awareness, TEST-INTEGRITY RULE |
+| `agents/gsd-executor.md` | fidelity, context | markers | senior-quality contract, Mode awareness, TEST-INTEGRITY RULE; mirror-deviations-to-frontmatter instruction (1 context marker pair) |
 | `agents/gsd-integration-checker.md` | fidelity | markers | seam/telemetry + design-source stance |
 | `agents/gsd-intel-updater.md` | grounding | markers | `<source_grounding>` block |
 | `agents/gsd-pattern-mapper.md` | fidelity | markers | senior-quality + code-quality/source awareness |
-| `agents/gsd-phase-researcher.md` | fidelity | markers | rung-fit + source-grounding paras; one-line import (anchor) |
+| `agents/gsd-phase-researcher.md` | fidelity, context | markers | rung-fit + source-grounding paras; one-line import (anchor); ADR/DOMAIN-MODEL grounding para |
 | `agents/gsd-plan-checker.md` | fidelity | anchors-only | 983/1000-line LARGE budget; Canonical-References row + 3 gate bullets |
 | `agents/gsd-planner.md` | fidelity | anchors-only | size-gated (XL); senior-quality + Mode paras + Ship-Fast caveat |
 | `agents/gsd-project-researcher.md` | fidelity | markers | source-grounding para; one-line import (anchor) |
@@ -227,11 +247,11 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-security-auditor.md` | strategy | markers | SECURITY-STRATEGY parent bullet |
 | `agents/gsd-ui-checker.md` | fidelity | markers | FE-architecture/Mode tables + design-override principle |
 | `agents/gsd-ui-researcher.md` | fidelity | markers | Mode/FE-architecture tables; one-line import (anchor) |
-| `agents/gsd-verifier.md` | fidelity | markers | reward-hacking + architecture/strategy/design/mode-fit gates |
+| `agents/gsd-verifier.md` | fidelity, context | markers | reward-hacking + architecture/strategy/design/mode-fit gates; DOMAIN-MODEL/TEST-STRATEGY strategy-fit extension |
 | `bin/lib/ui-safety-gate.cjs` | fidelity, strategy | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard + UI-hint authority |
 | `commands/gsd/ns-manage.md` | learn | anchors-only | `learn` in requires + gsd-learn routing row |
 | `commands/gsd/ns-project.md` | strategy | anchors-only | 9 strategy skills in requires + routing rows |
-| `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row: "Inert no-op in this fork" |
+| `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row + thresholds section: the calm knowledge-flush nudge (revived hook) |
 | `eslint.config.mjs` | identity | anchors-only | `_reference/**` ignore + generated-lib rider lines |
 | `.gitignore` | identity | anchors-only | generated project/grounding/learn .cjs + `_reference/` riders |
 | `.github/workflows/release.yml` | release | anchors-only | `NODE_AUTH_TOKEN` env on publish/dry-run steps |
@@ -241,20 +261,24 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/templates/phase-prompt.md` | grounding | anchors-only | `## Grounding` block (inside fenced template body) |
 | `gsd-core/templates/project.md` | strategy, grounding | anchors-only | `## Mode`, `## Sources`, `## Strategy Plan` + Skip-ledger (inside fenced template body) |
 | `gsd-core/templates/requirements.md` | dod | anchors-only | `[CROSS-CUTTING]` traceability row |
+| `gsd-core/templates/summary.md` | context | anchors-only | `deviations:` frontmatter field + guidance (structured mirror of `## Deviations from Plan`, inside fenced template body) |
 | `gsd-core/templates/verification-report.md` | fidelity | anchors-only | Mode & Source Fidelity verdict table (inside fenced template body) |
 | `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
-| `gsd-core/workflows/discuss-phase.md` | exploration | anchors-only | SIZE-GATED (29995/30000 bytes!); mandatory-exploration scout step + engineering-standards/canonical-refs lines |
-| `gsd-core/workflows/execute-phase.md` | fidelity | anchors-only | SIZE-GATED (89972/90000 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle |
+| `gsd-core/workflows/complete-milestone.md` | context | markers | acknowledge step routes each deferral into `.planning/milestones/next/<label>-CAPSULE.md` (create from template if absent), in addition to the STATE.md Deferred Items entry (1 marker pair) |
+| `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | SIZE-GATED (32000 budget); mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log (2 marker pairs) |
+| `gsd-core/workflows/discuss-phase/resume.md` | context | markers | capsule-aware existing-CONTEXT branch: provenance non-null → "Extend it" (append a Discussion-additions layer); provenance-null path byte-identical (1 marker pair) |
+| `gsd-core/workflows/execute-phase.md` | fidelity, context | anchors-only + markers | SIZE-GATED (93583/93600 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle (anchors); executor reads capsule Locked Decisions + Phase-Scoped Pitfalls, verifier reads capsule What Done Looks Like (2 marker pairs) |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
-| `gsd-core/workflows/new-milestone.md` | strategy, validation | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors) |
-| `gsd-core/workflows/new-project.md` | strategy, validation | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors) |
-| `gsd-core/workflows/plan-phase.md` | grounding | anchors-only | SIZE-GATED (89119/90000 bytes!); elaboration gate, grounding gate, UI-hint authority, oracle files |
+| `gsd-core/workflows/new-milestone.md` | strategy, validation, context | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors); Step-1 detects `milestones/next/<label>-CAPSULE.md` files, Step 3.1 matches on the resolved label, folds carried-forward items, then moves the capsule to `milestones/consumed/` (2 context marker pairs) |
+| `gsd-core/workflows/new-project.md` | strategy, validation, context | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors); after the deep-questioning loop, append each elicitation round to `.planning/PROJECT-DISCUSSION-LOG.md` (1 context marker pair) |
+| `gsd-core/workflows/plan-phase.md` | grounding, context | anchors-only + markers | SIZE-GATED (94894/<94900 bytes! — ceiling raised 94519→94900, user-approved 2026-07-18, ratchet down at next upstream shrink); elaboration gate, grounding gate, UI-hint authority, oracle files (anchors); §5.6 context freshness-gate directive + §10 `## Orchestrator curation` pre-checker directive routing the context plan:pre contribution fragment to the host (2 context marker pairs) |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
+| `gsd-core/workflows/resume-project.md` | context | markers | load_state re-anchor: read MASTER-CONTEXT.md + active capsule (via `context provenance`) + last SUMMARY, then `context verify --phase`; skips silently when MASTER-CONTEXT.md is absent (1 marker pair) |
 | `gsd-core/workflows/secure-phase.md` | grounding | markers | SECURITY-STRATEGY posture read |
-| `gsd-core/workflows/transition.md` | strategy | markers | `## Mode` drift check |
+| `gsd-core/workflows/transition.md` | strategy, context | markers | `## Mode` drift check; phase-end promotion of master-worthy discoveries into MASTER-CONTEXT.md (Load-bearing verified facts / Standing rules) + `## Orchestrator curation` layer on later-phase capsules (1 context marker pair) |
 | `gsd-core/workflows/ui-phase.md` | fidelity | anchors-only | two in-list files_to_read lines |
 | `gsd-core/workflows/ui-review.md` | grounding | anchors-only | one in-list design-oracle line |
 | `gsd-core/workflows/ultraplan-phase.md` | grounding | markers | grounding carried into the cloud prompt (in-fence part: anchors) |
@@ -296,8 +320,8 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 
 The fork version replaces upstream wholesale; during realignment keep the fork file and reconcile upstream changes into it by hand (not vice versa):
 
-- `hooks/gsd-context-monitor.js` — deliberately an **inert no-op** (reads and discards stdin, exits 0). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation.
-- `docs/context-monitor.md` — rewritten to document the disablement.
+- `hooks/gsd-context-monitor.js` — the fork's **calm knowledge-flush nudge** (part of the `context` capability). Same PostToolUse/PreCompact mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests `/gsd:context flush`; on PreCompact it emits a final flush + re-anchor reminder. Main-session-only, gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`, calm-by-contract (CI-linted tone). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation.
+- `docs/context-monitor.md` — rewritten to document the revived calm knowledge-flush nudge (thresholds, tone contract, config keys).
 - `gsd-core/references/scout-codebase.md` — upstream's lazy map-selection table was rewritten into the fork's mandatory-exploration doctrine (parallel explorer agents, rationalization-killers, confirm-or-refute gate); the map-selection table survives inside it.
 - `CHANGELOG.md` — fork-owned release history (fork versions 1.5.0+). Keep ours; upstream's changelog is not merged.
 
@@ -313,9 +337,9 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 - `docs/INVENTORY.md`, `docs/INVENTORY-MANIFEST.json` — regenerate with the inventory tooling after the port.
 - `package-lock.json` — regenerate with `npm install` (the fork is zero-runtime-deps; the lock reflects devDependencies only).
-- `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 10 fork skills + the ns-router skill bodies are projections of `commands/gsd/*.md`).
+- `skills/**/SKILL.md` — regenerate with `npm run gen:plugin-skills` (the 11 fork skills — including `skills/gsd-context/SKILL.md` — + the ns-router skill bodies are projections of `commands/gsd/*.md`).
 - `tests/agent-size-baseline.json`, `tests/workflow-size-baseline.json` — regenerate with `npm run size:baseline` after ports change agent/workflow sizes.
-- `gsd-core/bin/lib/capability-registry.cjs`, `docs/reference/capability-matrix.md` — committed generated artifacts that now include the rocket capability pack; regenerate with `node scripts/gen-capability-registry.cjs --write && node scripts/gen-capability-matrix.cjs --write` (their own staleness tests fail loudly if an upstream merge clobbers the rocket entries).
+- `gsd-core/bin/lib/capability-registry.cjs`, `docs/reference/capability-matrix.md` — committed generated artifacts that now include the rocket capability pack **and the `context` capability**; regenerate with `node scripts/gen-capability-registry.cjs --write && node scripts/gen-capability-matrix.cjs --write` (their own staleness tests fail loudly if an upstream merge clobbers the entries).
 
 ---
 

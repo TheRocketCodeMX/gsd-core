@@ -657,6 +657,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 ### Knowledge & Context
 
+- **`/gsd:context [seed|scout|flush|master] [--milestone] [--phase <N>] [--text]`** — Seed, verify, and grow durable project knowledge. `seed` — the orchestrator itself writes quality-stamped context capsules per phase (plus MASTER-CONTEXT when cross-phase content exists), anchors verified at birth; `scout` — explorer subagents confirm-or-refute a capsule's facts against the live code; `flush` — calm knowledge checkpoint (MASTER + active capsule + session position); `master` — curate MASTER-CONTEXT back to its ~150-line bound.
 - **`/gsd:graphify [build|query <term>|status|diff]`** — Build, query, and inspect the project knowledge graph in `.planning/graphs/`.
 - **`/gsd:mempalace-recall`** — Recall prior decisions, patterns, and surprises from MemPalace before planning.
 - **`/gsd:mempalace-capture [artifact-type]`** — File a phase artifact into MemPalace and mirror decision facts into its temporal KG.
@@ -680,7 +681,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 These six skills exist primarily for the model to perform two-stage hierarchical routing across 60+ skills. You can invoke them directly when you want to browse a category interactively.
 
-- **`/gsd-context`** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace).
+- **`gsd-context` (router)** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace). Not to be confused with the `/gsd:context` knowledge-lifecycle command above.
 - **`/gsd-ideate`** — Exploration / capture routing (explore, sketch, spike, spec, capture).
 - **`/gsd-manage`** — Configuration and workspace routing (workstreams, thread, update, ship, inbox).
 - **`/gsd-project`** — Project-lifecycle routing (milestones, audits, summary).

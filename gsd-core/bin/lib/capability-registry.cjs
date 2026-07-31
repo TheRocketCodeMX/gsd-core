@@ -518,6 +518,97 @@ const capabilities = {
       "extendedHookEvents": []
     }
   },
+  "context": {
+    "id": "context",
+    "role": "feature",
+    "version": "2.2.0",
+    "title": "Context lifecycle — durable project knowledge",
+    "description": "The knowledge lifecycle: MASTER-CONTEXT index, quality-stamped phase capsules inside <N>-CONTEXT.md, append-only layers, deterministic anchor verification (gsd-tools context verify), the calm context-pressure flush hook, and the re-anchor procedure. Doctrine: plans are perishable; context is durable.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [],
+    "agents": [],
+    "hooks": [],
+    "config": {
+      "context_lifecycle.enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists."
+      },
+      "context_lifecycle.seed_offer": {
+        "type": "string",
+        "default": "prompt",
+        "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off."
+      },
+      "context_lifecycle.curation": {
+        "type": "boolean",
+        "default": true,
+        "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs."
+      },
+      "context_lifecycle.hook_enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)."
+      },
+      "context_lifecycle.hook_warn_pct": {
+        "type": "number",
+        "default": 90,
+        "description": "used_pct threshold for the first calm flush suggestion."
+      },
+      "context_lifecycle.hook_urge_pct": {
+        "type": "number",
+        "default": 95,
+        "description": "used_pct threshold for the single firmer repeat."
+      },
+      "context_lifecycle.verify_max_age_commits": {
+        "type": "number",
+        "default": 50,
+        "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion."
+      },
+      "context_lifecycle.discussion_logs": {
+        "type": "boolean",
+        "default": true,
+        "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md."
+      }
+    },
+    "commands": [
+      {
+        "family": "context",
+        "module": "context-command-router.cjs",
+        "router": "routeContextCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [
+      {
+        "point": "plan:pre",
+        "into": "planner",
+        "fragment": {
+          "inline": "<context_capsule_lifecycle>\nCapsule lifecycle directives (context capability). `$context_path` is the phase CONTEXT.md resolved from init JSON in step 4. If it is null, or the file carries no `context_provenance` frontmatter, every part below skips silently — the pre-capsule flow is untouched.\n\n**1. Freshness gate — plan-phase orchestrator, run when reading this hook at plan:pre (before any planner spawn); it NEVER blocks:**\n\n```bash\nPROV_DATE=$(gsd_run context provenance --file \"$context_path\" --raw 2>/dev/null | jq -r '.date // empty')\nif [ -n \"$PROV_DATE\" ]; then\n  MAX_AGE=$(gsd_run query config-get context_lifecycle.verify_max_age_commits 2>/dev/null || echo 50)\n  AGE=$(git rev-list --count --since=\"$PROV_DATE\" HEAD 2>/dev/null || echo 0)\n  [ \"$AGE\" -gt \"$MAX_AGE\" ] && gsd_run context verify --file \"$context_path\" --raw\nfi\n```\n\nIf the verify report shows `stale + missing > 0`, print its summary (`total`/`ok`/`stale`/`missing`) to the user and continue — failing bullets are now annotated `[STALE — <date>: <reason>]` inside the capsule itself, so the planner sees them marked.\n\n**2. Planner (this fragment is injected into your prompt):** treat `[STALE — ...]`-annotated claims in CONTEXT.md as untrusted — do not build plans on them without re-verifying against the current code; prefer what the code says now over a stale claim.\n\n**3. Curation — plan-phase orchestrator, after planner output returns and BEFORE spawning gsd-plan-checker:** when `context_lifecycle.curation` resolves true (this hook's `configValues.curation`; default true) AND `PROV_DATE` was non-empty, review the returned plan(s) against `.planning/MASTER-CONTEXT.md` and the capsule — topology, standing rules, protect list, locked decisions — and append corrections/re-boundings as a `## Orchestrator curation (<date>)` layer to the capsule (append-only; prior layers stay byte-identical). Only then spawn the checker. Curation off or no capsule → skip silently.\n</context_capsule_lifecycle>"
+        },
+        "configValues": {
+          "verify_max_age_commits": "context_lifecycle.verify_max_age_commits",
+          "curation": "context_lifecycle.curation"
+        },
+        "produces": [],
+        "consumes": [
+          "CONTEXT.md"
+        ],
+        "when": "context_lifecycle.enabled",
+        "onError": "skip"
+      }
+    ],
+    "gates": []
+  },
   "copilot": {
     "id": "copilot",
     "role": "runtime",
@@ -857,6 +948,44 @@ const capabilities = {
     "contributions": [],
     "gates": []
   },
+  "grounding": {
+    "id": "grounding",
+    "role": "feature",
+    "version": "2.2.0",
+    "title": "Source-grounding enforcement",
+    "description": "Source-grounding enforcement: the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [],
+    "agents": [],
+    "hooks": [],
+    "config": {
+      "workflow.grounding_gate": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
+      }
+    },
+    "commands": [
+      {
+        "family": "grounding",
+        "module": "grounding-command-router.cjs",
+        "router": "routeGroundingCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "hermes": {
     "id": "hermes",
     "role": "runtime",
@@ -1092,6 +1221,40 @@ const capabilities = {
       "permissionWriter": null,
       "extendedHookEvents": []
     }
+  },
+  "learn": {
+    "id": "learn",
+    "role": "feature",
+    "version": "2.2.0",
+    "title": "Learn teaching system",
+    "description": "The /gsd:learn teaching system: concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "learn"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "learn",
+        "module": "learn-command-router.cjs",
+        "router": "routeLearnCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
   },
   "mempalace": {
     "id": "mempalace",
@@ -1627,120 +1790,6 @@ const capabilities = {
     "contributions": [],
     "gates": []
   },
-  "rocket-grounding": {
-    "id": "rocket-grounding",
-    "role": "feature",
-    "version": "2.2.0",
-    "title": "Rocket source-grounding enforcement",
-    "description": "Source-grounding enforcement (Rocket capability pack): the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
-    "tier": "full",
-    "requires": [],
-    "engines": {
-      "gsd": ">=1.6.0"
-    },
-    "runtimeCompat": {
-      "supported": [
-        "*"
-      ],
-      "unsupported": []
-    },
-    "skills": [],
-    "agents": [],
-    "hooks": [],
-    "config": {
-      "workflow.grounding_gate": {
-        "type": "boolean",
-        "default": true,
-        "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
-      }
-    },
-    "commands": [
-      {
-        "family": "grounding",
-        "module": "grounding-command-router.cjs",
-        "router": "routeGroundingCommand"
-      }
-    ],
-    "steps": [],
-    "contributions": [],
-    "gates": []
-  },
-  "rocket-learn": {
-    "id": "rocket-learn",
-    "role": "feature",
-    "version": "2.2.0",
-    "title": "Rocket learn teaching system",
-    "description": "The /gsd:learn teaching system (Rocket capability pack): concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
-    "tier": "full",
-    "requires": [],
-    "engines": {
-      "gsd": ">=1.6.0"
-    },
-    "runtimeCompat": {
-      "supported": [
-        "*"
-      ],
-      "unsupported": []
-    },
-    "skills": [
-      "learn"
-    ],
-    "agents": [],
-    "hooks": [],
-    "config": {},
-    "commands": [
-      {
-        "family": "learn",
-        "module": "learn-command-router.cjs",
-        "router": "routeLearnCommand"
-      }
-    ],
-    "steps": [],
-    "contributions": [],
-    "gates": []
-  },
-  "rocket-strategy": {
-    "id": "rocket-strategy",
-    "role": "feature",
-    "version": "2.2.0",
-    "title": "Rocket strategy chain",
-    "description": "Discovery/strategy chain (Rocket capability pack): the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
-    "tier": "full",
-    "requires": [],
-    "engines": {
-      "gsd": ">=1.6.0"
-    },
-    "runtimeCompat": {
-      "supported": [
-        "*"
-      ],
-      "unsupported": []
-    },
-    "skills": [
-      "cicd-strategy",
-      "discover-product",
-      "frontend-architecture",
-      "infrastructure-strategy",
-      "legacy-inventory",
-      "model-domain",
-      "recommend-architecture",
-      "security-strategy",
-      "testing-strategy"
-    ],
-    "agents": [],
-    "hooks": [],
-    "config": {},
-    "commands": [
-      {
-        "family": "project",
-        "module": "project-command-router.cjs",
-        "router": "routeProjectCommand"
-      }
-    ],
-    "steps": [],
-    "contributions": [],
-    "gates": []
-  },
   "schema-gate": {
     "id": "schema-gate",
     "role": "feature",
@@ -1885,6 +1934,48 @@ const capabilities = {
         "onError": "halt"
       }
     ]
+  },
+  "strategy": {
+    "id": "strategy",
+    "role": "feature",
+    "version": "2.2.0",
+    "title": "Strategy chain",
+    "description": "Discovery/strategy chain: the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
+    "tier": "full",
+    "requires": [],
+    "engines": {
+      "gsd": ">=1.6.0"
+    },
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [
+      "cicd-strategy",
+      "discover-product",
+      "frontend-architecture",
+      "infrastructure-strategy",
+      "legacy-inventory",
+      "model-domain",
+      "recommend-architecture",
+      "security-strategy",
+      "testing-strategy"
+    ],
+    "agents": [],
+    "hooks": [],
+    "config": {},
+    "commands": [
+      {
+        "family": "project",
+        "module": "project-command-router.cjs",
+        "router": "routeProjectCommand"
+      }
+    ],
+    "steps": [],
+    "contributions": [],
+    "gates": []
   },
   "tdd": {
     "id": "tdd",
@@ -2136,21 +2227,21 @@ const bySkill = {
   "ai-integration-phase": "ai-integration",
   "code-review": "code-review",
   "graphify": "graphify",
+  "learn": "learn",
   "mempalace-recall": "mempalace",
   "mempalace-capture": "mempalace",
   "validate-phase": "nyquist",
   "profile-user": "profile-pipeline",
-  "learn": "rocket-learn",
-  "cicd-strategy": "rocket-strategy",
-  "discover-product": "rocket-strategy",
-  "frontend-architecture": "rocket-strategy",
-  "infrastructure-strategy": "rocket-strategy",
-  "legacy-inventory": "rocket-strategy",
-  "model-domain": "rocket-strategy",
-  "recommend-architecture": "rocket-strategy",
-  "security-strategy": "rocket-strategy",
-  "testing-strategy": "rocket-strategy",
   "secure-phase": "security",
+  "cicd-strategy": "strategy",
+  "discover-product": "strategy",
+  "frontend-architecture": "strategy",
+  "infrastructure-strategy": "strategy",
+  "legacy-inventory": "strategy",
+  "model-domain": "strategy",
+  "recommend-architecture": "strategy",
+  "security-strategy": "strategy",
+  "testing-strategy": "strategy",
   "ui-phase": "ui",
   "ui-review": "ui"
 };
@@ -2311,6 +2402,24 @@ const byLoopPoint = {
       }
     ],
     "contributions": [
+      {
+        "capId": "context",
+        "point": "plan:pre",
+        "into": "planner",
+        "fragment": {
+          "inline": "<context_capsule_lifecycle>\nCapsule lifecycle directives (context capability). `$context_path` is the phase CONTEXT.md resolved from init JSON in step 4. If it is null, or the file carries no `context_provenance` frontmatter, every part below skips silently — the pre-capsule flow is untouched.\n\n**1. Freshness gate — plan-phase orchestrator, run when reading this hook at plan:pre (before any planner spawn); it NEVER blocks:**\n\n```bash\nPROV_DATE=$(gsd_run context provenance --file \"$context_path\" --raw 2>/dev/null | jq -r '.date // empty')\nif [ -n \"$PROV_DATE\" ]; then\n  MAX_AGE=$(gsd_run query config-get context_lifecycle.verify_max_age_commits 2>/dev/null || echo 50)\n  AGE=$(git rev-list --count --since=\"$PROV_DATE\" HEAD 2>/dev/null || echo 0)\n  [ \"$AGE\" -gt \"$MAX_AGE\" ] && gsd_run context verify --file \"$context_path\" --raw\nfi\n```\n\nIf the verify report shows `stale + missing > 0`, print its summary (`total`/`ok`/`stale`/`missing`) to the user and continue — failing bullets are now annotated `[STALE — <date>: <reason>]` inside the capsule itself, so the planner sees them marked.\n\n**2. Planner (this fragment is injected into your prompt):** treat `[STALE — ...]`-annotated claims in CONTEXT.md as untrusted — do not build plans on them without re-verifying against the current code; prefer what the code says now over a stale claim.\n\n**3. Curation — plan-phase orchestrator, after planner output returns and BEFORE spawning gsd-plan-checker:** when `context_lifecycle.curation` resolves true (this hook's `configValues.curation`; default true) AND `PROV_DATE` was non-empty, review the returned plan(s) against `.planning/MASTER-CONTEXT.md` and the capsule — topology, standing rules, protect list, locked decisions — and append corrections/re-boundings as a `## Orchestrator curation (<date>)` layer to the capsule (append-only; prior layers stay byte-identical). Only then spawn the checker. Curation off or no capsule → skip silently.\n</context_capsule_lifecycle>"
+        },
+        "configValues": {
+          "verify_max_age_commits": "context_lifecycle.verify_max_age_commits",
+          "curation": "context_lifecycle.curation"
+        },
+        "produces": [],
+        "consumes": [
+          "CONTEXT.md"
+        ],
+        "when": "context_lifecycle.enabled",
+        "onError": "skip"
+      },
       {
         "capId": "schema-gate",
         "point": "plan:pre",
@@ -2616,12 +2725,21 @@ const configKeys = {
   "workflow.ai_integration_phase": "ai-integration",
   "workflow.code_review": "code-review",
   "workflow.code_review_depth": "code-review",
+  "context_lifecycle.enabled": "context",
+  "context_lifecycle.seed_offer": "context",
+  "context_lifecycle.curation": "context",
+  "context_lifecycle.hook_enabled": "context",
+  "context_lifecycle.hook_warn_pct": "context",
+  "context_lifecycle.hook_urge_pct": "context",
+  "context_lifecycle.verify_max_age_commits": "context",
+  "context_lifecycle.discussion_logs": "context",
   "workflow.drift_threshold": "drift",
   "workflow.drift_action": "drift",
   "workflow.schema_drift_gate": "drift",
   "workflow.plan_drift_precheck": "drift",
   "workflow.post_planning_gaps": "gap-analysis",
   "graphify.enabled": "graphify",
+  "workflow.grounding_gate": "grounding",
   "intel.enabled": "intel",
   "mempalace.enabled": "mempalace",
   "mempalace.memory_mode": "mempalace",
@@ -2637,7 +2755,6 @@ const configKeys = {
   "workflow.pattern_mapper": "pattern-mapper",
   "profile-pipeline.enabled": "profile-pipeline",
   "workflow.research": "research",
-  "workflow.grounding_gate": "rocket-grounding",
   "workflow.schema_push_detection": "schema-gate",
   "workflow.security_enforcement": "security",
   "workflow.security_asvs_level": "security",
@@ -2671,6 +2788,54 @@ const configSchema = {
       "standard",
       "deep"
     ]
+  },
+  "context_lifecycle.enabled": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Master switch for the context lifecycle (seeding offers, freshness gate, curation step, re-anchor step). false = every consumer behaves as if no capsule exists."
+  },
+  "context_lifecycle.seed_offer": {
+    "owner": "context",
+    "type": "string",
+    "default": "prompt",
+    "description": "Roadmap-time seeding behavior: prompt (offer once, skippable) | auto (seed without asking, quality-stamped) | off."
+  },
+  "context_lifecycle.curation": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "After researcher/planner output, return control to the orchestrator to review against MASTER-CONTEXT + capsule and append an '## Orchestrator curation' layer before the checker runs."
+  },
+  "context_lifecycle.hook_enabled": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Enable the calm context-pressure flush messages from the context-monitor hook (main session only)."
+  },
+  "context_lifecycle.hook_warn_pct": {
+    "owner": "context",
+    "type": "number",
+    "default": 90,
+    "description": "used_pct threshold for the first calm flush suggestion."
+  },
+  "context_lifecycle.hook_urge_pct": {
+    "owner": "context",
+    "type": "number",
+    "default": 95,
+    "description": "used_pct threshold for the single firmer repeat."
+  },
+  "context_lifecycle.verify_max_age_commits": {
+    "owner": "context",
+    "type": "number",
+    "default": 50,
+    "description": "Capsule age (commits since provenance date) beyond which plan-phase runs context verify before consuming it and scout is offered pre-discussion."
+  },
+  "context_lifecycle.discussion_logs": {
+    "owner": "context",
+    "type": "boolean",
+    "default": true,
+    "description": "Append elicitation Q&A to PROJECT-DISCUSSION-LOG.md / <N>-DISCUSSION-LOG.md."
   },
   "workflow.drift_threshold": {
     "owner": "drift",
@@ -2711,6 +2876,12 @@ const configSchema = {
     "type": "boolean",
     "default": false,
     "description": "Enable the graphify knowledge-graph command + skill."
+  },
+  "workflow.grounding_gate": {
+    "owner": "grounding",
+    "type": "boolean",
+    "default": true,
+    "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
   },
   "intel.enabled": {
     "owner": "intel",
@@ -2806,12 +2977,6 @@ const configSchema = {
     "type": "boolean",
     "default": true,
     "description": "Run phase research before planning when research artifacts are missing or explicitly refreshed."
-  },
-  "workflow.grounding_gate": {
-    "owner": "rocket-grounding",
-    "type": "boolean",
-    "default": true,
-    "description": "Enable the plan-phase grounding gate. When enabled, plan-phase blocks planning unless the plan's ## Grounding block cites (and correctly quotes) every required source resolved by `gsd-tools grounding required` from the project's ## Strategy Plan. Absent or true = enforced; false = the gate is skipped (the check.grounding-plan handler reports skipped/pass)."
   },
   "workflow.schema_push_detection": {
     "owner": "schema-gate",
@@ -3830,6 +3995,11 @@ const commandFamilies = {
     "module": "audit-command-router.cjs",
     "router": "routeAuditUat"
   },
+  "context": {
+    "capId": "context",
+    "module": "context-command-router.cjs",
+    "router": "routeContextCommand"
+  },
   "extract-messages": {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
@@ -3856,7 +4026,7 @@ const commandFamilies = {
     "router": "routeGraphifyCommand"
   },
   "grounding": {
-    "capId": "rocket-grounding",
+    "capId": "grounding",
     "module": "grounding-command-router.cjs",
     "router": "routeGroundingCommand"
   },
@@ -3866,7 +4036,7 @@ const commandFamilies = {
     "router": "routeIntelCommand"
   },
   "learn": {
-    "capId": "rocket-learn",
+    "capId": "learn",
     "module": "learn-command-router.cjs",
     "router": "routeLearnCommand"
   },
@@ -3881,7 +4051,7 @@ const commandFamilies = {
     "router": "routeProfileSample"
   },
   "project": {
-    "capId": "rocket-strategy",
+    "capId": "strategy",
     "module": "project-command-router.cjs",
     "router": "routeProjectCommand"
   },
@@ -3907,6 +4077,9 @@ const capabilityClusters = {
   "graphify": [
     "graphify"
   ],
+  "learn": [
+    "learn"
+  ],
   "mempalace": [
     "mempalace-capture",
     "mempalace-recall"
@@ -3917,10 +4090,10 @@ const capabilityClusters = {
   "profile-pipeline": [
     "profile-user"
   ],
-  "rocket-learn": [
-    "learn"
+  "security": [
+    "secure-phase"
   ],
-  "rocket-strategy": [
+  "strategy": [
     "cicd-strategy",
     "discover-product",
     "frontend-architecture",
@@ -3930,9 +4103,6 @@ const capabilityClusters = {
     "recommend-architecture",
     "security-strategy",
     "testing-strategy"
-  ],
-  "security": [
-    "secure-phase"
   ],
   "ui": [
     "ui-phase",
@@ -3959,6 +4129,12 @@ const profileMembership = {
       "full"
     ]
   },
+  "learn": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
   "mempalace": {
     "tier": "full",
     "profiles": [
@@ -3977,19 +4153,13 @@ const profileMembership = {
       "full"
     ]
   },
-  "rocket-learn": {
-    "tier": "full",
-    "profiles": [
-      "full"
-    ]
-  },
-  "rocket-strategy": {
-    "tier": "full",
-    "profiles": [
-      "full"
-    ]
-  },
   "security": {
+    "tier": "full",
+    "profiles": [
+      "full"
+    ]
+  },
+  "strategy": {
     "tier": "full",
     "profiles": [
       "full"
@@ -4013,16 +4183,19 @@ const _requiresGraph = {
   "code-review": [],
   "codebuddy": [],
   "codex": [],
+  "context": [],
   "copilot": [],
   "cursor": [],
   "drift": [],
   "gap-analysis": [],
   "gemini": [],
   "graphify": [],
+  "grounding": [],
   "hermes": [],
   "intel": [],
   "kilo": [],
   "kimi": [],
+  "learn": [],
   "mempalace": [],
   "nyquist": [],
   "opencode": [],
@@ -4032,11 +4205,9 @@ const _requiresGraph = {
   "profile-pipeline": [],
   "qwen": [],
   "research": [],
-  "rocket-grounding": [],
-  "rocket-learn": [],
-  "rocket-strategy": [],
   "schema-gate": [],
   "security": [],
+  "strategy": [],
   "tdd": [],
   "trae": [],
   "ui": [],

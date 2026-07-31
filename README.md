@@ -42,6 +42,10 @@ On top of gsd-core's phase loop, this fork adds a connected **product → domain
 **Testing know-how** the agent consults while writing tests: Testcontainers, parallel-safe DB isolation, authenticate-once / multi-role auth, synthetic test data, E2E tiering, and flaky-test avoidance.
 
 The payoff: **one complexity assessment** made during discovery parameterizes both the architecture *and* the test strategy — a single thread from "what are we building" to "how do we test it."
+
+**Durable knowledge across the whole project — the `context` capability:**
+
+- **`/gsd:context`** (`seed` · `scout` · `flush` · `master`) — the knowledge lifecycle on top of GSD's fresh-subagent model. Right after roadmap approval the orchestrator seeds quality-stamped phase capsules (`<N>-CONTEXT.md`) and a bounded `MASTER-CONTEXT.md` index: verified facts each anchored `path:line`, locked decisions with their *why*, cross-repo seams, phase-scoped pitfalls. Capsules are treated as **evidence** — grown in append-only layers (later layers supersede, nothing is deleted), verified at birth and re-verified by `gsd-tools context verify` (a failed anchor is annotated `[STALE]`, never silently trusted). A calm context-pressure hook nudges a knowledge flush at high usage (never a panic save), and the standing first act after any compaction is re-anchoring from the MASTER index + active capsule. Elicitation Q&A is captured to append-only discussion logs so the reasoning behind each decision survives distillation. **Doctrine: plans are perishable; context is durable — front-load the knowledge, never the plans.**
 <!-- FORK:identity END -->
 
 ---

@@ -665,6 +665,10 @@ This file is the canonical output of this step. The orchestrator reads `.plannin
 
 Or: "None - plan executed exactly as written."
 
+<!-- FORK:context BEGIN -->
+**Mirror to frontmatter:** mirror every `## Deviations from Plan` entry into the `deviations:` frontmatter list (rule/what/why) — under the default context budget the next phase's planner reads SUMMARY frontmatter only, so an entry that exists solely in prose is invisible to it. Omit the `deviations:` key when the prose section is empty.
+<!-- FORK:context END -->
+
 **Auth gates section** (if any occurred): Document which task, what was needed, outcome.
 
 **Stub tracking:** Before writing the SUMMARY, scan all files created/modified in this plan for stub patterns:

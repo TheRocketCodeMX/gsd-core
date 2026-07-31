@@ -72,6 +72,9 @@ If user chooses [A] (Acknowledge):
    ...
    ```
    Sanitize all slug and status values via `sanitizeForDisplay()` before writing. Never inject raw file content into STATE.md.
+<!-- FORK:context BEGIN -->
+2b. **Route each acknowledged deferral forward — IN ADDITION to the STATE.md entry above.** Offer to append each acknowledged item into `.planning/milestones/next/<label>-CAPSULE.md` (where `<label>` is the next milestone, e.g. the next version) under `## Carried-forward decisions & deferrals`, so the next milestone's opening inherits it. If that capsule does not exist, create it from `~/.claude/gsd-core/templates/milestone-capsule.md` (fill the frontmatter `milestone`/`context_provenance` and `## Why this milestone`). Sanitize values via `sanitizeForDisplay()` as above.
+<!-- FORK:context END -->
 3. Set `closeout_type=override_closeout` and record `Known verification overrides: {count} (see STATE.md Deferred Items)` in the MILESTONES.md entry.
 4. Proceed with milestone close.
 

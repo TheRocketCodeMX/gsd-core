@@ -64,6 +64,10 @@ Per subsystem, fill the salvage card (recommend; user signs off): `code quality 
 
 Record the safe sequence: **expand schema (additive) → dual-write/backfill → verify → backup → cutover (blue-green/canary) → contract (mandatory)**, and which infra/secrets/data are reused vs migrated. (Detail handed to `infrastructure-strategy`/`cicd-strategy`.)
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 7: Write & commit
 
 Render `@~/.claude/gsd-core/templates/legacy-inventory.md` → `.planning/LEGACY-INVENTORY.md` (the coverage matrix + the three-way gap map + salvage dispositions + characterization gates + reuse-infra plan + the VERIFIED/INFERRED split + named open questions).

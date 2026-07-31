@@ -26,6 +26,17 @@
       ],
       "issue": "TBD"
     },
+    "context": {
+      "files": [
+        "bug-2492-context-coverage-gate.test.cjs",
+        "bug-2798-context-window-config-key.test.cjs",
+        "context-enrichment.test.cjs",
+        "context-utilization.property.test.cjs",
+        "enh-769-context-fork-effort.install.test.cjs",
+        "feat-1452-context-guard-mode.test.cjs"
+      ],
+      "issue": "context-lifecycle"
+    },
     "graphify": {
       "files": [
         "bug-622-graphify-optional-graph-html.test.cjs",

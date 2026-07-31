@@ -200,8 +200,19 @@ describe('ADR-857 Phase 6 capstone conformance (#1139)', () => {
     // Decision #1) — NOT the optional-feature inline logic this budget ratchets
     // toward capabilities — so its footprint legitimately raises the host-loop
     // ceiling rather than signalling an un-extracted optional feature.
+    //
+    // plan-phase.md ceiling raised 94519 → 94900: deliberate exception per the
+    // #1298 precedent, user-approved 2026-07-18. Reason: hard-delivering the
+    // context capability's orchestrator-directed gates (freshness verify +
+    // curation). E2E Scenario 3 proved a structural FAIL — no legal capability
+    // mechanism (step/gate/contribution) reaches the orchestrator's own
+    // execution flow: steps require a skill/agent/command ref and are
+    // dispatched, never inline-executed; into:"orchestrator" is rejected by the
+    // pinned agent-roles contract. Two marked FORK:context directive lines in
+    // §5.6/§10 route the already-shipped contribution fragment to the host.
+    // Ratchet this back down at the next upstream shrink.
     const { lfByteCount } = require('../scripts/workflow-size.cjs');
-    const PRE_PHASE6 = { 'plan-phase.md': 94519, 'execute-phase.md': 93600 };
+    const PRE_PHASE6 = { 'plan-phase.md': 94900, 'execute-phase.md': 93600 };
     const notShrunk = [];
     for (const [file, frozen] of Object.entries(PRE_PHASE6)) {
       const now = lfByteCount(path.join(ROOT, 'gsd-core', 'workflows', file));

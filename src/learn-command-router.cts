@@ -7,7 +7,7 @@
  * FORK:learn patch block) to the ADR-959 capability dispatch path:
  *   default → dispatchCapabilityCommand → require(learn-command-router.cjs) →
  *   routeLearnCommand. The family is registered by
- *   capabilities/rocket-learn/capability.json.
+ *   capabilities/learn/capability.json.
  *
  * Behaviour is preserved byte-for-behaviour from the prior inline case:
  * /gsd:learn backing — read the concept catalog (index) and the user-global

@@ -135,6 +135,10 @@ Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with
 
 Write to `.planning/adr/NNNN-architecture.md`. Capture *why* and trade-offs, not implementation detail.
 
+<!-- FORK:context BEGIN -->
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+<!-- FORK:context END -->
+
 ## Step 7: Commit
 
 ```bash

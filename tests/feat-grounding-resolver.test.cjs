@@ -42,16 +42,20 @@ describe('grounding resolver', () => {
     cleanup(dir);
   });
 
-  test('artifact on disk but status still recommended → unflipped warning (issue #21)', () => {
+  test('artifact on disk but status still recommended → required (with unflipped warning) (issue #21 P0-1c, Task 15)', () => {
     // The step ran (DOMAIN-MODEL.md exists) but never flipped its Strategy Plan
-    // row to `done` — the gate would under-require. resolveRequiredSources must
-    // surface the inconsistency instead of silently returning a smaller set.
+    // row to `done` — the artifact is real and citable, so it is now promoted to
+    // `required` (Task 15 closes the under-requiring hole this test used to pin:
+    // it previously asserted `required.length === 0` here). The `unflipped`
+    // warning still fires so orchestrators are prompted to flip the row.
     const dir = mkProject({
       'PROJECT.md': '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| model-domain | recommended |\n| testing-strategy | recommended |\n',
       'DOMAIN-MODEL.md': '## Subdomains\n| Subdomain | Type |\n|---|---|\n| pricing | Core |\n',
     });
     const r = grounding.resolveRequiredSources(dir);
-    assert.equal(r.required.length, 0, 'recommended is still not required');
+    assert.equal(r.required.length, 1, 'recommended + artifact-on-disk is now required');
+    assert.equal(r.required[0].artifact, 'DOMAIN-MODEL');
+    assert.match(r.required[0].notes || '', /strategy-done/, 'required entry notes the strategy-done flip');
     assert.ok(Array.isArray(r.warnings), 'resolver exposes a warnings field');
     assert.ok(
       r.warnings.some((w) => /^unflipped: model-domain\b/.test(w)),
@@ -61,6 +65,7 @@ describe('grounding resolver', () => {
       !r.warnings.some((w) => /testing-strategy/.test(w)),
       'a recommended step with NO artifact on disk is pending, not unflipped',
     );
+    assert.ok(!r.required.some((x) => x.artifact === 'TEST-STRATEGY'), 'testing-strategy has no artifact, stays out of required');
     cleanup(dir);
   });
 
