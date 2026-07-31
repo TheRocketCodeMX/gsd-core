@@ -201,7 +201,7 @@ Right after roadmap approval is when this session's context is richest — the w
 
 ```bash
 CL_ENABLED=$(gsd_run query config-get context_lifecycle.enabled --raw 2>/dev/null || echo true)
-SEED_OFFER=$(gsd_run query config-get context_lifecycle.seed_offer --default prompt 2>/dev/null || echo prompt)
+SEED_OFFER=$(gsd_run query config-get context_lifecycle.seed_offer --default prompt --raw 2>/dev/null || echo prompt)
 ```
 
 - `CL_ENABLED=false` or `SEED_OFFER=off` → skip silently, continue to Step 5 unchanged.

@@ -427,13 +427,13 @@ Also run the empty-implementation / hardcoded-empty-data / log-only stub greps f
 **Source-fidelity & integrity gates** — @~/.claude/gsd-core/references/verifier-fidelity-gates.md
 - **Reward-hacking gate** (`engineering-standards.md`): a check made to pass by tampering → 🛑.
 - **Architecture-fit:** universal floor ALWAYS (skipped 🛑); ADR rung-fit both ways (under 🛑, over ⚠️).
+- **Design-fit** (`gsd_run query project mode` → `has_provided_design: true`): diff built shape vs the oracle; invented or dropped user-facing field → 🛑; no covered field → "N/A".
+- **Mode-fit:** preserve/refactor needs parity evidence (unapproved drift 🛑); `design-delta` is parity-EXEMPT; vibe-coded-to-harden = intent-hardening, not parity; a dropped LEGACY-INVENTORY capability 🛑.
 - **Strategy-fit:** honor `FRONTEND-ARCHITECTURE.md` + `SECURITY-STRATEGY.md` when present — 🛑 by blast radius, else ⚠️.
+<!-- FORK:fidelity END -->
 <!-- FORK:context BEGIN -->
 Also honor `DOMAIN-MODEL.md` + `TEST-STRATEGY.md` when present — a violation is a gap, same severity.
 <!-- FORK:context END -->
-- **Design-fit** (`gsd_run query project mode` → `has_provided_design: true`): diff built shape vs the oracle; invented or dropped user-facing field → 🛑; no covered field → "N/A".
-- **Mode-fit:** preserve/refactor needs parity evidence (unapproved drift 🛑); `design-delta` is parity-EXEMPT; vibe-coded-to-harden = intent-hardening, not parity; a dropped LEGACY-INVENTORY capability 🛑.
-<!-- FORK:fidelity END -->
 
 Categorize: 🛑 Blocker (prevents goal, debt marker, reward-hacked check, ADR under-build) | ⚠️ Warning (incomplete, or over-built) | ℹ️ Info (notable)
 
