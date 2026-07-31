@@ -22,6 +22,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 
 const phaseId = require('../gsd-core/bin/lib/phase-id.cjs');
+const fc = require('fast-check');
 
 // ─── escapeRegex ─────────────────────────────────────────────────────────────
 
@@ -208,6 +209,27 @@ describe('extractPhaseToken', () => {
     assert.strictEqual(phaseId.extractPhaseToken('M1-2-brain'), 'M1-2');
   });
 
+  // #612/#2249: the #2043/#1324 letter-prefixed-decimal family has a NUMERIC-tail
+  // variant (`P0.3-2`) the #1324 pins above never covered — every tail there is
+  // non-numeric (`-tenant`, `-gate`) or hyphen-only (`M1-2`). PR-1 added a bracket
+  // dir reader `{CODE}.{MM}-{PP}` to extractPhaseToken; because that shape is
+  // string-indistinguishable from this family when the code ends in a digit, the
+  // reader is GATED on an explicit `convention` arg. This characterization locks
+  // the convention-less (legacy) reading byte-identical across the WHOLE family —
+  // single- AND multi-digit tails — so the gate can never silently regress it.
+  // (The multi-digit rows are precisely the ones no discriminator-tightening fix
+  // could have preserved: `P0.12-34` stays ambiguous with a padded bracket dir,
+  // whereas the convention gate is complete.)
+  test('preserves the #2043 numeric-tail letter-prefixed family (convention-less, byte-identical)', () => {
+    assert.strictEqual(phaseId.extractPhaseToken('P0.3-2-tenant'), 'P0.3-2');
+    assert.strictEqual(phaseId.extractPhaseToken('P1.2-3'), 'P1.2-3');
+    assert.strictEqual(phaseId.extractPhaseToken('A0.1-2'), 'A0.1-2');
+    assert.strictEqual(phaseId.extractPhaseToken('X9.9-9-name'), 'X9.9-9');
+    assert.strictEqual(phaseId.extractPhaseToken('P0.12-34-name'), 'P0.12-34');
+    assert.strictEqual(phaseId.extractPhaseToken('P0.34-56-name'), 'P0.34-56');
+    assert.strictEqual(phaseId.extractPhaseToken('P0X.3-2'), 'P0X.3-2');
+  });
+
   test('returns the full dirName when no numeric token found', () => {
     assert.strictEqual(phaseId.extractPhaseToken('no-numeric'), 'no-numeric');
     assert.strictEqual(phaseId.extractPhaseToken('alpha'), 'alpha');
@@ -216,6 +238,55 @@ describe('extractPhaseToken', () => {
 
   test('stops at first non-numeric-starting segment', () => {
     assert.strictEqual(phaseId.extractPhaseToken('01-02-name-03'), '01-02');
+  });
+
+  test('rejects a single-digit slug word after a phase number (#2043)', () => {
+    // A phase dir like "46-6-rs-pipeline-orchestrator" (roadmap phase name
+    // "6 Rs Pipeline Orchestrator" → slug "6-rs-...") must yield token "46",
+    // not "46-6" — the "6" is the slug's first word, not a sub-phase segment.
+    assert.strictEqual(phaseId.extractPhaseToken('46-6-rs-pipeline-orchestrator'), '46');
+    assert.strictEqual(phaseId.extractPhaseToken('68-6-rs'), '68');
+    // Legit cases are unaffected: a real zero-padded milestone-sub-phase pair
+    // stays intact, and a single-digit sub-phase after a letter-prefixed
+    // milestone id (e.g. "M1-2") is still valid.
+    assert.strictEqual(phaseId.extractPhaseToken('01-02-some-name'), '01-02');
+    assert.strictEqual(phaseId.extractPhaseToken('M1-2-brain'), 'M1-2');
+    // Milestone-prefixed convention: "M1-" strips as a project-code prefix, so
+    // the same rule fixes the slug-collision there too — a phase 46 named
+    // "6 Rs …" under milestone M1 yields "M1-46", not "M1-46-6". Phase 6 under
+    // M1 ("M1-6-rs") correctly stays "M1-6" (the 6 is the phase number).
+    assert.strictEqual(phaseId.extractPhaseToken('M1-46-6-rs-pipeline-orchestrator'), 'M1-46');
+    assert.strictEqual(phaseId.extractPhaseToken('M1-6-rs-pipeline'), 'M1-6');
+    // Single-digit + letter-suffix phase id ("1A") is a real token, not a slug word.
+    assert.strictEqual(phaseId.extractPhaseToken('1A-brain'), '1A');
+  });
+
+  test('rejects a ≥3-digit slug word after a phase number (#2232)', () => {
+    // Roadmap phase name "2026 Photos & Performance" slugifies to
+    // "2026-photos-performance"; dir "14-2026-photos-performance" must yield
+    // token "14", not "14-2026" — the year is the slug's first word, not a
+    // sub-phase segment (the residual case #2043 scoped out).
+    assert.strictEqual(phaseId.extractPhaseToken('14-2026-photos-performance'), '14');
+    assert.ok(
+      phaseId.phaseTokenMatches('14-2026-photos-performance', phaseId.normalizePhaseName('14')),
+      'phase 14 must match its own dir despite the year-leading slug',
+    );
+    // Boundary by continuation-segment digit width (the locked policy: a
+    // continuation is EXACTLY the 2-digit zero-padded form the write side emits):
+    assert.strictEqual(phaseId.extractPhaseToken('46-6-rs'), '46'); // 1-digit: slug word (#2043)
+    assert.strictEqual(phaseId.extractPhaseToken('01-02-name'), '01-02'); // 2-digit: sub-phase
+    assert.strictEqual(phaseId.extractPhaseToken('05-100-slug'), '05'); // 3-digit: slug word (policy)
+    assert.strictEqual(phaseId.extractPhaseToken('14-2026-photos'), '14'); // 4-digit: year slug word
+    // Milestone-prefixed variant collides the same way. Composed from parts
+    // rather than written as one literal: GitGuardian's generic high-entropy
+    // detector false-positives on the joined form (an alphanumeric run with
+    // separators reads as a token/key shape to it). The assertion is identical;
+    // only the source spelling changes.
+    const mPrefix = 'M1';
+    assert.strictEqual(
+      phaseId.extractPhaseToken(`${mPrefix}-14-2026-photos`),
+      `${mPrefix}-14`,
+    );
   });
 });
 
@@ -427,5 +498,480 @@ describe('getPhaseDirFromPhaseId', () => {
     assert.ok(result !== null);
     assert.ok(!result.startsWith('-'));
     assert.ok(!result.endsWith('-'));
+  });
+});
+
+// ─── parsePhaseFromProse (#2121, anchored — fixes #2111) ─────────────────────
+
+describe('parsePhaseFromProse', () => {
+  test('null / empty input yields null phase and name', () => {
+    assert.deepEqual(phaseId.parsePhaseFromProse(null), { phase: null, name: null });
+    assert.deepEqual(phaseId.parsePhaseFromProse(''), { phase: null, name: null });
+  });
+
+  test('#2111: a milestone-completion string carries no phase', () => {
+    assert.equal(phaseId.parsePhaseFromProse('Milestone v0.5 complete').phase, null);
+    assert.equal(phaseId.parsePhaseFromProse('Milestone v1.0 complete').phase, null);
+    assert.equal(phaseId.parsePhaseFromProse('Milestone v2.10 complete').phase, null);
+  });
+
+  test('#2111: a bare version token or stray numeral is not a phase', () => {
+    assert.equal(phaseId.parsePhaseFromProse('v0.5').phase, null);
+    assert.equal(phaseId.parsePhaseFromProse('v1.0').phase, null);
+    assert.equal(phaseId.parsePhaseFromProse('Fixed 12 bugs in v2.3').phase, null);
+  });
+
+  test('a genuine phase value (starting with the token) is parsed', () => {
+    assert.deepEqual(phaseId.parsePhaseFromProse('3 of 4 (Delta)'), { phase: '3', name: 'Delta' });
+    assert.deepEqual(phaseId.parsePhaseFromProse('3A — Delta'), { phase: '3A', name: 'Delta' });
+    assert.equal(phaseId.parsePhaseFromProse('12.1: Setup').phase, '12.1');
+    assert.equal(phaseId.parsePhaseFromProse('29 of 30').phase, '29');
+    assert.equal(phaseId.parsePhaseFromProse('029').phase, '029');
+  });
+
+  test('a leading project-code prefix is tolerated but not captured (bare token)', () => {
+    assert.equal(phaseId.parsePhaseFromProse('MEM-01 — Foo').phase, '01');
+    assert.equal(phaseId.parsePhaseFromProse('AB-29 of 30').phase, '29');
+  });
+
+  test('an optional leading "Phase" label is tolerated', () => {
+    assert.equal(phaseId.parsePhaseFromProse('Phase 3A — Delta').phase, '3A');
+  });
+
+  test('a status-word parenthetical is filtered from the name', () => {
+    // #2736 precedence change (the #1695 AC #3 residual): the em-dash name now
+    // wins when it is a genuine name, so `3A — Delta (executing)` yields
+    // 'Delta' (previously null — paren-priority harvested the status aside and
+    // the status filter nulled it, losing the real name).
+    assert.deepEqual(phaseId.parsePhaseFromProse('3A — Delta (executing)'), { phase: '3A', name: 'Delta' });
+    assert.equal(phaseId.parsePhaseFromProse('3 (complete)').name, null);
+  });
+
+  test('#2736: status-keyword-aware precedence across the first-party writer shapes', () => {
+    // completePhaseCore shape `N — Name (aside)`: the dash name wins; the
+    // name's own parenthetical is no longer harvested as the whole name.
+    assert.deepEqual(
+      phaseId.parsePhaseFromProse('48 — Closer-ruling measurement (D1a)'),
+      { phase: '48', name: 'Closer-ruling measurement' },
+    );
+    // beginPhaseCore shape `N (Name) — EXECUTING`: the dash tail is a status
+    // keyword, so the parenthetical name still wins.
+    assert.deepEqual(
+      phaseId.parsePhaseFromProse('16 (Native Global Hotkey) — EXECUTING'),
+      { phase: '16', name: 'Native Global Hotkey' },
+    );
+    // `N — COMPLETE` (state.cts phase-complete body line): status keyword on
+    // the dash, no paren → no name.
+    assert.deepEqual(phaseId.parsePhaseFromProse('5 — COMPLETE'), { phase: '5', name: null });
+    // gsd2-import shape `N (slug) — Milestone: Title`: the dash tail is a
+    // milestone label, not a name → the parenthetical still wins.
+    assert.deepEqual(
+      phaseId.parsePhaseFromProse('06 (setup) — Milestone: Foundation'),
+      { phase: '06', name: 'setup' },
+    );
+    // Cross-AI review round 1: an em-dash INSIDE a parenthetical name must not
+    // be mistaken for the name separator (the dash search runs on a
+    // paren-stripped copy).
+    assert.deepEqual(
+      phaseId.parsePhaseFromProse('16 (Native — Global Hotkey) — EXECUTING'),
+      { phase: '16', name: 'Native — Global Hotkey' },
+    );
+    // Cross-AI review round 1: status-LIKE dash tails beyond the canonical
+    // three lose to a parenthetical name (broader precedence vocabulary +
+    // the lone-ALL-CAPS-token heuristic), without changing which extracted
+    // names are nulled.
+    assert.equal(phaseId.parsePhaseFromProse('3 (Foundation) — COMPLETED').name, 'Foundation');
+    assert.equal(phaseId.parsePhaseFromProse('3 (Name) — In progress').name, 'Name');
+    assert.equal(phaseId.parsePhaseFromProse('3 (Name) — READY').name, 'Name');
+    assert.equal(phaseId.parsePhaseFromProse('3 (Name) — WIP').name, 'Name');
+    // With no parenthetical to prefer, an unknown dash tail stays the best guess.
+    assert.equal(phaseId.parsePhaseFromProse('3 — WIP').name, 'WIP');
+  });
+
+  test('#2124 review: name quantifiers are length-bounded (ReDoS guard)', () => {
+    // A parenthetical within the bound extracts; one longer than the bound is
+    // NOT matched — the cap is what prevents O(n^2) backtracking on a crafted
+    // untrusted value. Removing the bound would extract the long name → fail.
+    assert.equal(phaseId.parsePhaseFromProse('3 (Delta)').name, 'Delta');
+    assert.equal(phaseId.parsePhaseFromProse(`3 (${'x'.repeat(201)})`).name, null);
+    // A long unterminated "(" run yields no name and still parses the phase.
+    assert.deepEqual(phaseId.parsePhaseFromProse(`3 ${'('.repeat(5000)}`), { phase: '3', name: null });
+  });
+
+  test('#2124 review: non-string input is coerced, never throws', () => {
+    assert.doesNotThrow(() => phaseId.parsePhaseFromProse(3));
+    assert.equal(phaseId.parsePhaseFromProse(3).phase, '3');
+    assert.deepEqual(phaseId.parsePhaseFromProse(true), { phase: null, name: null });
+  });
+});
+
+// ─── stripConfiguredProjectCodePrefix (#2121 / #2104, config-aware) ───────────
+
+describe('stripConfiguredProjectCodePrefix', () => {
+  test('#2104: a foreign prefix is preserved (not collapsed to a bare phase)', () => {
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('MEM-01', 'LKML'), 'MEM-01');
+  });
+
+  test('the configured prefix is stripped (case-insensitive)', () => {
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('CK-01', 'CK'), '01');
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('LKML-29', 'lkml'), '29');
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('AB-29', 'AB'), '29');
+  });
+
+  test('a value with no prefix is returned unchanged', () => {
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('01', 'CK'), '01');
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('029', 'CK'), '029');
+  });
+
+  test('an absent/empty projectCode preserves the value verbatim', () => {
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('MEM-01', ''), 'MEM-01');
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('MEM-01', null), 'MEM-01');
+    assert.equal(phaseId.stripConfiguredProjectCodePrefix('MEM-01', undefined), 'MEM-01');
+  });
+});
+
+// ─── isForeignPrefixedPhaseQuery (#2121 / #2056) ─────────────────────────────
+
+describe('isForeignPrefixedPhaseQuery', () => {
+  test('a prefix that is not the configured code is foreign', () => {
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('MEM-01', 'LKML'), true);
+  });
+
+  test('the configured prefix is not foreign (case-insensitive)', () => {
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('CK-01', 'CK'), false);
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('ck-01', 'CK'), false);
+  });
+
+  test('a value with no prefix is never foreign', () => {
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('01', 'CK'), false);
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('29', 'AB'), false);
+  });
+
+  test('a prefixed query with no configured code is foreign; a bare one is not', () => {
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('MEM-01', ''), true);
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('MEM-01', null), true);
+    assert.equal(phaseId.isForeignPrefixedPhaseQuery('01', ''), false);
+  });
+});
+
+// ─── roadmapPhaseLookupSources (#2121, owned here after the move) ─────────────
+
+describe('roadmapPhaseLookupSources', () => {
+  const PREFIX_TOLERANT = `${phaseId.OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}0*29`;
+
+  test('a bare numeric query yields the numeric then prefix-tolerant sources', () => {
+    const sources = phaseId.roadmapPhaseLookupSources('29');
+    assert.deepEqual(sources, ['0*29', PREFIX_TOLERANT]);
+  });
+
+  test('the bare numeric source precedes the prefix-tolerant fallback', () => {
+    const sources = phaseId.roadmapPhaseLookupSources('29');
+    assert.ok(sources.indexOf('0*29') < sources.indexOf(PREFIX_TOLERANT));
+  });
+
+  test('a project-code-prefixed query adds the exact source first (3 sources)', () => {
+    const sources = phaseId.roadmapPhaseLookupSources('AB-29');
+    assert.equal(sources.length, 3);
+    assert.equal(sources[0], 'AB-29');
+    assert.ok(sources.includes('0*29'));
+    assert.ok(sources.includes(PREFIX_TOLERANT));
+  });
+
+  test('zero-padding is tolerated: 029 resolves the same sources as 29', () => {
+    assert.deepEqual(phaseId.roadmapPhaseLookupSources('029'), phaseId.roadmapPhaseLookupSources('29'));
+  });
+
+  test('sources are deduplicated', () => {
+    const sources = phaseId.roadmapPhaseLookupSources('29');
+    assert.equal(sources.length, new Set(sources).size);
+  });
+});
+
+// ─── #2121 property tests (fast-check) ───────────────────────────────────────
+
+describe('phase-id canonical surface — properties', () => {
+  test('#2111 invariant: a "Milestone vX.Y complete" string never yields a phase', () => {
+    fc.assert(
+      fc.property(fc.nat(999), fc.nat(999), (major, minor) => {
+        return phaseId.parsePhaseFromProse(`Milestone v${major}.${minor} complete`).phase === null;
+      }),
+    );
+  });
+
+  test('parse↔normalize: a "N of M" prose value extracts N, and it normalizes stably', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 9999 }), fc.integer({ min: 1, max: 9999 }), (n, m) => {
+        const parsed = phaseId.parsePhaseFromProse(`${n} of ${m}`);
+        return (
+          parsed.phase === String(n) &&
+          phaseId.normalizePhaseName(parsed.phase) === phaseId.normalizePhaseName(String(n))
+        );
+      }),
+    );
+  });
+});
+
+// ─── #2232 continuation-cap property tests (fast-check) ──────────────────────
+
+// An arbitrary run of digits, including leading-zero forms ("02", "007") that
+// String(int) can never produce — the zero-padded shape is the whole point of
+// the continuation rule, so the corpus must be able to generate it.
+const digitRun = (min, max) =>
+  fc.string({
+    unit: fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'),
+    minLength: min,
+    maxLength: max,
+  });
+
+describe('#2232 continuation cap — properties', () => {
+  test('a numeric segment is absorbed into the token IFF its digit run is exactly 2', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 99 }), digitRun(1, 6), (lead, seg) => {
+        const token = phaseId.extractPhaseToken(`${lead}-${seg}-photos-performance`);
+        const absorbed = token === `${lead}-${seg}`;
+        // The biconditional IS the rule: width 2 ⇔ absorbed. Anything else is
+        // a slug word and must leave the token at the bare leading number.
+        return absorbed === (seg.length === 2) && (absorbed || token === String(lead));
+      }),
+    );
+  });
+
+  test('the owner agrees with the observable extraction for every digit run', () => {
+    fc.assert(
+      fc.property(digitRun(1, 6), (seg) => {
+        const absorbed = phaseId.extractPhaseToken(`14-${seg}-slug`) === `14-${seg}`;
+        return phaseId.isPhaseContinuationSegment(seg) === absorbed;
+      }),
+    );
+  });
+
+  // Metamorphic: the read side (extractPhaseToken) must invert the write side
+  // (getPhaseDirFromPhaseId), which zero-pads every component to 2 digits. This
+  // ties the continuation cap to the convention it mirrors rather than to a
+  // hand-picked example — if the write-side padding width ever changes, this
+  // fails instead of silently drifting.
+  test('metamorphic: a write-side phase dir round-trips to its own normalized phase id', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 99 }), fc.integer({ min: 1, max: 99 }), (major, sub) => {
+        const dir = phaseId.getPhaseDirFromPhaseId(`${major}-${sub}`, 'Some Phase Name', null);
+        if (!dir) return true;
+        return phaseId.extractPhaseToken(dir) === phaseId.normalizePhaseName(`${major}-${sub}`);
+      }),
+    );
+  });
+
+  // The #2232 bug itself, as a property: a phase NAME that slugifies to a
+  // year-leading word must not perturb the round-trip.
+  test('metamorphic: round-trip holds even when the phase name leads with a year (#2232)', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 99 }),
+        fc.integer({ min: 1, max: 99 }),
+        fc.integer({ min: 1000, max: 9999 }),
+        (major, sub, year) => {
+          const dir = phaseId.getPhaseDirFromPhaseId(
+            `${major}-${sub}`,
+            `${year} Photos And Performance`,
+            null,
+          );
+          if (!dir) return true;
+          return phaseId.extractPhaseToken(dir) === phaseId.normalizePhaseName(`${major}-${sub}`);
+        },
+      ),
+    );
+  });
+});
+
+// ─── #2736 prose name-precedence property tests (fast-check) ─────────────────
+
+// #2821's only behavioral delta in parsePhaseFromProse is that a GENUINE
+// (non-status) em-dash name now takes precedence over a parenthetical name;
+// phase-token extraction and totality were unchanged by that commit.
+//
+// P1 and P9 are the delta guards: both fail against the pre-#2821 paren-first
+// parser (verified by the standalone mutation check against
+// parsePhaseFromProseOLD), because they each require the dash name to win
+// over a co-present parenthetical — P9 additionally exercises the
+// paren-stripped separator search, since the losing parenthetical itself
+// contains an em-dash.
+//
+// P2, P3, P4 are characterization tests: they pin currently-true precedence
+// contracts (status tails and em-dash-inside-parens both lose to a
+// parenthetical name) that the pre-#2821 parser ALSO satisfied, so they guard
+// against future regressions rather than proving the #2821 delta.
+//
+// P5-P8 pin totality and phase-token extraction, neither of which #2821
+// changed.
+
+const phaseToken = fc
+  .tuple(
+    digitRun(1, 3),
+    fc.option(fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), { nil: '' }),
+    fc.array(digitRun(1, 2), { maxLength: 2 }),
+  )
+  .map(([lead, letter, decimals]) => `${lead}${letter}${decimals.map((d) => `.${d}`).join('')}`);
+
+const STATUSY =
+  /^(?:completed?|executing|not started|planning|planned|ready(?:\s+to\s+\S.{0,50})?|done|in progress|blocked|paused|verifying)$/i;
+
+const genuineName = fc
+  .string({
+    unit: fc.constantFrom(
+      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+      ' ', 'A', 'B', 'C',
+    ),
+    minLength: 1,
+    maxLength: 40,
+  })
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0 && !STATUSY.test(s) && !/^milestone\s*:/i.test(s) && !/^[A-Z][A-Z0-9_-]*$/.test(s));
+
+const asideText = fc
+  .string({
+    unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_'),
+    minLength: 1,
+    maxLength: 30,
+  })
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
+
+const statusTail = fc.constantFrom(
+  'COMPLETE', 'COMPLETED', 'EXECUTING', 'READY', 'DONE', 'IN PROGRESS',
+  'BLOCKED', 'PAUSED', 'VERIFYING', 'PLANNING', 'PLANNED', 'NOT STARTED',
+);
+
+const capsToken = fc.string({
+  unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+  minLength: 2,
+  maxLength: 12,
+});
+
+describe('#2736 prose name precedence — properties', () => {
+  test('P1 dash name beats a trailing parenthetical aside', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, asideText, (tok, name, aside) => {
+        const p = phaseId.parsePhaseFromProse(`${tok} — ${name} (${aside})`);
+        return p.phase === tok && p.name === name;
+      }),
+    );
+  });
+
+  test('P2 a status-keyword tail never displaces a parenthetical name', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, statusTail, (tok, name, status) => {
+        const p = phaseId.parsePhaseFromProse(`${tok} (${name}) — ${status}`);
+        return p.phase === tok && p.name === name;
+      }),
+    );
+  });
+
+  test('P3 an em-dash inside parens is not mistaken for the separator', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, genuineName, statusTail, (tok, a, b, status) => {
+        const p = phaseId.parsePhaseFromProse(`${tok} (${a} — ${b}) — ${status}`);
+        return p.phase === tok && p.name === `${a} — ${b}`;
+      }),
+    );
+  });
+
+  test('P4 a lone ALL-CAPS tail loses to a parenthetical name', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, capsToken, (tok, name, caps) => {
+        const p = phaseId.parsePhaseFromProse(`${tok} (${name}) — ${caps}`);
+        return p.phase === tok && p.name === name;
+      }),
+    );
+  });
+
+  test('P5 parsePhaseFromProse is total over arbitrary input', () => {
+    fc.assert(
+      fc.property(fc.string({ maxLength: 300 }), (s) => {
+        const p = phaseId.parsePhaseFromProse(s);
+        return (
+          p !== null &&
+          typeof p === 'object' &&
+          (p.phase === null || typeof p.phase === 'string') &&
+          (p.name === null || typeof p.name === 'string')
+        );
+      }),
+    );
+  });
+
+  test('P6 pathological paren/em-dash runs stay total', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 400 }), (n) => {
+        const p = phaseId.parsePhaseFromProse(`3 ${'('.repeat(n)}${'—'.repeat(n)}`);
+        return p.phase === '3' && (p.name === null || typeof p.name === 'string');
+      }),
+    );
+  });
+
+  test('P7 the phase token round-trips out of first-party prose shapes', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, (tok, name) =>
+        phaseId.parsePhaseFromProse(`${tok} (${name})`).phase === tok &&
+        phaseId.parsePhaseFromProse(`Phase ${tok} — ${name}`).phase === tok &&
+        phaseId.parsePhaseFromProse(`${tok}`).phase === tok,
+      ),
+    );
+  });
+
+  test('P8 a milestone-prefixed token still yields the bare phase', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), minLength: 1, maxLength: 3 }),
+        phaseToken,
+        genuineName,
+        (ms, tok, name) => phaseId.parsePhaseFromProse(`${ms}1-${tok} (${name})`).phase === tok,
+      ),
+    );
+  });
+
+  test('P9 a genuine dash name wins over a paren containing an em-dash', () => {
+    fc.assert(
+      fc.property(phaseToken, genuineName, genuineName, genuineName, (tok, a, b, name) => {
+        const p = phaseId.parsePhaseFromProse(`${tok} (${a} — ${b}) — ${name}`);
+        return p.phase === tok && p.name === name;
+      }),
+    );
+  });
+
+  // The STATUSY regex above is a test-local mirror of the private, unexported
+  // STATUSY_TAIL_RE in src/phase-id.cts — it is not imported, only
+  // reimplemented. If a future edit to the implementation's status
+  // vocabulary drifts from this mirror, the properties above that rely on
+  // STATUSY (P2, genuineName's exclusion filter, etc.) would silently weaken
+  // rather than fail. This test pins the mirror to OBSERVABLE parser
+  // behavior instead of source text, so a divergence fails loudly here.
+  test('the test-local STATUSY mirror still agrees with the parser (divergence guard)', () => {
+    const statusVocab = [
+      'complete', 'completed', 'executing', 'not started', 'planning',
+      'planned', 'ready', 'done', 'in progress', 'blocked', 'paused',
+      'verifying',
+    ];
+
+    for (const w of statusVocab) {
+      assert.equal(
+        phaseId.parsePhaseFromProse(`3 (Real Name) — ${w}`).name,
+        'Real Name',
+        `expected status word "${w}" to lose to the parenthetical name`,
+      );
+      const upper = w.toUpperCase();
+      assert.equal(
+        phaseId.parsePhaseFromProse(`3 (Real Name) — ${upper}`).name,
+        'Real Name',
+        `expected status word "${upper}" to lose to the parenthetical name`,
+      );
+    }
+
+    const nonStatusNames = ['Foundation', 'Native Hotkey', 'setup work'];
+    for (const n of nonStatusNames) {
+      assert.equal(
+        phaseId.parsePhaseFromProse(`3 — ${n} (aside)`).name,
+        n,
+        `expected non-status name "${n}" to win as the dash name over the parenthetical aside`,
+      );
+    }
   });
 });

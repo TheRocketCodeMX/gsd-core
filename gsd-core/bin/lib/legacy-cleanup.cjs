@@ -34,8 +34,8 @@ const fs   = require('fs');
  * them can never delete a freshly-installed @therocketcode file.
  *
  *   - 'gsd-core-cc'      — the pre-rename original package.
- *   - '@opengsd/gsd-core' — the upstream npm coordinate (rug-pulled fork source).
- *   - 'open-gsd/gsd-core' — the upstream GitHub repo slug.
+ *   - '@therocketcode/gsd-core' — the upstream npm coordinate (rug-pulled fork source).
+ *   - 'TheRocketCodeMX/gsd-core' — the upstream GitHub repo slug.
  */
 // FORK:identity BEGIN
 const OLD_PACKAGE_SIGNALS = [
@@ -50,11 +50,16 @@ const OLD_PACKAGE_SIGNALS = [
  * NEVER include the current package's own cache
  * (`gsd-update-check-therocketcode-gsd-core.json`).
  *   - 'gsd-update-check.json'                  — the old shared (pre-per-package) cache.
- *   - 'gsd-update-check-opengsd-gsd-core.json' — the upstream @opengsd per-package cache.
+ *   - the upstream @opengsd per-package cache (see the split literal below).
  */
 const LEGACY_CACHE_FILENAMES = [
   'gsd-update-check.json',
-  'gsd-update-check-opengsd-gsd-core.json',
+  // The upstream @opengsd per-package cache. Written SPLIT so the tree-wide
+  // branding sweep (scripts/sync-upstream.sh maps opengsd-gsd-core →
+  // therocketcode-gsd-core) can never rewrite it into the CURRENT package's
+  // cache name — that exact accident once made cleanup flag the live cache
+  // (#607 data-loss guard, pinned by tests/issue-607-legacy-cleanup.test.cjs).
+  'gsd-update-check-' + 'opengsd' + '-gsd-core.json',
 ];
 
 /**

@@ -17,6 +17,7 @@
         "QWEN_CONFIG_DIR"
       ]
     },
+    "localConfigDir": ".qwen",
     "configFormat": "settings-json",
     "artifactLayout": {
       "global": [
@@ -27,6 +28,14 @@
           "nesting": "nested",
           "recursive": false,
           "converter": "convertClaudeCommandToClaudeSkill"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToQwenAgent"
         }
       ],
       "local": [
@@ -37,6 +46,14 @@
           "nesting": "nested",
           "recursive": false,
           "converter": "convertClaudeCommandToClaudeSkill"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToQwenAgent"
         }
       ]
     },
@@ -51,7 +68,69 @@
     "extendedHookEvents": [
       "SubagentStop",
       "Stop",
-      "PreCompact"
-    ]
+      "PreCompact",
+      "SubagentStart"
+    ],
+    "hostIntegration": {
+      "embeddingMode": "imperative",
+      "commandSurface": "slash-file",
+      "dispatch": {
+        "namedDispatch": true,
+        "nested": false,
+        "maxDepth": 1,
+        "background": true,
+        "subagentToolkit": "full",
+        "backgroundDispatch": false,
+        "isolation": "undocumented"
+      },
+      "modelMode": "passive",
+      "hookBus": "host",
+      "stateIO": "filesystem",
+      "transport": "mcp",
+      "runtime": "node",
+      "effortSurface": "undocumented"
+    },
+    "hostBehaviors": {
+      "skillPriorityFrontmatter": true,
+      "brandingRewrites": {
+        "CLAUDE.md": "QWEN.md",
+        "Claude Code": "Qwen Code",
+        ".claude/": ".qwen/"
+      },
+      "legacyCommandsGsdCleanup": true,
+      "legacyCommandsGsdInstallMigration": true,
+      "legacyCommandsGsdUninstall": true,
+      "hyphenNameAgentBody": true,
+      "reviewerCli": true
+    }
+  },
+  "reviewer": {
+    "slug": "qwen",
+    "flags": [
+      "--qwen"
+    ],
+    "transport": "spawn",
+    "probe": {
+      "kind": "command-exists",
+      "binary": "qwen"
+    },
+    "invoke": {
+      "binary": "qwen",
+      "args": [
+        "-"
+      ],
+      "promptChannel": "stdin",
+      "outputChannel": "stdout",
+      "modelArg": null,
+      "effortChannel": "none"
+    },
+    "timeoutFloorMs": 900000,
+    "emptyOutput": "stub-with-stderr",
+    "reviewsSection": "Qwen",
+    "evidenceClass": "source-grounded",
+    "requiresBinaries": [],
+    "promptBudgetKey": null,
+    "modelConfigKey": null,
+    "handler": null
   }
 }

@@ -15,7 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { platformEnsureDir } from './shell-command-projection.cjs';
+import { platformEnsureDir, retryRenameSync } from './shell-command-projection.cjs';
 import { realClock } from './clock.cjs';
 import type { Clock } from './clock.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -140,6 +140,22 @@ function planningDir(cwd: string, ws?: string | null, project?: string | null): 
 
 function planningRoot(cwd: string): string {
   return path.join(cwd, '.planning');
+}
+
+// Sorted list of workstream directory names under `<root>/.planning/workstreams`,
+// or `[]` when the project is flat (no workstreams dir). Single source of truth
+// for the "workstream mode" detection shared by the #1912/#2028 fail-safe guards
+// (init.progress, phase.complete) so the two paths cannot drift.
+function listAvailableWorkstreams(cwd: string): string[] {
+  try {
+    return fs
+      .readdirSync(path.join(planningRoot(cwd), 'workstreams'), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 interface PlanningPaths {
@@ -276,7 +292,7 @@ function withPlanningLock<T>(cwd: string, fn: () => T, clock?: Clock): T {
             // we must NOT fall through to a delete — back off and retry the create.
             const stolen = lockPath + '.stale-' + process.pid + '-' + clock.now() + '-' + (_planningStealSeq++);
             let renamed = false;
-            try { fs.renameSync(lockPath, stolen); renamed = true; } catch { /* another racer won */ }
+            try { retryRenameSync(lockPath, stolen); renamed = true; } catch { /* another racer won */ }
             if (renamed) {
               try { fs.rmSync(stolen, { force: true }); } catch { /* best-effort */ }
               continue; // dead/garbage/expired holder freed — retry immediately to grab it.
@@ -377,8 +393,14 @@ function findContextMdIn(absDirOrFiles: string | string[]): string | null {
       : fs.readdirSync(absDirOrFiles);
     if (files.includes('CONTEXT.md')) return 'CONTEXT.md';
     return files.find((f: string) => f.endsWith('-CONTEXT.md')) ?? null;
-  } catch {
-    return null;
+  } catch (err) {
+    // #1883: distinguish genuine absence from a permission/I-O failure. ENOENT
+    // ("nothing there") keeps the long-standing null contract the callers rely
+    // on; every other error (EACCES, EIO, …) is a real read failure that must
+    // propagate — otherwise an unreadable phase dir is silently reported as
+    // "no CONTEXT.md" and the discuss/plan gates wrongly skip context.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw err;
   }
 }
 
@@ -389,6 +411,7 @@ export = {
   createMemoryPointerAdapter,
   planningDir,
   planningRoot,
+  listAvailableWorkstreams,
   planningPaths,
   withPlanningLock,
   getActiveWorkstream,
