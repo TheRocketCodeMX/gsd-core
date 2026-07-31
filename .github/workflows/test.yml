@@ -116,10 +116,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.product_changed == 'true'
     runs-on: ${{ matrix.os }}
-    # 30 (was 15): a mega-PR's targeted scope approaches the full suite; unsharded
-    # Windows needs the headroom (realignment PR #19 hit the 15m wall). Normal PRs
-    # finish in 2-4 min and are unaffected. Upstream-PR candidate.
-    timeout-minutes: 30
+    # 60 (was 30, was 15): a mega-PR's targeted scope approaches the full suite;
+    # unsharded Windows needs the headroom (realignment PR #19 hit the 15m wall;
+    # the v1.9.0 realignment PR #38, ~1.6k changed files, hit the 30m wall).
+    # Normal PRs finish in 2-4 min and are unaffected. Upstream-PR candidate.
+    timeout-minutes: 60
     env:
       GSD_PLUGIN_ROOT: .ci-gsd-plugin-root-disabled
       # #2854: pin the emitted gate's baseline to the SAME commit the tree was merged
