@@ -78,6 +78,7 @@
     { "path": "src/profile-output.cts", "feature": "grounding", "mode": "markers", "markers": 1, "anchors": ["Sources of Truth", "generateSourcesSection"] },
     { "path": "src/installer-migration-report.cts", "feature": "grounding", "mode": "anchors-only", "anchors": ["gsd-grounding-index-refresh\\.js"] },
     { "path": "bin/install.js", "feature": "grounding", "mode": "anchors-only", "anchors": ["Fork grounding hook \\(#11\\)", "groundingRefreshCommand"] },
+    { "path": "bin/install.js", "feature": "uninstall-scoped-settings", "mode": "anchors-only", "anchors": ["settingsFilesToClean", "_uninstallScopedSettingsFile"] },
     { "path": "src/ui-safety-gate.cts", "feature": "fidelity", "mode": "markers", "markers": 2, "anchors": ["NEGATOR_BEFORE_TOKEN"] },
     { "path": "bin/lib/ui-safety-gate.cjs", "feature": "fidelity", "mode": "markers", "markers": 2, "anchors": ["NEGATOR_BEFORE_TOKEN"] },
     { "path": "hooks/hooks.json", "feature": "grounding", "mode": "anchors-only", "anchors": ["gsd-grounding-index-refresh"] },

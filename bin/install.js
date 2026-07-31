@@ -8604,12 +8604,30 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
     }
   }
 
-  // 6. Clean up settings.json (remove GSD hooks and statusline)
-  const settingsPath = path.join(targetDir, 'settings.json');
+  // 6. Clean up settings files (remove GSD hooks and statusline).
+  // Local installs on runtimes with a scoped settings slot write GSD hook
+  // entries to the scope-specific file (Claude: settings.local.json, #338), so
+  // uninstall must clean BOTH files — cleaning only settings.json left every
+  // managed hook registered in settings.local.json pointing at already-deleted
+  // scripts (2.0.0 update-matrix fix, B6).
+  // Descriptor-driven (ADR-1239): the scoped filename comes from the runtime's
+  // hostBehaviors.settingsFileByScope, the same source the installer's writer
+  // uses, instead of a hardcoded `runtime === 'claude'` check.
+  const _uninstallScopedSettingsFile = (() => {
+    const byScope = _hostBehaviors(runtime).settingsFileByScope;
+    if (!byScope) return null;
+    const name = byScope[isGlobal ? 'global' : 'local'];
+    return typeof name === 'string' && name !== 'settings.json' ? name : null;
+  })();
+  const settingsFilesToClean = _uninstallScopedSettingsFile
+    ? ['settings.json', _uninstallScopedSettingsFile]
+    : ['settings.json'];
+  for (const settingsFileToClean of settingsFilesToClean) {
+  const settingsPath = path.join(targetDir, settingsFileToClean);
   if (fs.existsSync(settingsPath)) {
     let settings = readSettings(settingsPath);
     if (settings === null) {
-      console.log(`  ${yellow}i${reset} Skipping settings.json cleanup — file could not be parsed`);
+      console.log(`  ${yellow}i${reset} Skipping ${settingsFileToClean} cleanup — file could not be parsed`);
       settings = {}; // prevent downstream crashes, but don't write back
     }
     let settingsModified = false;
@@ -8693,7 +8711,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
       }
       if (permissionsModified) {
         settingsModified = true;
-        console.log(`  ${green}✓${reset} Removed GSD permissions from settings.json`);
+        console.log(`  ${green}✓${reset} Removed GSD permissions from ${settingsFileToClean}`);
       }
     }
 
@@ -8719,7 +8737,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
       }
       if (antigravityPermissionsModified) {
         settingsModified = true;
-        console.log(`  ${green}✓${reset} Removed GSD permissions from settings.json`);
+        console.log(`  ${green}✓${reset} Removed GSD permissions from ${settingsFileToClean}`);
       }
     }
 
@@ -8735,7 +8753,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
         delete settings.mcpServers;
       }
       settingsModified = true;
-      console.log(`  ${green}✓${reset} Removed GSD MCP companion server from settings.json`);
+      console.log(`  ${green}✓${reset} Removed GSD MCP companion server from ${settingsFileToClean}`);
     }
 
     if (settingsModified) {
@@ -8743,6 +8761,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
       removedCount++;
     }
   }
+  } // end settingsFilesToClean loop
 
   // 6. For OpenCode, clean up permissions from opencode.json or opencode.jsonc
   if (resolveInstallPlan(runtime).finishPermissionWriter === 'opencode') {
