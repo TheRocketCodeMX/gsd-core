@@ -474,8 +474,8 @@ claude --dangerously-skip-permissions
 ### 기존 코드베이스
 
 ```bash
-/gsd-map-codebase           # Analyse what exists (parallel agents)
-/gsd-new-project            # Questions focus on what you're ADDING
+/gsd-onboard                # Safely map, ingest docs, and initialize planning
+# Follow printed handoff commands, then rerun /gsd-onboard
 # (normal phase workflow from here)
 ```
 
@@ -562,14 +562,14 @@ claude --dangerously-skip-permissions
 
 ### 프로그래밍 방식 CLI (`gsd-tools query` vs `gsd-tools.cjs`)
 
-자동화를 위해서는 등록된 서브명령어와 함께 **`gsd-tools query`**를 사용하세요([CLI-TOOLS.md — SDK 및 프로그래밍 방식 액세스](CLI-TOOLS.md#sdk-and-programmatic-access)와 QUERY-HANDLERS.md 참조). 레거시 `node $HOME/.claude/get-shit-done/bin/gsd-tools.cjs` CLI도 계속 지원됩니다.
+자동화를 위해서는 등록된 서브명령어와 함께 **`gsd-tools query`**를 사용하세요([CLI-TOOLS.md — SDK 및 프로그래밍 방식 액세스](CLI-TOOLS.md#sdk-and-programmatic-access)와 QUERY-HANDLERS.md 참조). 레거시 `node $HOME/.claude/gsd-core/bin/gsd-tools.cjs` CLI도 계속 지원됩니다.
 
 ### STATE.md 동기화 오류
 
 ```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state validate          # Detect drift
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state sync --verify     # Preview changes
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state sync              # Reconstruct STATE.md
+node "$HOME/.claude/gsd-core/bin/gsd-tools.cjs" state validate          # Detect drift
+node "$HOME/.claude/gsd-core/bin/gsd-tools.cjs" state sync --verify     # Preview changes
+node "$HOME/.claude/gsd-core/bin/gsd-tools.cjs" state sync              # Reconstruct STATE.md
 ```
 
 ### "Spawning..." 이후 명령어가 멈춘 것처럼 보일 때
@@ -667,7 +667,7 @@ GSD 서브에이전트는 별도의 컨텍스트 창에서 실행됩니다 — �
 
 비활성화된 서버는 이후 모든 턴에서 스키마를 제거합니다. MCP 정리는 `model_profile` 조정과 **복합**됩니다 — 두 레버는 가산적이며, MCP 절약은 오케스트레이터가 생성하는 모든 서브에이전트에서 즉시 나타납니다.
 
-전체 감사, 하네스 레퍼런스, `model_profile`과의 구성 노트는 번들된 `context-budget.md` 레퍼런스의 [MCP 도구 스키마 비용](../../get-shit-done/references/context-budget.md#mcp-tool-schema-cost-harness-concern)을 참조하세요.
+전체 감사, 하네스 레퍼런스, `model_profile`과의 구성 노트는 번들된 `context-budget.md` 레퍼런스의 [MCP 도구 스키마 비용](../../gsd-core/references/context-budget.md#mcp-tool-schema-cost-harness-concern)을 참조하세요.
 
 ### 비 Claude 런타임 사용 (Codex, OpenCode, Gemini CLI, Kilo)
 
@@ -853,7 +853,7 @@ All subagent/executor commits MUST use `--no-verify`.
   reports/                # Session reports (from /gsd-pause-work --report)
   todos/
     pending/              # Captured ideas awaiting work
-    done/                 # Completed todos
+    completed/             # Completed todos
   debug/                  # Active debug sessions
     resolved/             # Archived debug sessions
   spikes/                 # Feasibility experiments (from /gsd-spike)
@@ -864,7 +864,8 @@ All subagent/executor commits MUST use `--no-verify`.
     themes/
       default.css         # Shared CSS variables for all sketches
     MANIFEST.md           # Index of all sketches with winners
-  codebase/               # Brownfield codebase mapping (from /gsd-map-codebase)
+  codebase/               # Brownfield codebase mapping (from /gsd-map-codebase or /gsd-onboard)
+  onboarding/             # Brownfield onboarding summary (from /gsd-onboard)
   phases/
     XX-phase-name/
       XX-YY-PLAN.md       # Atomic execution plans

@@ -202,7 +202,7 @@ Size-budgeted upstream workflows/agents could not absorb the fork blocks inline,
 - `gsd-core/workflows/autonomous/blocker-handling.md`
 - `gsd-core/workflows/discuss-phase/resume.md`
 - `gsd-core/workflows/execute-phase/steps/failure-classification.md`
-- `gsd-core/workflows/plan-phase/modes/prd-express.md`
+- `gsd-core/workflows/plan-phase/modes/prd-express.md` — **upstream-absorbed as of the v1.9.0 realignment** (upstream extracted its own `plan-phase/steps/prd-express-path.md`; plan-phase.md now references theirs — this fork file is unreferenced and may be pruned)
 
 ### Do NOT restore (accidental / transient additions)
 
@@ -248,7 +248,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-ui-checker.md` | fidelity | markers | FE-architecture/Mode tables + design-override principle |
 | `agents/gsd-ui-researcher.md` | fidelity | markers | Mode/FE-architecture tables; one-line import (anchor) |
 | `agents/gsd-verifier.md` | fidelity, context | markers | reward-hacking + architecture/strategy/design/mode-fit gates; DOMAIN-MODEL/TEST-STRATEGY strategy-fit extension |
-| `bin/lib/ui-safety-gate.cjs` | fidelity, strategy | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard + UI-hint authority |
+| `bin/lib/ui-safety-gate.cjs` | fidelity | markers | legacy root copy (retained per the canonical header + probed as runtime fallback) kept in sync with `src/ui-safety-gate.cts`: negation guard. The UI-hint authority (`strategy`) blocks are **upstream-absorbed** (#2150, v1.9.0 realignment: upstream's line-anchored `**UI hint**: yes|no` parse is stricter and its tests pin those semantics; the root copy mirrors it unmarked) |
 | `commands/gsd/ns-manage.md` | learn | anchors-only | `learn` in requires + gsd-learn routing row |
 | `commands/gsd/ns-project.md` | strategy | anchors-only | 9 strategy skills in requires + routing rows |
 | `docs/ARCHITECTURE.md` | context-monitor | anchors-only | hook-table row + thresholds section: the calm knowledge-flush nudge (revived hook) |
@@ -267,14 +267,14 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
 | `gsd-core/workflows/complete-milestone.md` | context | markers | acknowledge step routes each deferral into `.planning/milestones/next/<label>-CAPSULE.md` (create from template if absent), in addition to the STATE.md Deferred Items entry (1 marker pair) |
-| `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | SIZE-GATED (32000 budget); mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log (2 marker pairs) |
+| `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log + capsule-provenance routing of check_existing "Update it" into `discuss-phase/resume.md`'s Extend branch (3 marker pairs; third pair added in the v1.9.0 realignment — upstream's inline check_existing text is kept, the old size-trim consolidation was dropped as moot under the 40960 DEFAULT cap) |
 | `gsd-core/workflows/discuss-phase/resume.md` | context | markers | capsule-aware existing-CONTEXT branch: provenance non-null → "Extend it" (append a Discussion-additions layer); provenance-null path byte-identical (1 marker pair) |
-| `gsd-core/workflows/execute-phase.md` | fidelity, context | anchors-only + markers | SIZE-GATED (93583/93600 bytes!); wave guards, ADR/DoD files_to_read, #1292 fail-safe, design oracle (anchors); executor reads capsule Locked Decisions + Phase-Scoped Pitfalls, verifier reads capsule What Done Looks Like (2 marker pairs) |
+| `gsd-core/workflows/execute-phase.md` | fidelity, context | anchors-only + markers | SIZE-GATED (93486/<93600 bytes); ADR/DoD files_to_read, design oracle (anchors; wave guards are upstream-native); the step-7 failure-classification extraction to `execute-phase/steps/failure-classification.md` is re-applied (fragment's 7.1 now defers to upstream's `execute-phase-quota-recovery.md`); executor reads capsule Locked Decisions + Phase-Scoped Pitfalls, verifier reads capsule What Done Looks Like (2 marker pairs) |
 | `gsd-core/workflows/help/modes/full.md` | strategy, learn | markers | registration blocks for strategy commands + `/gsd:learn`; the `--list-seeds` row is upstream-native (#722) |
 | `gsd-core/workflows/help/modes/topic.md` | learn | anchors-only | one routing-table row |
 | `gsd-core/workflows/new-milestone.md` | strategy, validation, context | markers | Mode refresh, Step 4.5 warm-start, strategy on-ramp (+1-line bullets, anchors); skip-ledger re-adoption lifecycle (anchors); Step-1 detects `milestones/next/<label>-CAPSULE.md` files, Step 3.1 matches on the resolved label, folds carried-forward items, then moves the capsule to `milestones/consumed/` (2 context marker pairs) |
 | `gsd-core/workflows/new-project.md` | strategy, validation, context | markers | design detection, brief/legacy/design grounding, `## Mode` fill + `## Sources` registry, Step 7.6; Step-9 on-ramp rewrite (anchors); init-JSON key-list truth-up + LEGACY-INVENTORY router short-circuit (anchors); after the deep-questioning loop, append each elicitation round to `.planning/PROJECT-DISCUSSION-LOG.md` (1 context marker pair) |
-| `gsd-core/workflows/plan-phase.md` | grounding, context | anchors-only + markers | SIZE-GATED (94894/<94900 bytes! — ceiling raised 94519→94900, user-approved 2026-07-18, ratchet down at next upstream shrink); elaboration gate, grounding gate, UI-hint authority, oracle files (anchors); §5.6 context freshness-gate directive + §10 `## Orchestrator curation` pre-checker directive routing the context plan:pre contribution fragment to the host (2 context marker pairs) |
+| `gsd-core/workflows/plan-phase.md` | grounding, context | anchors-only + markers | SIZE-GATED (96811/<96875 bytes — ceiling raised 94900→96875 in the v1.9.0 realignment, controller-approved: upstream grew the host and spent the fork's PRD-express trim itself; ratchet down at next upstream shrink); §1.6 elaboration gate, §13a grounding gate (+ upstream's #2770 fix kept), UI-hint sentence (now documenting upstream #2150), oracle files (anchors); §5.6 context freshness-gate directive + §10 `## Orchestrator curation` pre-checker directive (2 context marker pairs). The fork's §13a compression to `plan-phase-coverage-gate.md` is re-applied; the PRD-express trim is **upstream-absorbed** (their `steps/prd-express-path.md`) — the fork's `plan-phase/modes/prd-express.md` is no longer referenced |
 | `gsd-core/workflows/progress.md` | strategy | markers | Strategy-Plan awareness + Mode-staleness hint |
 | `gsd-core/workflows/resume-project.md` | context | markers | load_state re-anchor: read MASTER-CONTEXT.md + active capsule (via `context provenance`) + last SUMMARY, then `context verify --phase`; skips silently when MASTER-CONTEXT.md is absent (1 marker pair) |
 | `gsd-core/workflows/secure-phase.md` | grounding | markers | SECURITY-STRATEGY posture read |
@@ -284,7 +284,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/ultraplan-phase.md` | grounding | markers | grounding carried into the cloud prompt (in-fence part: anchors) |
 | `hooks/hooks.json` | grounding | anchors-only | JSON; grounding-index-refresh matcher entry |
 | `hooks/managed-hooks-registry.cjs` | grounding | anchors-only | one array line |
-| `package.json` | identity | anchors-only | JSON; fork name/author/repo + **zero runtime dependencies** (upstream's `dependencies` block deliberately removed) |
+| `package.json` | identity | anchors-only | JSON; fork name/author/repo + **zero runtime dependencies** (upstream's `dependencies` block deliberately removed). v1.9.0: `@anthropic-ai/claude-agent-sdk` added as a **devDependency** only — the #2590 backend gate resolves the installed SDK version by walking node_modules, and upstream's test needs it resolvable in-repo; nothing ships (no `dependencies` block) |
 | `scripts/prompt-injection-scan.sh` | fidelity | anchors-only | allowlist entry for untrusted-input-boundary.md |
 | `src/check-command-router.cts` | grounding | markers | grounding import, gate toggle + `cmdGroundingPlan`, route arm (+field lines, anchors) |
 | `src/clusters.cts` | strategy, learn | markers | strategy skill cluster rows (marked); `'learn'` row (anchors) |
@@ -293,26 +293,37 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `src/init.cts` | strategy | markers | provided-design detection + result fields (+signature, anchor) |
 | `src/installer-migration-report.cts` | grounding | anchors-only | one whitelist line |
 | `src/profile-output.cts` | grounding | markers | Sources-of-Truth section generator + managed-section wiring (anchors); the fork's GEMINI.md ambient-file branch is upstream-absorbed (`getProjectInstructionFile` runtime policy) |
-| `src/ui-safety-gate.cts` | fidelity | markers | negation guard const + skip logic |
-| `tests/bug-685-windowshide-spawn.test.cjs` | context-monitor | anchors-only | removed record-session assertion + explanatory note |
+| `src/ui-safety-gate.cts` | fidelity | markers | negation guard const + skip logic. The former UI-hint authority (`strategy`) blocks are **upstream-absorbed** (#2150) — never re-add the loose `UI_HINT_ANY_RE` variant; upstream's tests pin the strict semantics |
+| `tests/windows-robustness.test.cjs` | context-monitor | anchors-only | ported #685 block (upstream folded the file, consolidation #1969): fork hook must stay spawn-free; any reintroduced spawn MUST set windowsHide |
 | `tests/ci-test-scope.test.cjs` | context-monitor | anchors-only | A1 fixture swapped off the deleted bug-1974 context-monitor test |
 | `tests/claude-md.test.cjs` | grounding | anchors-only | 7-section + sources assertions |
-| `tests/enh-2790-skill-consolidation.test.cjs` | strategy | anchors-only | new skills in KNOWN_SKILLS set |
-| `tests/enh-769-context-fork-effort.install.test.cjs` | no-context-fork | anchors-only | inverted assertions: heavy skills must NOT carry `context: fork` |
+| `tests/skill-frontmatter-contract.test.cjs` | strategy | anchors-only | ported fork KNOWN_SKILLS entries (12 fork skills) after upstream deleted enh-2790 in consolidation #1970; v1.9.0: `FULL_BUDGET` 844→880 (upstream full.md = 829 lines, 15 headroom — the fork's 39 help-entry lines cannot fit); ratchet back on upstream shrink |
+| `tests/workflow-size-budget.test.cjs` | strategy | anchors-only | v1.9.0 realignment: `DISCUSS_PHASE_TARGET` 32000→34400 (upstream discuss-phase.md = 31,975 bytes, 25 headroom — the fork's ~2.3K marked blocks cannot fit); ratchet back on upstream shrink |
+| `tests/helpers/emitted-provenance.cjs` | learn | markers | `visual` registered in the `gsd-core-verbatim` provenance rule's enumerated-subdir pattern — the fork's vendored gsd-learn visual companion (`gsd-core/visual/*`) is emitted verbatim; without the registration the v1.9.0 install-tree totality guard fails on all 19 manifests |
+| `tests/helpers/emitted-runtime.cjs` | identity | markers | `resolveChangedPaths` unions uncommitted (staged + worktree) changes into the differential gate's explanation set — the CURRENT manifests are built from the working tree, so a dirty checkout (e.g. a staged upstream merge) must diff the same tree; no-op in CI where the tree is clean |
+| `tests/planner-decomposition.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: planner cap 48K→56K, mirroring the XL tier recorded in `tests/agent-size-budget.test.cjs` (upstream's own planner body = 49,116 LF chars, 36 under 48K — no fork block fits); ratchet back on upstream shrink |
+| `tests/reversibility-tagging.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: planner cap 49152→57344 (same XL mirror as above); ratchet back on upstream shrink |
+| `tests/precondition-element.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: planner + executor caps 49152→57344 (XL mirror; upstream headroom 36 / 494 chars); ratchet back on upstream shrink |
+| `tests/reachability-check.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: planner limit 50000→57344 (XL mirror); ratchet back on upstream shrink |
+| `tests/security.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: planner cap 49152→57344 in the #1627 fold (XL mirror); ratchet back on upstream shrink |
+| `tests/fix-2289-context-monitor-event-allowlist.test.cjs` | context-monitor | anchors-only | v1.9.0 realignment: the #2289 allowlist contract (envelope only on injection events) is adopted verbatim; the "injection events still warn" + "side effects on silent events" blocks are ADAPTED to the fork's calm knowledge-flush hook (used_pct 90/95 thresholds, GSD-active gate, missing-name → PostToolUse fallback, Stop silent AND side-effect-free, debounce-counter persistence as the silent side effect) |
+| `bin/install.js` | grounding | anchors-only | `groundingRefreshCommand` computation + pass-through into `applySettingsJsonHooks` (fork #11 FileChanged grounding-index refresh; registration body lives in `src/runtime-hooks-surface.cts`) — was an UNMARKED delta and got dropped in the v1.9.0 merge; now manifest-pinned |
+| `bin/install.js` | uninstall-scoped-settings | anchors-only | uninstall step 6 loops over `settingsFilesToClean` (shared `settings.json` **plus** the scope-specific file from `hostBehaviors.settingsFileByScope`, i.e. `settings.local.json` on local Claude installs, #338). Without it, local uninstall leaves every managed hook registered against already-deleted scripts (realign 2.0.0 update-matrix B6) — was an UNMARKED delta and got dropped in the v1.9.0 merge; now manifest-pinned |
 | `tests/init.test.cjs` | strategy | markers | provided-design detection tests (+4 baseline asserts, anchors) |
 | `tests/issue-607-legacy-cleanup.test.cjs` | identity | markers | upstream-signal, legacy-cache, empty-dir plan/apply tests |
 | `tests/ui-safety-gate.test.cjs` | fidelity | markers | negation-guard tests |
+| `tests/agent-size-budget.test.cjs` | fidelity | anchors-only | v1.9.0 realignment: `gsd-executor` + `gsd-plan-checker` re-tiered LARGE→XL (upstream's own bodies left 280 / 2,789 bytes of LARGE headroom — no room for the fork's marked blocks); commented, ratchet back on upstream shrink |
 
 ### Deletion-only deltas (nothing to anchor — guarded by tests instead)
 
-- `commands/gsd/autonomous.md`, `commands/gsd/execute-phase.md`, `commands/gsd/plan-phase.md` — the fork **removed** `context: fork` from the frontmatter (it forks heavy skills into a context that cannot spawn subagents). Re-apply by deleting the line again after an upstream merge. CI tripwire: `tests/enh-769-context-fork-effort.install.test.cjs` asserts the line is absent — an upstream merge restoring it fails the suite.
+- `commands/gsd/autonomous.md`, `commands/gsd/execute-phase.md`, `commands/gsd/plan-phase.md` — the fork **removed** `context: fork` from the frontmatter (it forks heavy skills into a context that cannot spawn subagents). Re-apply by deleting the line again after an upstream merge. CI tripwire: upstream adopted this policy natively in v1.9.0 (#921/#1970) — `tests/install-runtime-artifacts.test.cjs` asserts spawning orchestrators carry no `context: fork`; the fork's dedicated test was subsumed.
 - Deleted tests: `tests/bug-1974-context-exhaustion-record.test.cjs`, `tests/bug-2451-context-monitor-over-report.test.cjs`, `tests/perf-317-context-monitor-fs.test.cjs`, `tests/bug-925-context-monitor-hook-event-name.test.cjs` (deleted during the 2.0.0 realignment — same class: it pinned the active hook's event-name behavior, which the inert no-op does not have) — they tested the upstream context-monitor behavior this fork removed. Delete them again if an upstream merge resurrects them. `tests/ci-test-scope.test.cjs` A1 rides on a swapped fixture for the same reason (see the modified table).
 
 ### No-op / cosmetic (no restore needed)
 
 - `gsd-core/workflows/execute-phase/steps/codebase-drift-gate.md` — the shim-launcher line was moved to the top of its bash fence (pure reorder + branding).
-- `.secretscanignore` — only the allowlist `owner=` handle changed (`@open-gsd/maintainers` → `@TheRocketCodeMX/maintainers`). Note: this form is NOT covered by `scripts/sync-upstream.sh`'s patterns — re-apply by hand or extend the script.
-- `.claude-plugin/plugin.json`, `gemini-extension.json` — version field + branding only (version is fork-managed).
+- `.secretscanignore` — only the allowlist `owner=` handle changed (`@TheRocketCodeMX/maintainers` → `@TheRocketCodeMX/maintainers`). Note: this form is NOT covered by `scripts/sync-upstream.sh`'s patterns — re-apply by hand or extend the script.
+- `.claude-plugin/plugin.json` — version field + branding only (version is fork-managed). (`gemini-extension.json` was removed with the Gemini CLI sunset in the v1.9.0 realignment.)
 
 ---
 

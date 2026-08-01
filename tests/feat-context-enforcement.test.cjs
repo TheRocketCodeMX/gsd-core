@@ -76,7 +76,7 @@ describe('templates/summary.md: deviations: frontmatter field mirrors the prose 
   const content = fs.readFileSync(path.join(ROOT, 'gsd-core', 'templates', 'summary.md'), 'utf8');
 
   test('has a deviations: frontmatter example with rule/what/why keys', () => {
-    const devBlockMatch = content.match(/deviations:[\s\S]*?\n\n/);
+    const devBlockMatch = content.match(/deviations:[\s\S]*?\r?\n\r?\n/);
     assert.ok(devBlockMatch, 'expected a deviations: frontmatter example block');
     const block = devBlockMatch[0];
     for (const key of ['rule:', 'what:', 'why:']) {

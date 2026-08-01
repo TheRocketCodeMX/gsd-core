@@ -1,9 +1,9 @@
 # Maintaining the @therocketcode/gsd-core fork
 
-This is a fork of `open-gsd/gsd-core` (MIT), pinned at `v1.4.0`, published as **`@therocketcode/gsd-core`** from **`github.com/TheRocketCodeMX/gsd-core`**. We track upstream and cherry-pick.
+This is a fork of `TheRocketCodeMX/gsd-core` (MIT), pinned at `v1.4.0`, published as **`@therocketcode/gsd-core`** from **`github.com/TheRocketCodeMX/gsd-core`**. We track upstream and cherry-pick.
 
 ## Remotes
-- `upstream` → `https://github.com/open-gsd/gsd-core.git` — read-only source of fixes (the real community project). **Never push here.**
+- `upstream` → `https://github.com/TheRocketCodeMX/gsd-core.git` — read-only source of fixes (the real community project). **Never push here.**
 - `origin`   → `https://github.com/TheRocketCodeMX/gsd-core.git` — our fork. Set once: `git remote add origin https://github.com/TheRocketCodeMX/gsd-core.git`
 
 ## Our branding delta (what makes this a fork)
@@ -11,9 +11,9 @@ The rename replaced three coordinate forms across the tree (code, tests, docs):
 
 | Upstream | Ours |
 |---|---|
-| `@opengsd/gsd-core` (npm name) | `@therocketcode/gsd-core` |
-| `open-gsd/gsd-core` (repo slug) | `TheRocketCodeMX/gsd-core` |
-| `opengsd-gsd-core` (cache slug) | `therocketcode-gsd-core` |
+| `@therocketcode/gsd-core` (npm name) | `@therocketcode/gsd-core` |
+| `TheRocketCodeMX/gsd-core` (repo slug) | `TheRocketCodeMX/gsd-core` |
+| `therocketcode-gsd-core` (cache slug) | `therocketcode-gsd-core` |
 
 Plus: `package.json` identity (`name`, `author`, `repository`/`homepage`/`bugs`, `publishConfig.access: public`), `.claude-plugin/plugin.json` author block, `.secretscanignore` owners, and `eslint.config.mjs` ignores `_reference/`.
 
@@ -25,9 +25,9 @@ git fetch upstream --tags
 git log --oneline main..upstream/main          # review what's new
 git cherry-pick <sha>                           # pick specific fixes / security patches
 # Most conflicts will be the branding strings above. Re-apply the rename on conflicted files:
-#   sed -i 's#@opengsd/gsd-core#@therocketcode/gsd-core#g; s#@opengsd\/gsd-core#@therocketcode\/gsd-core#g' <file>
-#   sed -i 's#open-gsd/gsd-core#TheRocketCodeMX/gsd-core#g; s#open-gsd\/gsd-core#TheRocketCodeMX\/gsd-core#g' <file>
-#   sed -i 's#opengsd-gsd-core#therocketcode-gsd-core#g' <file>
+#   sed -i 's#@therocketcode/gsd-core#@therocketcode/gsd-core#g; s#@therocketcode\/gsd-core#@therocketcode\/gsd-core#g' <file>
+#   sed -i 's#TheRocketCodeMX/gsd-core#TheRocketCodeMX/gsd-core#g; s#TheRocketCodeMX\/gsd-core#TheRocketCodeMX\/gsd-core#g' <file>
+#   sed -i 's#therocketcode-gsd-core#therocketcode-gsd-core#g' <file>
 npm run generate:identity                       # re-bake the seam if package.json changed
 npm run build:lib && npm run test:unit && npm run check:identity-drift && npm run lint
 ```

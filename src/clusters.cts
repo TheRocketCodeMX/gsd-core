@@ -31,9 +31,11 @@ export type ClusterMap = Readonly<Record<ClusterName, ReadonlyArray<string>>>;
 
 export const CLUSTERS: ClusterMap = Object.freeze({
   core_loop: Object.freeze([
+    'next',
     'new-project',
     'roadmap',
     'context',
+    'onboard',
     'discuss-phase',
     'plan-phase',
     'execute-phase',

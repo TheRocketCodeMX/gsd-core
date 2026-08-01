@@ -159,7 +159,10 @@ describe('gsd-roadmap skill registration', () => {
   });
 
   test('allowlisted in the skill-consolidation ratchet and a surface cluster', () => {
-    assert.ok(read('tests/enh-2790-skill-consolidation.test.cjs').includes("'roadmap.md'"));
+    // v1.9.0: upstream consolidated tests/enh-2790-skill-consolidation.test.cjs
+    // into tests/skill-frontmatter-contract.test.cjs (#1970); its KNOWN_SKILLS
+    // allowlist is the successor surface ratchet.
+    assert.ok(read('tests/skill-frontmatter-contract.test.cjs').includes("'roadmap.md'"));
     assert.ok(/'roadmap'/.test(read('src/clusters.cts')), 'roadmap missing from src/clusters.cts');
   });
 });

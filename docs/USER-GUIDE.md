@@ -31,14 +31,13 @@ execute → verify → review → ship loop using existing GSD primitives.
 
 ---
 
-## Slash-command forms (hyphen vs colon)
+## Slash-command form
 
-GSD ships **the same set of skills** to every supported runtime, but two slash-form spellings are in play:
+GSD ships **the same set of skills** to every supported runtime, using the hyphen slash-form spelling:
 
 - **Hyphen form** — `/gsd-command-name` — used by Claude Code, Copilot, OpenCode, Kilo, Cursor, Windsurf, Augment, Antigravity, and Trae.
-- **Colon form** — `/gsd:command-name` — used by **Gemini CLI only**. Gemini namespaces every plugin's commands under the plugin id, so the install path rewrites every body-text reference and command file to the colon form during `--gemini` install.
 
-You don't need to choose — the installer writes the correct form into the command directory of each runtime you target. When following a walkthrough on a Gemini terminal, replace the hyphen after `gsd` with a colon as you read each slash command.
+The installer writes this form into the command directory of each runtime you target.
 
 ## Namespace routing primer (`gsd-ns-*`, v1.40+)
 
@@ -80,7 +79,7 @@ The core GSD loop is: **discuss → plan → execute → verify → ship**, repe
 
 See [Your first project](tutorials/your-first-project.md).
 
-For onboarding an existing codebase before starting a new milestone, see [Onboarding an existing codebase](tutorials/onboarding-an-existing-codebase.md).
+For onboarding an existing codebase before starting a new milestone, run `/gsd-onboard` or see [Onboarding an existing codebase](tutorials/onboarding-an-existing-codebase.md).
 
 **Relevant flags at a glance:**
 
@@ -232,7 +231,7 @@ See [docs/workflow-discuss-mode.md](workflow-discuss-mode.md) for the full discu
 
 The discuss-phase captures implementation decisions in CONTEXT.md under a `<decisions>` block as numbered bullets (`- **D-01:** …`). Two gates ensure those decisions survive into plans and shipped code.
 
-**Plan-phase translation gate (blocking).** After planning, GSD refuses to mark the phase planned until every trackable decision appears in at least one plan's `must_haves`, `truths`, or body.
+**Plan-phase translation gate (blocking).** After planning, GSD refuses to mark the phase planned until every trackable decision appears in at least one plan's scanned surfaces: front-matter `must_haves`/`truths`/`objective`, a `## must_haves`/`truths`/`tasks`/`objective` heading, or an `<objective>`/`<tasks>`/`<task>`/`<action>`/`<read_first>`/`<behavior>`/`<verify>`/`<acceptance_criteria>`/`<done>` tag body.
 
 **Verify-phase validation gate (non-blocking).** During verification, GSD searches plans, SUMMARY.md, modified files, and recent commit messages for each trackable decision. Misses are logged to VERIFICATION.md as a warning section; verification status is unchanged.
 
@@ -537,10 +536,12 @@ claude --dangerously-skip-permissions
 ### Existing Codebase
 
 ```bash
-/gsd-map-codebase           # Analyse what exists (parallel agents)
-/gsd-new-project            # Questions focus on what you're ADDING
+/gsd-onboard                # Safely map, ingest docs, and initialize planning
+# Follow the printed top-level handoff commands, then rerun /gsd-onboard
 # (normal phase workflow from here)
 ```
+
+`/gsd-onboard` routes through `/gsd-map-codebase`, `/gsd-ingest-docs`, and `/gsd-new-project` without nesting interactive workflows or overwriting existing planning files silently.
 
 **Post-execute drift detection (#2003).** After every `/gsd-execute-phase`, GSD checks whether the phase introduced enough structural change to make `.planning/codebase/STRUCTURE.md` stale. Flip the behavior with:
 
@@ -732,7 +733,7 @@ Each disabled server removes its schema from every subsequent turn. Trimming MCP
 
 For the full audit, harness reference, and the composition note with `model_profile`, see [MCP Tool Schema Cost](../gsd-core/references/context-budget.md#mcp-tool-schema-cost-harness-concern) in the bundled `context-budget.md` reference.
 
-### Using Non-Claude Runtimes (Codex, OpenCode, Gemini CLI, Kilo)
+### Using Non-Claude Runtimes (Codex, OpenCode, Antigravity CLI, Kilo)
 
 > **Codex CLI minimum supported version: `0.130.0`** (issue [#3562](https://github.com/TheRocketCodeMX/gsd-core/issues/3562)).
 
@@ -776,7 +777,6 @@ See [Runtime-Aware Profiles](CONFIGURATION.md#runtime-aware-profiles-2517).
 
 When generating artifacts, the installer adapts GSD commands to each runtime's native command schema:
 
-- **Gemini CLI** — generated TOML commands use Gemini's `{{args}}` placeholder (translated from Claude's `$ARGUMENTS`) so typed arguments interpolate into the prompt, and `/gsd:progress` injects live project state via a fixed `!{cat .planning/STATE.md 2>/dev/null}` shell block (no interpolated input, so no injection risk; Gemini shows its standard confirmation dialog).
 - **Qwen Code** — main-loop skills carry Qwen's numeric `priority` field so the most-used workflows (e.g. `new-project`, `plan-phase`, `execute-phase`) sort first in the `/skills` list; utility skills are left unset. Higher values sort earlier; the field affects only the `/skills` list order.
 
 See [How to install GSD Core on your runtime](how-to/install-on-your-runtime.md) for the full per-runtime details.
@@ -817,43 +817,6 @@ GSD installs four surfaces for CodeBuddy: `/gsd-*` slash commands in `~/.codebud
 npx @therocketcode/gsd-core --qwen --global
 ```
 
-### Installing as a Gemini CLI extension (#775)
-
-GSD ships a `gemini-extension.json` extension manifest at the repository root, so
-Gemini CLI users can install, update, and remove GSD through Gemini's own
-extension lifecycle — and have it show up in `gemini extensions list`:
-
-```bash
-# Install (Gemini clones the repo and copies the extension)
-gemini extensions install https://github.com/TheRocketCodeMX/gsd-core
-
-# Update to the latest released manifest version
-gemini extensions update gsd-core
-
-# Remove
-gemini extensions uninstall gsd-core
-```
-
-For local development against a checkout, symlink it instead of copying:
-
-```bash
-gemini extensions link /path/to/gsd-core
-```
-
-**What the extension delivers today:** it loads GSD's operating context
-(`GEMINI.md`) into every Gemini session in the project, and gives you the
-discoverable install/update/remove lifecycle above. The `/gsd:*` slash commands,
-agents, and hooks are still installed via the dedicated installer:
-
-```bash
-npx @therocketcode/gsd-core --gemini --global
-```
-
-The two paths are complementary and additive — installing the extension does not
-change or replace the `npx gsd-core --gemini` install, and either can be used on
-its own. (Slash-command/agent/hook projection into the extension package itself
-is a planned follow-up.)
-
 ### Installing for Prerelease Editions
 
 Set the runtime's `*_CONFIG_DIR` env var to the prerelease directory before running the installer:
@@ -867,7 +830,6 @@ WINDSURF_CONFIG_DIR=~/.codeium/windsurf-next npx @therocketcode/gsd-core@latest 
 | Runtime | Stable default | Override env var |
 |---|---|---|
 | Claude Code | `~/.claude` | `CLAUDE_CONFIG_DIR` |
-| Gemini CLI | `~/.gemini` | `GEMINI_CONFIG_DIR` |
 | OpenCode | `XDG_CONFIG_HOME/opencode` | `OPENCODE_CONFIG_DIR` |
 | Codex | (per Codex CLI) | `--config-dir` flag |
 | Copilot | `~/.copilot` | `COPILOT_CONFIG_DIR` (or `COPILOT_HOME`) |
@@ -891,7 +853,16 @@ Set `commit_docs: false` during `/gsd-new-project` or via `/gsd-settings`. Add `
 
 ### GSD Update Overwrote My Local Changes
 
-Since v1.17, the installer backs up locally modified files to `gsd-local-patches/`. Run `/gsd-update --reapply` to merge your changes back.
+Which recovery you need depends on whether you *modified a GSD file* or *added your own*:
+
+- **You edited a file GSD ships** (an agent prompt, a workflow). Since v1.17 the installer backs it up to `gsd-local-patches/`. Run `/gsd-update --reapply` to merge your changes back.
+- **You added your own file inside a GSD-managed directory** (a custom skill under `skills/`, an extra file in `commands/gsd/`). The installer saves it to `gsd-user-files-backup/`, and the update offers to restore it once the new version is installed. If you declined, or the backup is left over from an older update, restore it any time:
+
+  ```bash
+  node <config-dir>/gsd-core/bin/gsd-tools.cjs restore-custom-files --config-dir <config-dir> --apply
+  ```
+
+  Run it without `--apply` first to see what would be restored. The backup is never deleted, and the restore skips any file that would overwrite something the new release ships.
 
 ### Install or Refresh a Release Candidate
 
@@ -924,9 +895,9 @@ Since v1.3.1, the installer pre-populates `~/.claude/settings.json` (or
     "allow": [
       "Bash(npx gsd-core *)",
       "Read(.planning/*)",
-      "Write(.planning/*)",
+      "Edit(.planning/*)",
       "Read(STATE.md)",
-      "Write(STATE.md)"
+      "Edit(STATE.md)"
     ],
     "deny": [
       "Read(.env)",
@@ -994,6 +965,7 @@ To disable parallel execution entirely: `/gsd-settings` → set `parallelization
 | Plan doesn't match your vision       | `/gsd-discuss-phase [N]` then re-plan                                    |
 | Costs running high                   | `/gsd-config --profile budget` and `/gsd-settings` to toggle agents off  |
 | Update broke local changes           | `/gsd-update --reapply`                                                  |
+| Custom file gone after an update     | `gsd-tools restore-custom-files --config-dir <dir> --apply`              |
 | Want session summary for stakeholder | `/gsd-pause-work --report`                                               |
 | Don't know what step is next         | `/gsd-progress --next`                                                   |
 | Parallel execution build errors      | Update GSD or set `parallelization.enabled: false`                       |
@@ -1015,7 +987,7 @@ To disable parallel execution entirely: `/gsd-settings` → set `parallelization
   reports/                # Session reports (from /gsd-pause-work --report)
   todos/
     pending/              # Captured ideas awaiting work
-    done/                 # Completed todos
+    completed/             # Completed todos
   debug/                  # Active debug sessions
     resolved/             # Archived debug sessions
   spikes/                 # Feasibility experiments (from /gsd-spike)
@@ -1026,7 +998,8 @@ To disable parallel execution entirely: `/gsd-settings` → set `parallelization
     themes/
       default.css         # Shared CSS variables for all sketches
     MANIFEST.md           # Index of all sketches with winners
-  codebase/               # Brownfield codebase mapping (from /gsd-map-codebase)
+  codebase/               # Brownfield codebase mapping (from /gsd-map-codebase or /gsd-onboard)
+  onboarding/             # Brownfield onboarding summary (from /gsd-onboard)
   phases/
     XX-phase-name/
       XX-YY-PLAN.md       # Atomic execution plans
@@ -1047,3 +1020,4 @@ To disable parallel execution entirely: `/gsd-settings` → set `parallelization
 - [Commands](COMMANDS.md)
 - [Configuration](CONFIGURATION.md)
 - [The phase loop](explanation/the-phase-loop.md)
+- [Community Capability Registry & EoS Registry](registries/README.md) — discover third-party Capabilities and EoS host integrations

@@ -219,7 +219,10 @@ describe('issue-607 legacy-cleanup: planLegacyCleanup', () => {
 
 // FORK:identity BEGIN
   test('flags the upstream @opengsd per-package update-check cache', () => {
-    const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-opengsd-gsd-core.json');
+    // Split literal: the branding sweep (sync-upstream.sh) maps
+    // opengsd-gsd-core → therocketcode-gsd-core and once rewrote this into the
+    // CURRENT package's cache name, inverting the test into a self-contradiction.
+    const cachePath = path.join(homeDir, '.cache', 'gsd', 'gsd-update-check-' + 'opengsd' + '-gsd-core.json');
     writeFile(cachePath, JSON.stringify({ update_available: false }));
 
     const plan = planLegacyCleanup([], { homeDir });

@@ -17,7 +17,7 @@
  *   - ./planning-workspace.cjs (planningDir, planningRoot)
  *   - ./shell-command-projection.cjs (execGit, platformWriteSync, platformReadSync)
  *   - ./core-utils.cjs       (detectSubRepos)
- *   - ./model-catalog.cjs    (KNOWN_RUNTIMES, KNOWN_PROVIDERS)
+ *   - ./model-catalog.cjs    (KNOWN_RUNTIMES, KNOWN_PROVIDERS, ADAPTIVE_TIER_VALUES)
  */
 
 import fs from 'node:fs';
@@ -35,7 +35,7 @@ import { CONFIG_DEFAULTS as CANONICAL_CONFIG_DEFAULTS, normalizeLegacyKeys } fro
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import configSchema = require('./config-schema.cjs');
 const { VALID_CONFIG_KEYS, DYNAMIC_KEY_PATTERNS, isCentralConfigKey: _isCentralConfigKeyFn } = configSchema;
-import { KNOWN_RUNTIMES, KNOWN_PROVIDERS } from './model-catalog.cjs';
+import { KNOWN_RUNTIMES, KNOWN_PROVIDERS, ADAPTIVE_TIER_VALUES } from './model-catalog.cjs';
 // ─── Federated Config (ADR-857 phase 3b) ─────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import federatedConfigModule = require('./federated-config.cjs');
@@ -108,6 +108,7 @@ const CONFIG_DEFAULTS = {
   verifier: _getNestedConfigDefault('workflow', 'verifier'),
   nyquist_validation: _getNestedConfigDefault('workflow', 'nyquist_validation'),
   ai_integration_phase: _getNestedConfigDefault('workflow', 'ai_integration_phase'),
+  api_coverage_gate: _getNestedConfigDefault('workflow', 'api_coverage_gate'),
   parallelization: _getConfigDefault('parallelization'),
   brave_search: _getConfigDefault('brave_search'),
   firecrawl: _getConfigDefault('firecrawl'),
@@ -123,6 +124,7 @@ const CONFIG_DEFAULTS = {
   security_asvs_level: _getNestedConfigDefault('workflow', 'security_asvs_level'),
   security_block_on: _getNestedConfigDefault('workflow', 'security_block_on'),
   post_planning_gaps: _getNestedConfigDefault('workflow', 'post_planning_gaps'),
+  smart_zone_tokens: _getNestedConfigDefault('workflow', 'smart_zone_tokens'),
 };
 
 /**
@@ -174,10 +176,14 @@ interface ParsedConfig {
 const _gitIgnoredCache = new Map<string, boolean>();
 
 function isGitIgnored(cwd: string, targetPath: string): boolean {
-  const key = cwd + '::' + targetPath;
+  // #2206: strip trailing slashes — `git check-ignore` has a quirk where a
+  // CRLF .gitignore with blank lines falsely reports a trailing-slash path
+  // (e.g. `.planning/`) as ignored. Normalizing here protects every call site.
+  const normalized = targetPath.replace(/\/+$/, '');
+  const key = cwd + '::' + normalized;
   if (_gitIgnoredCache.has(key)) return _gitIgnoredCache.get(key)!;
   // --no-index checks .gitignore rules regardless of whether the file is tracked.
-  const result = execGit(['check-ignore', '-q', '--no-index', '--', targetPath], { cwd });
+  const result = execGit(['check-ignore', '-q', '--no-index', '--', normalized], { cwd });
   const ignored = result.exitCode === 0;
   _gitIgnoredCache.set(key, ignored);
   return ignored;
@@ -185,7 +191,11 @@ function isGitIgnored(cwd: string, targetPath: string): boolean {
 
 // ─── Model alias resolution ───────────────────────────────────────────────────
 
-const RUNTIME_OVERRIDE_TIERS = new Set(['opus', 'sonnet', 'haiku']);
+// Catalog-derived (model-catalog.cts) so this vocabulary can never drift from
+// VALID_TIERS in verify.cts — see #2070 "Generative Fix Divergence". Excludes
+// 'inherit' (unlike VALID_TIERS): runtime overrides always resolve to a
+// concrete tier, never the adaptive sentinel.
+const RUNTIME_OVERRIDE_TIERS = ADAPTIVE_TIER_VALUES;
 const _warnedConfigKeys = new Set<string>();
 
 function _warnUnknownProfileOverrides(parsed: Record<string, unknown>, configLabel: string): void {
@@ -298,8 +308,15 @@ function _warnUnknownProfileOverrides(parsed: Record<string, unknown>, configLab
 
 // Internal helper exposed for tests so per-process warning state can be reset
 // between cases that intentionally exercise the warning path repeatedly.
+// Clears BOTH dedup sets: _warnedConfigKeys (runtime/model-policy/tier warnings)
+// and _warnedUnknownConfigKeys (unknown top-level keys). Omitting the latter made
+// this a silent no-op for the suite that exists to test it — the leaked state
+// suppressed any later case reusing a key, and the existing cases only passed
+// because each picked a key name no other case reused (#2674).
 function _resetRuntimeWarningCacheForTests(): void {
   _warnedConfigKeys.clear();
+  _warnedUnknownConfigKeys.clear();
+  _warnedUnusableConfig.clear();
 }
 
 // ─── FIX 2: Federated overlay helpers ────────────────────────────────────────
@@ -409,13 +426,125 @@ type ConfigSource = 'workstream' | 'root' | 'builtin-defaults' | 'global-default
 /**
  * Result of loadConfigResolved — wraps the config object with provenance metadata.
  * - source: which layer supplied the config
- * - degraded: true when a workstream was requested but its config.json was absent
- *             (fell back to root config); false otherwise
+ * - degraded: true when the resolution did not deliver the configuration it
+ *             should have — either a workstream was requested but its
+ *             config.json was absent (fell back to root), or a file on the
+ *             resolution path exists but is unusable (#1880). `reason` says which.
  */
+/**
+ * Machine-readable outcome of a config resolution (#1880, ADR-1411 amendment
+ * "corrupt is not absent"). `Resolution<T>`'s four documented values all
+ * describe a resolution *miss*; the two `config_un*` values below are the
+ * unusable-input class that amendment introduced, and they are what makes a
+ * corrupt file distinguishable from an absent one.
+ *
+ * Frozen enum rather than bare strings so tests assert on the typed surface
+ * instead of diagnostic prose (CONTRIBUTING.md — Prohibited: Raw Text Matching
+ * on Test Outputs).
+ */
+const CONFIG_REASON = Object.freeze({
+  /** A config file was found, parsed, and supplied at least one setting. */
+  RESOLVED: 'resolved',
+  /** No config file exists at the resolved path. Genuine absence — NOT degraded. */
+  NOT_CONFIGURED: 'not_configured',
+  /** A config file exists and parsed, but carried no settings (`{}`). */
+  CONFIGURED_EMPTY: 'configured_empty',
+  /** A workstream was requested but had no config; fell back to root. */
+  WORKSTREAM_FALLBACK: 'workstream_fallback',
+  /** The file exists but is not valid JSON — settings were NOT applied. */
+  CONFIG_UNPARSEABLE: 'config_unparseable',
+  /** The file exists but could not be read (EACCES/EIO/…) — NOT applied. */
+  CONFIG_UNREADABLE: 'config_unreadable',
+} as const);
+
+type ConfigReason = (typeof CONFIG_REASON)[keyof typeof CONFIG_REASON];
+
+/** A config file that exists but cannot be used. Absence is NOT a fault. */
+interface ConfigFault {
+  reason: typeof CONFIG_REASON.CONFIG_UNPARSEABLE | typeof CONFIG_REASON.CONFIG_UNREADABLE;
+  /** Resolved path of the offending file — half of the diagnostic dedup key. */
+  path: string;
+  /** errno for an unreadable file; '' for a parse failure. The other half. */
+  code: string;
+}
+
 interface ConfigResolution {
   config: Record<string, unknown>;
   source: ConfigSource;
   degraded: boolean;
+  /**
+   * Why this resolution produced what it did. `degraded` alone cannot separate
+   * "no config here" from "your config is corrupt and was discarded" — both
+   * previously returned identical objects (#1880).
+   */
+  reason: ConfigReason;
+}
+
+/**
+ * Read + JSON-parse a config file, keeping *absent* distinguishable from
+ * *unusable*. `platformReadSync` returns null on ENOENT and re-throws every
+ * other errno, which is the seam that makes this separable at all.
+ */
+function _readConfigFile(filePath: string):
+  | { kind: 'ok'; data: Record<string, unknown> }
+  | { kind: 'absent' }
+  | { kind: 'fault'; fault: ConfigFault } {
+  let raw: string | null;
+  try {
+    raw = platformReadSync(filePath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code ?? 'EUNKNOWN';
+    return { kind: 'fault', fault: { reason: CONFIG_REASON.CONFIG_UNREADABLE, path: filePath, code } };
+  }
+  if (raw === null) return { kind: 'absent' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { kind: 'fault', fault: { reason: CONFIG_REASON.CONFIG_UNPARSEABLE, path: filePath, code: '' } };
+  }
+  // Shape, not just parseability (ADR-227). `0`, `"x"`, `[]` and `null` are all
+  // valid JSON but are not a config object. Accepting them let a PRESENT file
+  // parse "ok", then throw downstream, and be reported not_configured by the
+  // outer catch — a corrupt file indistinguishable from an absent one, which is
+  // the exact defect this change closes. Caught by the fast-check property.
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { kind: 'fault', fault: { reason: CONFIG_REASON.CONFIG_UNPARSEABLE, path: filePath, code: '' } };
+  }
+  return { kind: 'ok', data: parsed as Record<string, unknown> };
+}
+
+/**
+ * Dedup set for the unusable-config diagnostic. Keyed on resolved path + errno
+ * per the ADR-1411 amendment — never on message text, which would couple the
+ * guard to wording, and never on the errno alone, which would suppress a
+ * genuine second failure in a different file.
+ */
+const _warnedUnusableConfig = new Set<string>();
+
+/**
+ * The wiring clause (ADR-1411 amendment). `reason` lives on `ConfigResolution`,
+ * but `loadConfig` — the wrapper roughly fifty call sites use — returns
+ * `.config` alone and would never surface it. Without this diagnostic the field
+ * is unreachable to almost every consumer, and the user whose config was
+ * silently discarded still gets no signal. That was the whole defect in #1880.
+ */
+function _warnUnusableConfig(fault: ConfigFault): void {
+  // The NUL separators are load-bearing: without them `path`+`reason`+`code` is bare
+  // concatenation and two distinct faults can key alike. They are written as escapes rather
+  // than literal 0x00 bytes because a literal NUL makes the whole file binary to file(1) and
+  // grep(1), which silently skipped it — RULESET.AUDIT.search-source-not-generated tells
+  // agents to search this exact source to confirm an invariant exists, and it was returning
+  // nothing. Same runtime string, still greppable.
+  const key = `${fault.path}\u0000${fault.reason}\u0000${fault.code}`;
+  if (_warnedUnusableConfig.has(key)) return;
+  _warnedUnusableConfig.add(key);
+  const what = fault.reason === CONFIG_REASON.CONFIG_UNPARSEABLE
+    ? 'is not valid JSON'
+    : `could not be read (${fault.code})`;
+  process.stderr.write(
+    `gsd-tools: warning: ${fault.path} ${what} — its settings were NOT applied; using defaults instead\n`,
+  );
 }
 
 /**
@@ -425,13 +554,21 @@ interface ConfigResolution {
  * { config, source, degraded } instead of just the config object.
  * loadConfig now delegates to this function (byte-identical back-compat).
  *
- * Branch → source/degraded mapping:
- *   A1: ws set + ws config.json found → source:'workstream', degraded:false
- *   A2: ws null + config.json found   → source:'root',       degraded:false
- *   B:  catch + .planning/ + rootParsed set (ws fallback) → source:'root', degraded:true
- *   C:  catch + .planning/ + rootParsed null (federated defaults) → source:'builtin-defaults', degraded:false
- *   D:  catch + no .planning/ + ~/.gsd/defaults.json readable → source:'global-defaults', degraded:false
- *   E:  catch + no .planning/ + no global → source:'builtin-defaults', degraded:false
+ * Branch → source/degraded/reason mapping:
+ *   A1: ws set + ws config.json found → source:'workstream', degraded:false, reason:'resolved'|'configured_empty'
+ *   A2: ws null + config.json found   → source:'root',       degraded:false, reason:'resolved'|'configured_empty'
+ *   B:  catch + .planning/ + rootParsed set (ws fallback) → source:'root', degraded:true, reason:'workstream_fallback'
+ *   C:  catch + .planning/ + rootParsed null (federated defaults) → source:'builtin-defaults', degraded:false, reason:'not_configured'
+ *   D:  catch + no .planning/ + ~/.gsd/defaults.json readable → source:'global-defaults', degraded:false, reason:'not_configured'
+ *   E:  catch + no .planning/ + no global → source:'builtin-defaults', degraded:false, reason:'not_configured'
+ *
+ * ORTHOGONAL to all of the above (#1880, ADR-1411 "corrupt is not absent"): if
+ * any config file on the resolution path exists but is UNUSABLE — invalid JSON,
+ * or an errno such as EACCES — every branch instead returns degraded:true with
+ * reason:'config_unparseable'|'config_unreadable', and a deduplicated stderr
+ * diagnostic names the file. Before this, a trailing comma in config.json was
+ * byte-identical to the file not existing: builtin defaults, degraded:false,
+ * and the user's entire configuration silently discarded.
  */
 function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}): ConfigResolution {
   // NOTE: loadConfigResolved resolves from cwd AS-IS (no walk-up).
@@ -454,13 +591,39 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
     if (cachedSubRepos === undefined) cachedSubRepos = detectSubRepos(cwd);
     return cachedSubRepos.slice();
   };
+  // Faults are captured, not thrown: the existing control flow (one broad catch
+  // that falls back to defaults) is preserved exactly — see #1880. All that is
+  // added is knowing WHY the fallback fired, which is the whole defect.
+  let configFault: ConfigFault | null = null;
+
+  /**
+   * Stamp a fallback return with its reason. Every branch below reaches defaults
+   * (or the root config) — what differs is WHY, and before #1880 that was
+   * unrecoverable: a corrupt file and an absent one produced identical objects.
+   *
+   * An unusable file always wins and always sets `degraded:true`; genuine
+   * absence keeps whatever `degraded` the branch already decided, so the
+   * existing #1366 workstream-fallback semantics are untouched.
+   */
+  const fallback = (r: Omit<ConfigResolution, 'reason'>): ConfigResolution => {
+    if (configFault) return { ...r, degraded: true, reason: configFault.reason };
+    return {
+      ...r,
+      reason: r.degraded ? CONFIG_REASON.WORKSTREAM_FALLBACK : CONFIG_REASON.NOT_CONFIGURED,
+    };
+  };
+
   let rootParsed: ParsedConfig | null = null;
   if (ws) {
     const rootConfigPath = path.join(planningRoot(cwd), 'config.json');
     try {
-      const raw = platformReadSync(rootConfigPath);
-      if (raw === null) throw new Error('missing');
-      rootParsed = JSON.parse(raw) as ParsedConfig;
+      const rootRead = _readConfigFile(rootConfigPath);
+      if (rootRead.kind === 'fault') {
+        configFault = rootRead.fault;
+        _warnUnusableConfig(rootRead.fault);
+      }
+      if (rootRead.kind !== 'ok') throw new Error('root config absent or unusable');
+      rootParsed = rootRead.data;
       const { parsed: rootNormalized, normalizations: rootNorms } = normalizeLegacyKeys(rootParsed);
       if (rootNorms.length > 0) {
         for (const norm of rootNorms as unknown as NormalizationEntry[]) {
@@ -487,9 +650,17 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
   const defaults = CONFIG_DEFAULTS;
 
   try {
-    const raw = platformReadSync(configPath);
-    if (raw === null) throw new Error('missing');
-    const fileData: ParsedConfig = JSON.parse(raw) as ParsedConfig;
+    const read = _readConfigFile(configPath);
+    if (read.kind === 'fault') {
+      // The workstream/root config that ACTUALLY governs this resolution is
+      // unusable. This outranks any earlier root-config fault for reporting.
+      configFault = read.fault;
+      _warnUnusableConfig(read.fault);
+    }
+    if (read.kind !== 'ok') throw new Error('config absent or unusable');
+    const fileData: ParsedConfig = read.data;
+    // Snapshot BEFORE normalizeLegacyKeys mutates fileData in place.
+    const fileHadKeys = Object.keys(read.data).length > 0;
 
     let configDirty = false;
     {
@@ -663,7 +834,26 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
     // A1 vs A2: disambiguate by whether a real workstream was requested.
     // Fix 4: empty-string ws ('') resolves the root path → source:'root'.
     const source: ConfigSource = wsRequested ? 'workstream' : 'root';
-    return { config: _baseConfig, source, degraded: false };
+
+    // This config parsed — but a DIFFERENT file on the resolution path may not
+    // have. A workstream config that loads cleanly while the root config it
+    // inherits from is corrupt is still a degraded resolution: the root's
+    // settings were silently dropped. Reporting `resolved` here would reopen
+    // the exact hole this change closes, for the common case of a project that
+    // uses workstreams at all.
+    if (configFault) {
+      return { config: _baseConfig, source, degraded: true, reason: configFault.reason };
+    }
+
+    // Emptiness is judged on the FILE THAT WAS READ, not on `parsed` (the
+    // root+workstream merge). An empty workstream file inheriting a non-empty
+    // root would otherwise report `resolved` while carrying no settings of its
+    // own — the opposite of the not-configured/configured-empty distinction
+    // ADR-1411 rule 3 requires.
+    const reason = fileHadKeys
+      ? CONFIG_REASON.RESOLVED
+      : CONFIG_REASON.CONFIGURED_EMPTY;
+    return { config: _baseConfig, source, degraded: false, reason };
 
   } catch {
     // Fix 2: Early intercept — workstream requested but ws config.json absent (or dir absent)
@@ -671,7 +861,7 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
     // This delivers the #1366 acceptance criterion: nonexistent GSD_WORKSTREAM yields root, degraded.
     if (wsRequested && rootParsed) {
       const fb = loadConfigResolved(cwd, { workstream: null });
-      return { config: fb.config, source: 'root', degraded: true };
+      return fallback({ config: fb.config, source: 'root', degraded: true });
     }
 
     // Branch B, C, D, E
@@ -680,22 +870,29 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
         // Branch B: workstream requested but ws config.json absent; root config present.
         // (Only reached when wsRequested is false — e.g. ws='' with .planning/workstreams//config.json)
         const fb = loadConfigResolved(cwd, { workstream: null });
-        return { config: fb.config, source: 'root', degraded: true };
+        return fallback({ config: fb.config, source: 'root', degraded: true });
       }
       // Branch C: .planning/ exists but no config.json and no root config — federated/builtin defaults
       try {
-        return { config: _applyFederatedOverlay(defaults, {}, cwd), source: 'builtin-defaults', degraded: false };
+        return fallback({ config: _applyFederatedOverlay(defaults, {}, cwd), source: 'builtin-defaults', degraded: false });
       } catch {
-        return { config: defaults, source: 'builtin-defaults', degraded: false };
+        return fallback({ config: defaults, source: 'builtin-defaults', degraded: false });
       }
     }
     // Branch D or E: no .planning/
     try {
       const home = process.env['GSD_HOME'] || os.homedir();
       const globalDefaultsPath = path.join(home, '.gsd', 'defaults.json');
-      const raw = platformReadSync(globalDefaultsPath);
-      if (raw === null) throw new Error('missing');
-      const globalDefaults = JSON.parse(raw) as Record<string, unknown>;
+      const globalRead = _readConfigFile(globalDefaultsPath);
+      if (globalRead.kind === 'fault') {
+        // ~/.gsd/defaults.json is present but unusable. Only report it when the
+        // project config did not already fail — the nearer file is the one the
+        // user is most likely to be able to act on.
+        if (!configFault) configFault = globalRead.fault;
+        _warnUnusableConfig(globalRead.fault);
+      }
+      if (globalRead.kind !== 'ok') throw new Error('global defaults absent or unusable');
+      const globalDefaults = globalRead.data;
       const _globalBaseCfg: Record<string, unknown> = {
         ...defaults,
         model_profile: (globalDefaults['model_profile']) ?? defaults.model_profile,
@@ -722,19 +919,27 @@ function loadConfigResolved(cwd: string, options: Record<string, unknown> = {}):
         fast_mode: (globalDefaults['fast_mode']) || null,
         agent_skills: (globalDefaults['agent_skills']) || {},
         response_language: (globalDefaults['response_language']) || null,
+        // #2069: forward model_policy / model_profile_overrides / runtime so the global-defaults
+        // path is at parity with the project-config path (which forwards these three from
+        // parsed['…'] at the top of this function). Without these entries, ~/.gsd/defaults.json
+        // silently drops them — model_policy/provider/budget etc. are honored when set in a
+        // project but ignored when set globally.
+        runtime: (globalDefaults['runtime']) || null,
+        model_profile_overrides: (globalDefaults['model_profile_overrides']) || null,
+        model_policy: (globalDefaults['model_policy']) || null,
       };
       // Branch D: global-defaults
       try {
-        return { config: _applyFederatedOverlay(_globalBaseCfg, globalDefaults, cwd), source: 'global-defaults', degraded: false };
+        return fallback({ config: _applyFederatedOverlay(_globalBaseCfg, globalDefaults, cwd), source: 'global-defaults', degraded: false });
       } catch {
-        return { config: _globalBaseCfg, source: 'global-defaults', degraded: false };
+        return fallback({ config: _globalBaseCfg, source: 'global-defaults', degraded: false });
       }
     } catch {
       // Branch E: no global defaults
       try {
-        return { config: _applyFederatedOverlay(defaults, {}, cwd), source: 'builtin-defaults', degraded: false };
+        return fallback({ config: _applyFederatedOverlay(defaults, {}, cwd), source: 'builtin-defaults', degraded: false });
       } catch {
-        return { config: defaults, source: 'builtin-defaults', degraded: false };
+        return fallback({ config: defaults, source: 'builtin-defaults', degraded: false });
       }
     }
   }
@@ -751,6 +956,8 @@ function loadConfig(cwd: string, options: Record<string, unknown> = {}): Record<
 export = {
   loadConfig,
   loadConfigResolved,
+  CONFIG_REASON,
+  _warnedUnusableConfig,
   isGitIgnored,
   CONFIG_DEFAULTS,
   _getConfigDefault,

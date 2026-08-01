@@ -22,6 +22,10 @@ FIX=$(mktemp -d)/ctx-e2e && mkdir -p "$FIX" && cd "$FIX"
 git init -q && git commit -q --allow-empty -m "root"
 # Install / link the fork under test into the fixture (plugin or npm link), then:
 gsd_run --version                                   # sanity: fork resolves
+# GSD-active gate: the calm/flush hook (Scenario 4) only fires when
+# .planning/STATE.md exists — seed a minimal stub now so a by-the-book
+# run doesn't falsely fail that scenario.
+mkdir -p .planning && printf '# STATE\n' > .planning/STATE.md
 # Force the deterministic, non-interactive lifecycle behaviors:
 gsd_run config-set context_lifecycle.enabled true
 gsd_run config-set context_lifecycle.seed_offer auto        # seed without asking, quality-stamped

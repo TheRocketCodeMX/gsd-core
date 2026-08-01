@@ -7,6 +7,21 @@
 - **Realizes:** [ADR-857](857-capability-system.md) Branch 8 (host-CLI support as `role: runtime` Capabilities)
 - **Materializes:** [ADR-58](58-runtime-install-policy-module.md) (the typed `InstallPlan` projection)
 - **Builds on:** [ADR-3660](3660-runtime-artifact-layout-module.md) (artifact layout), [ADR-894](894-capability-declaration-format.md) (the `role: runtime` body, already validated)
+- **Subsumed by:** [ADR-1239](1239-gsd-embeddable-orchestration-engine.md) (GSD as an Embeddable Orchestration Engine) — read it first; see the amendment below
+- **Amended by:** [ADR-2782](2782-reviewer-lane-capability-surface.md) (Reviewer Lane capability surface) — a `role: "runtime"` capability may now carry a `reviewer` body **alongside** its runtime body. The runtime body itself remains closed and unchanged, and no feature-only field becomes permissible on it. ADR-2782 D6 **upholds** this ADR's closed-vocabulary principle: the lane's `handler` is a closed enum of first-party names (the `ConverterName` construction of Decision 3), never an open escape hatch, so §Alternatives #2 stands unreversed.
+
+## Amendment (2026-07-16): subsumed by ADR-1239 (EoS) — this ADR is the *declarative adapter*, not the whole architecture
+
+[ADR-1239](1239-gsd-embeddable-orchestration-engine.md) — **GSD as an Embeddable Orchestration Engine** (EoS), Accepted — subsumes this ADR **as the declarative adapter** in a larger frame, and inverts its direction of travel:
+
+- This ADR answers *"how does GSD project its files onto a host CLI we already know?"* — GSD reaches into the host.
+- ADR-1239 inverts that: **GSD is the engine; the host loads it through a negotiated Host-Integration Interface**, and a third party writes the thin host-plugin. ADR-1239 calls this "flips *projection* to *embedding*, and **unifies** them."
+
+**This ADR is not superseded and its status is unchanged.** The runtime descriptor is real, live, and load-bearing: it remains the *declarative* adapter within EoS. But it is a **component of** the current architecture, not the statement of it. A reader who takes this ADR as the top-level answer to "how does GSD meet a host?" will reach the wrong conclusion for any new host.
+
+**Read [ADR-1239](1239-gsd-embeddable-orchestration-engine.md) first.**
+
+Recorded because ADR-1239 declared this subsumption while this file recorded nothing, leaving the pointer one-way and EoS undiscoverable from here.
 
 ## Context
 
@@ -116,9 +131,9 @@ Selects which config-writing adapter `resolveRuntimeConfigIntent` (in `runtime-c
 
 Whether the runtime writes a shared `settings.json`. Replaces the former inline boolean per runtime in `runtime-config-adapter-registry`. Together with `installSurface` this fully parameterises the adapter-selection path.
 
-#### `permissionWriter` — `null | 'opencode' | 'kilo'`
+#### `permissionWriter` — `null | 'opencode' | 'kilo' | 'antigravity'`
 
-The finish-time permissions-sidecar writer (the JSONC file opencode and kilo require). Replaces the old `finishPermissionWriter` field in the `runtime-config-adapter-registry` `REGISTRY` table. All 14 runtimes that write no permissions sidecar carry `null`.
+The finish-time permissions-sidecar writer. `opencode`/`kilo` write a dedicated JSONC config file; `antigravity` (#2096 Phase B Upgrade 1) instead merges a `permissions.allow` array into the SAME shared `settings.json` GSD's own hook registration writes, plus a standalone `mcp_config.json` MCP-companion profile (Upgrade 2, dispatched alongside it). Replaces the old `finishPermissionWriter` field in the `runtime-config-adapter-registry` `REGISTRY` table. All 13 runtimes that write no permissions sidecar carry `null`.
 
 #### `extendedHookEvents` — `string[]` over a closed event vocabulary
 

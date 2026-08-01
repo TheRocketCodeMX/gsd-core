@@ -17,10 +17,12 @@
  *     `gsd-core-` / `anthropic-` id prefix) is rejected.
  *   - Load-time re-gate (default-resilient): an overlay that fails validation or
  *     whose `engines.gsd` does not satisfy the running GSD version is SKIPPED
- *     with a warning — it never crashes the loop. EXCEPTION (per-hook-kind
- *     policy): a skipped capability that declares a `gate` is recorded in
- *     `_overlay.incompatibleGateCapIds` so the loop resolver can fail CLOSED for
- *     that gate rather than silently proceeding as if it had passed.
+ *     with a warning — it never crashes the loop. A skipped capability that
+ *     declares a `gate` is additionally recorded in
+ *     `_overlay.incompatibleGateCapIds` / `_overlay.blockedGates` so the loop
+ *     resolver can surface a loud fail-OPEN advisory for that gate (#2009): the
+ *     un-evaluable gate is skipped (not enforced) with a remediation message,
+ *     rather than silently vanishing.
  *
  * The merged registry is materialized by the canonical `buildRegistry`
  * (re-exported from the generator, which ships) over a cap-map reconstructed
@@ -58,6 +60,14 @@ interface ValidatorModule {
   validateAgainstContract: (cap: unknown, capId: string) => string[];
   validateConsumesGlobal: (capMap: Map<string, unknown>) => string[];
   validateCrossCapability: (capMap: Map<string, unknown>, centralKeys: Set<string>) => string[];
+  /**
+   * ADR-2782 D4.3 — NON-FATAL diagnostics for an ACCEPTED capability (e.g. an
+   * unknown field inside a `reviewer` body, which is ignored with a warning
+   * rather than failing validation so a manifest built for a newer GSD degrades
+   * visibly instead of being rejected). Returns warnings; never throws.
+   * Optional so an older built validator without it still loads.
+   */
+  collectReviewerWarnings?: (cap: unknown) => string[];
 }
 interface SemverModule {
   semverSatisfies: (version: unknown, range: unknown) => boolean;
@@ -101,6 +111,14 @@ export interface LoadRegistryOptions {
   gsdHome?: string;
   /** Override the running GSD version used for engines.gsd satisfaction. */
   hostVersion?: string;
+  /**
+   * Optional configHome root for load-time write-confinement of installed
+   * third-party descriptors (ADR-1239 Phase C-2 / #1681). When set, each
+   * installed overlay's declared destSubpaths must resolve within this root or
+   * the descriptor is rejected fail-closed (skip + warn). Omit to rely on the
+   * install-time gate only (backward-compatible).
+   */
+  configHome?: string;
 }
 
 export interface OverlaySkip {
@@ -128,6 +146,15 @@ export interface BlockedGate {
 export interface OverlayMeta {
   /** Capabilities skipped at load, with the reason (surfaced to the user). */
   warnings: OverlaySkip[];
+  /**
+   * ADR-2782 D4.3 — non-fatal diagnostics for capabilities that were ACCEPTED.
+   * Distinct from `warnings`, which records capabilities that were SKIPPED: a
+   * consumer that treats every `warnings` entry as "inactive" would mislabel an
+   * active capability if these were folded in. Today this carries unknown-field
+   * notices from a `reviewer` body built for a newer GSD — the case D4.3 exists
+   * for, which validates cleanly and so would otherwise surface nowhere at all.
+   */
+  diagnostics: string[];
   /** Skipped capabilities that declared a gate — the loop must fail CLOSED for these. */
   incompatibleGateCapIds: string[];
   /**
@@ -190,16 +217,29 @@ function _setGeneratorForTest(g: GeneratorModule | null): void {
   _generatorOverride = g;
 }
 
-/** Resolve the running GSD version; fail-closed to '0.0.0' if it cannot be read. */
-function readHostVersion(): string {
+/**
+ * Resolve the running GSD version; fail-closed to '0.0.0' if it cannot be read.
+ *
+ * Prefer the authoritative `gsd-core/VERSION` the installer writes for EVERY runtime
+ * (libDir = gsd-core/bin/lib/, so `../../VERSION` = gsd-core/VERSION). This is reliable
+ * across all installed layouts — including runtimes that get no marker package.json, and
+ * local installs where the walked-up `../../../package.json` would resolve to the USER's
+ * own project and report a wrong version (#1920). Fall back to the runtime-root
+ * package.json for the dev/source tree, then fail-closed. Mirrors resolveVersionFrom()
+ * (#1383). `libDir` is injectable for tests; it defaults to this module's directory.
+ */
+export function readHostVersion(libDir: string = __dirname): string {
+  const SEMVER_PREFIX = /^\d+\.\d+\.\d+/;
   try {
-    // gsd-core/bin/lib/ -> repo/package root is three levels up.
+    const v = fs.readFileSync(path.join(libDir, '..', '..', 'VERSION'), 'utf8').trim();
+    if (SEMVER_PREFIX.test(v)) return v;
+  } catch { /* not an installed tree (no gsd-core/VERSION) */ }
+  try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-    const pkg: { version?: string } = require('../../../package.json');
-    return typeof pkg.version === 'string' && pkg.version ? pkg.version : '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
+    const pkg: { version?: string } = require(path.join(libDir, '..', '..', '..', 'package.json'));
+    if (pkg && typeof pkg.version === 'string' && SEMVER_PREFIX.test(pkg.version)) return pkg.version;
+  } catch { /* runtime root has no package.json */ }
+  return '0.0.0';
 }
 
 /**
@@ -473,6 +513,10 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
   const ledgerMod: LedgerModule = require('./capability-ledger.cjs');
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
   const consentMod: ConsentModule = require('./capability-consent.cjs');
+  // ADR-1239 Phase C-2 (#1681): load-time configHome confinement for installed
+  // third-party descriptors. Accessed via module ref for stub compatibility.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+  const externalDescriptorTrust: { assertDescriptorConfined(descriptor: unknown, configHome: string): void; isPathConfined(target: string, root: string): boolean } = require('./external-descriptor-trust.cjs');
 
   const cwd = options.cwd || process.cwd();
   const hostVersion = options.hostVersion || readHostVersion();
@@ -481,6 +525,8 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
   const gsdHome = options.gsdHome || process.env['GSD_HOME'] || os.homedir();
 
   const warnings: OverlaySkip[] = [];
+  // ADR-2782 D4.3 — non-fatal notices for capabilities that are ACCEPTED (see OverlayMeta).
+  const diagnostics: string[] = [];
   const incompatibleGateCapIds: string[] = [];
   const blockedGates: BlockedGate[] = [];
   const commandRoots: Record<string, string> = {};
@@ -748,7 +794,40 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
         continue;
       }
 
+      // ADR-1239 Phase C-2 (#1681): load-time configHome confinement — reject
+      // (skip + warn) any installed third-party descriptor whose declared
+      // destSubpath escapes the user-approved configHome, BEFORE it is composed.
+      // Defense-in-depth on top of the install-time gate (#1679 AC3).
+      if (typeof options.configHome === 'string' && options.configHome.length > 0) {
+        try {
+          externalDescriptorTrust.assertDescriptorConfined(cap, options.configHome);
+        } catch (confineErr) {
+          acceptedMap.delete(id);
+          skip('configHome confinement rejected: ' + errMessage(confineErr));
+          continue;
+        }
+      }
+
       // Accepted.
+      //
+      // ADR-2782 D4.3: an unknown field inside a `reviewer` body is IGNORED WITH A
+      // WARNING rather than failing validation, so a lane built for a newer GSD
+      // degrades to accepted-but-partially-understood instead of being rejected.
+      // That case validates cleanly, so without this call it would surface
+      // nowhere at runtime — the build-time generator only ever sees first-party
+      // in-repo manifests, never an installed third-party overlay. Guarded on
+      // presence so an older built validator without the function still loads,
+      // and wrapped because the never-crash contract (ADR-1244 D2) outranks a
+      // diagnostic: a throwing collector must not cost the user a working lane.
+      if (typeof validator.collectReviewerWarnings === 'function') {
+        try {
+          for (const w of validator.collectReviewerWarnings(cap) || []) {
+            diagnostics.push(`${root.scope}:${id}: ${w}`);
+          }
+        } catch {
+          // A diagnostic that cannot be produced is not worth failing an install over.
+        }
+      }
       overlayCaps.push(cap);
       acceptedIds.add(id);
       for (const s of skills) claimedSkills.add(s);
@@ -777,7 +856,7 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
     }
   }
 
-  const meta: OverlayMeta = { warnings, incompatibleGateCapIds, blockedGates, commandRoots };
+  const meta: OverlayMeta = { warnings, diagnostics, incompatibleGateCapIds, blockedGates, commandRoots };
 
   if (overlayCaps.length === 0) {
     // Nothing to compose. Return the frozen registry unchanged when there is
@@ -806,12 +885,12 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
     // to load. Clear the map (the first-party base never lists overlay commandRoots — first-party
     // command modules ship in bin/lib/, not via _overlay.commandRoots).
     meta.commandRoots = {};
-    // #1461 OVL-2 fail-CLOSED on compose failure (HIGH): the fallback DROPS every accepted overlay,
-    // so any accepted overlay that DECLARED a gate would have its gate silently vanish → a blocking
-    // gate FAILS OPEN, violating ADR-1244 (a skipped capability declaring a gate must FAIL CLOSED).
+    // #1461 OVL-2 (HIGH): on compose failure the fallback DROPS every accepted overlay, so any
+    // accepted overlay that DECLARED a gate would have its gate silently vanish with no trace.
     // Record each dropped gate-declaring overlay's gate as blocked using the SAME extraction the
-    // per-candidate `skip()` closure uses (gatePointsOf), so loop-resolver injects the synthetic
-    // blocking gate at each declared point exactly as it would for a per-candidate skip.
+    // per-candidate `skip()` closure uses (gatePointsOf), so loop-resolver surfaces the loud
+    // fail-OPEN advisory (#2009) at each declared point exactly as it would for a per-candidate
+    // skip — the gate does not silently disappear.
     for (const cap of overlayCaps) {
       const gatePoints = gatePointsOf(cap);
       if (gatePoints.length === 0) continue;
@@ -822,4 +901,5 @@ export function loadRegistry(options: LoadRegistryOptions = {}): Registry {
   }
 }
 
-module.exports = { loadRegistry, _setValidatorForTest, _setGeneratorForTest };
+// readHostVersion is exported for the #1920 regression (VERSION-first host-version resolution).
+module.exports = { loadRegistry, readHostVersion, _setValidatorForTest, _setGeneratorForTest };

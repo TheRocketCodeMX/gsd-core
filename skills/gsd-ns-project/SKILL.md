@@ -16,6 +16,7 @@ run the project-level Strategy Plan steps (normally sequenced by
 | User wants | Invoke |
 |---|---|
 | Start a new project | gsd-new-project |
+| Onboard an existing codebase | gsd-onboard |
 | Create a new milestone | gsd-new-milestone |
 | Generate or regenerate the project roadmap | gsd-roadmap |
 | Seed/verify/grow durable project knowledge (context capsules) | gsd-context |

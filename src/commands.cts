@@ -21,7 +21,7 @@ import coreUtilsMod = require('./core-utils.cjs');
 const { toPosixPath, generateSlugInternal, extractOneLinerFromBody } = coreUtilsMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseIdMod = require('./phase-id.cjs');
-const { normalizePhaseName, comparePhaseNum, extractPhaseToken } = phaseIdMod;
+const { normalizePhaseName, comparePhaseNum, extractPhaseToken, PHASE_NUMBER_TOKEN_SOURCE } = phaseIdMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseLocatorMod = require('./phase-locator.cjs');
 const { getArchivedPhaseDirs, findPhaseInternal } = phaseLocatorMod;
@@ -30,8 +30,13 @@ import roadmapParserMod = require('./roadmap-parser.cjs');
 const { extractCurrentMilestone, stripShippedMilestones: _stripShippedMilestones, getMilestoneInfo, getMilestonePhaseFilter, getRoadmapPhaseInternal } = roadmapParserMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import modelResolverMod = require('./model-resolver.cjs');
-const { resolveModelInternal, resolveEffortInternal, resolveFastModeInternal, resolveEffortForTier, resolveGranularityInternal, assertValidGranularityOverride } = modelResolverMod;
-import { renderEffortForRuntime, RUNTIMES_WITH_FAST_MODE } from './model-catalog.cjs';
+const { resolveModelInternal, resolveModelForTier, resolveProviderEscalation, resolveEffortInternal, resolveFastModeInternal, resolveEffortForTier, resolveGranularityInternal, assertValidGranularityOverride } = modelResolverMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import agentCommandRouterMod = require('./agent-command-router.cjs');
+const { AGENT_FAILURE_CLASSES } = agentCommandRouterMod;
+import { renderEffortForRuntime, renderEffortArgv, RUNTIMES_WITH_FAST_MODE } from './model-catalog.cjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import hostIntegrationMod = require('./host-integration.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningDir, planningPaths } = planningWorkspace;
@@ -42,6 +47,7 @@ const { extractFrontmatter } = frontmatter;
 import modelProfiles = require('./model-profiles.cjs');
 const { MODEL_PROFILES, VALID_PHASE_TYPES } = modelProfiles;
 import { formatGsdSlash, resolveRuntime } from './runtime-slash.cjs';
+import { realClock } from './clock.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +97,45 @@ interface EffortSyncChange {
 // ─── Phase Status ─────────────────────────────────────────────────────────────
 
 /**
+ * Phase-status precedence ladder — furthest-along wins (#2408).
+ *
+ * `cmdStats` builds `phasesByNumber` by scanning on-disk phase directories.
+ * When two directories normalize to the same phase key (e.g. `05-real/` and
+ * `05-real-stray/`), the status field must be folded by precedence rather
+ * than overwritten last-write-wins — otherwise `/gsd-stats` reports whatever
+ * directory `fs.readdirSync` happened to yield last, which is non-deterministic
+ * across platforms and can silently call a `Complete` phase `Not Started`.
+ */
+const PHASE_STATUS_PRECEDENCE: ReadonlyArray<string> = [
+  'Complete',
+  'Needs Review',
+  'Executed',
+  'In Progress',
+  'Planned',
+  'Not Started',
+  'Pending',
+];
+const PHASE_STATUS_RANK = new Map<string, number>(
+  PHASE_STATUS_PRECEDENCE.map((s, i) => [s, i]),
+);
+
+/**
+ * Fold two phase statuses by precedence — returns whichever is further along
+ * the {@link PHASE_STATUS_PRECEDENCE} ladder. Unrecognized statuses fall behind
+ * every recognized one (so a recognized status always wins over an unknown one;
+ * two unrecognized statuses favor `a` for determinism).
+ */
+function foldPhaseStatus(a: string, b: string): string {
+  const ra = PHASE_STATUS_RANK.get(a);
+  const rb = PHASE_STATUS_RANK.get(b);
+  if (ra === undefined && rb === undefined) return a;
+  if (ra === undefined) return b;
+  if (rb === undefined) return a;
+  // Lower rank = higher precedence (Complete=0 wins over Not Started=5).
+  return ra <= rb ? a : b;
+}
+
+/**
  * Determine phase status by checking plan/summary counts AND verification state.
  * Introduces "Executed" for phases with all summaries but no passing verification.
  */
@@ -104,12 +149,13 @@ function determinePhaseStatus(plans: number, summaries: number, phaseDir: string
     const files = fs.readdirSync(phaseDir);
     const verificationFile = files.find(f => f === 'VERIFICATION.md' || f.endsWith('-VERIFICATION.md'));
     if (verificationFile) {
-      const content = platformReadSync(path.join(phaseDir, verificationFile)) || '';
+      const verificationFilePath = path.join(phaseDir, verificationFile);
+      const content = platformReadSync(verificationFilePath) || '';
       // #1159 (Defect A): read ONLY the frontmatter `status` key to avoid false
       // matches from historical body metadata such as `previous_status: gaps_found`.
       // Full-text regexes like /status:\s*gaps_found/ match the substring inside
       // `previous_status: gaps_found`, producing incorrect phase status labels.
-      const fm = extractFrontmatter(content) as Record<string, unknown>;
+      const fm = extractFrontmatter(content, verificationFilePath) as Record<string, unknown>;
       // Normalise to lower-case to preserve the prior case-insensitive behaviour
       // while reading only the frontmatter `status` key (not the full body text).
       const fmStatus = typeof fm['status'] === 'string' ? fm['status'].trim().toLowerCase() : '';
@@ -164,7 +210,7 @@ function cmdListTodos(cwd: string, area: string | undefined, raw: boolean): void
   const pendingDir = path.join(planningDir(cwd), 'todos', 'pending');
 
   let count = 0;
-  const todos: Array<{ file: string; created: string; title: string; area: string; path: string }> = [];
+  const todos: Array<{ file: string; created: string; title: string; area: string; path: string; severity?: string }> = [];
 
   try {
     const files = fs.readdirSync(pendingDir).filter(f => f.endsWith('.md'));
@@ -175,6 +221,9 @@ function cmdListTodos(cwd: string, area: string | undefined, raw: boolean): void
       const createdMatch = content.match(/^created:\s*(.+)$/m);
       const titleMatch = content.match(/^title:\s*(.+)$/m);
       const areaMatch = content.match(/^area:\s*(.+)$/m);
+      // #2337: surface severity when present. Omit the key entirely for todos
+      // with no severity line so existing consumers of this JSON are unaffected.
+      const severityMatch = content.match(/^severity:\s*(.+)$/m);
 
       const todoArea = areaMatch ? areaMatch[1].trim() : 'general';
 
@@ -188,6 +237,7 @@ function cmdListTodos(cwd: string, area: string | undefined, raw: boolean): void
         title: titleMatch ? titleMatch[1].trim() : 'Untitled',
         area: todoArea,
         path: toPosixPath(path.relative(cwd, path.join(pendingDir, file))),
+        ...(severityMatch ? { severity: severityMatch[1].trim() } : {}),
       });
     }
   } catch { /* intentionally empty */ }
@@ -270,7 +320,7 @@ function cmdListSeeds(cwd: string, statusFilter: string | undefined, raw: boolea
     const content = platformReadSync(safeFilePath);
     if (content === null) continue;
 
-    const fm = extractFrontmatter(content) as Record<string, unknown>;
+    const fm = extractFrontmatter(content, safeFilePath) as Record<string, unknown>;
     const status = (fmStr(fm.status) || 'dormant').toLowerCase().trim() || 'dormant';
 
     // Match on the raw lowercased status (both sides already normalized);
@@ -374,10 +424,11 @@ function cmdHistoryDigest(cwd: string, raw: boolean): void {
       const summaries = fs.readdirSync(dirPath).filter(f => f.endsWith('-SUMMARY.md') || f === 'SUMMARY.md');
 
       for (const summary of summaries) {
-        const content = platformReadSync(path.join(dirPath, summary));
+        const summaryFilePath = path.join(dirPath, summary);
+        const content = platformReadSync(summaryFilePath);
         if (content === null) continue;
         try {
-          const fm = extractFrontmatter(content) as Record<string, unknown>;
+          const fm = extractFrontmatter(content, summaryFilePath) as Record<string, unknown>;
 
           const phaseNum = (fm['phase'] as string) || dir.split('-')[0];
 
@@ -477,9 +528,10 @@ function cmdResolveGranularity(cwd: string, phaseType: string | undefined, raw: 
  *   { model, profile, effort, effort_rendered, effort_param, effort_propagation,
  *     fast_mode, fast_mode_supported, [unknown_agent] }
  *
- * Flags: --effort <level>, --fast-mode <true|false>, --attempt <n>
+ * Flags: --effort <level>, --fast-mode <true|false>, --attempt <n>,
+ *        --failure-class <class> (#2296), --host <runtime-id> (#2481)
  */
-function cmdResolveExecution(cwd: string, agentType: string | undefined, raw: boolean, opts?: { effortOverride?: string; fastModeOverride?: boolean; attempt?: number }): void {
+function cmdResolveExecution(cwd: string, agentType: string | undefined, raw: boolean, opts?: { effortOverride?: string; fastModeOverride?: boolean; attempt?: number; failureClass?: string; host?: string }): void {
   if (!agentType) {
     error('agent-type required');
   }
@@ -487,7 +539,29 @@ function cmdResolveExecution(cwd: string, agentType: string | undefined, raw: bo
   opts = opts || {};
   const config = loadConfig(cwd);
   const profile = (config['model_profile'] as string) || 'balanced';
-  const model = resolveModelInternal(cwd, agentType!);
+  // #2068: resolve the model per-attempt so dynamic_routing escalates the MODEL
+  // (heavy tier) alongside effort. Gated on an explicit --attempt exactly like the
+  // effort resolution below, so the two fields stay symmetric: with no --attempt
+  // the model comes from the classic profile path (unchanged for everyone,
+  // including dynamic_routing-enabled users who don't pass --attempt), and only an
+  // explicit attempt routes through the tier ladder. resolveModelForTier itself
+  // still falls back to resolveModelInternal when dynamic_routing is off.
+  let model = (opts.attempt !== undefined && opts.attempt !== null)
+    ? resolveModelForTier(cwd, agentType!, opts.attempt)
+    : resolveModelInternal(cwd, agentType!);
+
+  // #2296: when the caller reports WHY the previous attempt failed, consult the
+  // provider-escalation ladder. Only a quota/rate-limit class warrants it — a
+  // heavier tier on the same throttled provider is still throttled, so this
+  // ladder swaps providers instead. Gated on an explicit --failure-class so the
+  // JSON contract is byte-identical for every existing caller.
+  let escalation: Record<string, unknown> | undefined;
+  if (opts.failureClass !== undefined) {
+    const applicable = opts.failureClass === AGENT_FAILURE_CLASSES.QUOTA_EXCEEDED;
+    const resolved = resolveProviderEscalation(cwd, agentType!, opts.attempt, applicable);
+    if (resolved.escalated) model = resolved.to;
+    escalation = { class: opts.failureClass, ...resolved };
+  }
 
   const effortOpts: Record<string, unknown> = {};
   if (typeof opts.effortOverride === 'string') effortOpts['override'] = opts.effortOverride;
@@ -517,8 +591,53 @@ function cmdResolveExecution(cwd: string, agentType: string | undefined, raw: bo
     fast_mode: fastMode,
     fast_mode_supported: fastModeSupported,
   };
+  // ADR-1239 amendment (#2481) / ADR-443 path (a): invocation-time effort for a
+  // named host. The host's negotiated `effortSurface` decides WHETHER an argument
+  // is emitted; the catalog knows the syntax. Absent --host the contract is
+  // byte-identical to before, so every existing caller is unaffected.
+  if (typeof opts.host === 'string' && opts.host.length > 0) {
+    const surface = effortSurfaceForHost(cwd, opts.host);
+    const argvRendered = renderEffortArgv(opts.host, effort, surface);
+    result['host'] = opts.host;
+    result['effort_surface'] = surface;
+    result['effort_argv'] = argvRendered.argv;
+    result['effort_argv_string'] = argvRendered.argv.join(' ');
+    result['effort_argv_value'] = argvRendered.value;
+  }
+
   if (!agentModels) result['unknown_agent'] = true;
+  if (escalation) result['escalation'] = escalation;
   output(result, raw, effort);
+}
+
+/**
+ * ADR-1239 amendment (#2481) — resolve a host's negotiated `effortSurface`.
+ *
+ * Reads the host's runtime descriptor from the generated capability registry and
+ * runs it through the Host-Integration negotiation so the trust-boundary invariant
+ * applies here exactly as everywhere else: an unknown host, a missing axis, or the
+ * `undocumented` sentinel all degrade to the safe floor rather than being trusted.
+ * Never throws — a lookup failure yields `'none'`, which renders no argument.
+ */
+function effortSurfaceForHost(cwd: string, host: string): string {
+  void cwd;
+  try {
+    // Mirrors the lazy-require pattern from runtime-slash.cts §runtimeSlash —
+    // capability-registry.cjs is generated and carries no type declarations.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { runtimes } = require('./capability-registry.cjs') as {
+      runtimes: Record<string, { runtime?: { hostIntegration?: unknown } }>;
+    };
+    const declared = runtimes[host]?.runtime?.hostIntegration;
+    if (!declared || typeof declared !== 'object') return 'none';
+    // The descriptor is untrusted JSON; negotiation applies the trust-boundary
+    // invariant (effective ⊆ host-declared ∩ engine-known) and fails closed.
+    const negotiated = hostIntegrationMod.negotiateHostCapabilities(declared);
+    const surface: unknown = negotiated?.effective?.effortSurface;
+    return typeof surface === 'string' ? surface : 'none';
+  } catch {
+    return 'none';
+  }
 }
 
 /**
@@ -564,9 +683,11 @@ function cmdEffortSync(cwd: string, raw: boolean, opts?: { dryRun?: boolean; con
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/unbound-method
   const { getGlobalConfigDir } = require('./runtime-homes.cjs') as { getGlobalConfigDir(runtime: string, explicitDir?: string | null): string };
   // Use install-time resolvers: they merge ~/.gsd/defaults.json with project config,
-  // matching the exact logic used when agents were originally installed.
+  // matching the exact logic used when agents were originally installed. #2071: these
+  // live in the shipped sibling install-effort-resolver.cjs (extracted from the
+  // package-root bin/install.js, which the installer never copies into a runtime home).
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/unbound-method
-  const { readGsdEffectiveEffortConfig, resolveInstallTimeEffort } = require('../../../bin/install.js') as {
+  const { readGsdEffectiveEffortConfig, resolveInstallTimeEffort } = require('./install-effort-resolver.cjs') as {
     readGsdEffectiveEffortConfig(cwd: string): Record<string, unknown>;
     resolveInstallTimeEffort(cfg: Record<string, unknown>, agentName: string): string;
   };
@@ -617,6 +738,58 @@ function cmdEffortSync(cwd: string, raw: boolean, opts?: { dryRun?: boolean; con
   output({ synced, skipped, changes, dry_run: dryRun, agents_dir: agentsDir }, raw, synced > 0 ? 'changed' : 'ok');
 }
 
+/**
+ * Detect the phase number for a commit from its `--files` path list.
+ *
+ * #2539: the extraction is anchored to the directory segment immediately under
+ * `.planning/phases/` or `.planning/milestones/<version>-phases/`, then run
+ * through the project-code-aware `extractPhaseToken` helper. The prior
+ * unanchored `match(/(\d+(?:\.\d+)*)-/)` returned the leftmost digit-run-then-
+ * hyphen anywhere in the joined path, so a project_code ending in a digit
+ * (e.g. PROJECT_V2) made `…/PROJECT_V2-07-name/…` match the `2-` inside `V2-`
+ * before the real `07-` phase token — resolving phase "2" instead of "7".
+ *
+ * Returns the phase number string (e.g. '07', '45.14'), or null when no phase
+ * directory segment is present in any of the file paths (e.g. a commit of
+ * `.planning/ROADMAP.md` has no phase segment, so no branch is resolved —
+ * matching the prior regex-no-match behaviour).
+ */
+function detectPhaseNumberFromFiles(files: string[] | undefined): string | null {
+  if (!files || files.length === 0) return null;
+  // A phase directory lives one segment below a `phases` parent segment:
+  //   .planning/phases/<phase-dir>/…
+  //   .planning/milestones/v1.0-phases/<phase-dir>/…
+  // The segment immediately after the `…phases` segment is the phase directory
+  // name. extractPhaseToken owns the project-code-aware token read.
+  for (const file of files) {
+    const norm = String(file).replace(/\\/g, '/').replace(/^\.\//, '');
+    const segments = norm.split('/');
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (segments[i] === 'phases' || segments[i].endsWith('-phases')) {
+        const phaseDir = segments[i + 1];
+        if (!phaseDir) continue;
+        const token = extractPhaseToken(phaseDir);
+        // extractPhaseToken falls back to returning dirName unchanged when no
+        // numeric token is found. normalizePhaseName is the canonical arbiter
+        // of "is this a real phase token": it strips the project-code prefix
+        // and returns a zero-padded numeric form for a genuine phase token, or
+        // the input unchanged otherwise. Accept the token only when it
+        // normalizes to a numeric phase form (the single-owner rule shared by
+        // every other phase-token reader — see #2528).
+        const normalized = normalizePhaseName(token);
+        // Built from the single-owner PHASE_NUMBER_TOKEN_SOURCE (the canonical
+        // phase-number grammar — #2128 anti-divergence guard) so this read-side
+        // acceptance check cannot drift from every other phase-token reader.
+        const phaseTokenShape = new RegExp(`^${PHASE_NUMBER_TOKEN_SOURCE}$`, 'i');
+        if (token !== phaseDir && phaseTokenShape.test(normalized)) {
+          return token;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function cmdCommit(cwd: string, message: string | undefined, files: string[] | undefined, raw: boolean, amend: boolean, noVerify: boolean): void {
   if (!message && !amend) {
     error('commit message required');
@@ -657,10 +830,21 @@ function cmdCommit(cwd: string, message: string | undefined, files: string[] | u
   if (branchingStrategy && branchingStrategy !== 'none') {
     let branchName: string | null = null;
     if (branchingStrategy === 'phase') {
-      // Determine which phase we're committing for from the file paths
-      const phaseMatch = (files || []).join(' ').match(/(\d+(?:\.\d+)*)-/);
-      if (phaseMatch) {
-        const phaseNum = phaseMatch[1];
+      // Determine which phase we're committing for from the file paths.
+      // #2539: the extraction is anchored to the directory SEGMENT immediately
+      // under `.planning/phases/` (or `.planning/milestones/<v>-phases/`) and
+      // runs through the project-code-aware extractPhaseToken helper, NOT a
+      // free unanchored regex. The prior `match(/(\d+(?:\.\d+)*)-/)` returned
+      // the leftmost digit-run-then-hyphen anywhere in the joined path, so a
+      // project_code ending in a digit (PROJECT_V2) made `.../PROJECT_V2-07-…`
+      // match the `2-` inside `V2-` before the real `07-` phase token —
+      // resolving phase "2" instead of phase "7" and silently checking out the
+      // wrong branch. extractPhaseToken already owns project-code-aware phase-
+      // token parsing (it is the single owner shared by the other 6 call sites
+      // — see #2528 for the parallel drift problem in phase-locator/phase),
+      // so this is the canonical path-segment-bound read, not a fourth copy.
+      const phaseNum = detectPhaseNumberFromFiles(files);
+      if (phaseNum) {
         const phaseInfo = findPhaseInternal(cwd, phaseNum) as Record<string, unknown> | null;
         if (phaseInfo) {
           branchName = (config['phase_branch_template'] as string)
@@ -679,10 +863,25 @@ function cmdCommit(cwd: string, message: string | undefined, files: string[] | u
     if (branchName) {
       const currentBranch = execGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd });
       if (currentBranch.exitCode === 0 && currentBranch.stdout.trim() !== branchName) {
-        // Create branch if it doesn't exist, or switch to it if it does
+        // #2539: the #1278 intent is to CREATE the phase/milestone branch
+        // before the FIRST commit on it — not to force-switch an already-
+        // checked-out working branch onto a DIFFERENT existing branch. The
+        // prior fallback to a bare `git checkout <branch>` silently switched
+        // the whole working tree onto an existing unrelated branch in the same
+        // call that then committed (the only trace was a reflog entry). So:
+        // create-if-absent only. If the resolved branch already exists and the
+        // tree is on some other branch, do NOT switch — but never silently: log
+        // the resolution so the operator sees that the phase branch was
+        // resolved and deliberately not switched to (#2539 AC2: an auto-
+        // checkout mid-commit must never happen silently).
         const create = execGit(['checkout', '-b', branchName], { cwd });
         if (create.exitCode !== 0) {
-          execGit(['checkout', branchName], { cwd });
+          // `git checkout -b` fails (non-zero) when the branch already exists.
+          // The operator is on the branch they intend to be on; commit there.
+          process.stderr.write(
+            `Warning: resolved ${branchingStrategy} branch "${branchName}" already exists; ` +
+            `committing on the current branch "${currentBranch.stdout.trim()}" instead of switching.\n`
+          );
         }
       }
     }
@@ -691,8 +890,24 @@ function cmdCommit(cwd: string, message: string | undefined, files: string[] | u
   // Stage files
   const explicitFiles = files && files.length > 0;
   const filesToStage = explicitFiles ? files : ['.planning/'];
+  const stagedPaths: string[] = [];
+  // #2608: a `git add` that fails must abort the commit, not be skipped.
+  // #2523 stopped a failed path entering the commit pathspec, but skipping it
+  // silently left two bad outcomes: a PARTIAL commit when only some requested
+  // paths failed, and a misleading `nothing_to_commit` when all of them did —
+  // in both cases the original staging error (permissions, unwritable index in
+  // a linked worktree, timeout) was discarded and the operator saw a downstream
+  // pathspec error pointing at an innocent file.
+  const stagingFailures: Array<{ file: string; error: string; timed_out: boolean }> = [];
+  // Paths already in the index BEFORE this call. On a staging failure the
+  // rollback below unstages only what THIS call added — unstaging a path the
+  // caller had staged themselves would destroy their work.
+  const preStaged = new Set(
+    execGit(['diff', '--cached', '--name-only'], { cwd })
+      .stdout.split('\n').map(s => s.trim()).filter(Boolean),
+  );
   for (const file of filesToStage) {
-    const fullPath = path.join(cwd, file);
+    const fullPath = path.resolve(cwd, file);
     if (!fs.existsSync(fullPath)) {
       if (explicitFiles) {
         // Caller passed an explicit --files list: missing files are skipped.
@@ -702,15 +917,96 @@ function cmdCommit(cwd: string, message: string | undefined, files: string[] | u
       }
       // Default mode (staging all of .planning/): stage the deletion so
       // removed planning files are not left dangling in the index.
-      execGit(['rm', '--cached', '--ignore-unmatch', file], { cwd });
+      // This mutates the index exactly like `git add` does, so it fails closed
+      // the same way — an unwritable index must not be swallowed here either.
+      // `--ignore-unmatch` already makes "no such path" a success, so a non-zero
+      // exit is a real I/O failure, not a missing file.
+      const rmResult = execGit(['rm', '--cached', '--ignore-unmatch', file], { cwd });
+      if (rmResult.exitCode !== 0) {
+        const rmErr: NodeJS.ErrnoException | null = rmResult.error;
+        stagingFailures.push({
+          file,
+          error: rmResult.stderr || rmResult.stdout,
+          timed_out: rmResult.signal === 'SIGTERM' && rmErr?.code === 'ETIMEDOUT',
+        });
+      }
     } else {
-      execGit(['add', file], { cwd });
+      const addResult = execGit(['add', file], { cwd });
+      // Only record paths that actually staged — a failed `git add` (permissions,
+      // out-of-repo edge) must not enter the commit pathspec (#2523). Mirrors
+      // cmdCommitToSubrepo's exitCode-gated push.
+      if (addResult.exitCode === 0) {
+        stagedPaths.push(file);
+      } else {
+        // `SpawnResultOutput.error` is typed `Error | null`; widen to the errno
+        // shape by ANNOTATION rather than assertion — `Error` is assignable to
+        // `NodeJS.ErrnoException` (its extra fields are optional), so an `as`
+        // cast here trips no-unnecessary-type-assertion.
+        const addErr: NodeJS.ErrnoException | null = addResult.error;
+        stagingFailures.push({
+          file,
+          error: addResult.stderr || addResult.stdout,
+          // The projection exposes a timeout distinctly (#2608 AC5); this is the
+          // same SIGTERM+ETIMEDOUT idiom worktree-safety.cts uses.
+          timed_out: addResult.signal === 'SIGTERM' && addErr?.code === 'ETIMEDOUT',
+        });
+      }
     }
   }
 
-  // Commit (--no-verify skips pre-commit hooks, used by parallel executor agents)
-  const commitArgs = amend ? ['commit', '--amend', '--no-edit'] : ['commit', '-m', sanitizedMessage as string];
+  // #2608: fail closed before `git commit` runs. Checked ahead of the
+  // nothing_to_commit branch below so a run where EVERY path failed to stage
+  // reports the staging cause rather than "nothing to commit", and ahead of the
+  // commit itself so a multi-file scope never partially commits the subset that
+  // happened to stage.
+  if (stagingFailures.length > 0) {
+    // Fail closed AND clean. Without this the paths that DID stage stay in the
+    // index with no commit made, so the next bare `git commit` sweeps them up —
+    // the same silent partial commit this fix exists to prevent, deferred one
+    // step. Mirrors cmdPrSubrepo's rollback-then-error convention. Only paths
+    // this call staged are unstaged (preStaged is excluded), and the reset is
+    // best-effort: if the index is unwritable — the very failure being reported
+    // — the reset cannot succeed either, and the staging error is still what
+    // gets returned.
+    const toUnstage = stagedPaths.filter(p => !preStaged.has(p));
+    if (toUnstage.length > 0) {
+      execGit(['reset', '-q', '--', ...toUnstage], { cwd });
+    }
+    const first = stagingFailures[0];
+    const result = {
+      committed: false,
+      hash: null,
+      reason: first.timed_out ? 'staging_timeout' : 'staging_failed',
+      file: first.file,
+      error: first.error,
+      failures: stagingFailures,
+    };
+    output(result, raw, 'failed');
+    return;
+  }
+
+  // Commit — when the caller declared a scope (--files), append a pathspec so
+  // only the declared files land in the commit, not the entire index (#2112).
+  // The pathspec uses stagedPaths (not filesToStage) so skipped missing files
+  // are excluded — otherwise git would record them as deletions (#2014).
+  // During a merge, git refuses partial commits — fall back to a bare commit.
+  // --amend is left without a pathspec: amending with -- <paths> is a different
+  // operation that rewrites the tip with only those paths.
+  if (explicitFiles && stagedPaths.length === 0 && !amend) {
+    const result = { committed: false, hash: null, reason: 'nothing_to_commit' };
+    output(result, raw, 'nothing');
+    return;
+  }
+  const isMergeInProgress = execGit(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd }).exitCode === 0;
+  const canScope = explicitFiles && stagedPaths.length > 0 && !amend
+    && !isMergeInProgress;
+  const commitArgs = amend
+    ? ['commit', '--amend', '--no-edit']
+    : ['commit', '-m', sanitizedMessage as string];
   if (noVerify) commitArgs.push('--no-verify');
+  if (canScope) {
+    commitArgs.push('--', ...stagedPaths);
+  }
   const commitResult = execGit(commitArgs, { cwd });
   if (commitResult.exitCode !== 0) {
     if (commitResult.stdout.includes('nothing to commit') || commitResult.stderr.includes('nothing to commit')) {
@@ -814,13 +1110,54 @@ function cmdCommitToSubrepo(cwd: string, message: string | undefined, files: str
     const repoCwd = path.join(cwd, repo);
 
     // Stage files (strip sub-repo prefix for paths relative to that repo)
+    // #2608: this is the sub-repo twin of cmdCommit's staging loop and carried
+    // the identical defect — a failed `git add` was dropped silently and the
+    // function went straight on to commit the subset that happened to stage,
+    // discarding git's stderr. Fails closed per-repo, with the same rollback of
+    // only what this call staged.
+    const preStagedSub = new Set(
+      execGit(['diff', '--cached', '--name-only'], { cwd: repoCwd })
+        .stdout.split('\n').map(s => s.trim()).filter(Boolean),
+    );
+    const stagedRelPaths: string[] = [];
+    const subStagingFailures: Array<{ file: string; error: string; timed_out: boolean }> = [];
     for (const file of repoFiles) {
       const relativePath = file.slice(repo.length + 1);
-      execGit(['add', relativePath], { cwd: repoCwd });
+      const addResult = execGit(['add', relativePath], { cwd: repoCwd });
+      if (addResult.exitCode === 0) {
+        stagedRelPaths.push(relativePath);
+      } else {
+        const addErr: NodeJS.ErrnoException | null = addResult.error;
+        subStagingFailures.push({
+          file,
+          error: addResult.stderr || addResult.stdout,
+          timed_out: addResult.signal === 'SIGTERM' && addErr?.code === 'ETIMEDOUT',
+        });
+      }
+    }
+    if (subStagingFailures.length > 0) {
+      const toUnstageSub = stagedRelPaths.filter(p => !preStagedSub.has(p));
+      if (toUnstageSub.length > 0) {
+        execGit(['reset', '-q', '--', ...toUnstageSub], { cwd: repoCwd });
+      }
+      const firstSub = subStagingFailures[0];
+      repos[repo] = {
+        committed: false,
+        hash: null,
+        files: repoFiles,
+        reason: firstSub.timed_out ? 'staging_timeout' : 'staging_failed',
+        error: firstSub.error,
+      };
+      continue;
     }
 
-    // Commit
-    const commitResult = execGit(['commit', '-m', message as string], { cwd: repoCwd });
+    // Commit — pathspec limits the commit to the staged files only (#2112)
+    const isMergeInProgressSub = execGit(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoCwd }).exitCode === 0;
+    const canScopeSub = stagedRelPaths.length > 0 && !isMergeInProgressSub;
+    const commitArgs = canScopeSub
+      ? ['commit', '-m', message as string, '--', ...stagedRelPaths]
+      : ['commit', '-m', message as string];
+    const commitResult = execGit(commitArgs, { cwd: repoCwd });
     if (commitResult.exitCode !== 0) {
       if (commitResult.stdout.includes('nothing to commit') || commitResult.stderr.includes('nothing to commit')) {
         repos[repo] = { committed: false, hash: null, files: repoFiles, reason: 'nothing_to_commit' };
@@ -966,8 +1303,16 @@ function cmdPrSubrepo(
     }
   }
 
-  // 5. Commit
-  const commitResult = execGit(['commit', '-m', commitMessage as string], { cwd: repoCwd });
+  // 5. Commit — pathspec limits the commit to the staged files only (#2112).
+  // changedFiles includes both old and new paths for renames so the full
+  // rename is captured atomically (pathspec on newPath alone would leave the
+  // deletion of oldPath stranded in the index).
+  const isMergeInProgressPr = execGit(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd: repoCwd }).exitCode === 0;
+  const canScopePr = changedFiles.length > 0 && !isMergeInProgressPr;
+  const commitArgs = canScopePr
+    ? ['commit', '-m', commitMessage as string, '--', ...changedFiles]
+    : ['commit', '-m', commitMessage as string];
+  const commitResult = execGit(commitArgs, { cwd: repoCwd });
   if (commitResult.exitCode !== 0) {
     rollback();
     error(`Failed to commit in ${repo}: ${commitResult.stderr}`);
@@ -1022,7 +1367,7 @@ function cmdSummaryExtract(cwd: string, summaryPath: string | undefined, fields:
   }
 
   const content = fs.readFileSync(fullPath, 'utf-8');
-  const fm = extractFrontmatter(content) as Record<string, unknown>;
+  const fm = extractFrontmatter(content, fullPath) as Record<string, unknown>;
 
   // Parse key-decisions into structured format
   const parseDecisions = (decisionsList: unknown) => {
@@ -1332,7 +1677,7 @@ function cmdTodoMatchPhase(cwd: string, phase: string | undefined, raw: boolean)
       for (const pf of planFiles) {
         const planContent = platformReadSync(path.join(phaseDir, pf));
         if (planContent === null) continue;
-        const fmFiles = planContent.match(/files_modified:\s*\[([^\]]*)\]/);
+        const fmFiles = planContent.match(/files_modified:\s*\[([^\]]{0,8000})\]/);
         if (fmFiles) {
           phasePlans.push(...fmFiles[1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean));
         }
@@ -1416,7 +1761,7 @@ function cmdTodoComplete(cwd: string, filename: string | undefined, raw: boolean
 
   // Read, add completion timestamp, move
   let content = fs.readFileSync(sourcePath, 'utf-8');
-  const today = new Date().toISOString().split('T')[0];
+  const today = realClock.localToday();
   content = `completed: ${today}\n` + content;
 
   platformWriteSync(path.join(completedDir, filename as string), content);
@@ -1428,7 +1773,7 @@ function cmdTodoComplete(cwd: string, filename: string | undefined, raw: boolean
 function cmdScaffold(cwd: string, type: string, options: ScaffoldOptions, raw: boolean): void {
   const { phase, name } = options;
   const padded = phase ? normalizePhaseName(phase) : '00';
-  const today = new Date().toISOString().split('T')[0];
+  const today = realClock.localToday();
 
   // Find phase directory
   const phaseInfo = phase ? findPhaseInternal(cwd, phase) as Record<string, unknown> | null : null;
@@ -1514,7 +1859,8 @@ function cmdStats(cwd: string, format: string | undefined, raw: boolean): void {
     const roadmapContent = extractCurrentMilestone(roadmapRaw, cwd);
     // Matches both plain numeric (Phase 1:) and milestone-prefixed (Phase 2-01:) headings.
     // Also tolerates optional [bracket-token] scope prefix on phase headings.
-    const headingPattern = /#{2,4}\s*(?:\[[^\]]+\]\s*)?Phase\s+([\w][\w.-]*)\s*:\s*([^\n]+)/gi;
+    // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
+    const headingPattern = /#{2,4}\s*(?:\[[^\]]{1,200}\]\s*)?Phase\s+([\w][\w.-]*)(?:\s*\([^)\n]{0,200}\))?\s*:\s*([^\n]+)/gi;
     let match: RegExpExecArray | null;
     while ((match = headingPattern.exec(roadmapContent)) !== null) {
       const key = normalizePhaseName(match[1]);
@@ -1559,7 +1905,12 @@ function cmdStats(cwd: string, format: string | undefined, raw: boolean): void {
         name: existing?.name || phaseName,
         plans: (existing?.plans || 0) + plans,
         summaries: (existing?.summaries || 0) + summaries,
-        status,
+        // #2408: fold colliding statuses by precedence rather than overwriting
+        // last-write-wins. fs.readdirSync order is non-deterministic across
+        // platforms, so a naive overwrite can report a Complete phase as Not
+        // Started (or vice versa) depending on read order. The fold picks the
+        // furthest-along status, matching what an operator expects.
+        status: existing ? foldPhaseStatus(existing.status, status) : status,
       });
     }
   } catch { /* intentionally empty */ }
@@ -1690,6 +2041,8 @@ function cmdCheckCommit(cwd: string, raw: boolean): void {
 export = {
   groupFilesBySubrepo,
   determinePhaseStatus,
+  foldPhaseStatus,
+  PHASE_STATUS_PRECEDENCE,
   cmdGenerateSlug,
   cmdCurrentTimestamp,
   cmdListTodos,

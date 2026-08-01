@@ -70,63 +70,69 @@ both ship in the installed runtime and are loaded into context — workflows on
 every command, agents on every subagent dispatch — so their byte size is a real
 cost. Two sibling guards (`tests/workflow-size-budget.test.cjs` and
 `tests/agent-size-budget.test.cjs`) keep that cost from creeping up invisibly,
-sharing one byte-counter (`measureMdFiles`) and one `npm run size:baseline`
-command that regenerates **both** snapshots. Each is an **anti-creep ratchet**,
-sibling to the regression-name ratchet above — three layers (workflows), ordered
-from day-to-day to last-resort:
+sharing one byte-counter (`measureMdFiles`). Growth is caught by two independent
+layers:
 
 | Layer | What it does | Where |
 |---|---|---|
-| **Per-file baseline** (primary) | Pins every workflow's *exact* current size in a committed snapshot. Any growth, shrink, add, or removal fails until the snapshot is regenerated — so sub-ceiling creep is caught by name and delta, not just at the tier's single largest file. | `tests/workflow-size-baseline.json` |
-| **Loose tier hard caps** (backstop) | Absolute outer red lines per tier — `XL ≤ 98304`, `LARGE ≤ 61440`, `DEFAULT ≤ 40960` bytes. Unlike the old tighten-only ceiling, a cap is **never raised** when a file approaches it: crossing it means *extract*, not bump. | `XL/LARGE/DEFAULT_CAP` |
-| **New-file cap** | A workflow not yet in the baseline must stay under `32768` bytes (the Codex `project_doc_max_bytes` anchor) unless explicitly tiered into `XL_WORKFLOWS`/`LARGE_WORKFLOWS` in the same PR. Keeps net-new orchestrators from being born oversized. | `NEW_FILE_CAP` |
+| **Differential attribution size ratchet** (primary, #2724 / ADR-2719 §4) | The same computed-attribution check that replaced the golden-install-parity fixtures also reports growth in any `gsd-core/workflows/*.md` or `agents/gsd-*.md` file, with the exact byte delta, comparing PR HEAD against `next`. Unacknowledged growth is a hard failure; shrinkage needs no acknowledgment. No committed snapshot — nothing to regenerate by hand. | `tests/emitted-attribution.test.cjs` (real-tree test) via `tests/helpers/emitted-diff.cjs` |
+| **Loose tier hard caps** (backstop) | Absolute outer red lines per tier — workflows: `XL ≤ 98304`, `LARGE ≤ 61440`, `DEFAULT ≤ 40960` bytes; agents: `XL ≤ 57344`, `LARGE ≤ 49152`, `DEFAULT ≤ 24576` bytes. A cap is **never raised** when a file approaches it: crossing it means *extract*, not bump. Independent of the ratchet above — unaffected by #2724. | `XL/LARGE/DEFAULT_CAP` in each guard file |
 
 `discuss-phase.md` additionally has a thin-dispatcher target of `< 32000` bytes
-(the discuss-phase progressive-disclosure split, #717).
-
-**Agents** (`tests/agent-size-budget.test.cjs`) use the same per-agent baseline
-(`tests/agent-size-baseline.json`) + loose tier hard caps — `XL ≤ 57344` /
-`LARGE ≤ 49152` / `DEFAULT ≤ 24576` bytes. There is no new-agent cap: a net-new
-agent is DEFAULT-tier and already bounded by the DEFAULT cap. (This is distinct
-from the separate 45 KB-*char* extraction-evidence threshold on `gsd-planner`
-enforced by `tests/planner-decomposition.test.cjs` — that one proves mode
-sections were extracted; this one bounds total agent bytes.)
+(the discuss-phase progressive-disclosure split, #717). A net-new agent is
+DEFAULT-tier and already bounded by the DEFAULT cap — no separate new-agent cap
+is needed. (This tier-cap machinery is distinct from the separate 45 KB-*char*
+extraction-evidence threshold on `gsd-planner` enforced by
+`tests/planner-decomposition.test.cjs` — that one proves mode sections were
+extracted; this one bounds total agent bytes.)
 
 ### How-to: a workflow or agent grew and CI is red
 
-The baseline guard reports the file and the byte delta (the same flow for both
-the workflow and agent guards). To resolve:
+The differential attribution check reports the file and the byte delta. To resolve:
 
-1. **Regenerate the snapshot** and inspect the one-line diff:
-   ```bash
-   npm run size:baseline
-   git diff tests/workflow-size-baseline.json
-   ```
-2. **Justify the growth in your PR** (a sentence in the description is enough) —
-   the committed baseline diff is the review record that the larger size was a
-   deliberate, seen decision, not silent drift.
-3. **Or shrink it instead of baselining.** Prefer extraction when the growth is
-   incidental: for a workflow, move per-mode bodies to `workflows/<name>/modes/`,
-   templates to `workflows/<name>/templates/`, and shared prose to
-   `gsd-core/references/`; for an agent, lift shared boilerplate into
-   `gsd-core/references/` and `@`-reference it — then load it **LAZILY**. Do *not* convert them to eager `@-required_reading`
-   includes: that shrinks the file's bytes without shrinking loaded context, so
-   it games the guard while making the real cost worse. See
-   `workflows/discuss-phase/` for the progressive-disclosure pattern.
+1. **Justify the growth in your PR** (a sentence in the description is enough) —
+   the acknowledgment entry (below) is the review record that the larger size
+   was a deliberate, seen decision, not silent drift.
+2. **Add an acknowledgment entry** in `tests/emitted-drift-ack.json` naming the
+   file and the reason, per `CONTEXT.md`'s `### Emitted Artifact Provenance`
+   entry. This is deliberately a committed file, not a flag — the entry appears
+   in your PR diff, so touching it *is* the visible signal.
+3. **Or shrink it instead of acknowledging.** Prefer extraction when the growth
+   is incidental: for a workflow, move per-mode bodies to
+   `workflows/<name>/modes/`, templates to `workflows/<name>/templates/`, and
+   shared prose to `gsd-core/references/`; for an agent, lift shared boilerplate
+   into `gsd-core/references/` and `@`-reference it — then load it **LAZILY**. Do
+   *not* convert them to eager `@-required_reading` includes: that shrinks the
+   file's bytes without shrinking loaded context, so it games the guard while
+   making the real cost worse. See `workflows/discuss-phase/` for the
+   progressive-disclosure pattern.
 
-If a hard cap (not the baseline) is what failed, regeneration will **not** help —
-that is the signal to extract, per step 3.
+If a hard cap (not the ratchet) is what failed, an acknowledgment will **not**
+help — that is the signal to extract, per step 3.
 
 ### Reference
 
 | Artifact | Role |
 |---|---|
-| `scripts/workflow-size.cjs` | Single source of truth — LF-normalized byte counter (`lfByteCount`) + generic `measureMdFiles(dir, predicate)` (backs both workflows and agents) + workflow enumeration (`listWorkflowStems`, `measureWorkflows`). Imported by **both** the guards and the generator so they can never measure differently. |
-| `scripts/update-size-baseline.cjs` (`npm run size:baseline`) | Regenerates **both** `tests/workflow-size-baseline.json` and `tests/agent-size-baseline.json` — sorted keys, trailing newline, idempotent. |
-| `tests/workflow-size-baseline.json` | The committed per-workflow snapshot (one entry per workflow). |
-| `tests/agent-size-baseline.json` | The committed per-agent snapshot (one entry per `gsd-*` agent). |
-| `tests/workflow-size-budget.test.cjs` | The three workflow guards above, plus the `discuss-phase` progressive-disclosure checks. |
-| `tests/agent-size-budget.test.cjs` | The per-agent baseline + tier hard-cap guards (the agent analog). |
+| `scripts/workflow-size.cjs` | Single source of truth — LF-normalized byte counter (`lfByteCount`) + generic `measureMdFiles(dir, predicate)` (backs both workflows and agents) + workflow enumeration (`listWorkflowStems`, `measureWorkflows`). Imported by both guards and by `tests/helpers/emitted-runtime.cjs`'s `currentSizes()` so they can never measure differently. |
+| `tests/emitted-attribution.test.cjs` + `tests/helpers/emitted-diff.cjs` | The differential attribution check and its size ratchet (ADR-2719). The sole mechanism for both emitted-content propagation AND per-file size growth as of #2724. |
+| `tests/emitted-drift-ack.json` | Committed acknowledgment file for unattributable emitted-content ripples and for size growth. Absent = no acks; its presence is the alarm. |
+| `npm run regen:derived` | Runs every remaining generator in dependency order (build → registry → ADR index → capability matrix → inventory manifest → manifest versions → `tests/fixtures/install-tree/*.json`). |
+| `tests/workflow-size-budget.test.cjs` | The workflow tier hard-cap guards, plus the `discuss-phase` progressive-disclosure checks. |
+| `tests/agent-size-budget.test.cjs` | The agent tier hard-cap guards (the agent analog). |
+
+`tests/workflow-size-baseline.json`, `tests/agent-size-baseline.json`,
+`tests/fixtures/golden-install-parity/*.json`, `scripts/update-size-baseline.cjs`
+(`npm run size:baseline`), and `scripts/git-merge-regen-driver.cjs`
+(`npm run setup:merge-driver`) are all removed by
+[#2724](https://github.com/TheRocketCodeMX/gsd-core/issues/2724): they were pure
+functions of the source tree, conflicted on every merge that touched them, and
+their functions are now served by the differential attribution check above.
+`tests/fixtures/install-tree/*.json` is the one artifact family that stays
+committed and normally-merged (ADR-2719 §7) — it conflicts on 0 of 7, its diffs
+are readable, and it preserves "the installer stopped shipping X" as a hard
+absolute failure with no attribution reasoning involved. Regenerate it with
+`npm run gen:install-tree` (folded into `npm run regen:derived`).
 
 ## Running suites locally
 
@@ -209,6 +215,55 @@ npm run ci:test-scope -- --files "commands/gsd/plan-phase.md"
 node scripts/ci-test-scope.cjs --base origin/next --head HEAD
 ```
 
+## Chunk packing and the test timing table
+
+`scripts/run-tests.cjs` does not hand the whole selected file list to one
+`node --test` process. It packs the files into **chunks**, each spawned
+separately, because Windows caps a command line at 32,767 characters and because
+each chunk gets its own 600s timeout (`RUN_TESTS_CHUNK_TIMEOUT_MS`) and a fresh
+process, which bounds memory pressure.
+
+How files are distributed across those chunks decides whether the slowest chunk
+sits near that timeout while the others idle. The packer weights each file by its
+**measured duration**, read from `tests/test-timings.json`, and places files with
+LPT (longest-processing-time-first: heaviest file first, each into the currently
+lightest chunk). Before #2456 the weight was guessed from the filename, which
+mis-ranked files badly enough that the slowest chunk ran ~3.9x the lightest.
+
+### Reference
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `RUN_TESTS_MAX_FILES_PER_CHUNK` | `60` | Per-chunk weight budget. Weights are normalized so an **average-cost** file weighs 1, so this still reads as "about 60 average files". |
+| `RUN_TESTS_MAX_CMDLINE_CHARS` | `28000` | argv ceiling per chunk, with headroom under the Windows 32,767 limit. |
+| `RUN_TESTS_TIMINGS_FILE` | `tests/test-timings.json` | Path to the timing table. Tests override it to inject a synthetic cost profile. |
+| `RUN_TESTS_CHUNK_TIMEOUT_MS` | `600000` | Per-chunk timeout. |
+
+The timing table is **advisory and deliberately un-gated**. There is no `--check`
+mode and no CI lint that fails on staleness, because timing data legitimately
+varies run to run. A file missing from the table falls back to the table's median
+weight, and a missing or unparseable table falls back to uniform weight — so
+drift costs chunk *balance*, never a red build. A count-based floor additionally
+guarantees the packer never produces fewer chunks than plain count-based packing
+would, so a badly stale table cannot collapse the suite into a few fat chunks.
+
+### How-to: regenerate the timing table
+
+Regenerate when the suite's cost profile has visibly drifted — after adding or
+removing expensive tests, not on a schedule. The input is a `node:test` reporter
+event stream from a `gsd-test` run:
+
+```bash
+node scripts/gen-test-timings.cjs \
+  ~/.local/state/gsd-test/runs/<run-id>/test-events-linux-node22.jsonl \
+  ~/.local/state/gsd-test/runs/<run-id>/test-events-linux-node24.jsonl
+```
+
+Pass every lane you have. A file's recorded time is the **max** across the
+supplied streams, not the mean: the packer exists to keep the *slowest* lane's
+slowest chunk away from the timeout, so the conservative bound is the right one.
+Keys are sorted so a regeneration diff shows only the files whose cost moved.
+
 ## Best practices for forward-compat (Node 24/26)
 
 - Use `process.execPath` when spawning Node in tests so each matrix lane exercises the lane's Node version.
@@ -221,8 +276,8 @@ node scripts/ci-test-scope.cjs --base origin/next --head HEAD
 ## Test strategy: #443 effort + fast_mode engine
 
 > Feature: unified cross-provider effort and fast_mode knobs (issue #443).
-> Test files: `tests/feat-443-effort-fast-mode.test.cjs` (unit),
-> `tests/feat-443-effort-fast-mode.integration.test.cjs` (integration).
+> Test files: `tests/model-resolver.test.cjs` (unit),
+> `tests/model-resolver.test.cjs` (integration).
 
 ### Testing pyramid
 

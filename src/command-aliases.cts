@@ -171,6 +171,14 @@ export const STATE_COMMAND_ALIASES: CommandAlias[] = [
     "mutation": true
   },
   {
+    "canonical": "state.rebuild",
+    "aliases": [
+      "state rebuild"
+    ],
+    "subcommand": "rebuild",
+    "mutation": true
+  },
+  {
     "canonical": "state.milestone-switch",
     "aliases": [
       "state milestone-switch"
@@ -286,6 +294,14 @@ export const INIT_COMMAND_ALIASES: CommandAlias[] = [
       "init new-milestone"
     ],
     "subcommand": "new-milestone",
+    "mutation": false
+  },
+  {
+    "canonical": "init.onboard",
+    "aliases": [
+      "init onboard"
+    ],
+    "subcommand": "onboard",
     "mutation": false
   },
   {
@@ -764,6 +780,20 @@ export const NON_FAMILY_COMMAND_ALIASES: NonFamilyCommandAlias[] = [
     "canonical": "requirements.mark-complete",
     "aliases": [
       "requirements mark-complete"
+    ],
+    "mutation": true
+  },
+  {
+    "canonical": "requirements.ready-ids",
+    "aliases": [
+      "requirements ready-ids"
+    ],
+    "mutation": false
+  },
+  {
+    "canonical": "requirements.revert-phase",
+    "aliases": [
+      "requirements revert-phase"
     ],
     "mutation": true
   },

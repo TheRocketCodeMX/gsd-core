@@ -1,4 +1,4 @@
-# Upstream Adoption Analysis — `@therocketcode/gsd-core` ← `open-gsd/gsd-core`
+# Upstream Adoption Analysis — `@therocketcode/gsd-core` ← `TheRocketCodeMX/gsd-core`
 
 > **Status: ANALYSIS ONLY.** This document is decision-support and the input for a
 > future GSD milestone/spec. It contains no implementation and mandates none. Nothing
@@ -51,7 +51,7 @@ The upstream delta splits cleanly into **two tracks**:
 
 ## 2. The fork ↔ upstream relationship
 
-| | Fork `@therocketcode/gsd-core` | Upstream `open-gsd/gsd-core` |
+| | Fork `@therocketcode/gsd-core` | Upstream `TheRocketCodeMX/gsd-core` |
 |---|---|---|
 | Base | forked at upstream `v1.4.0` (`7eb4d286`) | — |
 | Current | `1.14.0` (own scheme) | `1.6.1` (2026-07-01) |

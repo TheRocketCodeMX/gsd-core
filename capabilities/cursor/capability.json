@@ -17,6 +17,7 @@
         "CURSOR_CONFIG_DIR"
       ]
     },
+    "localConfigDir": ".cursor",
     "configFormat": "none",
     "artifactLayout": {
       "global": [
@@ -35,6 +36,14 @@
           "nesting": "flat",
           "recursive": false,
           "converter": "convertClaudeCommandToCursorCommand"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToCursorAgent"
         }
       ],
       "local": [
@@ -53,6 +62,14 @@
           "nesting": "flat",
           "recursive": false,
           "converter": "convertClaudeCommandToCursorCommand"
+        },
+        {
+          "kind": "agents",
+          "destSubpath": "agents",
+          "prefix": "gsd-",
+          "nesting": "flat",
+          "recursive": false,
+          "converter": "convertClaudeAgentToCursorAgent"
         }
       ]
     },
@@ -64,6 +81,79 @@
     "installSurface": "cursor-hooks-json",
     "writesSharedSettings": false,
     "permissionWriter": null,
-    "extendedHookEvents": []
+    "extendedHookEvents": [],
+    "hostIntegration": {
+      "embeddingMode": "imperative",
+      "commandSurface": "slash-file",
+      "dispatch": {
+        "namedDispatch": true,
+        "nested": true,
+        "maxDepth": 2,
+        "background": true,
+        "subagentToolkit": "full",
+        "backgroundDispatch": true,
+        "isolation": "harness-worktree"
+      },
+      "modelMode": "passive",
+      "hookBus": "host",
+      "stateIO": "filesystem",
+      "transport": "mcp",
+      "runtime": "node",
+      "effortSurface": "undocumented"
+    },
+    "harnessIsolationFlag": "--worktree",
+    "hostBehaviors": {
+      "reapplyCommand": "gsd-update --reapply (mention the skill name)",
+      "frontmatterDialect": "cursor",
+      "hooksJsonSurface": true,
+      "skipSharedHooksInstall": true,
+      "reportCommandsDir": true,
+      "skipUpdateBannerCommand": true,
+      "skipSettingsUi": true,
+      "managedHookEvents": [
+        "sessionStart",
+        "postToolUse",
+        "preToolUse",
+        "stop",
+        "subagentStart",
+        "subagentStop"
+      ],
+      "reviewerCli": true
+    }
+  },
+  "reviewer": {
+    "slug": "cursor",
+    "flags": [
+      "--cursor"
+    ],
+    "transport": "spawn",
+    "probe": {
+      "kind": "command-exists",
+      "binary": "cursor-agent"
+    },
+    "invoke": {
+      "binary": "cursor-agent",
+      "args": [
+        "-p",
+        "--mode",
+        "ask",
+        "--trust",
+        "--output-format",
+        "text",
+        "{{prompt}}"
+      ],
+      "promptChannel": "argv-file-ref",
+      "outputChannel": "stdout",
+      "modelArg": null,
+      "effortChannel": "none"
+    },
+    "timeoutFloorMs": 900000,
+    "emptyOutput": "stub-with-stderr",
+    "reviewsSection": "Cursor",
+    "evidenceClass": "source-grounded",
+    "requiresBinaries": [],
+    "promptBudgetKey": null,
+    "modelConfigKey": null,
+    "handler": null
   }
 }

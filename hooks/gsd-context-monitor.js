@@ -103,8 +103,8 @@ process.stdin.on('end', () => {
     const event = data.hook_event_name;
     const cwd = data.cwd || process.cwd();
 
-    // Stop / SubagentStop → nothing to say.
-    if (event === 'Stop' || event === 'SubagentStop') return;
+    // Stop / SubagentStart / SubagentStop → nothing to say.
+    if (event === 'Stop' || event === 'SubagentStart' || event === 'SubagentStop') return;
 
     // GSD-active gate: no .planning/STATE.md under cwd → stay silent (all events).
     if (!fs.existsSync(path.join(cwd, '.planning', 'STATE.md'))) return;
@@ -118,7 +118,16 @@ process.stdin.on('end', () => {
       return;
     }
 
-    // Metrics-driven path (PostToolUse and friends) needs a session id.
+    // #2289-adapted (upstream 1.9.0): the hookSpecificOutput.additionalContext
+    // envelope is only a valid output shape for the context-injection events.
+    // Metrics-driven nudges emit only for PostToolUse / AfterTool; a missing
+    // event name keeps the fork's test-pinned PostToolUse fallback. Any other
+    // named lifecycle event (however this hook gets wired on a given host)
+    // exits 0 silently. PreCompact keeps its dedicated always-emit branch
+    // above — the fork's flush contract pins it.
+    if (event && event !== 'PostToolUse' && event !== 'AfterTool') return;
+
+    // Metrics-driven path (PostToolUse / AfterTool) needs a session id.
     const sessionId = data.session_id;
     if (!sessionId) return;
 

@@ -173,7 +173,7 @@ function rungSet(cell: string): Set<string> {
 function crossCheck(artifact: string, key: string, value: string, sourceText: string): { ok: boolean; reason: string } {
   if (isPlaceholder(key) || isPlaceholder(value)) return { ok: false, reason: 'placeholder cell — source artifact not filled in' };
   if (artifact === 'ADR') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR${suggestKey(rows, key)}` };
     const rungCol = row[2] || '';
@@ -183,13 +183,13 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     return eq ? { ok: true, reason: '' } : { ok: false, reason: `rung mismatch: ADR="${rungCol}" cited="${value}"` };
   }
   if (artifact === 'DOMAIN-MODEL') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL${suggestKey(rows, key)}` };
     return norm(row[1]) === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `type mismatch: "${row[1]}" vs "${value}"` };
   }
   if (artifact === 'TEST-STRATEGY') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY${suggestKey(rows, key)}` };
     const lead = (norm(row[2]).match(/^(small|medium|large)/) || [])[1];
@@ -197,7 +197,7 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
   }
   if (artifact === 'DESIGN-INVENTORY') {
     const field = key.split('@')[0].trim();
-    const rows = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(field)];
     if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY${suggestKey(rows, field)}` };
     const src = norm((value.split('/')[0] || '').trim());
@@ -209,7 +209,7 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     // (`| Subsystem | Quality | … | Disposition | … |` in templates/legacy-inventory.md)
     // is the behavior register — the citation's key must name a real row
     // (case-insensitive), so a fabricated subsystem/region cannot pass.
-    const rows = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subsystem "${key}" not in LEGACY-INVENTORY's salvage-dispositions table${suggestKey(rows, key)}` };
     return { ok: true, reason: '' };

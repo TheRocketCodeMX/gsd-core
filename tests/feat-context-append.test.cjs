@@ -53,6 +53,11 @@ describe('roadmap capsule seed offer', () => {
     const wf = read('gsd-core/workflows/roadmap.md');
     assert.match(wf, /gsd-context.*seed --milestone/, 'dispatches gsd-context seed --milestone');
     assert.match(wf, /seed_offer/, 'reads context_lifecycle.seed_offer');
+    assert.match(
+      wf,
+      /config-get context_lifecycle\.seed_offer[^\n]*--raw/,
+      'seed_offer config-get must pass --raw, else the value is JSON-quoted and branch comparisons never match'
+    );
   });
 });
 

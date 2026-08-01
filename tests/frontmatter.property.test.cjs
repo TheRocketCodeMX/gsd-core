@@ -21,6 +21,7 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fc = require('./helpers/fast-check-setup.cjs');
+const yaml = require('js-yaml');
 
 const {
   extractFrontmatter,
@@ -261,5 +262,79 @@ describe('frontmatter: prohibitions parse ↔ splice bijection (#644)', () => {
           'prohibitions must survive a splice/re-parse round-trip unchanged');
       })
     );
+  });
+});
+
+// #1779 — reconstructFrontmatter must emit YAML that a STRICT parser accepts and
+// that preserves string values. The bijective contract is
+//   ∀ s: yaml.load(reconstructFrontmatter({ k: s })).k === s
+// over the documented safe-input subset. Two classes are out of scope and
+// excluded here, not silently passed:
+//   - lone UTF-16 surrogates (lossy through UTF-8 encoding) — filtered via
+//     fc.pre(s.isWellFormed());
+//   - numeric/boolean/null-looking BARE strings (e.g. "42", "true", "-5") that a
+//     YAML loader resolves to a non-string type — a separate pre-existing bug
+//     class (valid YAML, wrong type), so we assert equality only when the value
+//     loads back AS a string. An escaping defect (invalid YAML) still fails
+//     loudly because yaml.load() throws.
+describe('frontmatter: reconstructFrontmatter strict-YAML property (#1779)', () => {
+  test('property: every string value serializes to valid YAML and string-round-trips', () => {
+    fc.assert(
+      fc.property(fc.string({ maxLength: 200 }), (s) => {
+        fc.pre(s.isWellFormed());
+        // Throws → reconstructFrontmatter emitted invalid YAML → property fails
+        // (fast-check shrinks + prints the replay seed automatically).
+        const loaded = yaml.load(reconstructFrontmatter({ k: s }));
+        if (typeof loaded.k === 'string') {
+          assert.equal(loaded.k, s,
+            `value did not round-trip through strict YAML: ${JSON.stringify(s)}`);
+        }
+      })
+    );
+  });
+});
+
+// (g)(h) #1882 added an optional `sourcePath` argument to extractFrontmatter, used only to
+//     name and deduplicate a diagnostic. These two properties are what protect the ~50 call
+//     sites: whatever the argument does, it must never reach the parsed result, and the
+//     LF/CRLF equivalence the parser already promised must survive the new branch.
+describe('frontmatter: extractFrontmatter sourcePath is parse-inert (#1882)', () => {
+  test('property: the optional path argument never changes the parsed result', (t) => {
+    const original = process.stderr.write;
+    t.after(() => { process.stderr.write = original; });
+    process.stderr.write = () => true;
+      fc.assert(
+        fc.property(
+          fc.oneof(
+            fc.string({ maxLength: 300 }),
+            fc.string({ unit: 'binary', maxLength: 300 }),
+          ),
+          fc.stringMatching(/^\/[a-z0-9/_-]{1,40}\.md$/),
+          (content, somePath) => {
+            assert.deepEqual(
+              extractFrontmatter(content, somePath),
+              extractFrontmatter(content),
+              'sourcePath must be inert with respect to the parsed value',
+            );
+          }
+        )
+      );
+  });
+
+  test('property: a document and its CRLF twin parse identically', (t) => {
+    const original = process.stderr.write;
+    t.after(() => { process.stderr.write = original; });
+    process.stderr.write = () => true;
+      fc.assert(
+        fc.property(fc.string({ maxLength: 300 }), (content) => {
+          const lf = content.replace(/\r\n/g, '\n');
+          const crlf = lf.replace(/\n/g, '\r\n');
+          assert.deepEqual(
+            extractFrontmatter(crlf),
+            extractFrontmatter(lf),
+            'CRLF and LF spellings of one document must parse the same',
+          );
+        })
+      );
   });
 });
