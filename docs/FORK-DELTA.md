@@ -294,6 +294,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `src/installer-migration-report.cts` | grounding | anchors-only | one whitelist line |
 | `src/profile-output.cts` | grounding | markers | Sources-of-Truth section generator + managed-section wiring (anchors); the fork's GEMINI.md ambient-file branch is upstream-absorbed (`getProjectInstructionFile` runtime policy) |
 | `src/ui-safety-gate.cts` | fidelity | markers | negation guard const + skip logic. The former UI-hint authority (`strategy`) blocks are **upstream-absorbed** (#2150) — never re-add the loose `UI_HINT_ANY_RE` variant; upstream's tests pin the strict semantics |
+| `tests/emitted-attribution.test.cjs` | release | anchors-only | promotion-PR (base=main) skip for the differential gate — next-keyed mechanism; release content is gated entering next (PR #39 flap) |
 | `tests/windows-robustness.test.cjs` | context-monitor | anchors-only | ported #685 block (upstream folded the file, consolidation #1969): fork hook must stay spawn-free; any reintroduced spawn MUST set windowsHide |
 | `tests/ci-test-scope.test.cjs` | context-monitor | anchors-only | A1 fixture swapped off the deleted bug-1974 context-monitor test |
 | `tests/claude-md.test.cjs` | grounding | anchors-only | 7-section + sources assertions |
