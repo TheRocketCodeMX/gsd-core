@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-01
+
+### Changed
+
+- New `context` capability — the knowledge lifecycle. GSD's fresh-subagent model gains durable, verifiable project knowledge: a bounded `MASTER-CONTEXT.md` index, quality-stamped phase capsules (`<N>-CONTEXT.md`), append-only layers that supersede (never delete), deterministic anchor verification via `gsd-tools context verify` (a failed anchor is annotated `[STALE]`, never silently trusted), a calm context-pressure flush hook, the re-anchor procedure after any compaction, and append-only elicitation discussion logs. The capability seeds at the strategy → build transition (skippable), injects capsule Locked Decisions / Phase-Scoped Pitfalls / What-Done-Looks-Like into executor and verifier, and adds a planner freshness gate + orchestrator curation layer. Enforcement alignment rides along: verifier strategy-set gates, the grounding unflipped-row fix, researcher ADR/DOMAIN-MODEL grounding, and a structured `deviations:` frontmatter field so phase N's reality is visible to phase N+1. Doctrine: plans are perishable; context is durable — front-load the knowledge, never the plans. Capability ids also de-branded: `rocket-learn` → `learn`, `rocket-strategy` → `strategy`, `rocket-grounding` → `grounding`. (#36)
+- Realigned onto upstream GSD v1.9.0 (852 commits across v1.7.0–v1.9.0): adopts the kimi-code runtime + negotiated executor-worktree isolation (parallel waves on Codex/OpenCode/Kimi), reviewer lanes as capability manifest data, phase effort estimation with smart-zone calibration, the researcher `[VERIFIED: path:line]` citation discipline, `regen:derived`, and upstream's consolidated test architecture. All fork features re-placed and guard-verified (fork-delta manifest 169/169): context lifecycle, source-fidelity/grounding, strategy suite, roadmap-after-strategy, calm context-monitor hook, mode persistence. Upstream v1.9.0 is now a recorded git ancestor, keeping future pulls incremental. (#38)
+
 ## [2.2.0] - 2026-07-18
 
 ### Changed
