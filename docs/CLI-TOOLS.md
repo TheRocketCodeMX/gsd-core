@@ -93,6 +93,17 @@ node gsd-tools.cjs state-snapshot
 
 Returns JSON with: current position, phase, plan, status, decisions, blockers, metrics, last activity.
 
+### Smart Entry
+
+Read-only situation classifier used by `/gsd:next`.
+
+```bash
+node gsd-tools.cjs smart-entry          # Human summary + recommended route
+node gsd-tools.cjs smart-entry --json   # Machine-readable result for workflows
+```
+
+The JSON result contains `situation`, `recommended`, `summary`, `signals`, and ordered `actions[]`. Detection reads `.planning/STATE.md`, `ROADMAP.md`, latest verification/summary artifacts, and git status; it does not write files or dispatch commands.
+
 ---
 
 ## Phase Commands
@@ -116,6 +127,8 @@ node gsd-tools.cjs phase insert <after> <description>
 node gsd-tools.cjs phase remove <phase> [--force]
 
 # Mark phase complete, update state + roadmap
+# Also emits advisory `warnings[]` when a phase SUMMARY references a file that
+# is not on disk — see "Phase SUMMARY artifact check" below.
 node gsd-tools.cjs phase complete <phase>
 
 # Evaluate HUMAN-UAT results for a phase (markdown-aware; ignores false-positive contexts)
@@ -128,6 +141,31 @@ node gsd-tools.cjs phase-plan-index <phase>
 # List phases with filtering
 node gsd-tools.cjs phases list [--type planned|executed|all] [--phase N] [--include-archived]
 ```
+
+### Phase SUMMARY artifact check
+
+A phase `SUMMARY.md` asserts which files the phase created or modified. On
+`phase complete`, each SUMMARY in the phase is scanned for referenced file paths
+and any path that is not on disk is reported in the command's existing
+`warnings[]` array — the case where a summary reports work that never landed.
+
+**Advisory only.** Findings never block completion; the completion gate is the
+phase's `VERIFICATION.md` status, which this does not touch. `/gsd-execute-phase`
+surfaces the warnings before advancing.
+
+Scope and limits, so the output is not read as more than it is:
+
+- Paths are recovered heuristically from the SUMMARY body — backticked paths and
+  `Created:`/`Modified:`-style lines. Globs, URLs, bare hostnames, and paths
+  resolving outside the project are skipped rather than reported.
+- The `key-files:` frontmatter block is **not** read. Its YAML flow-sequence form
+  (`created: [a.ts, b.ts]`) is not matched by the prose scan, so a summary whose
+  only file claims live there produces no findings.
+- Commit hashes in the SUMMARY are **not** resolved here. The pattern matches any
+  hex-shaped token in prose, which is too loose to surface.
+
+Every path the scan does recover is checked — there is no cap. The standalone
+`verify-summary` verb keeps its historical default of checking the first two.
 
 ---
 
@@ -410,13 +448,14 @@ node gsd-tools.cjs scaffold phase-dir --phase N --name "phase name"
 
 ## Init Commands (Compound Context Loading)
 
-Load all context needed for a specific workflow in one call. Returns JSON with project info, config, state, and workflow-specific data.
+Load all context needed for a specific workflow in one call. Returns JSON with project info, config, state, and workflow-specific data. `init onboard [--fast] [--text]` reports brownfield signals, planning-doc candidates, codebase-map completeness, fast-map readiness, text-mode routing, partial planning state, and onboarding summary status for `/gsd-onboard`.
 
 ```bash
 node gsd-tools.cjs init execute-phase <phase>
 node gsd-tools.cjs init plan-phase <phase>
 node gsd-tools.cjs init new-project
 node gsd-tools.cjs init new-milestone
+node gsd-tools.cjs init onboard [--fast] [--text]
 node gsd-tools.cjs init quick <description>
 node gsd-tools.cjs init resume
 node gsd-tools.cjs init verify-work <phase>
@@ -444,7 +483,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 ```bash
 # Archive milestone
-node gsd-tools.cjs milestone complete <version> [--name <name>] [--archive-phases]
+node gsd-tools.cjs milestone complete <version> [--name <name>] [--no-archive-phases]
 
 # Mark requirements as complete
 node gsd-tools.cjs requirements mark-complete <ids>
@@ -519,6 +558,9 @@ node gsd-tools.cjs list-seeds [status]
 # Check file/directory existence
 node gsd-tools.cjs verify-path-exists <path>
 
+# Append a row to STATE.md's "Quick Tasks Completed" table (schema-backed; #2133)
+node gsd-tools.cjs quick-tasks-append --task "<description>"
+
 # Aggregate all SUMMARY.md data
 node gsd-tools.cjs history-digest
 
@@ -553,9 +595,55 @@ node gsd-tools.cjs commit <message> [--files f1 f2] [--amend] [--no-verify] [--r
 > `--no-verify`: Skips pre-commit hooks. Used by parallel executor agents during wave-based execution to avoid build lock contention (e.g., cargo lock fights in Rust projects). The orchestrator runs hooks once after each wave completes. Do not use `--no-verify` during sequential execution — let hooks run normally.
 > `--files <paths>` **staging behaviour**: by default, `--files` runs `git add -- <path>` for each named file before committing. This overwrites any per-hunk staging set up via `git add -p`. Pass `--respect-staged` to skip the `git add` step and commit only what is already in the index within the requested pathspec. If nothing is staged within that scope, the command returns `{ committed: false, reason: 'nothing staged' }` without error. The trailing `-- <paths>` pathspec on the commit is applied under both modes, so files staged outside the `--files` scope are never included (#3061 invariant).
 
+```bash
 # Web search (requires Brave API key)
 node gsd-tools.cjs websearch <query> [--limit N] [--freshness day|week|month]
 ```
+
+---
+
+## Update Backup and Restore
+
+The two halves of `/gsd:update`'s user-added-file protection. `detect-custom-files`
+lists files that exist inside GSD-managed directories but are absent from
+`gsd-file-manifest.json` — the update workflow copies those into
+`gsd-user-files-backup/` before the clean-install wipe. `restore-custom-files`
+puts them back afterwards.
+
+```bash
+# List user-added files the installer would destroy (JSON)
+node gsd-tools.cjs detect-custom-files --config-dir <config-dir>
+
+# Plan a restore — reports what would be restored, writes nothing
+node gsd-tools.cjs restore-custom-files --config-dir <config-dir>
+
+# Restore the eligible entries
+node gsd-tools.cjs restore-custom-files --config-dir <config-dir> --apply
+```
+
+`restore-custom-files` emits one entry per backed-up file:
+
+| Field | Meaning |
+|---|---|
+| `path` | Path relative to the config dir — where the file came from and goes back to |
+| `outcome` | `eligible` (plan mode) · `restored` · `skipped_destination_managed` · `skipped_destination_exists` · `skipped_copy_failed` · `skipped_unsafe_path` |
+| `warnings` | Advisory `{code, detail}` findings from the compatibility pass; never blocks a restore |
+
+Warning codes: `destination_managed`, `destination_exists`,
+`missing_referenced_path`, `missing_referenced_command`,
+`frontmatter_missing_field`, `write_failed`.
+
+The compatibility pass runs against the **newly installed** release, so it
+catches a backed-up skill that `@`-references a workflow the new version
+retired, invokes a `/gsd:` command that no longer exists, or is missing the
+`name` / `description` frontmatter its runtime needs.
+
+Three things the restore never does: it never deletes the backup, it never
+overwrites a path the new release ships (`skipped_destination_managed`), and it
+never overwrites a different file already on disk
+(`skipped_destination_exists`). Symlinked backup entries are skipped outright
+rather than followed (`skipped_unsafe_path`). A single unwritable entry is
+reported and the remaining entries still restore.
 
 ---
 
@@ -597,7 +685,7 @@ node gsd-tools.cjs worktree record-agent \
   --manifest <path> --agent-id <id> --path <worktree> --branch <branch> --base <sha>
 ```
 
-**`worktree record-agent`** appends one `{agent_id, worktree_path, branch, expected_base}` entry to an already-initialized manifest, validating every field **at write time using the same rules the `cleanup-wave` reader enforces** — `--branch` must match the disposable `^worktree-agent-[A-Za-z0-9._/-]+$` namespace, and `--path`/`--branch`/`--base` must be non-empty. `--agent-id` is required (write-strict), even though the reader treats it as optional. A missing or garbled field — or a duplicate `(worktree_path, branch)` the reader would dedup away — fails loudly with a recovery hint and a non-zero exit **without** writing, instead of appending an under-populated or silently-dropped entry. Whitespace-only `--path`/`--base` are rejected (values are trimmed). The on-disk manifest shape is unchanged (the reader re-derives `allowed_bases`); the orchestrator still initializes the empty `{orchestrator_root, worktrees: []}` shell inline before any agent is recorded.
+**`worktree record-agent`** appends one `{agent_id, worktree_path, branch, expected_base}` entry to an already-initialized manifest, validating every field **at write time using the same rules the `cleanup-wave` reader enforces** — `--branch` must match the disposable `^(worktree-)?agent-[A-Za-z0-9._/-]+$` namespace (accepts both `agent-<id>` and legacy `worktree-agent-<id>`), and `--path`/`--branch`/`--base` must be non-empty. `--agent-id` is required (write-strict), even though the reader treats it as optional. A missing or garbled field — or a duplicate `(worktree_path, branch)` the reader would dedup away — fails loudly with a recovery hint and a non-zero exit **without** writing, instead of appending an under-populated or silently-dropped entry. Whitespace-only `--path`/`--base` are rejected (values are trimmed). The on-disk manifest shape is unchanged (the reader re-derives `allowed_bases`); the orchestrator still initializes the empty `{orchestrator_root, worktrees: []}` shell inline before any agent is recorded.
 
 ---
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-interface RequiredSource { id: string; path: string; artifact: string; }
+interface RequiredSource { id: string; path: string; artifact: string; notes?: string; }
 interface LiteralSource { kind: string; path: string; note: string; }
 interface ResolveResult { required: RequiredSource[]; skipped: string[]; pending: string[]; sources: LiteralSource[]; warnings: string[]; }
 
@@ -71,14 +71,23 @@ function resolveRequiredSources(cwd: string): ResolveResult {
       const p = map.rel === 'adr' ? newestAdr(planning) : path.join(planning, map.rel);
       if (p && fs.existsSync(p)) required.push({ id: step, path: p, artifact: map.artifact });
     } else if (status === 'recommended') {
-      pending.push(step);
-      // Inconsistency surface (issue #21 P0-1c): the artifact exists on disk but the
-      // Strategy Plan row was never flipped to `done` — the step ran but skipped its
-      // `project strategy-done` wrap-up, so the gate is under-requiring. Warn loudly
-      // so orchestrators can flip the row instead of trusting a vacuous pass.
+      // FORK:context — issue #21 P0-1c: a `recommended` row whose artifact already
+      // exists on disk is a real, citable source (the step ran; only the Strategy
+      // Plan row's flip to `done` is missing). Under-requiring it let plans skip
+      // citing a source that genuinely grounds them. Promote it to `required` with
+      // a note prompting the `strategy-done` flip, instead of leaving it a mere
+      // warning. `recommended` + no artifact yet stays the pending/warning path.
       const p = map.rel === 'adr' ? newestAdr(planning) : path.join(planning, map.rel);
       if (p && fs.existsSync(p)) {
+        required.push({
+          id: step,
+          path: p,
+          artifact: map.artifact,
+          notes: `artifact exists but Strategy Plan row is unflipped — run \`gsd-tools project strategy-done ${step}\``,
+        });
         warnings.push(`unflipped: ${step} — artifact exists (${path.basename(p)}) but Strategy Plan status is still 'recommended'; run \`project strategy-done ${step}\``);
+      } else {
+        pending.push(step);
       }
     }
   }
@@ -164,7 +173,7 @@ function rungSet(cell: string): Set<string> {
 function crossCheck(artifact: string, key: string, value: string, sourceText: string): { ok: boolean; reason: string } {
   if (isPlaceholder(key) || isPlaceholder(value)) return { ok: false, reason: 'placeholder cell — source artifact not filled in' };
   if (artifact === 'ADR') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in ADR${suggestKey(rows, key)}` };
     const rungCol = row[2] || '';
@@ -174,13 +183,13 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     return eq ? { ok: true, reason: '' } : { ok: false, reason: `rung mismatch: ADR="${rungCol}" cited="${value}"` };
   }
   if (artifact === 'DOMAIN-MODEL') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in DOMAIN-MODEL${suggestKey(rows, key)}` };
     return norm(row[1]) === norm(value) ? { ok: true, reason: '' } : { ok: false, reason: `type mismatch: "${row[1]}" vs "${value}"` };
   }
   if (artifact === 'TEST-STRATEGY') {
-    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subdomain\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subdomain "${key}" not in TEST-STRATEGY${suggestKey(rows, key)}` };
     const lead = (norm(row[2]).match(/^(small|medium|large)/) || [])[1];
@@ -188,7 +197,7 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
   }
   if (artifact === 'DESIGN-INVENTORY') {
     const field = key.split('@')[0].trim();
-    const rows = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Field\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(field)];
     if (!row) return { ok: false, reason: `field "${field}" not in DESIGN-INVENTORY${suggestKey(rows, field)}` };
     const src = norm((value.split('/')[0] || '').trim());
@@ -200,7 +209,7 @@ function crossCheck(artifact: string, key: string, value: string, sourceText: st
     // (`| Subsystem | Quality | … | Disposition | … |` in templates/legacy-inventory.md)
     // is the behavior register — the citation's key must name a real row
     // (case-insensitive), so a fabricated subsystem/region cannot pass.
-    const rows = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i);
+    const rows = parseTable(sourceText, /\|\s*Subsystem\b[^|]*\|/i);  // allow-adhoc-markdown: header-locator regex for the fork grounding cross-check parseTable; predates TABLE_SCHEMAS
     const row = rows[norm(key)];
     if (!row) return { ok: false, reason: `subsystem "${key}" not in LEGACY-INVENTORY's salvage-dispositions table${suggestKey(rows, key)}` };
     return { ok: true, reason: '' };

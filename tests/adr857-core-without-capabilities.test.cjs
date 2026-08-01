@@ -68,8 +68,11 @@ const ALL_12_POINTS = [...CANONICAL_POINTS];
  * because _getNestedConfigValue expects a nested object, not a flat dotted key.
  */
 function buildAllFalseConfig() {
-  const workflow = {};
-  const intel = {};
+  // Generic nested set: any dotted when-key "a.b.c" → { a: { b: { c: false } } }.
+  // This keeps the all-caps-off fixture in lockstep with the registry — a new
+  // capability introducing a new top-level key (e.g. context_lifecycle.enabled)
+  // is zeroed automatically instead of silently falling back to its default.
+  const config = { workflow: {}, intel: {} };
   for (const point of ALL_12_POINTS) {
     const entry = realRegistry.byLoopPoint[point];
     if (!entry) continue;
@@ -77,17 +80,17 @@ function buildAllFalseConfig() {
       for (const hook of entry[kind] || []) {
         const when = hook.when;
         if (typeof when !== 'string' || !when) continue;
-        if (when.startsWith('workflow.')) {
-          const key = when.slice('workflow.'.length);
-          workflow[key] = false;
-        } else if (when === 'intel.enabled') {
-          intel.enabled = false;
+        const parts = when.split('.');
+        let node = config;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (typeof node[parts[i]] !== 'object' || node[parts[i]] === null) node[parts[i]] = {};
+          node = node[parts[i]];
         }
-        // Any future top-level keys would need extending here.
+        node[parts[parts.length - 1]] = false;
       }
     }
   }
-  return { workflow, intel };
+  return config;
 }
 
 const ALL_FALSE_CONFIG = buildAllFalseConfig();

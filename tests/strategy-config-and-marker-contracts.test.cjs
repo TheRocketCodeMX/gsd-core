@@ -89,7 +89,7 @@ describe('MARKER: roadmap-elaboration idempotency contract (plan-phase ⇄ gsd-r
 describe('TRIPWIRE: capability-owned command families are not re-shadowed in gsd-tools.cjs (issue #25)', () => {
   // The Rocket capability pack converted the fork's three hardcoded command
   // families (learn / project / grounding) to ADR-959 capability dispatch:
-  // capabilities/rocket-{learn,strategy,grounding}/capability.json own the
+  // capabilities/{learn,strategy,grounding}/capability.json own the
   // families; the routers live in src/*-command-router.cts. The switch in
   // gsd-tools.cjs falls through to dispatchCapabilityCommand for them.
   //
@@ -108,16 +108,26 @@ describe('TRIPWIRE: capability-owned command families are not re-shadowed in gsd
       assert.ok(
         !caseRe.test(gsdToolsSrc),
         `gsd-tools.cjs contains a hardcoded \`case '${family}'\` — this shadows the ` +
-          `capability-registered router (capabilities/rocket-*/capability.json). ` +
+          `capability-registered router (capabilities/{learn,strategy,grounding}/capability.json). ` +
           `Delete the case; the default arm dispatches the family via dispatchCapabilityCommand.`
       );
     });
   }
 
-  test('the registry owns all three families via the rocket capability pack', () => {
+  test('the registry owns all three families via the fork-owned capability packs', () => {
     const registry = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'));
-    assert.equal(registry.commandFamilies.learn.capId, 'rocket-learn');
-    assert.equal(registry.commandFamilies.project.capId, 'rocket-strategy');
-    assert.equal(registry.commandFamilies.grounding.capId, 'rocket-grounding');
+    assert.equal(registry.commandFamilies.learn.capId, 'learn');
+    assert.equal(registry.commandFamilies.project.capId, 'strategy');
+    assert.equal(registry.commandFamilies.grounding.capId, 'grounding');
   });
+});
+
+test('no rocket- prefixed capability ids remain (plain-id convention)', () => {
+  const capsDir = path.resolve(__dirname, '..', 'capabilities');
+  const dirs = fs.readdirSync(capsDir);
+  assert.ok(!dirs.some((d) => d.startsWith('rocket-')), `rocket-prefixed dirs remain: ${dirs.filter((d) => d.startsWith('rocket-'))}`);
+  for (const id of ['learn', 'strategy', 'grounding']) {
+    const cap = JSON.parse(fs.readFileSync(path.join(capsDir, id, 'capability.json'), 'utf8'));
+    assert.equal(cap.id, id);
+  }
 });

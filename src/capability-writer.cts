@@ -92,7 +92,7 @@ interface DesiredCapability {
 }
 
 interface SetCapabilityStateOptions {
-  materialize?: { runtime: string; scope: string };
+  materialize?: { runtime: string; scope: string; resolveAttribution?: (runtime: string) => string | null | undefined };
 }
 
 /**
@@ -151,8 +151,17 @@ function setCapabilityState(
   const resolvedConfigDir = before.runtimeConfigDir;
 
   // ── Load registry ─────────────────────────────────────────────────────────
+  // Issue #2045 (DEFECT 2): validate against the COMPOSED overlay-aware registry
+  // (first-party ∪ accepted overlays), mirroring capability-state.cts:547-551.
+  // The frozen capability-registry.cjs only knows first-party ids, so a third-
+  // party cap failed the membership check below → "unknown capability" even
+  // though resolveCapabilityRuntimeState (the `before` snapshot, line 150) already
+  // knew about it. loadRegistry is non-throwing and first-party-wins, so a
+  // malformed overlay is skipped (never crashes the writer); a truly-unknown id
+  // is STILL rejected because it is absent from the composed capabilities map.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const registry = require('./capability-registry.cjs') as Record<string, unknown>;
+  const { loadRegistry } = require('./capability-loader.cjs') as { loadRegistry: (opts?: Record<string, unknown>) => Record<string, unknown> };
+  const registry = loadRegistry({ includeInstalled: true, cwd, gsdHome: process.env['GSD_HOME'] });
   const capabilitiesMap = (
     registry['capabilities'] && typeof registry['capabilities'] === 'object' && !Array.isArray(registry['capabilities'])
       ? registry['capabilities']
@@ -346,14 +355,29 @@ function setCapabilityState(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const runtimeArtifactLayout = require('./runtime-artifact-layout.cjs') as {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        resolveRuntimeArtifactLayout: (runtime: string, configDir: string, scope: string) => any;
+        resolveRuntimeArtifactLayout: (runtime: string, configDir: string, scope: string, capabilityRegistry?: unknown) => any;
       };
+      // #2322: thread the SAME composed registry (loaded above, includeInstalled:true)
+      // into layout resolution so the skills kind's stage() closure can bind a
+      // third-party capability skill to its declaring capId at staging time —
+      // required for BOTH the '*' (full-profile) fill-in and the ownership binding
+      // (see resolveRuntimeArtifactLayout's #2322 doc comment).
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const layout = runtimeArtifactLayout.resolveRuntimeArtifactLayout(runtime, resolvedConfigDir, scope);
+      const layout = runtimeArtifactLayout.resolveRuntimeArtifactLayout(runtime, resolvedConfigDir, scope, registry);
       const commandsGsdDir = _resolveCommandsGsdDir();
       const manifest = _resolveManifest(commandsGsdDir, resolvedConfigDir);
+      // #1575: applySurface now accepts opts.resolveAttribution so surface-path
+      // agents get the same Co-Authored-By trailer as the install path. The
+      // resolver is not threaded here yet — the CLI command handler does not have
+      // access to getCommitAttribution (which lives in bin/install.js). Until that
+      // is refactored into a shared module, surface-path agents for descriptor-
+      // driven runtimes will lack the Co-Authored-By trailer that install adds.
+      // Parity is proven when resolveAttribution IS provided (see
+      // tests/issue-1575-agent-descriptor-parity.test.cjs).
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      applySurface(resolvedConfigDir, layout, manifest, undefined, registry);
+      applySurface(resolvedConfigDir, layout, manifest, undefined, registry, opts?.materialize?.resolveAttribution
+        ? { resolveAttribution: opts.materialize.resolveAttribution }
+        : undefined);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       // Fix C: materialise was explicitly requested — a failure is an error (non-zero exit),

@@ -7,7 +7,6 @@
 ## Command Syntax
 
 - **Claude Code / Copilot / OpenCode / Kilo:** `/gsd-command-name [args]` (hyphen form)
-- **Gemini CLI:** `/gsd:command-name [args]` (colon form — Gemini namespaces commands under `gsd:`)
 - **Codex:** `$gsd-command-name [args]`
 
 The hyphen and colon forms are *runtime-specific spellings of the same command*. Whichever runtime you're on, the installer writes the correct form into your runtime's command directory.
@@ -18,7 +17,7 @@ Heavy workflow skills (`/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-autonomous
 
 Quick-status skills (`/gsd-progress`, `/gsd-stats`) declare `effort: low`, directing the runtime to use a minimal token budget for fast reads.
 
-These fields are Claude Code–specific frontmatter. On runtimes that do not recognise them (Gemini, Codex, Cursor, etc.) the fields are silently ignored — existing behaviour is unchanged.
+These fields are Claude Code–specific frontmatter. On runtimes that do not recognise them (Antigravity, Codex, Cursor, etc.) the fields are silently ignored — existing behaviour is unchanged.
 
 ---
 
@@ -28,7 +27,7 @@ Six namespace routers ship as the first-stage entry points in v1.40. They keep t
 
 | Command | Routes to |
 |---------|-----------|
-| `/gsd-workflow` | Phase pipeline — discuss / plan / execute / verify / phase / progress |
+| `/gsd-workflow` | Phase pipeline — discuss / plan / execute / verify / phase / progress / next |
 | `/gsd-project` | Project lifecycle — milestones, audits, summary |
 | `/gsd-quality` | Quality gates — code review, debug, audit, security, eval, ui |
 | `/gsd-context` | Codebase intelligence — map, graphify, docs, learnings |
@@ -55,6 +54,25 @@ Initialize a new project with deep context gathering.
 ```bash
 /gsd-new-project                    # Interactive mode
 /gsd-new-project --auto @prd.md     # Auto-extract from PRD
+```
+
+---
+
+### `/gsd-onboard`
+
+Guide an existing codebase through first-time GSD onboarding. The command checks repo state, routes you through codebase mapping, optional docs ingest, project initialization, and creates an onboarding summary once planning exists.
+
+| Flag | Description |
+|------|-------------|
+| `--fast` | Prefer the lightweight `/gsd-map-codebase --fast` mapping handoff; a complete map is still required before `/gsd-new-project` |
+| `--text` | Use numbered plain-text gates instead of TUI menus |
+
+**Prerequisites:** Existing repo or planning docs. For empty greenfield projects, use `/gsd-new-project`.
+**Produces:** `.planning/codebase/` via map-codebase, `.planning/` via new-project or ingest-docs, and `.planning/onboarding/SUMMARY.md` after project setup.
+
+```bash
+/gsd-onboard           # Guided brownfield onboarding
+/gsd-onboard --fast    # Use lightweight codebase mapping first, then complete the map before project setup
 ```
 
 ---
@@ -175,7 +193,7 @@ Research, plan, and verify a phase.
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `N` | No | Phase number (defaults to next unplanned phase) |
+| `N` | No | Phase number (if omitted, the orchestrating workflow reads ROADMAP.md and targets the next unplanned phase — not a `gsd-tools.cjs` CLI feature) |
 
 | Flag | Description |
 |------|-------------|
@@ -190,12 +208,15 @@ Research, plan, and verify a phase.
 | `--ingest <path-or-glob>` | Use ADR file(s) instead of discuss-phase for context synthesis |
 | `--ingest-format <auto\|nygard\|madr\|narrative>` | Optional ADR parser format override for `--ingest` |
 | `--reviews` | Replan with cross-AI review feedback from REVIEWS.md |
-| `--validate` | Run state validation before planning begins |
 | `--bounce` | Run external plan bounce validation after planning (uses `workflow.plan_bounce_script`) |
 | `--skip-bounce` | Skip plan bounce even if enabled in config |
-| `--mvp` | Vertical MVP mode — planner organizes tasks as feature slices (UI→API→DB) instead of horizontal layers. On Phase 1 of a new project with no prior phase summaries, also emits `SKELETON.md` (Walking Skeleton). Can be persisted on a phase via `**Mode:** mvp` in ROADMAP.md, which applies `--mvp` automatically without the flag. |
-| `--tdd` | TDD mode — planner applies `type: tdd` to eligible behavior-adding tasks so each begins with a failing test. Composable with `--mvp`: `--mvp --tdd` produces vertical slices where every behavior-adding task starts red-green. |
+| `--mvp` | MVP enrichment on top of the default tracer-first ordering — frames the phase goal as a user story and, on Phase 1 of a new project with no prior phase summaries, also emits `SKELETON.md` (Walking Skeleton). Vertical slicing is now the default (see `--no-tracer`); `--mvp` no longer turns it on. Can be persisted on a phase via `**Mode:** mvp` in ROADMAP.md, which applies `--mvp` automatically without the flag. |
+| `--no-tracer` | Opt out of the default **tracer-first** decomposition and plan horizontal layers (the legacy default). By default every plan leads with one production-quality end-to-end `tracer` slice that the executor verifies before any expansion task. |
+| `--no-reversibility-gates` | Suppress the human checkpoint that a **one-way-door** decision normally earns, for runs you intend to leave unattended. By default a decision rated `one-way` — undoing it needs a data migration, breaks a published contract, or is impossible — gets a `checkpoint:decision` inserted before the task that implements it. Ratings are still recorded on tasks and `costly` decisions are still flagged, so the flag changes what stops the run, not what the plan remembers. |
+| `--tdd` | TDD mode — planner applies `type: tdd` to eligible behavior-adding tasks so each begins with a failing test. Composable with `--mvp`: `--mvp --tdd` produces vertical slices where every behavior-adding task starts red-green. The leading `tracer` task also starts red under `--tdd`. |
 | `--granularity <coarse\|standard\|fine>` | Override the planning granularity for this invocation, ignoring config. Valid values: `coarse`, `standard`, `fine`. Takes precedence over `granularities.planning`, top-level `granularity`, and `planning.granularity` config. |
+
+**Smart-zone estimate report (#2631).** Every generated PLAN.md carries an optional `estimate` block (`{tokens, tasks, confidence}`). During the plan-check pass, `gsd-plan-checker` runs each plan's `estimate.tokens` through `estimate-check` against the configurable `workflow.smart_zone_tokens` budget (default `100000`) and reports the result; a plan above budget gets a concrete split recommendation. The report is **advisory and never blocks planning**, and it is skipped with `--skip-verify` since it runs inside the verification pass. `confidence` is derived from how many completed phases carry recorded actuals — `low` means fewer than three, so the figure is not yet calibrated for your project. See [ADR-2629](adr/2629-phase-effort-estimation-calibration.md).
 
 **Prerequisites:** `.planning/ROADMAP.md` exists
 **Produces:** `{phase}-RESEARCH.md`, `{phase}-{N}-PLAN.md`, `{phase}-VALIDATION.md`; `{phase}/SKELETON.md` when Walking Skeleton mode fires
@@ -216,11 +237,13 @@ Packages sourced from WebSearch are tagged `[ASSUMED]` (not `[VERIFIED]`) and tr
 
 See [Package Legitimacy Gate in the User Guide](USER-GUIDE.md#package-legitimacy-gate-v1421) for the full checkpoint format, verdict table, and troubleshooting.
 
+**In-repo value citation:**
+For any in-repo *discrete value* the researcher reports — an enum, a schema or type union, an error code, a status constant, or a filesystem path — a `[VERIFIED: …]` tag requires that it opened the source-of-truth file with `Read` during the run and cited the path **and line range** (`[VERIFIED: src/types/order.ts:14-22]`). The values are quoted verbatim in RESEARCH.md beside the claim, and any value used in a code example must also appear in that quote; anything else stays `[ASSUMED]`. A codebase `grep`, training memory, or a web search do not earn the tag on their own. This stops a plausible-but-drifted enum from reaching PLAN.md — where the planner lifts it into the plan's `<interfaces>` context block and the executor trusts it as ground truth — and surfacing only as a mid-execution deviation at typecheck.
+
 ```bash
 /gsd-plan-phase 1                              # Research + plan + verify phase 1
 /gsd-plan-phase 3 --skip-research              # Plan without research (familiar domain)
 /gsd-plan-phase --auto                         # Non-interactive planning
-/gsd-plan-phase 2 --validate                   # Validate state before planning
 /gsd-plan-phase 1 --bounce                     # Plan + external bounce validation
 /gsd-plan-phase 2 --ingest docs/adr/0010.md   # ADR express path for context synthesis
 /gsd-plan-phase 2 --ingest 'docs/adr/00*.md' --ingest-format auto
@@ -240,7 +263,7 @@ Cross-AI plan convergence loop — replan with review feedback until no HIGH con
 | Argument / Flag | Required | Description |
 |-----------------|----------|-------------|
 | `N` | **Yes** | Phase number to plan and review |
-| `--codex` / `--gemini` / `--claude` / `--opencode` | No | Single-reviewer selection |
+| Reviewer flags | No | Pass through every reviewer lane flag: `--gemini`, `--claude`, `--codex`, `--coderabbit`, `--opencode`, `--qwen`, `--cursor`, `--agy` / `--antigravity`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--kimi-code` |
 | `--all` | No | Run every configured reviewer in parallel |
 | `--max-cycles N` | No | Override cycle cap (default 3) |
 
@@ -278,7 +301,6 @@ Execute all plans in a phase with wave-based parallelization, or run a specific 
 |----------|----------|-------------|
 | `N` | **Yes** | Phase number to execute |
 | `--wave N` | No | Execute only Wave `N` in the phase |
-| `--validate` | No | Run state validation before execution begins |
 | `--cross-ai` | No | Delegate execution to an external AI CLI (uses `workflow.cross_ai_command`) |
 | `--no-cross-ai` | No | Force local execution even if cross-AI is enabled in config |
 
@@ -290,7 +312,6 @@ Execute all plans in a phase with wave-based parallelization, or run a specific 
 ```bash
 /gsd-execute-phase 1                # Execute phase 1
 /gsd-execute-phase 1 --wave 2       # Execute only Wave 2
-/gsd-execute-phase 1 --validate     # Validate state before execution
 /gsd-execute-phase 2 --cross-ai     # Delegate phase 2 to external AI CLI
 ```
 
@@ -314,6 +335,8 @@ For browser-backed UAT, use a configured browser MCP server. The current Open GS
 ```
 
 **Coverage-aware UAT routing (#1602).** When a SUMMARY.md carries a `coverage:` frontmatter block, `verify-work` classifies each deliverable deterministically instead of prompting for every prose bullet: deliverables proven by passing tests are auto-passed (recorded with `source: automated`, no prompt) and only judgment-dependent deliverables are presented for human sign-off. SUMMARYs without a `coverage:` block fall back to the previous prose-based extraction unchanged. See the [`coverage:` block reference](#summary-coverage-block) below.
+
+**Honest verifier — `insufficient_spec` abstention (#1154).** A `must_haves.truths` item carrying the `verification: backstop` marker (a *non-inferable* check the edge-probe surfaced at spec time) is graded specially: if the verifier cannot confirm it with **explicit evidence** (a passing wired held-out/property-based test, or a directly-observed behavior), it **abstains** — the item is reported `unverified — held-out test recommended` and the phase verdict becomes `human_needed` (with reason `insufficient_spec`, distinct from ordinary manual-UAT `human_needed`), **never a silent `passed`**. Autonomous runs complete with "N unverified non-inferable checks" rather than hard-halting; interactive runs route the item to the end-of-phase human checkpoint. Abstention is exogenous (driven by the `backstop` tag, never a self-judged "abstain if unsure") and an inferable truth is never abstained. Reliable on capable verifier tiers (`sonnet`+); the budget `haiku` tier degrades toward current behavior. See [Honest Verifier](../gsd-core/references/honest-verifier.md).
 
 #### SUMMARY `coverage:` block
 
@@ -364,6 +387,11 @@ Create PR from completed phase work with auto-generated body.
 - Verification status
 - Key decisions
 - Optional configured PRD-style sections from `ship.pr_body_sections`
+
+**Ship gates (capability-driven):** `/gsd:ship` runs every active `ship:pre` gate from the capability registry. Two are on by default:
+
+- **Security** (`security` capability): blocks while `SECURITY.md` reports `threats_open > 0`. Resolve via `/gsd:secure-phase {n}`.
+- **Broken-windows ledger** (`broken-windows` capability, issue #1950): when `workflow.windows_enforce=true` is set, blocks while `.planning/WINDOWS.md` reports any `open` entry. The ledger accumulates stubs, TODOs, skipped tests, unrun verifies, and unmet truths across phases. Resolve an entry with `gsd-tools windows fixed <id>` (defect resolved) or `gsd-tools windows waive <id> "<reason>"` (justified deferral — reason is required and recorded). Inspect via `gsd-tools windows status`. Enforcement is **opt-in** (default `workflow.windows_enforce=false`): enable with `gsd config-set workflow.windows_enforce true`; tracking continues regardless.
 
 See [Custom PR Body Sections](ship-pr-body-sections.md) for onboarding, examples, and validation rules.
 
@@ -462,6 +490,7 @@ Start next version cycle.
 |----------|----------|-------------|
 | `name` | No | Milestone name |
 | `--reset-phase-numbers` | No | Restart the new milestone at Phase 1 and archive old phase dirs before roadmapping |
+| `--ws <name>` | No | Scope the milestone to a workstream; skips the shared `PROJECT.md` write |
 
 **Prerequisites:** Previous milestone completed
 **Produces:** Updated `PROJECT.md`, new `REQUIREMENTS.md`, new `ROADMAP.md`
@@ -470,6 +499,7 @@ Start next version cycle.
 /gsd-new-milestone                  # Interactive
 /gsd-new-milestone "v2.0 Mobile"    # Named milestone
 /gsd-new-milestone --reset-phase-numbers "v2.0 Mobile"  # Restart milestone numbering at 1
+/gsd-new-milestone --ws search "v2.0 Search"  # Scope to a workstream
 ```
 
 ---
@@ -576,9 +606,21 @@ node gsd-tools.cjs phase uat-passed 3 --raw                  # Machine-readable 
 
 ## Navigation Commands
 
+### `/gsd:next`
+
+Open the state-aware smart-entry launcher. It reads `.planning/STATE.md`, `ROADMAP.md`, verification artifacts, and git status, classifies the current situation, shows a short menu, then dispatches exactly one existing GSD command.
+
+This is a launcher/router only — it never performs project work directly. Detection is handled by `gsd-tools smart-entry --json`; the markdown workflow presents the menu with `AskUserQuestion` or a numbered `--text` fallback.
+
+**Situations detected:** no project, paused work, blockers, failed verification, first-phase setup, planning, executing, pending verification, idle stranded work, complete milestone, or unknown state.
+
+```bash
+/gsd:next                          # Detect state and route to the best next action
+```
+
 ### `/gsd-progress`
 
-Show status, next steps, and automatically advance to the next logical workflow step. Reads project state and determines the appropriate action.
+Show status, next steps, and automatically advance to the next logical workflow step. Reads project state and determines the appropriate action. Use `/gsd:next` when you want an interactive smart-entry menu before dispatch; use `/gsd-progress --next` when you want GSD to advance directly.
 
 | Flag | Description |
 |------|-------------|
@@ -586,7 +628,7 @@ Show status, next steps, and automatically advance to the next logical workflow 
 | `--next --auto` | Like `--next`, but chains steps automatically until milestone completion or a blocking decision |
 | `--next --converge` | When the next action is planning, route it through `/gsd-plan-review-convergence`; requires `workflow.plan_review_convergence=true` |
 | `--cross-ai` | Alias for `--converge` |
-| Reviewer flags | With `--converge`, pass through `--codex`, `--gemini`, `--claude`, `--opencode`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--all`, and `--max-cycles N` |
+| Reviewer flags | With `--converge`, pass through every reviewer lane flag: `--gemini`, `--claude`, `--codex`, `--coderabbit`, `--opencode`, `--qwen`, `--cursor`, `--agy` / `--antigravity`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--kimi-code`, `--all`, and `--max-cycles N` |
 | `--do "task description"` | Analyze freeform intent and dispatch to the most appropriate GSD command |
 | `--forensic` | Append a 6-check integrity audit after the standard report (STATE consistency, orphaned handoffs, deferred scope drift, memory-flagged pending work, blocking todos, uncommitted code) |
 
@@ -673,7 +715,7 @@ Configure per-step flags in `.planning/config.json` under `manager.flags`. These
     "flags": {
       "discuss": "--auto",
       "plan": "--skip-research",
-      "execute": "--validate"
+      "execute": "--cross-ai"
     }
   }
 }
@@ -816,7 +858,7 @@ Run all remaining phases autonomously.
 | `--interactive` | Lean context with user input |
 | `--converge` | Route each planning step through `/gsd-plan-review-convergence`; requires `workflow.plan_review_convergence=true` |
 | `--cross-ai` | Alias for `--converge` |
-| Reviewer flags | With `--converge`, pass through `--codex`, `--gemini`, `--claude`, `--opencode`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--all`, and `--max-cycles N` |
+| Reviewer flags | With `--converge`, pass through every reviewer lane flag: `--gemini`, `--claude`, `--codex`, `--coderabbit`, `--opencode`, `--qwen`, `--cursor`, `--agy` / `--antigravity`, `--ollama`, `--lm-studio`, `--llama-cpp`, `--kimi-code`, `--all`, and `--max-cycles N` |
 | `--text` | Replace `AskUserQuestion` prompts with plain numbered lists |
 
 ```bash
@@ -1170,7 +1212,7 @@ gsd capability remove my-cap --scope project          # Turn the installed overl
 
 ### `/gsd-map-codebase`
 
-Analyze existing codebase with parallel mapper agents. Use `--fast` for a quick single-agent scan, or `--query` to search existing intel.
+Analyze existing codebase with parallel mapper agents. Use `--fast` for a quick single-agent scan, or `--query` to search existing intel. First-time brownfield setup should usually start with `/gsd-onboard`, which hands off to this command when a map is missing.
 
 | Argument | Required | Description |
 |----------|----------|-------------|
@@ -1313,6 +1355,20 @@ Update GSD with changelog preview, and optionally sync skills or reapply local p
 /gsd-update --next                  # Install from the @next RC dist-tag
 ```
 
+**Recovering your own files.** The update protects two different buckets, and
+they recover differently:
+
+| Bucket | What it holds | How it comes back |
+|---|---|---|
+| `gsd-local-patches/` | GSD-shipped files **you modified** | `/gsd-update --reapply` (three-way merge) |
+| `gsd-user-files-backup/` | Files **you added** inside GSD-managed directories | The update offers a restore before it finishes |
+
+When the backup is non-empty, the update lists what it saved, flags anything
+that may no longer be compatible with the release just installed, and asks
+whether to restore. Declining leaves the backup untouched — it is never
+deleted — so you can restore later with
+`gsd-tools restore-custom-files --config-dir <config-dir> --apply`.
+
 ---
 
 ## Code Quality Commands
@@ -1409,14 +1465,24 @@ Reviewers are prompted to verify the plan's claims against the actual repository
 | `--qwen` | Include Qwen Code review (Alibaba Qwen models) |
 | `--cursor` | Include Cursor agent review |
 | `--agy` / `--antigravity` | Include Antigravity CLI review (free with Google credentials) |
+| `--kimi-code` | Include Kimi Code CLI review (Moonshot AI) |
 | `--ollama` | Include Ollama server review |
 | `--lm-studio` | Include LM Studio server review |
 | `--llama-cpp` | Include llama.cpp server review |
 | `--all` | Include all available reviewers (CLI + local model servers) |
 
+**No `jq`, `curl`, or `timeout` prerequisite.** Reviewer lanes used to shell out to these for JSON parsing, HTTP calls, and wall-clock bounding, which made five lanes unavailable on a stock Windows/Git-Bash host (no `jq`) and left one lane unbounded on stock macOS (no `timeout` or `gtimeout`). GSD now does all three itself, so every lane runs with nothing on your `PATH` but the reviewer's own CLI. A lane that declares an external tool it genuinely needs still reports itself unavailable with an install hint rather than running into an empty review.
+
+**Unavailable reviewers:** an explicit reviewer flag is an assertion. If you name a reviewer that cannot run on this host — its CLI is not installed, a required external tool is missing, its local server is unreachable, or its egress destination changed (see below) — `/gsd-review` reports an **error** for that reviewer and does not proceed with a reduced set. This holds even when other named reviewers are available: `--gemini --qwen` on a host without `qwen` fails rather than silently becoming a Gemini-only review.
+
+Reviewers reached through `--all` or `review.default_reviewers` behave differently: an undetected reviewer there is reported as an info note and skipped. Use `--all` for "whatever is available on this host", and `review.default_reviewers` for a preferred subset that may vary by host.
+
+**Changed egress destination:** a reviewer lane is sent your plan text, requirements, research findings, and `CONTEXT.md` decisions. For the local-server lanes (`--ollama`, `--lm-studio`, `--llama-cpp`) the destination comes from a config key such as `review.ollama_host`, which is an ordinary editable value — including by a pull request. If you installed such a lane as a capability and its host has changed since you consented to it, GSD **blocks that lane and tells you both destinations** rather than sending your plans somewhere you did not approve. Re-consent to allow the new host. First-party lanes shipped with GSD are unaffected, and a lane you never consented to is not blocked — there is nothing to compare it against.
+
 **Default reviewer behavior (no flags):**
 - If `review.default_reviewers` is **unset**, `/gsd-review` runs all detected reviewers (current default behavior).
 - If `review.default_reviewers` is **set**, `/gsd-review` runs only that subset (for example `["gemini","codex"]`).
+- `review.default_reviewers` may include names from `review.reviewer_instances`; each instance runs as its own reviewer identity using its configured adapter/model. Instance names are not CLI flags.
 - `--all` always overrides config and runs the full detected set.
 - Explicit flags (for example `--cursor`) override both `--all` and config defaults for that run.
 
@@ -1639,6 +1705,28 @@ node gsd-tools.cjs state sync --verify    # Dry-run: show changes without writin
 
 ---
 
+### `state rebuild [--dry-run] [--verbose]`
+
+Re-derive STATE.md body structure from canonical sources (frontmatter + `.planning/phases/` disk scan). Reconciles `## Current Position` prose with frontmatter, drops orphaned rows from the `**By Phase:**` table, clears template-placeholder field values, and de-duplicates `## Session Continuity Archive` blocks down to the 3 most-recent entries. Every mutation is recorded in a structured `## Rebuild Log` audit section appended to STATE.md (ADR-1817 §3).
+
+Heavier and manual counterpart to the lightweight, auto-triggered `state sync`. The two compose non-overlappingly: `sync` patches three frontmatter fields; `rebuild` reconciles body structure. Per ADR-1817 §4, `rebuild` is idempotent — running it twice on a clean file produces no change.
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Compute the rebuild and emit a structured preview, write nothing |
+| `--verbose` | Tee the audit-log entries to stderr in addition to writing them to STATE.md |
+
+**Prerequisites:** `.planning/STATE.md` exists
+**Produces:** Reconciled `STATE.md` with a `## Rebuild Log` audit entry (only when drift was reconciled)
+
+```bash
+node gsd-tools.cjs state rebuild             # Reconcile body structure
+node gsd-tools.cjs state rebuild --dry-run   # Preview the diff without writing
+node gsd-tools.cjs state rebuild --verbose   # Emit audit-log entries to stderr
+```
+
+---
+
 ### `state planned-phase`
 
 Record state transition after plan-phase completes (Planned/Ready to execute).
@@ -1694,7 +1782,7 @@ A lint gate enforces the budget:
 npm run lint:descriptions
 ```
 
-The check is also run as part of `npm test` via `tests/enh-2789-description-budget.test.cjs`.
+The check is also run as part of `npm test` via `tests/skill-frontmatter-contract.test.cjs`.
 
 ---
 

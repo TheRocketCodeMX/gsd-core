@@ -45,9 +45,13 @@ describe('gsd-planner reachability_check step', () => {
     assert.ok(content.includes('UNREACHABLE'), 'Missing UNREACHABLE marker for failed checks');
   });
 
-  test('file stays under 50000 char limit (CRLF-normalized)', () => {
+  // FORK: limit mirrors the XL tier this fork records for gsd-planner in
+  // tests/agent-size-budget.test.cjs (upstream's v1.9.0 planner body is 49,116 LF
+  // chars — the fork's marked blocks cannot fit under 50000; see docs/FORK-DELTA.md).
+  // Ratchet back to 50000 if upstream shrinks.
+  test('file stays under 57344 char limit (CRLF-normalized)', () => {
     content = content || fs.readFileSync(plannerPath, 'utf-8');
     const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    assert.ok(normalized.length < 50000, `File is ${normalized.length} chars, over the 50000 limit`);
+    assert.ok(normalized.length < 57344, `File is ${normalized.length} chars, over the 57344 limit`);
   });
 });

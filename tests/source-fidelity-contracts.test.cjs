@@ -107,16 +107,22 @@ describe('GROUNDING: the strategy + plan layers re-ground in the design', () => 
 });
 
 describe('GATES: per-source fidelity gates are wired', () => {
+  // v1.9.0 realignment: the verifier's gate BODY was extracted to the
+  // verifier-fidelity-gates reference (agent size cap left no room inline);
+  // the agent must still @-load the reference, and the gate text must live there.
   test('gsd-verifier has the design-fidelity gate (observable-shape diff)', () => {
     const V = AG('gsd-verifier.md');
-    has(V, 'Design-fit check');
-    has(V, 'address-failure guard');
+    has(V, 'verifier-fidelity-gates.md');          // the @-load seam
+    const G = REF('verifier-fidelity-gates.md');
+    has(G, 'Design-fit check');
+    has(G, 'address-failure guard');
   });
 
   test('gsd-verifier splits the Mode-fit gate: design-delta parity-exempt + vibe intent-gate', () => {
     const V = AG('gsd-verifier.md');
     has(V, 'parity-EXEMPT');                       // design-mandated change is not drift
-    has(V, 'intent-hardening, NOT behavior-parity'); // vibe is not pinned to its bugs
+    const G = REF('verifier-fidelity-gates.md');
+    has(G, 'intent-hardening, NOT behavior-parity'); // vibe is not pinned to its bugs
   });
 
   test('gsd-plan-checker has the design-fidelity dimension + the two exemptions', () => {
@@ -139,7 +145,11 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
 
   test('WRITE: the oracle has live writers on the FE-led + fallback paths (not just optional model-domain)', () => {
     has(WF('frontend-architecture.md'), 'Write the field oracle');                 // FE-led path
-    has(WF('plan-phase.md'), 'write `.planning/DESIGN-INVENTORY.md` before finalizing the data shape'); // planner fallback
+    // v1.9.0: the planner-fallback bullet was condensed — the oracle path and the
+    // write-before-shape mandate now sit in one sentence ("No oracle yet → ingest
+    // this phase's design slice and write it before finalizing the data shape").
+    has(WF('plan-phase.md'), '.planning/DESIGN-INVENTORY.md');
+    has(WF('plan-phase.md'), 'write it before finalizing the data shape'); // planner fallback
   });
 
   test('TRIGGER: all three entry points detect/route a provided design', () => {
@@ -158,7 +168,9 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
   });
 
   test('TRIGGER: the design-fidelity gate fires on a schema/contract field that backs a covered surface (not only UI phases)', () => {
-    has(AG('gsd-verifier.md'), 'backs a design-covered surface');
+    // v1.9.0: trigger text lives in the extracted verifier-fidelity-gates
+    // reference (see the GATES block above for the @-load seam assertion).
+    has(REF('verifier-fidelity-gates.md'), 'backs a design-covered surface');
     has(TPL('design-inventory.md'), 'Backs (surface field)'); // the column that maps a built column to its user-facing field
   });
 

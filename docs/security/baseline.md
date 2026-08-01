@@ -7,7 +7,7 @@
 | RFC status | Draft |
 | Version | 0.1.0 |
 | Last updated | 2026-05-22 |
-| Owner | @open-gsd/maintainers (`@trek-e @Solvely-Colin @jeremymcs`) |
+| Owner | @TheRocketCodeMX/maintainers (`@trek-e @Solvely-Colin @jeremymcs`) |
 
 ### Repos in scope
 
@@ -133,11 +133,16 @@ file before the job passes.
 
 ### 2.4 Locale-safe text scanning
 
-**Control:** Text output and user-facing strings are scanned for locale-unsafe
-constructs (non-ASCII homoglyphs, bidirectional override characters, invisible
-Unicode) that could be used to obscure malicious content in diffs or logs.
+**Control:** Text output and user-facing strings are scanned for invisible
+Unicode and bidirectional override characters that could be used to obscure
+malicious content in diffs or logs. The live hooks
+(`gsd-prompt-guard.js`, `gsd-read-injection-scanner.js`) inline their own
+Unicode-detection patterns for hook independence — they do not call
+`scanForInjection` from `security.cts`. The centralized `scanForInjection`
+function serves as the CI codebase-scanner engine
+(`tests/prompt-injection-scan.security.test.cjs`).
 
-**Why it matters:** Unicode homoglyph and BiDi attacks are documented
+**Why it matters:** Unicode invisible-character and BiDi attacks are documented
 supply-chain vectors (CVE-2021-42574 — "Trojan Source"). Detecting them at scan
 time prevents invisible payload injection in source and output files.
 
@@ -350,7 +355,7 @@ This project follows **coordinated disclosure** aligned with ISO/IEC 29147:
 
 ### Scanner policy owner
 
-**Owner:** `@open-gsd/maintainers` (`@trek-e @Solvely-Colin @jeremymcs`), as
+**Owner:** `@TheRocketCodeMX/maintainers` (`@trek-e @Solvely-Colin @jeremymcs`), as
 reflected in `.github/CODEOWNERS`.
 
 Responsibilities:
@@ -362,7 +367,7 @@ Responsibilities:
 
 ### Exclusion governance
 
-**Owner:** `@open-gsd/maintainers`
+**Owner:** `@TheRocketCodeMX/maintainers`
 
 - All exclusions must use the annotation grammar defined in the implementing
   PRs (§ 2.2 for secret scanning; equivalent for other scanners)
@@ -371,7 +376,7 @@ Responsibilities:
 
 ### Baseline owner (this document)
 
-**Owner:** `@open-gsd/maintainers`
+**Owner:** `@TheRocketCodeMX/maintainers`
 
 - Quarterly review cadence (calendar entry required — see § 8 checklist)
 - Any substantive change to this document requires a PR reviewed by at least
@@ -397,12 +402,12 @@ Responsibilities:
 
 | Item | Status | Owner | Target date | Exit criteria |
 |---|---|---|---|---|
-| Locale-safe text scanning (#116) | In progress | `@open-gsd/maintainers` | TBD: maintainer | PR #132 merged; CI passes |
-| Prompt-injection scanning (#113) | In progress | `@open-gsd/maintainers` | TBD: maintainer | PR #133 merged; CI passes |
-| Secret scanning (#115) | In progress | `@open-gsd/maintainers` | TBD: maintainer | PR #134 merged; CI passes; 0 un-annotated entries |
-| Dependency integrity (#114) | In progress | `@open-gsd/maintainers` | TBD: maintainer | PR #135 merged; `npm audit` clean |
-| Reproducible env bootstrap (#117) | In progress | `@open-gsd/maintainers` | TBD: maintainer | PR #136 merged; `npm ci` passes cleanly |
-| Baseline doc approved | Draft | `@open-gsd/maintainers` | TBD: maintainer | At least one maintainer approves this document |
+| Locale-safe text scanning (#116) | In progress | `@TheRocketCodeMX/maintainers` | TBD: maintainer | PR #132 merged; CI passes |
+| Prompt-injection scanning (#113) | In progress | `@TheRocketCodeMX/maintainers` | TBD: maintainer | PR #133 merged; CI passes |
+| Secret scanning (#115) | In progress | `@TheRocketCodeMX/maintainers` | TBD: maintainer | PR #134 merged; CI passes; 0 un-annotated entries |
+| Dependency integrity (#114) | In progress | `@TheRocketCodeMX/maintainers` | TBD: maintainer | PR #135 merged; `npm audit` clean |
+| Reproducible env bootstrap (#117) | In progress | `@TheRocketCodeMX/maintainers` | TBD: maintainer | PR #136 merged; `npm ci` passes cleanly |
+| Baseline doc approved | Draft | `@TheRocketCodeMX/maintainers` | TBD: maintainer | At least one maintainer approves this document |
 
 ### Phase 2 — Sibling repo alignment
 
@@ -421,7 +426,7 @@ Per sibling repo, the expected work is:
 5. Update the Phase 2 table above once the PR merges
 
 **Target date:** TBD: maintainer
-**Owner:** `@open-gsd/maintainers`
+**Owner:** `@TheRocketCodeMX/maintainers`
 
 ### Phase 3 — Enforcement
 
@@ -433,7 +438,7 @@ Once all in-scope repos have adopted all controls:
 4. Mark RFC status as `Adopted` in § 1
 
 **Target date:** TBD: maintainer
-**Owner:** `@open-gsd/maintainers`
+**Owner:** `@TheRocketCodeMX/maintainers`
 
 ---
 
@@ -463,7 +468,7 @@ based on historical data after the first quarterly review.
 - [ ] Maintainer review of this baseline (required before RFC status → `Approved`)
 - [ ] Sibling repo enumeration (populate Phase 2 table in § 6)
 - [ ] CODEOWNERS update to explicitly list `docs/security/` as owned by
-      `@open-gsd/maintainers`
+      `@TheRocketCodeMX/maintainers`
 - [ ] Quarterly review calendar entry created (link to be added here)
 - [ ] Per-control adoption tracking issue opened for each Phase 2 sibling repo
 - [ ] Phase 2 rollout PR(s) opened per sibling repo (one PR per repo)

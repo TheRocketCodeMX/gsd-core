@@ -14,12 +14,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { platformReadSync } from './shell-command-projection.cjs';
+import { collectSection } from './markdown-sectionizer.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningDir } = planningWorkspace;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import frontmatter = require('./frontmatter.cjs');
 const { extractFrontmatter } = frontmatter;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import phaseIdMod = require('./phase-id.cjs');
+const { PHASE_NUMBER_TOKEN_SOURCE } = phaseIdMod;
 import { requireSafePath, sanitizeForDisplay } from './security.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -156,15 +160,15 @@ function scanDebugSessions(planDir: string): DebugSessionItem[] {
     const content = platformReadSync(safeFilePath);
     if (content === null) continue;
 
-    const fm = extractFrontmatter(content);
+    const fm = extractFrontmatter(content, safeFilePath);
     const status = ((fm.status as string) || 'unknown').toLowerCase();
     if (status === 'resolved' || status === 'complete') continue;
 
     // Extract hypothesis from "Current Focus" block if parseable
     let hypothesis = '';
-    const focusMatch = content.match(/##\s*Current Focus[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i); // allow-adhoc-markdown: pre-seam read-only section extract in audit.cts; pending migration #1372
-    if (focusMatch) {
-      const focusText = focusMatch[1].trim().split('\n')[0].trim();
+    const focusSection = collectSection(content, (h) => h.level === 2 && h.text.trim().toLowerCase().startsWith('current focus'), { levelBounded: true });
+    if (focusSection) {
+      const focusText = focusSection.body.trim().split('\n')[0].trim();
       hypothesis = sanitizeForDisplay(focusText.slice(0, 100));
     }
 
@@ -242,7 +246,7 @@ function scanQuickTasks(planDir: string): QuickTaskItem[] {
       if (content === null) {
         status = 'unreadable';
       } else {
-        const fm = extractFrontmatter(content);
+        const fm = extractFrontmatter(content, safeSum);
         status = ((fm.status as string) || 'unknown').toLowerCase();
       }
     }
@@ -305,7 +309,7 @@ function scanThreads(planDir: string): ThreadItem[] {
     const content = platformReadSync(safeFilePath);
     if (content === null) continue;
 
-    const fm = extractFrontmatter(content);
+    const fm = extractFrontmatter(content, safeFilePath);
     let status = ((fm.status as string) || '').toLowerCase().trim();
 
     // Fall back to scanning body for ## Status: OPEN / IN PROGRESS
@@ -374,7 +378,7 @@ function scanTodos(planDir: string): TodoItem[] {
     const content = platformReadSync(safeFilePath);
     if (content === null) continue;
 
-    const fm = extractFrontmatter(content);
+    const fm = extractFrontmatter(content, safeFilePath);
 
     // Extract first line of body after frontmatter
     const bodyMatch = content.replace(/^---[\s\S]*?---\n?/, '');
@@ -432,7 +436,7 @@ function scanSeeds(planDir: string): SeedItem[] {
     const content = platformReadSync(safeFilePath);
     if (content === null) continue;
 
-    const fm = extractFrontmatter(content);
+    const fm = extractFrontmatter(content, safeFilePath);
     const status = ((fm.status as string) || 'dormant').toLowerCase();
 
     if (!unimplementedStatuses.has(status)) continue;
@@ -482,7 +486,7 @@ function scanUatGaps(planDir: string): UatGapItem[] {
 
   for (const dir of dirs) {
     const phaseDir = path.join(phasesDir, dir);
-    const phaseMatch = dir.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
+    const phaseMatch = dir.match(new RegExp(`^(${PHASE_NUMBER_TOKEN_SOURCE})`, 'i'));
     const phaseNum = phaseMatch ? phaseMatch[1] : dir;
 
     let files: string[];
@@ -505,7 +509,7 @@ function scanUatGaps(planDir: string): UatGapItem[] {
       const content = platformReadSync(safeFilePath);
       if (content === null) continue;
 
-      const fm = extractFrontmatter(content);
+      const fm = extractFrontmatter(content, safeFilePath);
       const status = ((fm.status as string) || 'unknown').toLowerCase();
       const result = ((fm.result as string) || '').toLowerCase();
 
@@ -552,7 +556,7 @@ function scanVerificationGaps(planDir: string): VerificationGapItem[] {
 
   for (const dir of dirs) {
     const phaseDir = path.join(phasesDir, dir);
-    const phaseMatch = dir.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
+    const phaseMatch = dir.match(new RegExp(`^(${PHASE_NUMBER_TOKEN_SOURCE})`, 'i'));
     const phaseNum = phaseMatch ? phaseMatch[1] : dir;
 
     let files: string[];
@@ -575,7 +579,7 @@ function scanVerificationGaps(planDir: string): VerificationGapItem[] {
       const content = platformReadSync(safeFilePath);
       if (content === null) continue;
 
-      const fm = extractFrontmatter(content);
+      const fm = extractFrontmatter(content, safeFilePath);
       const status = ((fm.status as string) || 'unknown').toLowerCase();
 
       if (status !== 'gaps_found' && status !== 'human_needed') continue;
@@ -614,7 +618,7 @@ function scanContextQuestions(planDir: string): ContextQuestionItem[] {
 
   for (const dir of dirs) {
     const phaseDir = path.join(phasesDir, dir);
-    const phaseMatch = dir.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
+    const phaseMatch = dir.match(new RegExp(`^(${PHASE_NUMBER_TOKEN_SOURCE})`, 'i'));
     const phaseNum = phaseMatch ? phaseMatch[1] : dir;
 
     let files: string[];
@@ -637,7 +641,7 @@ function scanContextQuestions(planDir: string): ContextQuestionItem[] {
       const content = platformReadSync(safeFilePath);
       if (content === null) continue;
 
-      const fm = extractFrontmatter(content);
+      const fm = extractFrontmatter(content, safeFilePath);
 
       // Check frontmatter open_questions field
       let questions: string[] = [];
@@ -649,9 +653,9 @@ function scanContextQuestions(planDir: string): ContextQuestionItem[] {
 
       // Also check for ## Open Questions section in body
       if (questions.length === 0) {
-        const oqMatch = content.match(/##\s*Open Questions[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i); // allow-adhoc-markdown: pre-seam read-only section extract in audit.cts; pending migration #1372
-        if (oqMatch) {
-          const oqBody = oqMatch[1].trim();
+        const oqSection = collectSection(content, (h) => h.level === 2 && h.text.trim().toLowerCase().startsWith('open questions'), { levelBounded: true });
+        if (oqSection) {
+          const oqBody = oqSection.body.trim();
           if (oqBody && oqBody.length > 0 && !/^\s*none\s*$/i.test(oqBody)) {
             const items = oqBody.split('\n')
               .map((l: string) => l.trim())

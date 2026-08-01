@@ -62,17 +62,6 @@ const UI_GATE_PATTERN_GLOBAL = new RegExp(UI_GATE_PATTERN.source, 'gi');
 const NEGATOR_BEFORE_TOKEN = /(?:^|[^a-z])(?:no|not|without|never|sans|zero|n't)\s+(?:a\s+|an\s+|the\s+)?$/i;
 // FORK:fidelity END
 
-// FORK:strategy BEGIN
-// Per-phase UI-hint authority (strategy chain): the design-aware roadmapper annotates every
-// ROADMAP phase with `**UI hint**: yes|no`. When the hint is present it is AUTHORITATIVE in
-// BOTH directions — `yes` ⇒ UI, any other explicit hint (e.g. `no`) ⇒ NOT UI — because the
-// roadmapper already judged the phase against the design/strategy artifacts; keyword detection
-// must not override it, and the annotation's own bare "UI" token must not self-match.
-// Keyword detection remains the fallback ONLY when no hint exists.
-const UI_HINT_YES_RE = /UI hint[^a-zA-Z]*:?[^a-zA-Z]*yes/i;
-const UI_HINT_ANY_RE = /UI hint/i;
-// FORK:strategy END
-
 /**
  * Check a roadmap phase section string for frontend UI indicators.
  *
@@ -89,16 +78,26 @@ function checkUiPresence(text) {
   // Normalise CRLF so the pattern sees consistent line boundaries.
   const normalised = text.replace(/\r\n/g, '\n');
 
-// FORK:strategy BEGIN
-  // Explicit per-phase UI hint is authoritative (both directions) — see UI_HINT_*_RE above.
-  if (UI_HINT_ANY_RE.test(normalised)) {
-    const hintYes = UI_HINT_YES_RE.test(normalised);
-    return { hasUI: hintYes, tokens: hintYes ? ['ui-hint:yes'] : [] };
-  }
-// FORK:strategy END
+  // #2150: an explicit `**UI hint**: yes|no` metadata line is the author's
+  // authoritative declaration of whether the phase has a UI surface — progress.md
+  // and new-project.md already parse this line (`UI hint.*yes`). The bare token
+  // `UI` in the line itself must not count as a UI indicator, and the declaration
+  // overrides token-sniffing. Line-anchored (`m`) so a mid-line prose mention is
+  // not treated as the metadata line; word-boundary on the value so `nope`/`not`
+  // do not match `no`.
+  const hintMatch = normalised.match(/^\s*\*\*UI hint\*\*\s*:\s*(yes|no)\b/im);
+  const hint = hintMatch ? hintMatch[1].toLowerCase() : null;
+
+  // Strip ANY `**UI hint**:` line before token-sniffing so a hint without a
+  // recognised yes/no (or one we did not short-circuit on) cannot false-positive
+  // on the bare `UI` token.
+  const sniffable = normalised
+    .split('\n')
+    .filter((line) => !/^\s*\*\*UI hint\*\*\s*:/i.test(line))
+    .join('\n');
 
   const found = new Set();
-  for (const line of normalised.split('\n')) {
+  for (const line of sniffable.split('\n')) {
     // Reset lastIndex before each line so the global pattern restarts from 0.
     UI_GATE_PATTERN_GLOBAL.lastIndex = 0;
     for (const m of line.matchAll(UI_GATE_PATTERN_GLOBAL)) {
@@ -109,6 +108,13 @@ function checkUiPresence(text) {
 // FORK:fidelity END
       found.add(m[2].toLowerCase());
     }
+  }
+
+  if (hint === 'no') {
+    return { hasUI: false, tokens: [] };
+  }
+  if (hint === 'yes') {
+    return { hasUI: true, tokens: [...found] };
   }
 
   return { hasUI: found.size > 0, tokens: [...found] };

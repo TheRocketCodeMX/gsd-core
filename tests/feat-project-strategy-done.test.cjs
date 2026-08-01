@@ -112,15 +112,28 @@ describe('project strategy-done', () => {
   });
 
   test('the flip feeds query grounding required (end-to-end loop closure)', () => {
+    // Task 15 / issue #21 P0-1c: this test previously pinned the under-requiring
+    // hole (`recommended` + artifact-on-disk was NOT required). The resolver now
+    // promotes an existing-but-unflipped artifact to `required` with a note
+    // prompting the `strategy-done` flip; after the flip the entry stays
+    // required, the note disappears, and the unflipped warning goes away.
     writeProject(tmpDir, PLAN);
     fs.writeFileSync(path.join(tmpDir, '.planning', 'DOMAIN-MODEL.md'),
       '## Subdomains\n| Subdomain | Type |\n|---|---|\n| pricing | Core |\n');
     const before = JSON.parse(runGsdTools('query grounding required', tmpDir).output);
-    assert.ok(!before.required.some((s) => s.artifact === 'DOMAIN-MODEL'), 'not required while recommended');
+    const beforeEntry = before.required.find((s) => s.artifact === 'DOMAIN-MODEL');
+    assert.ok(beforeEntry, 'recommended + artifact on disk → required (Task 15 closes the hole)');
+    assert.match(beforeEntry.notes || '', /strategy-done/,
+      'the required-while-recommended entry carries the strategy-done note');
+    assert.ok((before.warnings || []).some((w) => /^unflipped: model-domain\b/.test(w)),
+      'unflipped warning fires while the row is still recommended');
     runGsdTools('project strategy-done model-domain', tmpDir);
     const after = JSON.parse(runGsdTools('query grounding required', tmpDir).output);
-    assert.ok(after.required.some((s) => s.artifact === 'DOMAIN-MODEL'),
-      'done + artifact on disk → required set includes it');
+    const afterEntry = after.required.find((s) => s.artifact === 'DOMAIN-MODEL');
+    assert.ok(afterEntry, 'done + artifact on disk → required set still includes it');
+    assert.ok(!afterEntry.notes, 'after the flip the strategy-done note is gone');
+    assert.ok(!(after.warnings || []).some((w) => /model-domain/.test(w)),
+      'after the flip the unflipped warning is gone');
   });
 });
 

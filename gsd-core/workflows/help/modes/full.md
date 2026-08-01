@@ -13,6 +13,20 @@ Display the complete GSD Core command reference. Output ONLY the reference conte
 2. `/gsd:plan-phase 1` - Create detailed plan for first phase
 3. `/gsd:execute-phase 1` - Execute the phase
 
+Not sure where to start? `/gsd:next` reads your project state and routes you to the right next action.
+
+### Smart Entry
+
+**`/gsd:next`**
+The state-aware front door. Detects your current situation and presents a short menu of the right next actions.
+
+- Reads `.planning/STATE.md`, git state, and verification signals via `gsd-tools smart-entry`
+- Classifies your situation (no-project, paused, blocked, planning, executing, needs-verify, idle, complete, …)
+- Shows a situation-appropriate menu with one recommended action, then dispatches
+- Launcher/router only — it never does the work itself; falls back to `/gsd:progress` if detection is unavailable
+
+Usage: `/gsd:next`
+
 ## Staying Updated
 
 GSD evolves fast. Update periodically:
@@ -48,6 +62,16 @@ Creates all `.planning/` artifacts:
 
 Usage: `/gsd:new-project`
 
+**`/gsd:onboard [--fast] [--text]`**
+Guide first-time onboarding for an existing codebase.
+
+- Detects brownfield code, existing planning docs, and partial `.planning/` state
+- Routes through `/gsd:map-codebase`, `/gsd:ingest-docs`, and `/gsd:new-project` in the safe order
+- Creates `.planning/onboarding/SUMMARY.md` after project setup
+- Idempotent: confirms existing artifacts and does not overwrite planning silently
+
+Usage: `/gsd:onboard`
+
 **`/gsd:roadmap [--auto] [--milestone]`**
 Generate — or bring current — the project roadmap after the strategy chain, then hand off to the build loop.
 
@@ -67,7 +91,7 @@ Map an existing codebase for brownfield projects.
 - Analyzes codebase with parallel Explore agents
 - Creates `.planning/codebase/` with 7 focused documents
 - Covers stack, architecture, structure, conventions, testing, integrations, concerns
-- Use before `/gsd:new-project` on existing codebases
+- Usually reached through `/gsd:onboard` for first-time existing-codebase setup; run directly to refresh or focus a map
 
 Usage: `/gsd:map-codebase`
 
@@ -90,7 +114,7 @@ Usage: `/gsd:discuss-phase 2`
 Usage: `/gsd:discuss-phase 2 --batch`
 Usage: `/gsd:discuss-phase 2 --batch=3`
 
-**`/gsd:plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--prd <file>] [--ingest <path-or-glob>] [--ingest-format <auto|nygard|madr|narrative>] [--reviews] [--text] [--tdd] [--mvp]`**
+**`/gsd:plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--prd <file>] [--ingest <path-or-glob>] [--ingest-format <auto|nygard|madr|narrative>] [--reviews] [--text] [--tdd] [--mvp] [--no-tracer] [--no-reversibility-gates]`**
 Create detailed execution plan for a specific phase.
 
 - `--skip-research` — bypass the research subagent
@@ -101,7 +125,9 @@ Create detailed execution plan for a specific phase.
 - `--ingest <path-or-glob>` — pre-ingest external ADRs/PRDs/SPECs before planning (see *PRD Express Path* below)
 - `--ingest-format <auto|nygard|madr|narrative>` — hint the ADR ingester's parser when `--ingest` is set; defaults to `auto`
 - `--tdd` — plan in test-driven order (tests before code)
-- `--mvp` — vertical-slice MVP planning mode (see also `/gsd:mvp-phase`)
+- `--mvp` — MVP enrichment (user story + Walking Skeleton) on top of the default tracer-first ordering (see also `/gsd:mvp-phase`)
+- `--no-tracer` — opt out of the default tracer-first slice and plan horizontal layers (legacy default)
+- `--no-reversibility-gates` — suppress the `checkpoint:decision` a `one-way`-door decision normally earns, for intentionally-unattended runs (ratings are still recorded)
 
 - Generates `.planning/phases/XX-phase-name/XX-YY-PLAN.md`
 - Breaks phase into concrete, actionable tasks
@@ -234,11 +260,13 @@ Start a new milestone through unified flow.
 - Requirements definition with scoping
 - Roadmap creation with phase breakdown
 - Optional `--reset-phase-numbers` flag restarts numbering at Phase 1 and archives old phase dirs first for safety
+- Optional `--ws <name>` flag scopes the milestone to a workstream and skips the shared `PROJECT.md` write
 
 Mirrors `/gsd:new-project` flow for brownfield projects (existing PROJECT.md).
 
 Usage: `/gsd:new-milestone "v2.0 Features"`
 Usage: `/gsd:new-milestone --reset-phase-numbers "v2.0 Features"`
+Usage: `/gsd:new-milestone --ws search "v2.0 Search"`
 
 **`/gsd:complete-milestone <version>`**
 Archive completed milestone and prepare for next version.
@@ -398,7 +426,7 @@ List pending todos and select one to work on.
 - Optional area filter (e.g., `/gsd:capture --list api`)
 - Loads full context for selected todo
 - Routes to appropriate action (work now, add to phase, brainstorm)
-- Moves todo to done/ when work begins
+- Moves todo to completed/ when work begins
 
 Usage: `/gsd:capture --list`
 Usage: `/gsd:capture --list api`
@@ -634,7 +662,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 <!-- FORK:strategy END -->
 - **`/gsd:mvp-phase <phase-number>`** — Plan a phase as a vertical MVP slice (user story + SPIDR splitting) before handing off to plan-phase. Same end-state as `/gsd:plan-phase --mvp`, with a guided MVP-shaping intro.
 - **`/gsd:ultraplan-phase [phase]`** — [BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back.
-- **`/gsd:plan-review-convergence <phase> [--codex] [--gemini] [--claude] [--opencode] [--ollama] [--lm-studio] [--llama-cpp] [--all] [--text] [--ws <name>] [--max-cycles N]`** — Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Supports both cloud reviewers (Codex/Gemini/Claude/OpenCode) and local model runtimes (Ollama, LM Studio, llama.cpp).
+- **`/gsd:plan-review-convergence <phase> [--gemini] [--claude] [--codex] [--coderabbit] [--opencode] [--qwen] [--cursor] [--agy/--antigravity] [--ollama] [--lm-studio] [--llama-cpp] [--kimi-code] [--all] [--text] [--ws <name>] [--max-cycles N]`** — Cross-AI plan convergence loop — replan with review feedback until no HIGH concerns remain. Supports both cloud reviewers (Gemini/Claude/Codex/CodeRabbit/OpenCode/Qwen/Cursor/Antigravity/Kimi Code) and local model runtimes (Ollama, LM Studio, llama.cpp).
 - **`/gsd:autonomous [--from N] [--to N] [--only N] [--interactive] [--converge]`** — Run all remaining phases autonomously: discuss → plan → execute per phase. `--converge` routes planning through plan-review convergence; `--cross-ai` is an alias.
 
 ### Quality, Review & Verification
@@ -657,6 +685,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 ### Knowledge & Context
 
+- **`/gsd:context [seed|scout|flush|master] [--milestone] [--phase <N>] [--text]`** — Seed, verify, and grow durable project knowledge. `seed` — the orchestrator itself writes quality-stamped context capsules per phase (plus MASTER-CONTEXT when cross-phase content exists), anchors verified at birth; `scout` — explorer subagents confirm-or-refute a capsule's facts against the live code; `flush` — calm knowledge checkpoint (MASTER + active capsule + session position); `master` — curate MASTER-CONTEXT back to its ~150-line bound.
 - **`/gsd:graphify [build|query <term>|status|diff]`** — Build, query, and inspect the project knowledge graph in `.planning/graphs/`.
 - **`/gsd:mempalace-recall`** — Recall prior decisions, patterns, and surprises from MemPalace before planning.
 - **`/gsd:mempalace-capture [artifact-type]`** — File a phase artifact into MemPalace and mirror decision facts into its temporal KG.
@@ -680,7 +709,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 These six skills exist primarily for the model to perform two-stage hierarchical routing across 60+ skills. You can invoke them directly when you want to browse a category interactively.
 
-- **`/gsd-context`** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace).
+- **`gsd-context` (router)** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace). Not to be confused with the `/gsd:context` knowledge-lifecycle command above.
 - **`/gsd-ideate`** — Exploration / capture routing (explore, sketch, spike, spec, capture).
 - **`/gsd-manage`** — Configuration and workspace routing (workstreams, thread, update, ship, inbox).
 - **`/gsd-project`** — Project-lifecycle routing (milestones, audits, summary).
@@ -698,7 +727,7 @@ These six skills exist primarily for the model to perform two-stage hierarchical
 ├── config.json           # Workflow mode & gates
 ├── todos/                # Captured ideas and tasks
 │   ├── pending/          # Todos waiting to be worked on
-│   └── done/             # Completed todos
+│   └── completed/        # Completed todos
 ├── spikes/               # Spike experiments (/gsd:spike)
 │   ├── MANIFEST.md       # Spike inventory and verdicts
 │   └── NNN-name/         # Individual spike directories
@@ -711,7 +740,7 @@ These six skills exist primarily for the model to perform two-stage hierarchical
 ├── milestones/
 │   ├── v1.0-ROADMAP.md       # Archived roadmap snapshot
 │   ├── v1.0-REQUIREMENTS.md  # Archived requirements
-│   └── v1.0-phases/          # Archived phase dirs (via /gsd:cleanup or --archive-phases)
+│   └── v1.0-phases/          # Archived phase dirs (via /gsd:cleanup or milestone complete, which archives by default)
 │       ├── 01-foundation/
 │       └── 02-core-features/
 ├── codebase/             # Codebase map (brownfield projects)

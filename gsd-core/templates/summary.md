@@ -21,6 +21,13 @@ provides:
   - [bullet list of what this phase built/delivered]
 affects: [list of phase names or keywords that will need this context]
 
+# Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
+# Same estimateTokens scale (chars/4 over the realized diff), never a harness token count.
+actuals:
+  tokens: [chars/4 over files actually changed]
+  tasks: [tasks completed]
+  commits: [commits made]
+
 # Tech tracking
 tech-stack:
   added: [libraries/tools added in this phase]
@@ -39,6 +46,11 @@ patterns-established:
   - "Pattern 2: description"
 
 requirements-completed: []  # REQUIRED — Copy ALL requirement IDs from this plan's `requirements` frontmatter field.
+
+deviations:  # structured mirror of ## Deviations from Plan — REQUIRED whenever that section is non-empty
+  - rule: "2"          # deviation rule number
+    what: "added missing config validation"
+    why: "plan assumed it existed"
 
 # Coverage metadata (#1602) — one entry per shipped deliverable. Drives DETERMINISTIC UAT routing in verify-work.
 # OMIT this whole block for legacy/prose-only SUMMARYs — verify-work then falls back to the ## Accomplishments bullets
@@ -164,6 +176,8 @@ None - no external service configuration required.
 **Patterns:** Established conventions future phases should maintain.
 
 **Population:** Frontmatter is populated during summary creation in execute-plan.md. See `<step name="create_summary">` for field-by-field guidance.
+
+**Deviations:** `deviations:` is a structured mirror of the `## Deviations from Plan` prose section. Frontmatter-only readers (the default-budget planner) see ONLY this — the prose section is invisible to them; an empty prose section means this key is omitted.
 </frontmatter_guidance>
 
 <coverage_guidance>

@@ -10,7 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { phaseVariants, buildRoadmapPhaseVariants, buildNotStartedPhaseVariants } from './validate.cjs';
-import { phaseDirNameRe, PHASE_TOKEN_FROM_DIR_RE, MILESTONE_ARCHIVE_DIR_RE, canonicalPlanStem } from './validate.cjs';
+import { realClock } from './clock.cjs';
+import { phaseDirNameRe, PHASE_TOKEN_FROM_DIR_RE, MILESTONE_ARCHIVE_DIR_RE, canonicalPlanStem, textEncodingError } from './validate.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- planning-workspace.cjs is an export= CommonJS module
 import planningWorkspace = require('./planning-workspace.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- frontmatter.cjs is an export= CommonJS module
@@ -21,11 +22,13 @@ import stateMod = require('./state.cjs');
 import modelProfilesMod = require('./model-profiles.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- plan-scan.cjs is an export= CommonJS module
 import planScanMod = require('./plan-scan.cjs');
-import { execGit, platformReadSync as safeReadFile, platformWriteSync } from './shell-command-projection.cjs';
+import { execGit, platformReadSync as safeReadFile, platformWriteSync, posixNormalize } from './shell-command-projection.cjs';
 import { PACKAGE_NAME } from './package-identity.cjs';
 import { formatGsdSlash, resolveRuntime } from './runtime-slash.cjs';
 import { detectSchemaFiles, checkSchemaDrift } from './schema-detect.cjs';
 import { isCanonicalPlanningFile } from './artifacts.cjs';
+import { extractTaggedBlocks } from './markdown-sectionizer.cjs';
+import { VALID_PROFILES, VALID_TIERS, VALID_PHASE_TYPES } from './model-catalog.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- agent-install-check.cjs is an export= CommonJS module
 import agentInstallCheck = require('./agent-install-check.cjs');
 const { checkAgentsInstalled } = agentInstallCheck;
@@ -37,7 +40,7 @@ import configLoaderMod = require('./config-loader.cjs');
 const { loadConfig, CONFIG_DEFAULTS } = configLoaderMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseIdMod = require('./phase-id.cjs');
-const { normalizePhaseName, phaseTokenMatches, escapeRegex, getMilestoneFromPhaseId } = phaseIdMod;
+const { normalizePhaseName, phaseTokenMatches, escapeRegex, getMilestoneFromPhaseId, OPTIONAL_PHASE_TAG_SOURCE, PHASE_NUMBER_TOKEN_SOURCE, extractPhaseToken, comparePhaseNum } = phaseIdMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseLocatorMod = require('./phase-locator.cjs');
 const { findPhaseInternal } = phaseLocatorMod;
@@ -47,6 +50,9 @@ const { getMilestoneInfo, stripShippedMilestones, extractCurrentMilestone } = ro
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import worktreeSafetyMod = require('./worktree-safety.cjs');
 const { inspectWorktreeHealth } = worktreeSafetyMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- commands.cjs is an export= CommonJS module
+import commandsMod = require('./commands.cjs');
+const { determinePhaseStatus } = commandsMod;
 
 const { planningDir, planningRoot } = planningWorkspace;
 const { extractFrontmatter, parseMustHavesBlock } = frontmatterMod;
@@ -57,21 +63,52 @@ const { MODEL_PROFILES } = modelProfilesMod;
 void stripShippedMilestones;
 void detectSchemaFiles;
 
-function cmdVerifySummary(
+interface SummaryVerification {
+  passed: boolean;
+  checks: {
+    summary_exists: boolean;
+    files_created: { checked: number; found: number; missing: string[] };
+    commits_exist: boolean;
+    self_check: string;
+  };
+  errors: string[];
+}
+
+/**
+ * Pure core of `verify-summary` (#2572).
+ *
+ * Same artifact↔git checks the CLI verb has always run, lifted out of the
+ * `output()` wrapper so other verbs can consume the structured
+ * `{ passed, checks, errors }` contract directly instead of shelling out and
+ * re-parsing JSON. `cmdVerifySummary` is now a thin adapter over this.
+ *
+ * Never throws and never writes to stdout: a missing SUMMARY, a non-repo, or an
+ * unresolvable commit all come back as structured `false`/`missing` values.
+ *
+ * Caveat for callers surfacing `commits_exist`: the hash pattern is a loose
+ * `\b[0-9a-f]{7,40}\b`, so any hex-shaped token in the prose counts as a
+ * candidate. That is cheap as an advisory signal and unacceptable as a gate.
+ *
+ * @param checkFileCount How many extracted candidates to probe. Defaults to 2 —
+ *   the value the CLI verb has always used. Pass `Infinity` to probe every
+ *   candidate (see `cmdPhaseComplete`, which reports on all of them).
+ * @param opts.checkCommits When `false`, the `git cat-file` probes are skipped
+ *   entirely and `commits_exist` comes back `false` meaning *not checked*.
+ *   Callers that do not surface `commits_exist` should pass `false` so this
+ *   stays a pure-filesystem check with no subprocess cost.
+ */
+function verifySummaryCore(
   cwd: string,
   summaryPath: string,
-  checkFileCount: number | undefined,
-  raw: boolean,
-): void {
-  if (!summaryPath) {
-    error('summary-path required');
-  }
-
+  checkFileCount?: number,
+  opts?: { checkCommits?: boolean },
+): SummaryVerification {
   const fullPath = path.join(cwd, summaryPath);
   const checkCount = checkFileCount || 2;
+  const checkCommits = opts?.checkCommits !== false;
 
   if (!fs.existsSync(fullPath)) {
-    const result = {
+    return {
       passed: false,
       checks: {
         summary_exists: false,
@@ -81,24 +118,74 @@ function cmdVerifySummary(
       },
       errors: ['SUMMARY.md not found'],
     };
-    output(result, raw, 'failed');
-    return;
   }
 
   const content = fs.readFileSync(fullPath, 'utf-8');
   const errors: string[] = [];
 
+  const projectRoot = path.resolve(cwd);
+
+  /**
+   * Is `candidate` plausibly a repo-relative file this check should probe?
+   *
+   * Deliberately narrowing. This is an ADVISORY, so the two error directions are
+   * not symmetric: a false positive tells a user their healthy project is
+   * missing a file that was never claimed, while a false negative just means one
+   * reference goes unprobed. Every rejection below is a noise class confirmed on
+   * #2685; when in doubt, skip rather than warn.
+   */
+  const isProbableProjectFile = (candidate: string): boolean => {
+    // Only repo-relative paths — a bare filename is too ambiguous to locate.
+    if (!candidate.includes('/')) return false;
+    // URLs, protocol-relative links, and any other scheme.
+    if (candidate.startsWith('http') || candidate.startsWith('//')) return false;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return false;
+    // Globs name a set, not a file: `src/**/*.cts` is never "missing".
+    if (/[*?]/.test(candidate)) return false;
+    // Bare hostnames (`docs.example.com/guide.html`). A repo-relative path's
+    // first segment is a directory name, which in practice contains a dot only
+    // when it is a dotfile directory (`.github/`, `.changeset/`, `.planning/`)
+    // — i.e. the dot is at index 0. A dot anywhere later marks a hostname.
+    const firstSegment = candidate.split('/')[0] || '';
+    if (firstSegment.indexOf('.') > 0) return false;
+    // Containment guard: a `../`-bearing reference must not turn this advisory
+    // into a filesystem existence probe outside the project.
+    const resolved = path.resolve(projectRoot, candidate);
+    if (resolved !== projectRoot && !resolved.startsWith(projectRoot + path.sep)) return false;
+    return true;
+  };
+
+  // Pattern 2 excludes `[` and `]` from its path class (#2685 Blocker 1). All
+  // three SUMMARY templates prescribe a YAML flow sequence for `key-files`:
+  //
+  //     key-files:
+  //       created: [src/auth/login.ts, src/auth/session.ts]
+  //
+  // and the label matches `(?:Created|Modified|…):` case-insensitively. Without
+  // the bracket exclusion the class captures the literal `[` as part of the
+  // first path, yielding `[src/auth/login.ts` — a candidate that can never exist
+  // on disk. That fired on healthy projects built from GSD's own shipped
+  // template. The exclusion also stops a markdown list in the body from
+  // reintroducing the same artifact.
+  //
+  // Stripping frontmatter first was the other remedy offered on #2685. It is a
+  // verified no-op on top of this exclusion — measured identical extraction
+  // across all three shipped templates — because the exclusion already makes a
+  // flow-sequence line contribute nothing. Consequence worth naming: the
+  // `key-files` block, the most authoritative statement of what a phase created,
+  // is still not read. Recovering it needs a real frontmatter parse, which is
+  // deliberately left as a follow-up rather than smuggled in here.
   const mentionedFiles = new Set<string>();
   const patterns = [
     /`([^`]+\.[a-zA-Z]+)`/g,
-    /(?:Created|Modified|Added|Updated|Edited):\s*`?([^\s`]+\.[a-zA-Z]+)`?/gi,
+    /(?:Created|Modified|Added|Updated|Edited):\s*`?([^\s`[\]]+\.[a-zA-Z]+)`?/gi,
   ];
 
   for (const pattern of patterns) {
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(content)) !== null) {
       const filePath = m[1];
-      if (filePath && !filePath.startsWith('http') && filePath.includes('/')) {
+      if (filePath && isProbableProjectFile(filePath)) {
         mentionedFiles.add(filePath);
       }
     }
@@ -107,13 +194,13 @@ function cmdVerifySummary(
   const filesToCheck = Array.from(mentionedFiles).slice(0, checkCount);
   const missing: string[] = [];
   for (const file of filesToCheck) {
-    if (!fs.existsSync(path.join(cwd, file))) {
+    if (!fs.existsSync(path.resolve(projectRoot, file))) {
       missing.push(file);
     }
   }
 
   const commitHashPattern = /\b[0-9a-f]{7,40}\b/g;
-  const hashes = content.match(commitHashPattern) || [];
+  const hashes = checkCommits ? content.match(commitHashPattern) || [] : [];
   let commitsExist = false;
   if (hashes.length > 0) {
     for (const hash of hashes.slice(0, 3)) {
@@ -151,8 +238,21 @@ function cmdVerifySummary(
   };
 
   const passed = missing.length === 0 && selfCheck !== 'failed';
-  const result = { passed, checks, errors };
-  output(result, raw, passed ? 'passed' : 'failed');
+  return { passed, checks, errors };
+}
+
+/** CLI adapter over verifySummaryCore — arg guard + output shaping only. */
+function cmdVerifySummary(
+  cwd: string,
+  summaryPath: string,
+  checkFileCount: number | undefined,
+  raw: boolean,
+): void {
+  if (!summaryPath) {
+    error('summary-path required');
+  }
+  const result = verifySummaryCore(cwd, summaryPath, checkFileCount);
+  output(result, raw, result.passed ? 'passed' : 'failed');
 }
 
 /**
@@ -205,8 +305,13 @@ function scanNegativeGrepCommentEcho(content: string): { errors: string[]; warni
   //    while a prose echo on the same line is still caught.
   const cmdSpanRe =
     /grep(?:\s+-{1,2}[A-Za-z][A-Za-z-]*)+\s+(?:'[^']*'|"[^"]*"|[^\s'"|>&;]+)[^\n]*?(?:==|-eq|=)\s*0\b/g;
+  // Security scan: must see the FULL text up to the first </action> — including a
+  // malformed inner <action> — so a grep-echo-0 trick cannot hide behind a
+  // deliberately-unclosed tag. Use a bounded to-first-close scan (ReDoS-safe via
+  // the {0,20000} cap, #2128), NOT the stop-at-next-open extractTaggedBlocks seam
+  // (which would drop the span before an unterminated inner <action>).
   const actionZones: string[] = [];
-  const actionRe = /<action>([\s\S]*?)<\/action>/g;
+  const actionRe = /<action>([\s\S]{0,20000}?)<\/action>/g;
   let acm: RegExpExecArray | null;
   while ((acm = actionRe.exec(text)) !== null) actionZones.push(acm[1]);
   const scannableActionText = actionZones.map((zone) => zone.replace(cmdSpanRe, ' ')).join('\n');
@@ -364,32 +469,21 @@ function scanFileWideNegativeGateConflict(content: string): { warnings: string[]
     gateText: string;  // <verify>+<automated>+<acceptance_criteria> text
     reqText: string;   // <action>+<acceptance_criteria> text (requirement side)
   }
-  const taskRe = /<task[^>]*>([\s\S]*?)<\/task>/g;
   const tasks: TaskInfo[] = [];
-  let tm: RegExpExecArray | null;
-  while ((tm = taskRe.exec(text)) !== null) {
-    const tc = tm[1];
+  for (const tc of extractTaggedBlocks(text, 'task', true)) {
     // Extract task name.
-    const namem = tc.match(/<name>([\s\S]*?)<\/name>/);
-    const name = namem ? namem[1].trim() : 'unnamed';
+    const namem = extractTaggedBlocks(tc, 'name');
+    const name = namem.length ? namem[0].trim() : 'unnamed';
     // Extract <files> entries.
-    const filesm = tc.match(/<files>([\s\S]*?)<\/files>/);
-    const filesText = filesm ? filesm[1] : '';
+    const filesArr = extractTaggedBlocks(tc, 'files');
+    const filesText = filesArr.length ? filesArr[0] : '';
     const files = filesText.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
     // Gate text: <verify>/<automated>/<acceptance_criteria>.
     const gateFragments: string[] = [];
-    for (const tag of ['verify', 'automated', 'acceptance_criteria']) {
-      const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'g');
-      let mm: RegExpExecArray | null;
-      while ((mm = re.exec(tc)) !== null) gateFragments.push(mm[1]);
-    }
+    for (const tag of ['verify', 'automated', 'acceptance_criteria']) gateFragments.push(...extractTaggedBlocks(tc, tag));
     // Requirement text: <action>/<acceptance_criteria>.
     const reqFragments: string[] = [];
-    for (const tag of ['action', 'acceptance_criteria']) {
-      const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'g');
-      let mm: RegExpExecArray | null;
-      while ((mm = re.exec(tc)) !== null) reqFragments.push(mm[1]);
-    }
+    for (const tag of ['action', 'acceptance_criteria']) reqFragments.push(...extractTaggedBlocks(tc, tag));
     // Strip XML tags from gate text so segments containing embedded
     // XML closing tags (e.g. <automated>cmd</automated> nested inside <verify>)
     // don't bleed into the file-path token extraction.
@@ -557,10 +651,167 @@ function scanFileWideNegativeGateConflict(content: string): { warnings: string[]
   return { warnings, valid: true as const };
 }
 
+// ─── Plan-task structure validation (#2444) ──────────────────────────────────
+
+/**
+ * Per-task structural information extracted from a PLAN.md `<tasks>` block.
+ * Captures the task's `type` attribute (so `checkpoint:*` tasks validate
+ * against their type-specific canonical field set per
+ * `gsd-core/references/checkpoints.md`) plus presence flags for every tag the
+ * validator cares about. Pure data — no I/O.
+ */
+interface PlanTaskInfo {
+  name: string;
+  /** Lowercased `type` attribute value, or '' when the opening tag has no type. */
+  type: string;
+  hasName: boolean;
+  // auto-task fields
+  hasFiles: boolean;
+  hasAction: boolean;
+  hasVerify: boolean;
+  hasDone: boolean;
+  // checkpoint:human-verify fields
+  hasWhatBuilt: boolean;
+  hasHowToVerify: boolean;
+  // checkpoint:decision fields
+  hasDecision: boolean;
+  hasOptions: boolean;
+  // checkpoint:human-action fields
+  hasInstructions: boolean;
+  hasVerification: boolean;
+  // cross-checkpoint common
+  hasResumeSignal: boolean;
+}
+
+/**
+ * Single pass over `<task ...>…</task>` blocks. The body pattern is
+ * ReDoS-safe stop-at-next-open (mirrors `taggedBlockPattern` in
+ * markdown-sectionizer.cts): bounded attributes (`[^>]{0,1000}`) and a body
+ * boundary that terminates at the NEXT `<task[\s>]` opening, so a document
+ * full of unclosed `<task>` openings scans linearly. Captures both the
+ * attribute string (group 1, so the `type=` selector is not lost the way it is
+ * with `extractTaggedBlocks`) and the body (group 2).
+ */
+const PLAN_TASK_BLOCK_RE = /<task(\s[^>]{0,1000})?>((?:(?!<task[\s>])[\s\S])*?)<\/task>/g;
+
+/**
+ * Extract one `PlanTaskInfo` per `<task …>…</task>` block in `content`.
+ *
+ * Why a dedicated regex instead of `extractTaggedBlocks('task', true)`:
+ * `extractTaggedBlocks` discards the opening tag, so the task's `type=`
+ * attribute (which selects the validation branch) is lost. This helper
+ * captures both the attribute string and the body in one pass, then reuses
+ * `extractTaggedBlocks` on the body for sub-element extraction.
+ */
+function extractPlanTaskInfos(content: string): PlanTaskInfo[] {
+  const infos: PlanTaskInfo[] = [];
+  if (typeof content !== 'string' || content.length === 0) return infos;
+
+  PLAN_TASK_BLOCK_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PLAN_TASK_BLOCK_RE.exec(content)) !== null) {
+    const attrs = match[1] ?? '';
+    const body = match[2] ?? '';
+
+    const typeMatch = attrs.match(/\btype\s*=\s*["']?([\w:-]+)/i);
+    const type = typeMatch ? typeMatch[1].toLowerCase() : '';
+
+    const nameArr = extractTaggedBlocks(body, 'name');
+    const hasName = nameArr.length > 0;
+    const name = hasName ? nameArr[0].trim() : '';
+
+    infos.push({
+      name,
+      type,
+      hasName,
+      hasFiles: /<files>/.test(body),
+      hasAction: /<action>/.test(body),
+      hasVerify: /<verify>/.test(body),
+      hasDone: /<done>/.test(body),
+      hasWhatBuilt: /<what-built>/.test(body),
+      hasHowToVerify: /<how-to-verify>/.test(body),
+      hasDecision: /<decision>/.test(body),
+      hasOptions: /<options>/.test(body),
+      hasInstructions: /<instructions>/.test(body),
+      hasVerification: /<verification>/.test(body),
+      hasResumeSignal: /<resume-signal>/.test(body),
+    });
+
+    // Guard against zero-length matches looping forever.
+    if (match.index === PLAN_TASK_BLOCK_RE.lastIndex) {
+      PLAN_TASK_BLOCK_RE.lastIndex++;
+    }
+  }
+  return infos;
+}
+
+function isCheckpointType(type: string): boolean {
+  return type.startsWith('checkpoint:');
+}
+
+/**
+ * Validate one plan task's structure against its type-specific canonical field
+ * set (per `gsd-core/references/checkpoints.md`):
+ *   - `checkpoint:human-verify` requires `<what-built>` / `<how-to-verify>` /
+ *      `<resume-signal>` (the "checkpoint triple").
+ *   - `checkpoint:decision` requires `<decision>` / `<options>` /
+ *      `<resume-signal>`.
+ *   - `checkpoint:human-action` requires `<action>` / `<instructions>` /
+ *      `<verification>` / `<resume-signal>`.
+ *   - Unknown `checkpoint:*` subtypes require only the universal
+ *      `<resume-signal>` (forward-compat — newer checkpoint types registered
+ *      in the reference don't need a verifier change to pass structure
+ *      validation).
+ *   - All other types (`auto`, `tracer`, `manual`, bare `<task>`, …) keep the
+ *      historical `<action>` / `<verify>` / `<done>` / `<files>` requirements.
+ */
+function validatePlanTaskStructure(task: PlanTaskInfo): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const taskName = task.hasName ? task.name : 'unnamed';
+
+  if (!task.hasName) {
+    errors.push('Task missing <name> element');
+  }
+
+  if (isCheckpointType(task.type)) {
+    if (!task.hasResumeSignal) {
+      errors.push(`Task '${taskName}' missing <resume-signal>`);
+    }
+    switch (task.type) {
+      case 'checkpoint:human-verify':
+        if (!task.hasWhatBuilt) errors.push(`Task '${taskName}' missing <what-built>`);
+        if (!task.hasHowToVerify) errors.push(`Task '${taskName}' missing <how-to-verify>`);
+        break;
+      case 'checkpoint:decision':
+        if (!task.hasDecision) errors.push(`Task '${taskName}' missing <decision>`);
+        if (!task.hasOptions) errors.push(`Task '${taskName}' missing <options>`);
+        break;
+      case 'checkpoint:human-action':
+        if (!task.hasAction) errors.push(`Task '${taskName}' missing <action>`);
+        if (!task.hasInstructions) errors.push(`Task '${taskName}' missing <instructions>`);
+        if (!task.hasVerification) errors.push(`Task '${taskName}' missing <verification>`);
+        break;
+      default:
+        // Unknown checkpoint:* subtype: <resume-signal> is the only universal
+        // requirement (forward-compat).
+        break;
+    }
+  } else {
+    if (!task.hasAction) errors.push(`Task '${taskName}' missing <action>`);
+    if (!task.hasVerify) warnings.push(`Task '${taskName}' missing <verify>`);
+    if (!task.hasDone) warnings.push(`Task '${taskName}' missing <done>`);
+    if (!task.hasFiles) warnings.push(`Task '${taskName}' missing <files>`);
+  }
+
+  return { errors, warnings };
+}
+
 function cmdVerifyPlanStructure(cwd: string, filePath: string, raw: boolean): void {
   if (!filePath) {
     error('file path required');
   }
+  if (filePath.includes('\0')) { error('file path contains null bytes'); }
   const fullPath = path.isAbsolute(filePath) ? filePath : path.join(cwd, filePath);
   const content = safeReadFile(fullPath);
   if (!content) {
@@ -568,7 +819,16 @@ function cmdVerifyPlanStructure(cwd: string, filePath: string, raw: boolean): vo
     return;
   }
 
-  const fm = extractFrontmatter(content);
+  // #2701: fail loud on NUL/binary corruption before structure checks. A
+  // structurally intact-but-NUL-corrupted plan otherwise passes as valid and is
+  // silently skipped by recursive/binary-skipping searchers downstream.
+  const encErr = textEncodingError(content, filePath);
+  if (encErr) {
+    output({ valid: false, errors: [encErr] }, raw);
+    return;
+  }
+
+  const fm = extractFrontmatter(content, fullPath);
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -577,25 +837,20 @@ function cmdVerifyPlanStructure(cwd: string, filePath: string, raw: boolean): vo
     if (fm[field] === undefined) errors.push(`Missing required frontmatter field: ${field}`);
   }
 
-  const taskPattern = /<task[^>]*>([\s\S]*?)<\/task>/g;
+  const extractedTasks = extractPlanTaskInfos(content);
   const tasks: Record<string, unknown>[] = [];
-  let taskMatch: RegExpExecArray | null;
-  while ((taskMatch = taskPattern.exec(content)) !== null) {
-    const taskContent = taskMatch[1];
-    const nameMatch = taskContent.match(/<name>([\s\S]*?)<\/name>/);
-    const taskName = nameMatch ? nameMatch[1].trim() : 'unnamed';
-    const hasFiles = /<files>/.test(taskContent);
-    const hasAction = /<action>/.test(taskContent);
-    const hasVerify = /<verify>/.test(taskContent);
-    const hasDone = /<done>/.test(taskContent);
-
-    if (!nameMatch) errors.push('Task missing <name> element');
-    if (!hasAction) errors.push(`Task '${taskName}' missing <action>`);
-    if (!hasVerify) warnings.push(`Task '${taskName}' missing <verify>`);
-    if (!hasDone) warnings.push(`Task '${taskName}' missing <done>`);
-    if (!hasFiles) warnings.push(`Task '${taskName}' missing <files>`);
-
-    tasks.push({ name: taskName, hasFiles, hasAction, hasVerify, hasDone });
+  for (const task of extractedTasks) {
+    const verdict = validatePlanTaskStructure(task);
+    errors.push(...verdict.errors);
+    warnings.push(...verdict.warnings);
+    tasks.push({
+      name: task.hasName ? task.name : 'unnamed',
+      type: task.type,
+      hasFiles: task.hasFiles,
+      hasAction: task.hasAction,
+      hasVerify: task.hasVerify,
+      hasDone: task.hasDone,
+    });
   }
 
   if (tasks.length === 0) warnings.push('No <task> elements found');
@@ -613,6 +868,25 @@ function cmdVerifyPlanStructure(cwd: string, filePath: string, raw: boolean): vo
   // eslint-disable-next-line @typescript-eslint/no-base-to-string -- FrontmatterValue comparison
   if (hasCheckpoints && fm['autonomous'] !== 'false' && String(fm['autonomous']) !== 'false') {
     errors.push('Has checkpoint tasks but autonomous is not false');
+  }
+
+  // #1951: a decision rated one-way is supposed to be confirmed before it is
+  // walked through. Warn (never error — <reversibility> stays additive) when a
+  // one-way rating has no checkpoint:decision anywhere ahead of it in the plan,
+  // which is the planner emitting the rating but skipping the gate.
+  const decisionCheckpointOffsets: number[] = [];
+  for (const m of content.matchAll(/<task\s+type=["']?checkpoint:decision/g)) {
+    if (m.index !== undefined) decisionCheckpointOffsets.push(m.index);
+  }
+  for (const m of content.matchAll(/<reversibility\s[^>]*rating=["']?one-way/g)) {
+    const at = m.index;
+    if (at === undefined) continue;
+    if (!decisionCheckpointOffsets.some((offset) => offset < at)) {
+      warnings.push(
+        'Task rated <reversibility rating="one-way"> has no preceding checkpoint:decision — '
+          + 'a one-way door must be confirmed before the agent walks through it',
+      );
+    }
   }
 
   const echoScan = scanNegativeGrepCommentEcho(content);
@@ -851,7 +1125,7 @@ function collectPromisedFilesAtOrAfterWave(phaseDir: string, minWave: number): S
     const planFullPath = path.join(phaseDir, planFile);
     const planContent = safeReadFile(planFullPath);
     if (!planContent) continue;
-    const fm = extractFrontmatter(planContent);
+    const fm = extractFrontmatter(planContent, planFullPath);
     const waveRaw = fm['wave'];
     const wave = typeof waveRaw === 'string' ? parseInt(waveRaw, 10) : (typeof waveRaw === 'number' ? waveRaw : NaN);
     if (isNaN(wave) || wave < minWave) continue;
@@ -886,7 +1160,7 @@ function cmdVerifyKeyLinks(cwd: string, planFilePath: string, raw: boolean): voi
 
   // Derive the current plan's wave number and phase directory for wave-aware
   // missing-file handling (fix #1202).
-  const currentFm = extractFrontmatter(content);
+  const currentFm = extractFrontmatter(content, fullPath);
   const currentWaveRaw = currentFm['wave'];
   const currentWave = typeof currentWaveRaw === 'string'
     ? parseInt(currentWaveRaw, 10)
@@ -986,8 +1260,15 @@ function listMilestoneArchiveDirs(planBase: string): string[] {
       .sort((a, b) =>
         path.basename(a).localeCompare(path.basename(b), undefined, { numeric: true }),
       );
-  } catch {
-    return [];
+  } catch (err) {
+    // #1883: distinguish genuine absence from a permission/I-O failure. ENOENT
+    // (no milestones/ dir yet) keeps the long-standing [] contract that
+    // collectPhaseRoots / forEachArchivedPhaseToken depend on for "no archives";
+    // every other error (EACCES, EIO, …) must propagate — otherwise an unreadable
+    // milestones/ dir is silently reported as "no archives" and active-milestone
+    // resolution / archived-phase filtering misbehaves.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
   }
 }
 
@@ -1073,7 +1354,7 @@ function checkMilestonePrefixMismatches(
 ): MilestoneMismatch[] {
   const mismatches: MilestoneMismatch[] = [];
   const sections: { version: string; start: number; end: number }[] = [];
-  const sectionRx = /^#{1,3}\s+(?:\[[^\]]+\]\s*)?.*v(\d+\.\d+)/gim;
+  const sectionRx = /^#{1,3}\s+(?:\[[^\]]{1,200}\]\s*)?.*v(\d+\.\d+)/gim;
   let m: RegExpExecArray | null;
   while ((m = sectionRx.exec(roadmapContent)) !== null) {
     if (sections.length > 0) sections[sections.length - 1].end = m.index;
@@ -1081,7 +1362,8 @@ function checkMilestonePrefixMismatches(
   }
   for (const section of sections) {
     const content = roadmapContent.slice(section.start, section.end);
-    const phaseRx = /#{2,4}\s*(?:\[[^\]]+\]\s*)?Phase\s+([\w][\w.-]*)\s*:/gi;
+    // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
+    const phaseRx = /#{2,4}\s*(?:\[[^\]]{1,200}\]\s*)?Phase\s+([\w][\w.-]*)(?:\s*\([^)\n]{0,200}\))?\s*:/gi;
     let pm: RegExpExecArray | null;
     while ((pm = phaseRx.exec(content)) !== null) {
       const phaseId = pm[1];
@@ -1163,7 +1445,7 @@ function cmdValidateConsistency(cwd: string, raw: boolean): void {
 
       for (const dir of dirs) {
         const phasePath = path.join(phaseRoot, dir);
-        const phaseLabel = path.relative(planBase, phasePath).replace(/\\/g, '/');
+        const phaseLabel = posixNormalize(path.relative(planBase, phasePath));
         const phaseFiles = fs.readdirSync(phasePath);
         const plans = phaseFiles.filter((f) => f.endsWith('-PLAN.md')).sort();
 
@@ -1193,8 +1475,9 @@ function cmdValidateConsistency(cwd: string, raw: boolean): void {
         }
 
         for (const plan of plans) {
-          const content = fs.readFileSync(path.join(phasePath, plan), 'utf-8');
-          const fmData = extractFrontmatter(content);
+          const planFilePath = path.join(phasePath, plan);
+          const content = fs.readFileSync(planFilePath, 'utf-8');
+          const fmData = extractFrontmatter(content, planFilePath);
           if (!fmData['wave']) {
             warnings.push(`${phaseLabel}/${plan}: missing 'wave' in frontmatter`);
           }
@@ -1301,14 +1584,18 @@ function cmdValidateHealth(
     repairs.push('regenerateState');
   } else {
     const stateContent = fs.readFileSync(statePath, 'utf-8');
-    const phaseRefs = [...stateContent.matchAll(/[Pp]hase\s+(\d+[A-Z]?(?:\.\d+)*)/g)].map(
+    const phaseRefs = [
+      ...stateContent.matchAll(new RegExp(`[Pp]hase\\s+(${PHASE_NUMBER_TOKEN_SOURCE})`, 'g')),
+    ].map(
       (m) => m[1],
     );
     const validPhases = collectDiskPhases(planBase);
     try {
       if (fs.existsSync(roadmapPath)) {
         const roadmapRaw = fs.readFileSync(roadmapPath, 'utf-8');
-        const all = [...roadmapRaw.matchAll(/#{2,4}\s*Phase\s+(\d+[A-Z]?(?:\.\d+)*)/gi)];
+        const all = [
+          ...roadmapRaw.matchAll(new RegExp(`#{2,4}\\s*Phase\\s+(${PHASE_NUMBER_TOKEN_SOURCE})`, 'gi')),
+        ];
         for (const m of all) validPhases.add(m[1]);
       }
     } catch {
@@ -1356,13 +1643,39 @@ function cmdValidateHealth(
     try {
       const rawCfg = fs.readFileSync(configPath, 'utf-8');
       const parsed = JSON.parse(rawCfg) as Record<string, unknown>;
-      const validProfiles = ['quality', 'balanced', 'budget', 'inherit'];
-      if (parsed['model_profile'] && !validProfiles.includes(parsed['model_profile'] as string)) {
+      if (parsed['model_profile'] && !VALID_PROFILES.includes(parsed['model_profile'] as string)) {
         addIssue(
           'warning',
           'W004',
           `config.json: invalid model_profile "${parsed['model_profile'] as string}"`,
-          `Valid values: ${validProfiles.join(', ')}`,
+          `Valid values: ${VALID_PROFILES.join(', ')}`,
+        );
+      }
+      const configModels = parsed['models'];
+      if (configModels && typeof configModels === 'object' && !Array.isArray(configModels)) {
+        for (const [phaseType, tierValue] of Object.entries(configModels as Record<string, unknown>)) {
+          if (!VALID_PHASE_TYPES.has(phaseType)) {
+            addIssue(
+              'warning',
+              'W022',
+              `config.json: models has an unknown phase type "${phaseType}" which will be ignored`,
+              `Valid phase types: ${[...VALID_PHASE_TYPES].join(', ')}`,
+            );
+          } else if (typeof tierValue !== 'string' || !VALID_TIERS.has(tierValue)) {
+            addIssue(
+              'warning',
+              'W022',
+              `config.json: models.${phaseType} has an invalid tier value ${JSON.stringify(tierValue)} which will be ignored`,
+              `Valid tiers: ${[...VALID_TIERS].join(', ')}`,
+            );
+          }
+        }
+      } else if (configModels !== undefined && configModels !== null) {
+        addIssue(
+          'warning',
+          'W022',
+          `config.json: models is set to ${JSON.stringify(configModels)}, but must be an object mapping phase types to tiers — this value will be ignored`,
+          `Set models to an object like {"planning": "sonnet"}, or remove the key to use profile defaults`,
         );
       }
     } catch (err) {
@@ -1431,6 +1744,52 @@ function cmdValidateHealth(
         'W005',
         `Phase directory "${e.name}" doesn't follow NN-name format`,
         'Rename to match pattern (e.g., 01-setup)',
+      );
+    }
+  }
+
+  // W023 (#2408): detect two or more real on-disk phase directories that
+  // normalize to the same phase key (e.g. `05-real/` + `05-real-stray/`).
+  // The collision silently breaks /gsd-stats status accuracy (now folded by
+  // precedence — see commands.cts foldPhaseStatus) and forces an operator
+  // decision. Wording is neutral — never guesses which directory is "real".
+  {
+    const groups = new Map<string, string[]>();
+    for (const e of phaseDirEntries) {
+      // extractPhaseToken never returns empty — for unparseable dir names it
+      // falls back to the dir name itself. Two distinct unparseable names
+      // therefore normalize to distinct keys and cannot false-positive here;
+      // only dirs whose tokens collapse to the same key (e.g. `05-real` and
+      // `05-real-stray` → token `05`) produce a collision group.
+      const token = extractPhaseToken(e.name);
+      const key = normalizePhaseName(token);
+      const list = groups.get(key);
+      if (list) list.push(e.name);
+      else groups.set(key, [e.name]);
+    }
+    for (const [key, dirs] of groups) {
+      if (dirs.length < 2) continue;
+      // Compute each dir's status independently so the warning is informative.
+      // Sort by phase id for stable output regardless of readdir order; tie-
+      // break on the dir name itself so two dirs sharing the same phase token
+      // (the collision case itself) still sort deterministically (V8's stable
+      // sort would otherwise fall back to non-portable fs.readdirSync order).
+      const described = dirs
+        .slice()
+        .sort((a, b) => comparePhaseNum(a, b) || String(a).localeCompare(String(b)))
+        .map((d) => {
+          const files = phaseDirFiles.get(d) || [];
+          const plans = files.filter(f => f.endsWith('-PLAN.md') || f === 'PLAN.md').length;
+          const summaries = files.filter(f => f.endsWith('-SUMMARY.md') || f === 'SUMMARY.md').length;
+          const status = determinePhaseStatus(plans, summaries, path.join(phasesDir, d), 'Not Started');
+          return `${d} (${status})`;
+        })
+        .join(', ');
+      addIssue(
+        'warning',
+        'W023',
+        `Phase directories collide on normalized key "${key}": ${described}`,
+        'Inspect each directory; rename or remove the duplicate so only one directory maps to this phase key',
       );
     }
   }
@@ -1571,7 +1930,7 @@ function cmdValidateHealth(
       if (currentPhaseMatch) {
         const statePhase = currentPhaseMatch[1].replace(/^0+/, '');
         const phaseCheckboxRe = new RegExp(
-          `-\\s*\\[x\\].*Phase\\s+0*${escapeRegex(statePhase)}[:\\s]`,
+          `-\\s*\\[x\\].*Phase\\s+0*${escapeRegex(statePhase)}${OPTIONAL_PHASE_TAG_SOURCE}[:\\s]`,
           'i',
         );
         if (phaseCheckboxRe.test(roadmapContentFull)) {
@@ -1807,7 +2166,8 @@ function cmdValidateHealth(
       if (isMarkedComplete) {
         const roadmapRaw = fs.readFileSync(roadmapPath, 'utf-8');
         const scopedContent = extractCurrentMilestone(roadmapRaw, cwd);
-        const phasePattern = /#{2,4}\s*Phase\s+(\d+[A-Z]?(?:\.\d+)*)\s*:\s*([^\n]+)/gi;
+        // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
+        const phasePattern = new RegExp(`#{2,4}\\s*Phase\\s+(${PHASE_NUMBER_TOKEN_SOURCE})(?:\\s*\\([^)\\n]{0,200}\\))?\\s*:\\s*([^\\n]+)`, 'gi');
         const unstarted: string[] = [];
         let pm: RegExpExecArray | null;
         // Non-hoisted: load-order matters (circular dep guard)
@@ -1895,7 +2255,7 @@ function cmdValidateHealth(
             stateContent += `**Current phase:** (determining...)\n`;
             stateContent += `**Status:** Resuming\n\n`;
             stateContent += `## Session Log\n\n`;
-            stateContent += `- ${new Date().toISOString().split('T')[0]}: STATE.md regenerated by ${slash('health')} --repair\n`;
+            stateContent += `- ${realClock.localToday()}: STATE.md regenerated by ${slash('health')} --repair\n`;
             writeStateMd(statePath, stateContent, cwd);
             repairActions.push({ action: repair, success: true, path: 'STATE.md' });
             break;
@@ -1946,7 +2306,7 @@ function cmdValidateHealth(
           }
           case 'backfillMilestones': {
             if (!options['backfill'] && !options['repair']) break;
-            const today = new Date().toISOString().split('T')[0];
+            const today = realClock.localToday();
             let backfilled = 0;
             for (const ver of missingFromRegistry) {
               try {
@@ -2088,7 +2448,7 @@ function cmdVerifySchemaDrift(
   const planFiles = fs.readdirSync(phaseDir).filter((f) => f.endsWith('-PLAN.md'));
   for (const pf of planFiles) {
     const content = fs.readFileSync(path.join(phaseDir, pf), 'utf-8');
-    const fmMatch = content.match(/files_modified:\s*\[([^\]]*)\]/);
+    const fmMatch = content.match(/files_modified:\s*\[([^\]]{0,8000})\]/);
     if (fmMatch) {
       const files = fmMatch[1].split(',').map((f) => f.trim()).filter(Boolean);
       allFiles.push(...files);
@@ -2277,6 +2637,7 @@ export = {
   scanNegativeGrepCommentEcho,
   scanFileWideNegativeGateConflict,
   cmdVerifySummary,
+  verifySummaryCore,
   cmdVerifyPlanStructure,
   cmdVerifyPhaseCompleteness,
   cmdVerifyReferences,
@@ -2288,4 +2649,9 @@ export = {
   cmdValidateAgents,
   cmdVerifySchemaDrift,
   cmdVerifyCodebaseDrift,
+  // Test seam (#1883): listMilestoneArchiveDirs is private and exercised through
+  // the validate command, which runs in a subprocess — an fs monkeypatch in the
+  // test process cannot reach it. Exposed under a leading underscore so the
+  // permission-error path can be unit-tested directly (no chmod 0o000).
+  _listMilestoneArchiveDirs: listMilestoneArchiveDirs,
 };

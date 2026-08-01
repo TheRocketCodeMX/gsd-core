@@ -1,7 +1,7 @@
 {
   "id": "claude",
   "role": "runtime",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "title": "Claude Code",
   "description": "Anthropic Claude Code — primary development runtime; tier-1 support with full hook surface and skills-based global install.",
   "tier": "core",
@@ -17,6 +17,7 @@
         "CLAUDE_CONFIG_DIR"
       ]
     },
+    "localConfigDir": ".claude",
     "configFormat": "settings-json",
     "artifactLayout": {
       "global": [
@@ -61,6 +62,86 @@
       "Stop",
       "PreCompact",
       "FileChanged"
-    ]
+    ],
+    "hostIntegration": {
+      "embeddingMode": "imperative",
+      "commandSurface": "slash-file",
+      "dispatch": {
+        "namedDispatch": true,
+        "nested": true,
+        "maxDepth": 5,
+        "background": true,
+        "subagentToolkit": "full",
+        "backgroundDispatch": false,
+        "isolation": "harness-worktree"
+      },
+      "modelMode": "passive",
+      "hookBus": "host",
+      "stateIO": "filesystem",
+      "transport": "mcp",
+      "runtime": "node",
+      "effortSurface": "argv"
+    },
+    "harnessIsolationFlag": "isolation=\"worktree\"",
+    "hostBehaviors": {
+      "attributionSource": "settings-json-commit",
+      "authorsCanonicalWorkflow": true,
+      "localInstallStyle": "legacy-flat",
+      "permissionsSchema": "claude",
+      "settingsFileByScope": {
+        "local": "settings.local.json",
+        "global": "settings.json"
+      },
+      "sourceMarkerFile": ".gsd-source",
+      "agentFrontmatterExtensions": [
+        "effort"
+      ],
+      "ownsClaudePaths": true,
+      "nativeModelAliases": true,
+      "skillsGlobalOnboarding": true,
+      "legacyCommandsGsdInstallMigration": true,
+      "legacyCommandsGsdUninstall": "global",
+      "hyphenNameAgentBody": true,
+      "reviewerCli": true
+    }
+  },
+  "reviewer": {
+    "slug": "claude",
+    "flags": [
+      "--claude"
+    ],
+    "transport": "spawn",
+    "probe": {
+      "kind": "command-exists",
+      "binary": "claude"
+    },
+    "invoke": {
+      "binary": "claude",
+      "args": [
+        "{{model}}",
+        "{{effort}}",
+        "-p",
+        "-"
+      ],
+      "promptChannel": "stdin",
+      "outputChannel": "stdout",
+      "modelArg": "--model",
+      "effortChannel": "argv"
+    },
+    "timeoutFloorMs": 1200000,
+    "emptyOutput": "stub-with-stderr",
+    "reviewsSection": "Claude",
+    "evidenceClass": "source-grounded",
+    "requiresBinaries": [],
+    "promptBudgetKey": null,
+    "modelConfigKey": "review.models.claude",
+    "handler": null
+  },
+  "config": {
+    "review.models.claude": {
+      "type": "string",
+      "default": "",
+      "description": "Model passed to the Claude reviewer lane."
+    }
   }
 }

@@ -28,10 +28,11 @@ permissions:
 jobs:
   security:
     runs-on: ubuntu-latest
-    # 30m (was 10m): the base64 scan is O(changed-files); a very large diff
-    # (e.g. the #604 repo-wide rename, ~800 changed files) can exceed 10m. The
-    # scan itself is unchanged; this only raises the ceiling for big diffs.
-    timeout-minutes: 30
+    # 60m (was 30m, was 10m): the base64 scan is O(changed-files); a very large
+    # diff can exceed the ceiling (the #604 rename ~800 files broke 10m; the
+    # v1.9.0 realignment PR #38 ~1.6k files broke 30m). The scan itself is
+    # unchanged; this only raises the ceiling for big diffs.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
