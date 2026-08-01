@@ -49,9 +49,6 @@
     ".agents/skills/gsd-config/SKILL.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
-    ".agents/skills/gsd-context/SKILL.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
     ".agents/skills/gsd-debug/SKILL.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
@@ -325,9 +322,6 @@
     "command/gsd-config.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
-    "command/gsd-context.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
     "command/gsd-debug.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
@@ -533,9 +527,6 @@
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "commands/gsd-config.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
-    "commands/gsd-context.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "commands/gsd-debug.md": {
@@ -784,9 +775,6 @@
     "gsd-core/references/cicd-strategy.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
-    "gsd-core/references/context-lifecycle.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
     "gsd-core/references/continuation-format.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
@@ -874,9 +862,6 @@
     "gsd-core/templates/claude-md.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
-    "gsd-core/templates/context-capsule.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
     "gsd-core/templates/debug-subagent-prompt.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
@@ -890,9 +875,6 @@
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "gsd-core/templates/infra-strategy.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
-    "gsd-core/templates/master-context.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "gsd-core/templates/phase-prompt.md": {
@@ -1171,9 +1153,6 @@
     "skills/gsd-config/SKILL.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
-    "skills/gsd-context/SKILL.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
     "skills/gsd-debug/SKILL.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
@@ -1343,9 +1322,6 @@
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "skills/gsd-ns-project/skills/complete-milestone/SKILL.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
-    },
-    "skills/gsd-ns-project/skills/context/SKILL.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0, epic: upstream-tracking realignment): 852 upstream commits rewrote the installer emission/conversion pipeline and the workflow/agent bodies wholesale, so this emitted artifact moved (or grew) for reasons the per-file provenance table deliberately does not attribute (installer-wide transform churn). Fork deltas were re-applied per docs/FORK-DELTA.md; the change is the merge itself, reviewed file-by-file in the Wave A–D reports (.superpowers/sdd/align-wave*-report.md)."
     },
     "skills/gsd-ns-project/skills/discover-product/SKILL.md": {
@@ -1594,9 +1570,6 @@
     "cicd-strategy.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0): scripts/sync-runtime-launcher.cjs re-synced the canonical gsd_run launcher preamble (grown by upstream runtime-home arms) into the fork-owned skill workflows; the growth is the shared preamble, not new content."
     },
-    "context.md": {
-      "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0): scripts/sync-runtime-launcher.cjs re-synced the canonical gsd_run launcher preamble (grown by upstream runtime-home arms) into the fork-owned skill workflows; the growth is the shared preamble, not new content."
-    },
     "discover-product.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0): scripts/sync-runtime-launcher.cjs re-synced the canonical gsd_run launcher preamble (grown by upstream runtime-home arms) into the fork-owned skill workflows; the growth is the shared preamble, not new content."
     },
@@ -1626,6 +1599,9 @@
     },
     "testing-strategy.md": {
       "reason": "upstream v1.6.1→v1.9.0 realignment merge (align/upstream-1.9.0): scripts/sync-runtime-launcher.cjs re-synced the canonical gsd_run launcher preamble (grown by upstream runtime-home arms) into the fork-owned skill workflows; the growth is the shared preamble, not new content."
+    },
+    "execute-phase.md": {
+      "reason": "context capability (PR #36): two FORK:context sectional injections — the executor's always-read list gains the capsule's Locked Decisions + Phase-Scoped Pitfalls sections and the verifier spawn gains What Done Looks Like (+521 B vs main). Deliberate enforcement wiring, held under the phase6 frozen ceiling (93393 < 93600); new fork-additive context files need no growth acks (their prior entries removed as stale)."
     }
   }
 }
