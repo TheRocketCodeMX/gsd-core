@@ -2342,6 +2342,19 @@ test('differential attribution over the real tree', { timeout: 900_000 }, async 
     return;
   }
 
+  // FORK:release — promotion PRs (release/X.Y.Z → main) are exempt from the
+  // differential gate. The baseline/ack mechanism is next-keyed by design
+  // (ADR-2719: "the `next` sha this PR is being evaluated against"); against a
+  // main base the diff re-litigates an entire release's worth of changes that
+  // already passed this gate entering `next`, and the verdict flaps on the
+  // base-fallback chain (main lacks the ack file entirely, so a fallback to
+  // origin/next flips needed acks to stale — observed on PR #39). Release
+  // content is gated on the way INTO next; the promotion merge is bookkeeping.
+  if (process.env.GITHUB_BASE_REF === 'main') {
+    t.skip('promotion PR to main: differential gate is next-keyed; content was gated entering next');
+    return;
+  }
+
   // hooks/dist is gitignored and built (DEFECT.HOOKS-DIST-SCOPED-CI): the scoped CI
   // lane does not run build:hooks, so a real install there would emit no hooks/ dir.
   // Build idempotently, exactly as the golden harness does.
