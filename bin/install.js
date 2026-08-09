@@ -12478,7 +12478,18 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
  * Handle statusline configuration with optional prompt
  */
 function handleStatusline(settings, isInteractive, callback) {
-  const hasExisting = settings.statusLine != null;
+  // #41: the "already configured" guard protects THIRD-PARTY statuslines
+  // (#2248, ccusage et al) — it must not freeze GSD's own entry. A managed
+  // statusline written by an older install keeps whatever runner it was born
+  // with (bare `node`, a pruned nvm version, an old hooks path); Claude Code
+  // spawns it via `sh -c` with no login-profile PATH, so a stale runner exits
+  // 127 with zero stdout and the status bar renders blank. Re-emit ours on
+  // every install, exactly like the managed hooks — `isManagedHookCommand` is
+  // the same discriminator the installer already uses for this elsewhere.
+  const existingStatuslineCommand = settings.statusLine && settings.statusLine.command;
+  const isManagedStatusline = typeof existingStatuslineCommand === 'string' &&
+    isManagedHookCommand(existingStatuslineCommand, { surface: 'settings-json' });
+  const hasExisting = settings.statusLine != null && !isManagedStatusline;
 
   if (!hasExisting) {
     callback(true);
@@ -13483,6 +13494,9 @@ module.exports = {
     parseUpdateBannerInput,
     buildUpdateBannerHookEntry,
     buildHookCommand,
+    // #41 — exported so the managed-vs-third-party statusline discrimination
+    // is asserted directly instead of only through a full install.
+    handleStatusline,
     normalizeNodePath,
     resolveNodeRunner,
     referencesHook,

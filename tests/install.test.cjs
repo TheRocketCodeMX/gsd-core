@@ -10537,3 +10537,384 @@ describe('Bug #2395: finishInstall persists runtime identity for non-Claude runt
     });
   });
 });
+
+
+// ────────────────────────────────────────────────────────────────────────
+// #41: /gsd-update leaves the Claude Code statusline broken
+//
+// Three cooperating defects, one symptom (blank status bar after an update):
+//   1. handleStatusline skipped ANY pre-existing settings.statusLine — including
+//      GSD's own — so a managed entry was never re-emitted with the current
+//      absolute node runner. The #2248 guard is for THIRD-PARTY statuslines.
+//   2. rewriteLegacyManagedNodeHookCommands (the #2979 repair pass) walked
+//      settings.hooks only, so settings.statusLine.command kept its bare/stale
+//      `node` prefix forever.
+//   3. normalizeNodePath had no nvm branch, so a `nvm use`-transient
+//      ~/.nvm/versions/node/vX.Y.Z/bin/node got baked in instead of the
+//      long-lived default-alias version (fnm/mise/volta all normalize away
+//      from their transient path).
+//
+// A bare `node` prefix exits 127 under Claude Code's PATH-less `sh -c` spawn;
+// zero stdout renders as an empty status bar.
+// ────────────────────────────────────────────────────────────────────────
+{
+  const __issue41 = require('node:test');
+  __issue41.describe('#41: managed statusline is re-emitted, repaired, and nvm-normalized', () => {
+    const assert41 = require('node:assert/strict');
+    const fs41 = require('node:fs');
+    const path41 = require('node:path');
+    const os41 = require('node:os');
+    const child41 = require('node:child_process');
+    const INSTALL41 = require(path41.join(__dirname, '..', 'bin', 'install.js'));
+    const helpers41 = require('./helpers.cjs');
+    const { test: t41, describe: d41, beforeEach: be41, afterEach: ae41 } = __issue41;
+
+    const MANAGED_STATUSLINE = '/home/u/.claude/hooks/gsd-statusline.js';
+
+    // ─── Defect 3: normalizeNodePath — nvm ────────────────────────────────
+    d41('normalizeNodePath — nvm versioned path → default-alias version', () => {
+      const NVM_ROOT = '/home/u/.nvm';
+      const PINNED = `${NVM_ROOT}/versions/node/v20.11.0/bin/node`;
+      const DEFAULT_NODE = `${NVM_ROOT}/versions/node/v24.1.0/bin/node`;
+
+      // Minimal fake fs: alias file contents + which paths exist.
+      function fakeFs({ aliases = {}, versions = [] } = {}) {
+        const versionDirs = versions.slice();
+        return {
+          env: {},
+          readFileSync: (p) => {
+            const rel = String(p).replace(`${NVM_ROOT}/alias/`, '');
+            if (Object.prototype.hasOwnProperty.call(aliases, rel)) return aliases[rel];
+            const err = new Error(`ENOENT: ${p}`);
+            err.code = 'ENOENT';
+            throw err;
+          },
+          readdirSync: (p) => {
+            if (String(p) === `${NVM_ROOT}/versions/node`) return versionDirs;
+            const err = new Error(`ENOENT: ${p}`);
+            err.code = 'ENOENT';
+            throw err;
+          },
+          existsSync: (p) => {
+            const s = String(p);
+            const aliasRel = s.startsWith(`${NVM_ROOT}/alias/`) ? s.slice(`${NVM_ROOT}/alias/`.length) : null;
+            if (aliasRel !== null) return Object.prototype.hasOwnProperty.call(aliases, aliasRel);
+            const m = s.match(/^\/home\/u\/\.nvm\/versions\/node\/([^/]+)\/bin\/node$/);
+            if (m) return versionDirs.includes(m[1]);
+            return false;
+          },
+        };
+      }
+
+      t41('exact default alias version → rewritten to the default-alias node', () => {
+        const opts = fakeFs({ aliases: { default: '24.1.0\n' }, versions: ['v20.11.0', 'v24.1.0'] });
+        assert41.equal(INSTALL41.normalizeNodePath(PINNED, opts), DEFAULT_NODE);
+      });
+
+      t41('partial default alias (major only) resolves to the highest installed match', () => {
+        const opts = fakeFs({ aliases: { default: '24\n' }, versions: ['v20.11.0', 'v24.0.9', 'v24.1.0'] });
+        assert41.equal(INSTALL41.normalizeNodePath(PINNED, opts), DEFAULT_NODE);
+      });
+
+      t41('alias chain (default → lts/jod → version) is followed', () => {
+        const opts = fakeFs({
+          aliases: { default: 'lts/jod\n', 'lts/jod': '24.1.0\n' },
+          versions: ['v20.11.0', 'v24.1.0'],
+        });
+        assert41.equal(INSTALL41.normalizeNodePath(PINNED, opts), DEFAULT_NODE);
+      });
+
+      t41('custom NVM_DIR layout (not ~/.nvm) is normalized too', () => {
+        const CUSTOM = '/opt/nvm';
+        const pinned = `${CUSTOM}/versions/node/v20.11.0/bin/node`;
+        const wanted = `${CUSTOM}/versions/node/v24.1.0/bin/node`;
+        assert41.equal(
+          INSTALL41.normalizeNodePath(pinned, {
+            env: { NVM_DIR: CUSTOM },
+            readFileSync: (p) => {
+              if (String(p) === `${CUSTOM}/alias/default`) return '24.1.0\n';
+              throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+            },
+            readdirSync: () => ['v20.11.0', 'v24.1.0'],
+            existsSync: (p) => String(p) === `${CUSTOM}/alias/default` || String(p) === wanted,
+          }),
+          wanted,
+        );
+      });
+
+      t41('no default alias → raw execPath unchanged (no regression)', () => {
+        const opts = fakeFs({ aliases: {}, versions: ['v20.11.0'] });
+        assert41.equal(INSTALL41.normalizeNodePath(PINNED, opts), PINNED);
+      });
+
+      t41('default alias points at an uninstalled version → raw execPath unchanged', () => {
+        const opts = fakeFs({ aliases: { default: '24.1.0\n' }, versions: ['v20.11.0'] });
+        assert41.equal(INSTALL41.normalizeNodePath(PINNED, opts), PINNED);
+      });
+
+      t41('already on the default version → unchanged (idempotent, no churn)', () => {
+        const opts = fakeFs({ aliases: { default: '24.1.0\n' }, versions: ['v24.1.0'] });
+        assert41.equal(INSTALL41.normalizeNodePath(DEFAULT_NODE, opts), DEFAULT_NODE);
+      });
+
+      t41('a non-nvm /versions/node/ layout is NOT captured by the nvm branch', () => {
+        const foreign = '/opt/othermgr/versions/node/v20.11.0/bin/node';
+        assert41.equal(
+          INSTALL41.normalizeNodePath(foreign, {
+            env: {},
+            readFileSync: () => '24.1.0',
+            readdirSync: () => ['v24.1.0'],
+            existsSync: () => true,
+          }),
+          foreign,
+        );
+      });
+
+      t41('resolveNodeRunner emits the nvm default-alias path as a quoted token', () => {
+        const orig = process.execPath;
+        try {
+          Object.defineProperty(process, 'execPath', { value: PINNED, configurable: true });
+          const opts = fakeFs({ aliases: { default: '24.1.0\n' }, versions: ['v20.11.0', 'v24.1.0'] });
+          assert41.equal(INSTALL41.resolveNodeRunner(opts), JSON.stringify(DEFAULT_NODE));
+        } finally {
+          Object.defineProperty(process, 'execPath', { value: orig, configurable: true });
+        }
+      });
+    });
+
+    // ─── Defect 2: the #2979 repair pass must cover settings.statusLine ───
+    d41('rewriteLegacyManagedNodeHookCommands — repairs settings.statusLine.command', () => {
+      const RUNNER = '"/usr/local/bin/node"';
+
+      t41('bare-node managed statusline is rewritten to the absolute runner', () => {
+        const settings = {
+          statusLine: { type: 'command', command: `node "${MANAGED_STATUSLINE}"` },
+        };
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, true, 'statusLine repair must report a change');
+        assert41.equal(settings.statusLine.command, `${RUNNER} "${MANAGED_STATUSLINE}"`);
+      });
+
+      t41('statusLine is repaired even when settings.hooks is absent entirely', () => {
+        const settings = { statusLine: { type: 'command', command: `node "${MANAGED_STATUSLINE}"` } };
+        assert41.equal(settings.hooks, undefined);
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, true, 'the hooks-less early return must not skip statusLine');
+        assert41.equal(settings.statusLine.command, `${RUNNER} "${MANAGED_STATUSLINE}"`);
+      });
+
+      t41('ephemeral absolute runner in the statusline is rewritten to the stable runner', () => {
+        // A Cellar path is ephemeral (`brew upgrade node` prunes it) — the same
+        // class of stale runner as a pruned nvm version, and the one the repair
+        // pass already normalizes for hooks (#3181).
+        const settings = {
+          statusLine: {
+            type: 'command',
+            command: `"/usr/local/Cellar/node/25.8.1/bin/node" "${MANAGED_STATUSLINE}"`,
+          },
+        };
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, true);
+        assert41.equal(settings.statusLine.command, `${RUNNER} "${MANAGED_STATUSLINE}"`);
+      });
+
+      t41('a third-party statusline is NEVER touched by the repair pass', () => {
+        const settings = {
+          statusLine: { type: 'command', command: 'node "/home/u/.claude/ccusage.js"' },
+        };
+        const before = settings.statusLine.command;
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, false, 'unmanaged statusline must not be rewritten');
+        assert41.equal(settings.statusLine.command, before);
+      });
+
+      t41('an already-stable managed statusline is not rewritten (no churn)', () => {
+        const settings = {
+          statusLine: { type: 'command', command: `${RUNNER} "${MANAGED_STATUSLINE}"` },
+        };
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, false);
+      });
+
+      t41('hook repair still runs alongside the statusLine repair', () => {
+        const settings = {
+          hooks: {
+            SessionStart: [{ hooks: [{ type: 'command', command: 'node "/home/u/.claude/hooks/gsd-check-update.js"' }] }],
+          },
+          statusLine: { type: 'command', command: `node "${MANAGED_STATUSLINE}"` },
+        };
+        const changed = INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER);
+        assert41.equal(changed, true);
+        assert41.equal(
+          settings.hooks.SessionStart[0].hooks[0].command,
+          `${RUNNER} "/home/u/.claude/hooks/gsd-check-update.js"`,
+        );
+        assert41.equal(settings.statusLine.command, `${RUNNER} "${MANAGED_STATUSLINE}"`);
+      });
+
+      t41('a statusLine without a string command is ignored safely', () => {
+        const settings = { statusLine: { type: 'url', url: 'https://example.test' } };
+        assert41.equal(INSTALL41.rewriteLegacyManagedNodeHookCommands(settings, RUNNER), false);
+      });
+    });
+
+    // ─── Defect 1: handleStatusline must re-emit OUR statusline ──────────
+    d41('handleStatusline — skips third-party statuslines only', () => {
+      function call(settings, isInteractive) {
+        let decided;
+        const { stdout } = helpers41.captureConsole(() => {
+          INSTALL41.handleStatusline(settings, isInteractive, (v) => { decided = v; });
+        });
+        return { decided, stdout };
+      }
+
+      t41('handleStatusline is exported for direct testing', () => {
+        assert41.equal(typeof INSTALL41.handleStatusline, 'function');
+      });
+
+      t41('no existing statusline → install it', () => {
+        assert41.equal(call({}, false).decided, true);
+      });
+
+      // Every historical shape GSD itself has emitted must be recognized as ours.
+      const managedShapes = {
+        'bare node + quoted absolute script (pre-#2979)': `node "${MANAGED_STATUSLINE}"`,
+        'absolute nvm runner + quoted script (post-#2979)':
+          `"/home/u/.nvm/versions/node/v22.22.1/bin/node" "${MANAGED_STATUSLINE}"`,
+        'absolute system runner + quoted script': `"/usr/local/bin/node" "${MANAGED_STATUSLINE}"`,
+        'local install, $CLAUDE_PROJECT_DIR-anchored script':
+          '"$CLAUDE_PROJECT_DIR"/.claude/hooks/gsd-statusline.js',
+        'portable-hooks $HOME-relative script': '"$HOME/.claude/hooks/gsd-statusline.js"',
+        'windows PowerShell call operator + backslash paths':
+          '& "C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\u\\.claude\\hooks\\gsd-statusline.js"',
+        'bare script path, no runner': '/home/u/.claude/hooks/gsd-statusline.js',
+      };
+      for (const [label, command] of Object.entries(managedShapes)) {
+        t41(`managed statusline (${label}) is re-emitted, not skipped`, () => {
+          const { decided, stdout } = call({ statusLine: { type: 'command', command } }, false);
+          assert41.equal(decided, true, `GSD's own statusline (${label}) must be re-emitted each install`);
+          assert41.doesNotMatch(stdout, /Skipping statusline \(already configured\)/);
+        });
+      }
+
+      t41('managed statusline is re-emitted without prompting even when interactive', () => {
+        const { decided } = call(
+          { statusLine: { type: 'command', command: `node "${MANAGED_STATUSLINE}"` } },
+          true,
+        );
+        assert41.equal(decided, true, 'our own entry must never trigger the keep/replace prompt');
+      });
+
+      t41('third-party statusline is skipped with the #2248 warning', () => {
+        const { decided, stdout } = call(
+          { statusLine: { type: 'command', command: 'bunx ccusage statusline' } },
+          false,
+        );
+        assert41.equal(decided, false, 'a third-party statusline must stay protected (#2248)');
+        assert41.match(stdout, /Skipping statusline \(already configured\)/);
+        assert41.match(stdout, /--force-statusline/);
+      });
+
+      t41('non-command statusline (no command string) is treated as third-party', () => {
+        const { decided, stdout } = call({ statusLine: { type: 'url', url: 'https://example.test' } }, false);
+        assert41.equal(decided, false);
+        assert41.match(stdout, /Skipping statusline \(already configured\)/);
+      });
+    });
+
+    // ─── End-to-end: reinstall over a broken managed statusline ──────────
+    d41('reinstall over a bare-node managed statusline repairs it end-to-end', () => {
+      let tmpDir41;
+      let origEnv41;
+
+      be41(() => {
+        tmpDir41 = fs41.mkdtempSync(path41.join(os41.tmpdir(), 'gsd-statusline-41-'));
+        origEnv41 = process.env.CLAUDE_CONFIG_DIR;
+      });
+
+      ae41(() => {
+        if (origEnv41 === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+        else process.env.CLAUDE_CONFIG_DIR = origEnv41;
+        helpers41.cleanup(tmpDir41);
+      });
+
+      function installOverExistingStatusline() {
+        const configDir = path41.join(tmpDir41, '.claude');
+        fs41.mkdirSync(configDir, { recursive: true });
+        const settingsPath = path41.join(configDir, 'settings.json');
+        // Exactly what a pre-#2979 GSD install left behind.
+        fs41.writeFileSync(settingsPath, JSON.stringify({
+          statusLine: {
+            type: 'command',
+            command: `node "${path41.join(configDir, 'hooks', 'gsd-statusline.js')}"`,
+          },
+        }, null, 2));
+        process.env.CLAUDE_CONFIG_DIR = configDir;
+
+        let result;
+        helpers41.captureConsole(() => { result = INSTALL41.install(true, 'claude'); });
+
+        let decided;
+        helpers41.captureConsole(() => {
+          INSTALL41.handleStatusline(result.settings, false, (v) => { decided = v; });
+        });
+
+        helpers41.captureConsole(() => {
+          INSTALL41.finishInstall(
+            result.settingsPath, result.settings, result.statuslineCommand,
+            decided, 'claude', true, configDir,
+          );
+        });
+
+        return {
+          configDir,
+          decided,
+          settings: JSON.parse(fs41.readFileSync(settingsPath, 'utf8')),
+        };
+      }
+
+      t41('the persisted statusLine command no longer starts with bare `node`', () => {
+        const { decided, settings } = installOverExistingStatusline();
+        assert41.equal(decided, true, 'the installer must re-emit its own statusline');
+        const cmd = settings.statusLine && settings.statusLine.command;
+        assert41.ok(typeof cmd === 'string' && cmd.length > 0, 'statusLine.command must be written');
+        assert41.doesNotMatch(
+          cmd,
+          /^\s*&?\s*node\s/,
+          `bare-\`node\` statusline survived reinstall → exit 127 under a PATH-less spawn: ${cmd}`,
+        );
+        assert41.match(cmd, /gsd-statusline\.js/);
+      });
+
+      t41('the re-emitted statusline resolves under a PATH-less `sh -c` spawn', (t) => {
+        if (process.platform === 'win32') { t.skip('POSIX sh spawn simulation'); return; }
+        const { configDir, settings } = installOverExistingStatusline();
+        const hookPath = path41.join(configDir, 'hooks', 'gsd-statusline.js');
+        if (!fs41.existsSync(hookPath)) {
+          t.skip('hooks/dist not built in this checkout — nothing to spawn');
+          return;
+        }
+        const payload = JSON.stringify({
+          model: { display_name: 'Opus' },
+          workspace: { current_dir: tmpDir41 },
+        });
+        const res = child41.spawnSync('sh', ['-c', settings.statusLine.command], {
+          input: payload,
+          encoding: 'utf8',
+          // Claude Code spawns the statusline with the process env and no
+          // login-profile initialisation — nvm/fnm/volta shims are NOT on PATH.
+          env: { HOME: tmpDir41, PATH: '/usr/local/bin:/usr/bin:/bin' },
+          timeout: 30000,
+        });
+        assert41.equal(
+          res.status, 0,
+          `statusline exited ${res.status} under a PATH-less spawn (127 = \`node: not found\`): ${res.stderr}`,
+        );
+        assert41.ok(
+          typeof res.stdout === 'string' && res.stdout.trim().length > 0,
+          'zero stdout renders as a blank status bar — the reported symptom',
+        );
+      });
+    });
+  });
+}

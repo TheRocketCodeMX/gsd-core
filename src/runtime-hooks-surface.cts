@@ -378,6 +378,74 @@ function parseTomlValue(text: string, i: number): { value: unknown; end: number 
 interface NodeNormOpts {
   env?: NodeJS.ProcessEnv;
   existsSync?: (p: string) => boolean;
+  readFileSync?: (p: string) => string;
+  readdirSync?: (p: string) => string[];
+}
+
+/** Compare two `vX.Y.Z` dir names numerically (descending sort comparator). */
+function compareNvmVersionDirs(a: string, b: string): number {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const av = parse(a);
+  const bv = parse(b);
+  for (let i = 0; i < Math.max(av.length, bv.length); i++) {
+    const d = (bv[i] || 0) - (av[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/**
+ * Resolve nvm's `default` alias to a concrete `versions/node/<dir>` name.
+ *
+ * nvm ships no version-independent shim on disk (unlike fnm's aliases dir,
+ * mise's shims dir and volta's bin dir), so the only stable pointer is the
+ * `default` alias file — the version nvm activates for a fresh login shell.
+ * The file holds either a (possibly partial) version (`24`, `24.1.0`,
+ * `v24.1.0`), another alias name (`lts/jod`), or `node`/`stable` meaning
+ * "latest installed". Alias chains are followed for a bounded number of hops.
+ *
+ * Returns null when the alias is absent, unreadable, or names no installed
+ * version — callers must then leave execPath untouched.
+ */
+function resolveNvmDefaultVersionDir(
+  nvmRoot: string,
+  existsSync: (p: string) => boolean,
+  readFileSync: (p: string) => string,
+  readdirSync: (p: string) => string[],
+): string | null {
+  let spec: string | null = null;
+  let aliasName = 'default';
+  for (let hop = 0; hop < 5; hop++) {
+    const aliasFile = `${nvmRoot}/alias/${aliasName}`;
+    if (!existsSync(aliasFile)) return null;
+    let contents: string;
+    try {
+      contents = String(readFileSync(aliasFile)).trim();
+    } catch {
+      return null;
+    }
+    if (!contents) return null;
+    if (/^v?\d/.test(contents)) { spec = contents.replace(/^v/, ''); break; }
+    if (contents === 'node' || contents === 'stable' || contents === 'unstable') { spec = ''; break; }
+    if (!/^[A-Za-z0-9._\-/*]+$/.test(contents) || contents.includes('..')) return null;
+    aliasName = contents;
+  }
+  if (spec === null) return null;
+
+  const versionsDir = `${nvmRoot}/versions/node`;
+  let installed: string[];
+  try {
+    installed = readdirSync(versionsDir) || [];
+  } catch {
+    return null;
+  }
+  const wanted = spec === '' ? null : `v${spec}`;
+  const matches = installed.filter(
+    (d) => /^v\d/.test(d) && (wanted === null || d === wanted || d.startsWith(`${wanted}.`)),
+  );
+  if (matches.length === 0) return null;
+  matches.sort(compareNvmVersionDirs);
+  return matches[0];
 }
 
 function normalizeNodePath(execPath: string, opts?: NodeNormOpts): string {
@@ -449,6 +517,41 @@ function normalizeNodePath(execPath: string, opts?: NodeNormOpts): string {
     const shim = `${voltaMatch[1]}/bin/node${voltaMatch[2] || ''}`;
     if (existsSync(shim)) return shim;
   }
+
+  // nvm pins a concrete version at <NVM_DIR>/versions/node/<ver>/bin/node, and
+  // `nvm use <ver>` selects it for the CURRENT SHELL ONLY — the same transient
+  // selection fnm expresses as a per-shell fnm_multishells path (#977). Baking
+  // that transient version into hooks and statusLine means the command 404s the
+  // moment `nvm uninstall <ver>` prunes it, and Claude Code renders a hook that
+  // exits non-zero with no stdout as a BLANK STATUS BAR (#41).
+  //
+  // nvm has no version-independent shim on disk, so the stable alias fnm/mise/
+  // volta each point at is, for nvm, the `default` alias — the version a fresh
+  // login shell activates. Derive <NVM_DIR> from execPath (a `.nvm` root, or a
+  // custom NVM_DIR the path actually lives under), resolve the alias, and only
+  // rewrite when the resulting binary exists — otherwise fall back to the raw
+  // execPath unchanged, exactly like the mise/volta branches.
+  const nvmMatch = normalizedForMatch.match(
+    /^(.*)\/versions\/node\/[^/]+\/(bin\/)?node(\.exe)?$/,
+  );
+  if (nvmMatch) {
+    const root = nvmMatch[1];
+    const envRoot = env.NVM_DIR ? shellCmdProjection.posixNormalize(env.NVM_DIR).replace(/\/+$/, '') : '';
+    const isNvmRoot = /(^|\/)\.nvm$/.test(root) || (envRoot !== '' && root === envRoot);
+    if (isNvmRoot) {
+      const readFileSync = (opts && opts.readFileSync)
+        || ((p: string) => fs.readFileSync(p, 'utf8'));
+      const readdirSync = (opts && opts.readdirSync)
+        || ((p: string) => fs.readdirSync(p));
+      const versionDir = resolveNvmDefaultVersionDir(root, existsSync, readFileSync, readdirSync);
+      if (versionDir) {
+        // Preserve the matched layout: `<ver>/bin/node` on POSIX,
+        // `<ver>/node.exe` where the runtime laid it out that way.
+        const candidate = `${root}/versions/node/${versionDir}/${nvmMatch[2] || ''}node${nvmMatch[3] || ''}`;
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+  }
   return execPath;
 }
 
@@ -507,6 +610,7 @@ interface SettingsHooks {
 
 interface Settings {
   hooks?: SettingsHooks;
+  statusLine?: HookEntry;
 }
 
 interface RewriteOpts {
@@ -514,56 +618,93 @@ interface RewriteOpts {
   runtime?: string;
 }
 
+/**
+ * Project one legacy managed `node <script>` command string onto the absolute
+ * node runner, or return null when the entry must be left alone (unparseable,
+ * arg-form, unmanaged script, already-stable runner, or no change needed).
+ *
+ * Extracted from the settings.hooks walk so the identical rules can be applied
+ * to `settings.statusLine.command`, which carries the same command shape and
+ * the same managed basename but lives outside settings.hooks (#41).
+ */
+function projectLegacyManagedNodeCommand(
+  entry: HookEntry,
+  absoluteRunner: string,
+  platform: string,
+  runtime: string,
+): string | null {
+  if (!entry || typeof entry.command !== 'string') return null;
+  if (Array.isArray(entry.args) && entry.args.length > 0) return null;
+  let trimmed = entry.command.trim();
+  const hadPowerShellCallOperator = platform === 'win32' && /^&\s+/.test(trimmed);
+  if (hadPowerShellCallOperator) {
+    trimmed = trimmed.replace(/^&\s+/, '').trim();
+  }
+  const m = trimmed.match(/^node\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/) ||
+            trimmed.match(/^("([^"]+)"|'([^']+)'|(\S+))\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/);
+  if (!m) return null;
+
+  let _runnerToken: string, scriptToken: string, scriptPath: string;
+  if (/^node\s+/.test(trimmed)) {
+    _runnerToken = 'node';
+    scriptToken = m[1];
+    scriptPath = m[2] || m[3] || m[4] || '';
+  } else {
+    _runnerToken = m[1];
+    const runnerPath = shellCmdProjection.posixNormalize(m[2] || m[3] || m[4] || '');
+    const stableRunner = normalizeNodePath(runnerPath);
+    if (stableRunner === runnerPath && platform !== 'win32') return null;
+    scriptToken = m[5];
+    scriptPath = m[6] || m[7] || m[8] || '';
+  }
+
+  if (!isManagedHookBasename(scriptPath, { surface: 'settings-json' })) return null;
+
+  const projectedCommand = projectLegacySettingsHookCommand({
+    absoluteRunner,
+    scriptPath,
+    scriptToken,
+    runtime,
+    platform,
+  });
+  if (!projectedCommand) return null;
+  if (entry.command === projectedCommand) return null;
+  return projectedCommand;
+}
+
 function rewriteLegacyManagedNodeHookCommands(settings: Settings, absoluteRunner: string, opts?: RewriteOpts): boolean {
-  if (!settings || !settings.hooks || !absoluteRunner) return false;
+  if (!settings || !absoluteRunner) return false;
+  if (!settings.hooks && !settings.statusLine) return false;
   if (!opts) opts = {};
   const platform = opts.platform || process.platform;
+  const runtime = opts.runtime || 'generic';
   let changed = false;
-  for (const entries of Object.values(settings.hooks)) {
+  for (const entries of Object.values(settings.hooks || {})) {
     if (!Array.isArray(entries)) continue;
     for (const entry of entries) {
       if (!entry || !Array.isArray(entry.hooks)) continue;
       for (const h of entry.hooks) {
-        if (!h || typeof h.command !== 'string') continue;
-        if (Array.isArray(h.args) && h.args.length > 0) continue;
-        let trimmed = h.command.trim();
-        const hadPowerShellCallOperator = platform === 'win32' && /^&\s+/.test(trimmed);
-        if (hadPowerShellCallOperator) {
-          trimmed = trimmed.replace(/^&\s+/, '').trim();
-        }
-        const m = trimmed.match(/^node\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/) ||
-                  trimmed.match(/^("([^"]+)"|'([^']+)'|(\S+))\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/);
-        if (!m) continue;
-
-        let _runnerToken: string, scriptToken: string, scriptPath: string;
-        if (/^node\s+/.test(trimmed)) {
-          _runnerToken = 'node';
-          scriptToken = m[1];
-          scriptPath = m[2] || m[3] || m[4] || '';
-        } else {
-          _runnerToken = m[1];
-          const runnerPath = shellCmdProjection.posixNormalize(m[2] || m[3] || m[4] || '');
-          const stableRunner = normalizeNodePath(runnerPath);
-          if (stableRunner === runnerPath && platform !== 'win32') continue;
-          scriptToken = m[5];
-          scriptPath = m[6] || m[7] || m[8] || '';
-        }
-
-        if (!isManagedHookBasename(scriptPath, { surface: 'settings-json' })) continue;
-
-        const projectedCommand = projectLegacySettingsHookCommand({
-          absoluteRunner,
-          scriptPath,
-          scriptToken,
-          runtime: opts.runtime || 'generic',
-          platform,
-        });
-        if (!projectedCommand) continue;
-        if (h.command === projectedCommand) continue;
-
-        h.command = projectedCommand;
+        const projected = projectLegacyManagedNodeCommand(h, absoluteRunner, platform, runtime);
+        if (projected === null) continue;
+        h.command = projected;
         changed = true;
       }
+    }
+  }
+
+  // #41: `settings.statusLine` is a managed node command in every way that
+  // matters — same `node "<configDir>/hooks/gsd-statusline.js"` shape, same
+  // managed basename — but it lives outside `settings.hooks`, so the #2979
+  // repair pass never visited it. A bare-`node` statusline exits 127 under
+  // Claude Code's PATH-less `sh -c` spawn and renders as a blank status bar.
+  // The managed-only guard inside projectLegacyManagedNodeCommand keeps
+  // third-party statuslines (#2248) untouched.
+  const statusLine = settings.statusLine;
+  if (statusLine && typeof statusLine === 'object') {
+    const projected = projectLegacyManagedNodeCommand(statusLine, absoluteRunner, platform, runtime);
+    if (projected !== null) {
+      statusLine.command = projected;
+      changed = true;
     }
   }
   return changed;
