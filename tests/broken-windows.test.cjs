@@ -38,6 +38,8 @@ const {
   appendWindow,
   markWaived,
   markFixed,
+  amendWindow,
+  reconcileLedger,
   openCount,
 } = require('../gsd-core/bin/lib/broken-windows.cjs');
 
@@ -721,5 +723,472 @@ describe('broken-windows CLI: lifecycle', () => {
     assert.equal(status.ledger.waived_count, 1);
     assert.equal(status.ledger.fixed_count, 1);
     assert.equal(status.ledger.total_count, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures for the reason/amend/reconcile surface
+// ---------------------------------------------------------------------------
+
+/** A full WindowEntry (not the append input shape) for raw-ledger fixtures. */
+function makeRawEntry(overrides = {}) {
+  return {
+    id: 1,
+    kind: 'stub',
+    phase: '2',
+    file: '',
+    line: null,
+    description: 'hardcoded empty list',
+    status: 'open',
+    reason: '',
+    recorded_at: '2026-08-09T00:00:00Z',
+    resolved_at: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Render a ledger file with EXPLICIT frontmatter counts, so a test can pin
+ * counts that disagree with the entries — the hand-edit drift shape that
+ * bricks every read (issue: markFixed took no reason, so operators hand-wrote
+ * the rationale into WINDOWS.md and the counts drifted).
+ */
+function rawLedgerWithCounts(entries, counts) {
+  return [
+    '---',
+    'schema_version: 1',
+    `open_count: ${counts.open}`,
+    `waived_count: ${counts.waived}`,
+    `fixed_count: ${counts.fixed}`,
+    `total_count: ${counts.total}`,
+    'last_updated: 2026-08-09T00:00:00Z',
+    '---',
+    '',
+    '# Broken Windows Ledger',
+    '',
+    '````json',
+    JSON.stringify(entries, null, 2),
+    '````',
+    '',
+  ].join('\n');
+}
+
+function writeLedger(tmp, raw) {
+  fs.mkdirSync(path.join(tmp, '.planning'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, '.planning', LEDGER_FILE_NAME), raw, 'utf8');
+}
+
+function readLedgerFile(tmp) {
+  return fs.readFileSync(path.join(tmp, '.planning', LEDGER_FILE_NAME), 'utf8');
+}
+
+// ---------------------------------------------------------------------------
+// Pure: markFixed carries a reason (parity with markWaived)
+// ---------------------------------------------------------------------------
+
+describe('broken-windows: markFixed with a recorded reason', () => {
+  test('fixed with a reason records it in the reason column', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, 'closed by commit abc123 — the query now scopes by org', { now: 't2' });
+
+    assert.equal(led.entries[0].status, 'fixed');
+    assert.equal(led.entries[0].reason, 'closed by commit abc123 — the query now scopes by org');
+    assert.equal(led.entries[0].resolved_at, 't2');
+    assert.equal(led.fixed_count, 1);
+    assert.equal(led.open_count, 0);
+  });
+
+  test('fixed WITHOUT a reason keeps the pre-reason 3-arg signature (opts third) working', () => {
+    // Backward compatibility: every existing caller passes `{ now }` third.
+    // That call must still resolve the entry and leave reason empty — no
+    // silent coercion of the opts object into the reason column.
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, { now: 't2' });
+
+    assert.equal(led.entries[0].status, 'fixed');
+    assert.equal(led.entries[0].reason, '');
+    assert.equal(led.entries[0].resolved_at, 't2', 'opts.now must still be honored when passed third');
+  });
+
+  test('fixed with reason third and opts fourth honors both', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, 'evidence: LIVE-EVIDENCE.md §3', { now: 't2' });
+    assert.equal(led.entries[0].reason, 'evidence: LIVE-EVIDENCE.md §3');
+    assert.equal(led.entries[0].resolved_at, 't2');
+  });
+
+  test('whitespace-only fixed reason records as empty (no fake rationale)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, '   ', { now: 't2' });
+    assert.equal(led.entries[0].reason, '');
+  });
+
+  test('fixed reason rejects a 4-backtick run (fence integrity — same discipline as description)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    assert.throws(
+      () => markFixed(led, 1, 'see ```` the fence', { now: 't2' }),
+      reasonIs(REASON.WINDOWS_INVALID_TEXT),
+    );
+  });
+
+  test('waive reason rejects a 4-backtick run (the same hole on the waive path)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    assert.throws(
+      () => markWaived(led, 1, 'see ```` the fence', { now: 't2' }),
+      reasonIs(REASON.WINDOWS_INVALID_TEXT),
+    );
+  });
+
+  test('a reason-carrying fixed entry reparses (the closure survives a round trip)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, 'closed: pipe | and backslash \\ in the rationale', { now: 't2' });
+    const reparsed = parseLedger(renderLedger(led));
+    assert.equal(reparsed.entries[0].reason, 'closed: pipe | and backslash \\ in the rationale');
+    assert.equal(reparsed.fixed_count, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: amendWindow (mechanical edit of an existing entry)
+// ---------------------------------------------------------------------------
+
+describe('broken-windows: amendWindow', () => {
+  test('amend rewrites the description of an OPEN entry, leaving status and counts alone', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry({ description: 'both halves of the defect' }), { now: 't1' }));
+    led = amendWindow(led, 1, { description: 'only the surviving half' }, { now: 't2' });
+
+    assert.equal(led.entries[0].description, 'only the surviving half');
+    assert.equal(led.entries[0].status, 'open');
+    assert.equal(led.entries[0].resolved_at, null);
+    assert.equal(led.open_count, 1);
+    assert.equal(led.total_count, 1);
+    assert.equal(led.last_updated, 't2');
+  });
+
+  test('amend rewrites a RESOLVED entry (closure text is editable after resolution)', () => {
+    // The whole point: a hand-annotated closure must be normalizable by the
+    // tool. assertOpen must NOT gate amend.
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = markFixed(led, 1, 'first pass', { now: 't2' });
+    led = amendWindow(led, 1, { reason: 'closed by 413.7 — evidence: EVIDENCE.md §3' }, { now: 't3' });
+
+    assert.equal(led.entries[0].status, 'fixed');
+    assert.equal(led.entries[0].reason, 'closed by 413.7 — evidence: EVIDENCE.md §3');
+    assert.equal(led.entries[0].resolved_at, 't2', 'amend must not re-stamp resolved_at');
+    assert.equal(led.fixed_count, 1);
+  });
+
+  test('amend corrects a stale file pointer and line', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry({ file: 'src/wrong.ts', line: 10 }), { now: 't1' }));
+    led = amendWindow(led, 1, { file: 'src/right.ts', line: 42 }, { now: 't2' });
+    assert.equal(led.entries[0].file, 'src/right.ts');
+    assert.equal(led.entries[0].line, 42);
+  });
+
+  test('amend with an empty field set throws USAGE (a no-op write is a mistake)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    assert.throws(() => amendWindow(led, 1, {}, { now: 't2' }), reasonIs(REASON.WINDOWS_USAGE));
+  });
+
+  test('amend on an unknown id throws ID_NOT_FOUND', () => {
+    const led = emptyLedger('now');
+    assert.throws(
+      () => amendWindow(led, 999, { description: 'x' }, { now: 't' }),
+      reasonIs(REASON.WINDOWS_ID_NOT_FOUND),
+    );
+  });
+
+  test('amend re-validates every field it writes (traversal, empty description, 4-backtick, line)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    assert.throws(() => amendWindow(led, 1, { file: '../../etc/passwd' }), reasonIs(REASON.WINDOWS_INVALID_FILE));
+    assert.throws(() => amendWindow(led, 1, { description: '   ' }), reasonIs(REASON.WINDOWS_APPEND_MISSING_FIELD));
+    assert.throws(() => amendWindow(led, 1, { description: 'four ```` ticks' }), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+    assert.throws(() => amendWindow(led, 1, { reason: 'four ```` ticks' }), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+    assert.throws(() => amendWindow(led, 1, { line: 0 }), reasonIs(REASON.WINDOWS_APPEND_MISSING_FIELD));
+  });
+
+  test('amended ledger reparses (fence stays valid)', () => {
+    let led = emptyLedger('now');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: 't1' }));
+    led = amendWindow(led, 1, { description: 'narrowed | with a pipe' }, { now: 't2' });
+    const reparsed = parseLedger(renderLedger(led));
+    assert.equal(reparsed.entries[0].description, 'narrowed | with a pipe');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: reconcileLedger (the ONLY lenient path — count self-heal)
+// ---------------------------------------------------------------------------
+
+describe('broken-windows: reconcileLedger', () => {
+  const driftedRaw = () => rawLedgerWithCounts(
+    [
+      makeRawEntry({ id: 1, status: 'open' }),
+      makeRawEntry({ id: 2, status: 'fixed', reason: 'hand-written rationale', resolved_at: '2026-08-09T01:00:00Z' }),
+    ],
+    // Frontmatter claims 2 open / 0 fixed; the entries say 1 open / 1 fixed.
+    { open: 2, waived: 0, fixed: 0, total: 2 },
+  );
+
+  test('parseLedger STILL fails closed on count drift (reconcile must not leak into normal reads)', () => {
+    assert.throws(() => parseLedger(driftedRaw()), reasonIs(REASON.WINDOWS_LEDGER_MALFORMED));
+  });
+
+  test('reconcileLedger re-derives the counts from the entries', () => {
+    const res = reconcileLedger(driftedRaw(), { now: '2026-08-09T02:00:00Z' });
+    assert.equal(res.repaired, true);
+    assert.equal(res.ledger.open_count, 1);
+    assert.equal(res.ledger.fixed_count, 1);
+    assert.equal(res.ledger.waived_count, 0);
+    assert.equal(res.ledger.total_count, 2);
+    assert.equal(res.ledger.last_updated, '2026-08-09T02:00:00Z');
+    // Entries survive verbatim — reconcile repairs the counts, never the data.
+    assert.equal(res.ledger.entries[1].reason, 'hand-written rationale');
+  });
+
+  test('reconcileLedger reports the pre-repair counts so the drift is auditable', () => {
+    const res = reconcileLedger(driftedRaw(), { now: 't' });
+    assert.deepEqual(res.before, { open_count: 2, waived_count: 0, fixed_count: 0, total_count: 2 });
+  });
+
+  test('a reconciled ledger parses under the STRICT reader', () => {
+    const res = reconcileLedger(driftedRaw(), { now: 't' });
+    const reparsed = parseLedger(renderLedger(res.ledger));
+    assert.equal(reparsed.open_count, 1);
+    assert.equal(reparsed.fixed_count, 1);
+  });
+
+  test('reconcileLedger on an already-consistent ledger reports repaired=false and does not bump last_updated', () => {
+    const consistent = rawLedgerWithCounts([makeRawEntry({ id: 1 })], { open: 1, waived: 0, fixed: 0, total: 1 });
+    const res = reconcileLedger(consistent, { now: '2026-08-09T02:00:00Z' });
+    assert.equal(res.repaired, false);
+    assert.equal(res.ledger.last_updated, '2026-08-09T00:00:00Z');
+  });
+
+  test('reconcileLedger still fails on real corruption (it repairs counts, not a broken JSON block)', () => {
+    const corrupt = [
+      '---',
+      'schema_version: 1',
+      'open_count: 1',
+      'waived_count: 0',
+      'fixed_count: 0',
+      'total_count: 1',
+      'last_updated: 2026-08-09T00:00:00Z',
+      '---',
+      '',
+      '````json',
+      '[ { "id": 1, "kind": ',
+      '````',
+      '',
+    ].join('\n');
+    assert.throws(() => reconcileLedger(corrupt, { now: 't' }), reasonIs(REASON.WINDOWS_LEDGER_MALFORMED));
+  });
+
+  test('reconcileLedger still enforces the entry shape (a bogus status is corruption, not drift)', () => {
+    const bogus = rawLedgerWithCounts([makeRawEntry({ id: 1, status: 'halfway' })], { open: 1, waived: 0, fixed: 0, total: 1 });
+    assert.throws(() => reconcileLedger(bogus, { now: 't' }), reasonIs(REASON.WINDOWS_LEDGER_MALFORMED));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI: windows fixed <id> "<reason>"
+// ---------------------------------------------------------------------------
+
+describe('broken-windows CLI: windows fixed with a reason', () => {
+  test('fixed <id> "<reason>" records the rationale in the ledger', (t) => {
+    const tmp = createTempDir('bw-fixed-reason-');
+    t.after(() => cleanup(tmp));
+
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+
+    const r2 = runGsdTools(['windows', 'fixed', '1', 'closed by 413.5-07 — live evidence §(f)'], tmp);
+    assert.equal(r2.success, true, `stderr: ${r2.error || ''}`);
+    const obj = JSON.parse(r2.output);
+    assert.equal(obj.ledger.entries[0].status, 'fixed');
+    assert.equal(obj.ledger.entries[0].reason, 'closed by 413.5-07 — live evidence §(f)');
+    assert.equal(obj.ledger.open_count, 0);
+    assert.equal(obj.ledger.fixed_count, 1);
+
+    // Persisted, and the file still reads under the strict parser.
+    const r3 = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(r3.success, true, `stderr: ${r3.error || ''}`);
+    assert.equal(JSON.parse(r3.output).ledger.entries[0].reason, 'closed by 413.5-07 — live evidence §(f)');
+  });
+
+  test('fixed <id> with NO reason still works (backward compatibility at the CLI)', (t) => {
+    const tmp = createTempDir('bw-fixed-noreason-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const r2 = runGsdTools(['windows', 'fixed', '1'], tmp);
+    assert.equal(r2.success, true, `stderr: ${r2.error || ''}`);
+    const obj = JSON.parse(r2.output);
+    assert.equal(obj.ledger.entries[0].status, 'fixed');
+    assert.equal(obj.ledger.entries[0].reason, '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI: windows amend
+// ---------------------------------------------------------------------------
+
+describe('broken-windows CLI: windows amend', () => {
+  test('amend rewrites description + file on an open row and keeps it open', (t) => {
+    const tmp = createTempDir('bw-amend-open-');
+    t.after(() => cleanup(tmp));
+
+    const r1 = runGsdTools(
+      ['windows', 'append', '--kind', 'deviation', '--phase', '412', '--file', 'src/stale.ts', '--description', 'both halves'],
+      tmp,
+    );
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+
+    const r2 = runGsdTools(
+      ['windows', 'amend', '1', '--description', 'only the surviving half', '--file', 'src/correct.ts'],
+      tmp,
+    );
+    assert.equal(r2.success, true, `stderr: ${r2.error || ''}`);
+    const obj = JSON.parse(r2.output);
+    assert.equal(obj.ledger.entries[0].description, 'only the surviving half');
+    assert.equal(obj.ledger.entries[0].file, 'src/correct.ts');
+    assert.equal(obj.ledger.entries[0].status, 'open');
+    assert.equal(obj.ledger.open_count, 1);
+  });
+
+  test('amend normalizes a hand-annotated closure on a FIXED row', (t) => {
+    const tmp = createTempDir('bw-amend-fixed-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'unmet-truth', '--phase', '413', '--description', 'TRUTH NOT MET: rollup != proxy'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const r2 = runGsdTools(['windows', 'fixed', '1'], tmp);
+    assert.equal(r2.success, true, `stderr: ${r2.error || ''}`);
+
+    const r3 = runGsdTools(['windows', 'amend', '1', '--reason', 'MET 2026-08-09 (Plan 413.7) — equality proven to 0.00000000'], tmp);
+    assert.equal(r3.success, true, `stderr: ${r3.error || ''}`);
+    const obj = JSON.parse(r3.output);
+    assert.equal(obj.ledger.entries[0].status, 'fixed');
+    assert.equal(obj.ledger.entries[0].reason, 'MET 2026-08-09 (Plan 413.7) — equality proven to 0.00000000');
+    assert.equal(obj.ledger.fixed_count, 1);
+  });
+
+  test('amend with no field flags fails (usage)', (t) => {
+    const tmp = createTempDir('bw-amend-nofields-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const r2 = runGsdTools(['windows', 'amend', '1'], tmp);
+    assert.equal(r2.success, false);
+    assert.match(r2.error, /at least one|--description|--reason|usage/i);
+  });
+
+  test('amend on an unknown id fails', (t) => {
+    const tmp = createTempDir('bw-amend-unknown-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const r2 = runGsdTools(['windows', 'amend', '999', '--description', 'y'], tmp);
+    assert.equal(r2.success, false);
+    assert.match(r2.error, /no window|id 999|not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI: windows reconcile
+// ---------------------------------------------------------------------------
+
+describe('broken-windows CLI: windows reconcile', () => {
+  test('reconcile repairs a hand-drifted ledger that every other verb refuses', (t) => {
+    const tmp = createTempDir('bw-reconcile-');
+    t.after(() => cleanup(tmp));
+
+    // The exact failure this fix exists to end: a hand-edited closure whose
+    // frontmatter counts no longer match the entries. status/append/fixed all
+    // fail closed on it; reconcile is the repair verb.
+    writeLedger(tmp, rawLedgerWithCounts(
+      [
+        makeRawEntry({ id: 1, status: 'open' }),
+        makeRawEntry({ id: 2, status: 'fixed', reason: 'hand-written', resolved_at: '2026-08-09T01:00:00Z' }),
+      ],
+      { open: 2, waived: 0, fixed: 0, total: 2 },
+    ));
+
+    const blocked = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(blocked.success, false, 'the drifted ledger must fail closed before reconcile');
+    assert.match(blocked.error, /counts disagree/i);
+
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, true, `stderr: ${rec.error || ''}`);
+    const obj = JSON.parse(rec.output);
+    assert.equal(obj.ok, true);
+    assert.equal(obj.repaired, true);
+    assert.equal(obj.ledger.open_count, 1);
+    assert.equal(obj.ledger.fixed_count, 1);
+
+    // And the ledger is usable again through the normal (strict) path.
+    const after = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(after.success, true, `stderr: ${after.error || ''}`);
+    assert.equal(JSON.parse(after.output).ledger.open_count, 1);
+    assert.match(readLedgerFile(tmp), /open_count: 1/);
+  });
+
+  test('reconcile on a consistent ledger is a no-op that reports repaired=false', (t) => {
+    const tmp = createTempDir('bw-reconcile-noop-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const before = readLedgerFile(tmp);
+
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, true, `stderr: ${rec.error || ''}`);
+    assert.equal(JSON.parse(rec.output).repaired, false);
+    assert.equal(readLedgerFile(tmp), before, 'a no-op reconcile must not rewrite the file');
+  });
+
+  test('reconcile re-renders a hand-mangled but count-consistent ledger (normalized, not repaired)', (t) => {
+    const tmp = createTempDir('bw-reconcile-normalize-');
+    t.after(() => cleanup(tmp));
+    // Counts agree, so the strict reader accepts it — but the fence line was
+    // mangled by a hand edit (`````json[` on one line). Reconcile re-renders.
+    const mangled = rawLedgerWithCounts([makeRawEntry({ id: 1 })], { open: 1, waived: 0, fixed: 0, total: 1 })
+      .replace('````json\n[', '````json[');
+    writeLedger(tmp, mangled);
+
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, true, `stderr: ${rec.error || ''}`);
+    const obj = JSON.parse(rec.output);
+    assert.equal(obj.repaired, false, 'counts were already true');
+    assert.equal(obj.normalized, true, 'the file bytes were not what the renderer emits');
+    assert.notEqual(readLedgerFile(tmp), mangled, 'the mangled bytes must be rewritten');
+    assert.match(readLedgerFile(tmp), /````json\r?\n\[/);
+  });
+
+  test('reconcile with no ledger reports windows_ledger_missing (nothing to repair)', (t) => {
+    const tmp = createTempDir('bw-reconcile-missing-');
+    t.after(() => cleanup(tmp));
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, false);
+    assert.match(rec.error, /no ledger|missing/i);
+  });
+
+  test('reconcile does NOT paper over real corruption', (t) => {
+    const tmp = createTempDir('bw-reconcile-corrupt-');
+    t.after(() => cleanup(tmp));
+    writeLedger(tmp, 'not a ledger at all');
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, false);
+    assert.match(rec.error, /malformed|frontmatter/i);
   });
 });
