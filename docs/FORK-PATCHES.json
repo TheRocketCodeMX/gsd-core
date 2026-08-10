@@ -602,7 +602,8 @@
       "markers": 3,
       "anchors": [
         "/gsd:model-domain",
-        "/gsd:cicd-strategy"
+        "/gsd:cicd-strategy",
+        "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
       ]
     },
     {
