@@ -96,7 +96,7 @@ The floor's explicit non-goals — **decided, not forgotten**:
 - **nightly / any `schedule:` job** — [trigger: a C2-a/b/c/d job-to-be-done + a named owner + a triage SLA]
 - **matrix** — [trigger: a supported-platform promise we've actually made]
 - **merge queue** — [trigger: ~tens of merges/day; stale-base failures routine]
-- **preview environments** — [trigger: the platform gives them free / a reviewer needs to click the change]
+- **preview environments** — [trigger: the platform gives them free]
 - **canary analysis (D4)** — [trigger: representative traffic + an evaluation process wired into the release + a metrics provider]
 - **staging (D5)** — [trigger: a risky migration to rehearse, or a compliance mandate]
 - [SLSA L3 — when artifacts cross trust boundaries · cosign — when there's a verifier · SBOM program — when a customer/regulator asks]

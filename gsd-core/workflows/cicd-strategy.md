@@ -88,7 +88,7 @@ The number that decides the pipeline's shape is the **suite wall clock**, and no
 
 **The reverse holds too:** if the user has a genuine VPC/regulatory constraint and you were about to recommend GHA hosted runners, the cloud-native exception (or self-hosted runners in their VPC behind GHA) is the right call — don't dogmatically default.
 
-Pricing context if cost comes up: GHA Linux $0.006/min (2,000–3,000 free min/mo), Cloud Build $0.006/min + 2,500 free min/mo, Azure $40/parallel-job unlimited minutes. Stay on hosted runners until the bill clears the free tier plus low-hundreds $/mo; then managed third-party runners before DIY self-hosted; never self-hosted on public repos.
+Pricing context if cost comes up: GHA Linux $0.006/min 2-core ($0.002 1-core; 2,000–3,000 free min/mo), Cloud Build $0.006/min + 2,500 free min/mo, Azure $40/parallel-job unlimited minutes. Stay on hosted runners until the bill clears the free tier plus low-hundreds $/mo; then managed third-party runners before DIY self-hosted; never self-hosted on public repos.
 
 ## Step 4: Auth + secrets
 

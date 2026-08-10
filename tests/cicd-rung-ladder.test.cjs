@@ -190,7 +190,7 @@ describe('citation honesty', () => {
       // No Radar blip by these names exists.
       assert.doesNotMatch(text, /pipeline as (a )?product/i, `${file}: unverified Radar blip`);
       // Not present in current GitHub billing docs.
-      assert.doesNotMatch(text, /10×|10x multiplier|2× multiplier/i, `${file}: outdated minute multipliers`);
+      assert.doesNotMatch(text, /10× multiplier|10x multiplier|2× multiplier|2x multiplier/i, `${file}: outdated minute multipliers`);
       // DORA's numeric benchmark table was never read from the primary source.
       assert.doesNotMatch(text, /elite performers?/i, `${file}: unverified DORA benchmark tier`);
     }
