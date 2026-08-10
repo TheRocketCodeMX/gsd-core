@@ -32,6 +32,8 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 
 **If `EXISTS` and not `--auto`:** ask Update / View / Skip (header "Strategy"). On Skip: exit ("Existing TEST-STRATEGY.md preserved."). On View: show then Update/Skip.
 
+**On Update (and on `--auto` over an existing file):** read the existing file's `## Coverage debt` table before re-deriving anything. Those rows are the only record of where this project's pyramid actually leaks — each one is a behavior that reached UAT or certification unproven. Where they cluster (a subdomain, a level, a kind of behavior), raise that area's level emphasis in Step 3 and add it to Step 4's gnarly-bits list, and say in the wrap-up which rows drove a change. An empty table is the healthy state and needs no comment. Carry the existing rows forward verbatim — this section is append-only and `verify-work` is its writer, not this skill.
+
 ## Step 2: Load context
 
 ```bash

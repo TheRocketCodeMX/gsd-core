@@ -347,7 +347,7 @@ A SUMMARY.md may carry an optional `coverage:` frontmatter block — a list of p
 | `id` | Stable identifier (`D1`, `D2`…), unique within the SUMMARY |
 | `description` | The deliverable in human-readable form |
 | `requirement` | Optional REQ-ID linking to REQUIREMENTS.md |
-| `verification[].kind` | `unit` \| `integration` \| `e2e` \| `automated_ui` \| `manual_procedural` \| `other` |
+| `verification[].kind` | `unit` \| `integration` \| `e2e` \| `automated_ui` \| `agentic_certification` \| `manual_procedural` \| `other` |
 | `verification[].ref` | Test path + descriptor, screenshot ref, or command |
 | `verification[].status` | `pass` \| `fail` \| `unknown` |
 | `human_judgment` | Required boolean. `true` always routes to a human |

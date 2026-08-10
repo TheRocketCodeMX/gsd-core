@@ -348,6 +348,22 @@
       ]
     },
     {
+      "path": "CONTEXT.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+      ]
+    },
+    {
+      "path": "docs/COMMANDS.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`automated_ui` \\\\\\| `agentic_certification`"
+      ]
+    },
+    {
       "path": "docs/context-monitor.md",
       "feature": "context-monitor",
       "mode": "whole-file",
@@ -902,9 +918,11 @@
       "path": "src/init.cts",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 2,
+      "markers": 4,
       "anchors": [
-        "has_design_hint"
+        "has_design_hint",
+        "detectCertificationMode",
+        "certification_mode:"
       ]
     },
     {
@@ -1162,11 +1180,20 @@
       ]
     },
     {
+      "path": "tests/coverage-metadata-parser.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "coverage classify — agentic_certification evidence",
+        "agentic_certification"
+      ]
+    },
+    {
       "path": "gsd-core/workflows/verify-work.md",
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "gsd:section id=\"agentic-certification\"",
+        "Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification\\.md`",
         "verify-work/steps/agentic-certification\\.md",
         "<step name=\"coverage_gap_capture\">",
         "##\\s*Coverage debt",

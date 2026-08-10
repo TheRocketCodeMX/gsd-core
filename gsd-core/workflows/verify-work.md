@@ -220,9 +220,9 @@ Then **prepend** this test to the test list:
 This catches bugs that only manifest on fresh start — race conditions in startup sequences, silent seed failures, missing environment setup — which pass against warm state but break in production.
 </step>
 
-<!-- gsd:section id="agentic-certification" when="always" -->
-If `section_manifest` is `null` or `"agentic-certification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`. Otherwise skip — do not read the file. It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. `when="always"` because the contract is that every phase leaves a **recorded** certification outcome; the step itself resolves `workflow.certification: off` and dispatches nothing.
-<!-- /gsd:section -->
+**Agentic certification (unconditional).** Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`.
+
+It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. It is **not** a `gsd:section`: the contract is that every phase leaves a *recorded* certification outcome, so there is no configuration under which this dispatch is skipped, and a section wrapper would put a written-down silent-skip branch on disk in the one step whose whole contract is "recorded, never silent". The opt-out lives inside the step, which resolves `workflow.certification: off` in its first table and dispatches nothing — recorded, not absent. Same unconditional-step-file form as `execute-phase.md`'s post-merge gate. The step reads its posture from `certification_mode` in the `INIT` bundle above, so it spawns nothing of its own.
 
 <step name="create_uat_file">
 **Create UAT file with all tests:**

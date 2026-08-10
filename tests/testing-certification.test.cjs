@@ -648,29 +648,38 @@ function at(text, re) {
   return m ? m.index : -1;
 }
 
-describe('certification in the loop — the verify-work section gate', () => {
-  test('verify-work declares an `agentic-certification` section that dispatches a step file', () => {
+describe('certification in the loop — the verify-work dispatch', () => {
+  test('verify-work dispatches the certification step file unconditionally', () => {
     const text = read(VERIFY_WORK);
     assert.match(
       text,
-      /<!--\s*gsd:section\s+id="agentic-certification"\s+when="[^"]+"\s*-->/,
-      'verify-work.md must carry a gsd:section gate with id="agentic-certification"'
-    );
-    assert.match(
-      text,
-      /verify-work\/steps\/agentic-certification\.md/,
-      'the section must dispatch the fork-owned step file'
+      /Read and execute `gsd-core\/workflows\/verify-work\/steps\/agentic-certification\.md`/,
+      'the dispatch must use the plain unconditional step-file form'
     );
   });
 
-  test('the section is a sibling of automated-ui-verification (same dispatch contract)', () => {
+  test('the dispatch is NOT a gsd:section — there is no configuration that skips it', () => {
+    // Wave 2 review N1: a section wrapper puts a written-down silent-skip branch
+    // ("Otherwise skip — do not read the file") on disk in the one step whose
+    // whole contract is "recorded, never silent". The opt-out belongs inside the
+    // step, which resolves `workflow.certification: off` and records it.
     const text = read(VERIFY_WORK);
-    // Both gates use the manifest-gated read-or-skip contract; the certification
-    // gate must not invent a second dispatch convention.
-    const certGate = text.slice(at(text, /id="agentic-certification"/));
-    assert.match(certGate.slice(0, 700), /section_manifest/, 'the gate must honor `section_manifest`');
-    assert.match(certGate.slice(0, 700), /Otherwise skip|do not read the file/i, 'the gate must be skippable');
-    assert.match(certGate.slice(0, 700), /<!--\s*\/gsd:section\s*-->/, 'the gate must be closed');
+    assert.doesNotMatch(
+      text,
+      /gsd:section\s+id="agentic-certification"/,
+      'the certification dispatch must not be wrapped in a section gate'
+    );
+    const manifest = JSON.parse(read('gsd-core/workflows/section-manifest.json'));
+    assert.ok(
+      !JSON.stringify(manifest).includes('agentic-certification'),
+      'and the generated section manifest must carry no entry for it'
+    );
+  });
+
+  test('it uses the same unconditional form as execute-phase\'s post-merge gate', () => {
+    const cert = read(VERIFY_WORK).match(/Read and execute `gsd-core\/workflows\/verify-work\/steps\/agentic-certification\.md`\./);
+    const gate = read('gsd-core/workflows/execute-phase.md').match(/Read and execute `gsd-core\/workflows\/execute-phase\/steps\/post-merge-gate\.md`\./);
+    assert.ok(cert && gate, 'both dispatches exist in the same corpus form');
   });
 
   test('certification runs AFTER the checkpoint set exists and BEFORE any checkpoint is presented', () => {
@@ -679,7 +688,7 @@ describe('certification in the loop — the verify-work section gate', () => {
     // `present_test` the human has already done the work certification exists to
     // take over. The window is exactly extract_tests → create_uat_file.
     const text = read(VERIFY_WORK);
-    const gate = at(text, /id="agentic-certification"/);
+    const gate = at(text, /verify-work\/steps\/agentic-certification\.md/);
     const extract = at(text, /<step name="extract_tests">/);
     const create = at(text, /<step name="create_uat_file">/);
     const present = at(text, /<step name="present_test">/);
@@ -728,13 +737,27 @@ describe('the certification step: detect → auto-resolve → escalate', () => {
     );
   });
 
-  test('the trust gate precedes any launch or probe (post-fix-wave ordering)', () => {
+  test('the trust gate SECTION precedes the capability-re-check SECTION', () => {
+    // Wave 2 review M1: the previous form anchored on prose that all lived
+    // inside §3, 60 bytes apart, so swapping §3 and §4 still passed. Anchor on
+    // the section HEADINGS — that is the ordering the Wave 1 M2 defect was.
     const t = text();
-    const trust = at(t, /isolated HOME|sandbox-first|sandbox HOME/i);
-    const launch = at(t, /first launch|launch(ing)? (it|the (tool|driver))|run the (live )?probe/i);
-    assert.ok(trust > -1, 'the step must carry the sandbox-first trust gate');
-    assert.ok(launch > -1, 'the step must describe a launch/probe');
-    assert.ok(trust < launch, 'the trust gate must come BEFORE the first launch/probe (references/certification.md is the authority)');
+    const trust = at(t, /^##\s*\d+\.\s*Trust gate/im);
+    const recheck = at(t, /^##\s*\d+\.\s*Re-check the recorded capability/im);
+    assert.ok(trust > -1, 'the step must carry a numbered Trust gate section');
+    assert.ok(recheck > -1, 'the step must carry a numbered capability re-check section');
+    assert.ok(trust < recheck, 'the trust gate must precede the capability re-check (references/certification.md is the authority)');
+  });
+
+  test('the trust gate itself claims the re-check — the gate covers the re-probe too', () => {
+    const t = text();
+    const gate = t.slice(at(t, /^##\s*\d+\.\s*Trust gate/im), at(t, /^##\s*\d+\.\s*Re-check the recorded capability/im));
+    assert.match(
+      gate,
+      /including the capability re-check|covers the re-check|the re-check below/i,
+      'the doctrine "a re-probe is also a first launch" must be pinned separately from the ordering'
+    );
+    assert.match(gate, /isolated HOME|sandbox-first|sandbox HOME/i, 'and the gate is the sandbox-first one');
   });
 
   test('the brief is canonical and any script is an accelerant', () => {
@@ -786,8 +809,14 @@ describe('the certification step: detect → auto-resolve → escalate', () => {
   });
 
   test('it degrades to today’s behavior when nothing is available', () => {
+    // Wave 2 review T2: asserted against the whole 15 KB file this passed on any
+    // of ~6 unrelated sentences. Scope it to the §8 outcome block, which is where
+    // the CERT-0 fallback promise actually lives.
     const t = text();
-    assert.match(t, /unchanged|fall back|falls back/i);
+    const outcome = t.slice(at(t, /^##\s*\d+\.\s*Record the outcome/im));
+    assert.ok(outcome.length > 0, 'the outcome section must exist');
+    assert.match(outcome, /unchanged|falls? back/i, 'the CERT-0 path is today’s UAT, unchanged');
+    assert.match(outcome, /CERT-0/, 'and it is named as such');
   });
 });
 
@@ -810,6 +839,30 @@ describe('evidence schema — kind: agentic_certification', () => {
 
   test('the classifier enum accepts it', () => {
     assert.match(read(COVERAGE_CTS), /'agentic_certification'/);
+  });
+
+  test('EVERY documented enum surface carries it — a partial landing is the failure mode', () => {
+    // Wave 2 review M3: the enum landed in 2 of 4 surfaces, so CONTEXT.md — the
+    // one an agent consults as ground truth before authoring a coverage: block —
+    // still told it `agentic_certification` was invalid. Sweep them all.
+    // examples/dynamic-context-management/CONTEXT-INDEX.json is a frozen example
+    // fixture and is deliberately NOT in this list.
+    const surfaces = [
+      'gsd-core/templates/summary.md',
+      'docs/COMMANDS.md',
+      'CONTEXT.md',
+      'docs/CONTEXT-INDEX.json',
+      'src/coverage.cts',
+    ];
+    const missing = surfaces.filter((p) => !read(p).includes('agentic_certification'));
+    assert.deepEqual(missing, [], `enum surfaces missing agentic_certification: ${missing.join(', ')}`);
+  });
+
+  test('no documented surface still enumerates the pre-change six kinds', () => {
+    const stale = ['docs/COMMANDS.md', 'CONTEXT.md', 'docs/CONTEXT-INDEX.json'].filter((p) =>
+      /automated_ui[^\n]{0,4}\|[^\n]{0,4}manual_procedural/.test(read(p))
+    );
+    assert.deepEqual(stale, [], `these still list automated_ui immediately before manual_procedural: ${stale.join(', ')}`);
   });
 
   test('the deterministic auto-pass contract is NOT weakened to admit it', () => {
@@ -851,7 +904,9 @@ describe('workflow.certification — the config key', () => {
   test('the declaration is not ALSO patched into the central schema', () => {
     // Two owners for one key is the failure mode the federated surface exists
     // to prevent; a stray central default would silently shadow the capability.
-    assert.doesNotMatch(read('src/config.cts'), /certification/);
+    // Wave 2 review T1: scoped to the KEY, not the word — an unrelated future
+    // comment mentioning certification must not fail this guard.
+    assert.doesNotMatch(read('src/config.cts'), /['"]?workflow\.certification/);
   });
 
   test('planning-config documents the key with its default and values', () => {
@@ -1290,5 +1345,50 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
     assert.ok(windows !== -1 && sweep !== -1 && push !== -1);
     assert.ok(windows < sweep, 'it follows the existing gates rather than displacing them');
     assert.ok(sweep < push, 'it is a PRE-flight check');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 2 review fix wave (folded into Wave 3). Each test below pins a finding
+// so the fix cannot regress silently: N2 (the preamble no longer contradicts
+// the `off` opt-out), N3 (the Coverage-debt reader exists — it was a claimed
+// consumer with no code behind it), T4 (the certification posture rides the
+// INIT bundle, so the step file carries no launcher preamble).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Wave 2 review fix wave', () => {
+  test('N2 — the no-silent-path invariant is scoped to the modes that have one', () => {
+    const t = read(CERT_STEP);
+    const preamble = t.slice(0, at(t, /^##\s*1\./m));
+    assert.match(preamble, /no silent path/i, 'the invariant is still stated');
+    assert.match(
+      preamble,
+      /unless[^\n]*`workflow\.certification`[^\n]*`off`|`off`[^\n]*the one[^\n]*opt-out/i,
+      'and it is qualified by the one configured opt-out, which §1 then implements'
+    );
+  });
+
+  test('N3 — the Coverage-debt section has a real reader, and it is not a phantom flag', () => {
+    const wf = read(WORKFLOW);
+    assert.match(wf, /##\s*Coverage debt/, 'the strategy workflow must actually read the section');
+    assert.match(wf, /Update/, 'on the Update path — the one that re-derives an existing strategy');
+    const tpl = read(TEMPLATE);
+    const debt = section(tpl, 'Coverage debt');
+    assert.doesNotMatch(debt, /`--update`/, 'no flag is claimed that does not exist');
+    assert.match(debt, /append-only/i);
+  });
+
+  test('T4 — the certification step reads its posture from the INIT bundle, not its own spawn', () => {
+    const t = read(CERT_STEP);
+    assert.match(t, /certification_mode/, 'the field is what the step consumes');
+    assert.doesNotMatch(t, /_GSD_SHIM_NAME/, 'so the 4.5 KB runtime-launcher preamble is gone');
+    assert.match(read(VERIFY_WORK), /certification_mode/, 'and the host names the field it threads through');
+    assert.match(read('src/init.cts'), /certification_mode:/, 'init.verify-work resolves it');
+  });
+
+  test('T4 — the resolver degrades to `required`, never to "skip"', () => {
+    const src = read('src/init.cts');
+    const fn = src.slice(at(src, /function detectCertificationMode/), at(src, /function detectCertificationMode/) + 900);
+    assert.match(fn, /catch\s*\{[\s\S]{0,80}return 'required'/, 'an unreadable posture is not a licence to skip');
   });
 });

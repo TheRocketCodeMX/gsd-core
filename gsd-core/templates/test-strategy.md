@@ -87,8 +87,9 @@ Baseline at strategy time; one row **appended** per re-baseline (the T1–T4 tri
 ## Coverage debt
 
 Appended by `verify-work`'s coverage-gap step — one row per gap that reached UAT or
-certification unproven. Append-only; `/gsd:testing-strategy` reads it on `--update` to
-see this project's real failure modes. Empty is the healthy state.
+certification unproven. Append-only; read by `/gsd:testing-strategy` when the strategy is
+re-derived (the Update path in Step 1), because these rows are the only record of where
+this project's pyramid actually leaks. Empty is the healthy state.
 
 | Date | Phase / gap | Behavior that escaped | Fast test that was missing (and at which level) | Status |
 |---|---|---|---|---|
