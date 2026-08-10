@@ -1167,7 +1167,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "kind: agentic_certification"
+        "`agentic_certification`: that entry belongs to a certification run"
       ]
     },
     {
