@@ -1,6 +1,6 @@
 # Certification — the top of the pyramid is two different jobs
 
-Reference for `/gsd:testing-strategy` (the gate-vs-certify, capability-detection, and substrate steps). Every capability claim below traces to a vendor's own page or a dated live probe — where a vendor is silent, the silence is recorded as the finding, never papered over.
+Reference for `/gsd:testing-strategy` (the gate-vs-certify, capability-detection, and substrate steps) and for `verify-work`'s certification step (`gsd-core/workflows/verify-work/steps/agentic-certification.md`), which consumes the trust gate, probe procedure, and brief format below rather than restating them. Every capability claim below traces to a vendor's own page or a dated live probe — where a vendor is silent, the silence is recorded as the finding, never papered over.
 
 ## The doctrine
 
@@ -112,4 +112,4 @@ Capabilities as documented by each vendor — the strategy names options and rec
 The shape to remember: **the tools developers actually have on the desktop cannot run unattended, and the tools that can run unattended are Playwright.** That is why the gate is scripted and certification is human-adjacent — not a compromise, the only arrangement the primary sources support.
 
 ---
-*Consumed by `/gsd:testing-strategy` (capability detection, substrate, gate-vs-certify). The tier, probe rows, mechanism, and substrate live in `.planning/TEST-STRATEGY.md`.*
+*Consumed by `/gsd:testing-strategy` (capability detection, substrate, gate-vs-certify) and by `verify-work`'s pre-UAT certification step (trust gate, re-check, brief). The tier, probe rows, mechanism, and substrate live in `.planning/TEST-STRATEGY.md`.*
