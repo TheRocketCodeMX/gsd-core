@@ -23,7 +23,17 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { handleMessage } = require('../gsd-core/bin/lib/mcp-server.cjs');
+
+// FORK: upstream pins the prompt count to its own literal 71. This fork ships
+// extra commands/gsd/*.md (strategy chain, learn, context, …), so the literal
+// is derived from the same directory buildCatalog() walks — the row-31
+// invariant ("every commands/gsd/*.md is listed as a prompt") is unchanged,
+// only the hard-coded upstream total is replaced by the on-disk truth.
+const COMMANDS_GSD_DIR = path.resolve(__dirname, '..', 'commands', 'gsd');
+const COMMAND_COUNT = fs.readdirSync(COMMANDS_GSD_DIR).filter((f) => f.endsWith('.md')).length;
 
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
@@ -63,7 +73,11 @@ describe('prompts — protocol surface', () => {
     const res = handleMessage({ jsonrpc: '2.0', id: 1, method: 'prompts/list' });
     assert.equal(res.error, undefined, 'prompts/list must not error');
     assert.ok(res.result && Array.isArray(res.result.prompts), 'result.prompts must be an array');
-    assert.equal(res.result.prompts.length, 71, 'must list all 71 commands/gsd/*.md as prompts');
+    assert.equal(
+      res.result.prompts.length,
+      COMMAND_COUNT,
+      `must list all ${COMMAND_COUNT} commands/gsd/*.md as prompts`
+    );
     for (const p of res.result.prompts) {
       assert.equal(typeof p.name, 'string');
       assert.equal(p.name.includes('/'), false, 'name must be the bare command, not a path');

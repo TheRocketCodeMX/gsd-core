@@ -114,11 +114,14 @@
     },
     "context": {
       "files": [
+        "context-composer.property.test.cjs",
         "context-enrichment.test.cjs",
+        "context-index-sync.test.cjs",
+        "context-predicates.property.test.cjs",
         "context-utilization.property.test.cjs",
         "fix-2289-context-monitor-event-allowlist.test.cjs"
       ],
-      "issue": "FORK: the context capability (context-lifecycle program) owns context-enrichment + context-utilization; upstream's fix-2289 suite shares the derived 'context' prefix and pushed the cluster to 3"
+      "issue": "FORK: the context capability (context-lifecycle program) owns context-enrichment + context-utilization; upstream's fix-2289 suite shares the derived 'context' prefix, and the v1.10.0 realignment added upstream's context-composer (#2958), context-index-sync (#2950), and context-predicates (#2938) suites to the same cluster"
     },
     "federated-config": {
       "files": [
