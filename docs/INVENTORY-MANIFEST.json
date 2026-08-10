@@ -641,6 +641,7 @@
       "quick/steps/worktree-pre-dispatch-commit.md",
       "review/steps/reviewer-instances-note-1.md",
       "review/steps/reviewer-instances-note-2.md",
+      "testing-strategy/steps/suite-tune-up.md",
       "transition/steps/workstream-collision-check.md",
       "update/steps/channel-banner.md",
       "verify-work/steps/agentic-certification.md",

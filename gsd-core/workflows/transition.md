@@ -180,6 +180,64 @@ Extract from result: `completed_phase`, `plans_executed`, `next_phase`, `next_ph
 
 </step>
 
+<!-- FORK:strategy BEGIN -->
+<step name="suite_health_compare">
+
+The one-line threshold check for suite health: this phase's **measured** suite against
+the **recorded** baseline, evaluated against the T1–T4 trigger table in
+`@~/.claude/gsd-core/references/test-strategy.md` (`## Suite health`) — that table is the
+authority; do not re-derive thresholds here.
+
+**Both inputs must exist:**
+
+```bash
+ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_STRATEGY" || echo "NO_STRATEGY"
+(ls -t .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true) | head -1
+TODAY=$(date -u +%Y-%m-%d)
+```
+
+Read the newest SUMMARY's `suite-metrics:` frontmatter block (`test_count`, `wall_clock`,
+`containers_started`) and the **last** row of TEST-STRATEGY.md's `## Suite health` table.
+
+**Skip silently** — print nothing, block nothing — when `NO_STRATEGY`, when there is no
+`## Suite health` section, when no SUMMARY in this phase carries a `suite-metrics:` block,
+or when the baseline row reads `unmeasured`. A phase is never held up for a measurement
+nobody took.
+
+**The check.** Derive `ms/test = wall_clock ÷ test_count` here (it is deliberately not
+recorded in the SUMMARY, so the two can never disagree), then:
+
+| Trigger | Fires when | Route |
+|---|---|---|
+| **T1 — tier budget breach** | the dev-loop tier exceeds ~90 s locally, or the PR gate exceeds 10 min (= cicd's C1-a) | **immediately, now** |
+| **T2 — ms/test trend** | derived ms/test is >~25 % above the baseline row's ms/test | milestone close |
+| **T3 — container churn** | `containers_started` grew faster than `test_count` | milestone close |
+| **T4 — backstop** | `test_count` is >~40 % above the row of the last tune-up | milestone close |
+
+**Flat ms/test with a rising `test_count` is volume, not a regression** — do not fire T2.
+Say so, and point at tiering/sharding (the CI ladder's C1) rather than at tuning.
+
+**T1 → an immediate todo, written now.** Write `.planning/todos/pending/${TODAY}-suite-health-t1.md`
+in the `add-todo` shape (`created` / `title` / `area: testing` / `severity: major`), whose
+`## Solution` attaches the flow that fixes it: **`/gsd:testing-strategy --tune-up`**. Then
+surface the breach in this transition's output — a TDD-ergonomics emergency is never a
+silent row in a table.
+
+**T2 / T3 / T4 → scheduled at milestone close.** Same todo shape and same directory,
+`severity: minor`, title prefixed `Suite tune-up (milestone close):` and naming the
+trigger that fired, `## Solution` again attaching `/gsd:testing-strategy --tune-up`.
+`complete-milestone`'s existing `audit-open` scan is what surfaces it there — no new
+machinery, no daemon, no CI plumbing.
+
+**Nothing fired:** print exactly one line — `[suite health: {ms/test} ms/test vs {baseline} — no trigger]`.
+
+**Never write a `## Suite health` row from this step.** Re-baselining is the tune-up
+flow's fourth pass, and it appends a dated row rather than rewriting one; a compare that
+also re-baselines would erase the trend it exists to read.
+
+</step>
+<!-- FORK:strategy END -->
+
 <step name="archive_prompts">
 
 If prompts were generated for the phase, they stay in place.

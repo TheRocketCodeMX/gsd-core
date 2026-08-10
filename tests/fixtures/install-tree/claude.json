@@ -424,6 +424,7 @@
   "gsd-core/workflows/strategy-chain/modes/advance.md",
   "gsd-core/workflows/sync-skills.md",
   "gsd-core/workflows/testing-strategy.md",
+  "gsd-core/workflows/testing-strategy/steps/suite-tune-up.md",
   "gsd-core/workflows/thread.md",
   "gsd-core/workflows/transition.md",
   "gsd-core/workflows/transition/steps/workstream-collision-check.md",

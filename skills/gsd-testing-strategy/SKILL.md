@@ -1,7 +1,7 @@
 ---
 name: gsd-testing-strategy
 description: "Recommend a test strategy matched to the architecture — test shape, levels, and what to test."
-argument-hint: "[--auto] [--text]"
+argument-hint: "[--auto] [--text] [--tune-up]"
 allowed-tools:
   - Read
   - Write
@@ -21,10 +21,12 @@ Decide WHAT to test, at WHICH level, and HOW MUCH — matched to the architectur
 1. Load the architecture decision (ADR / SKELETON) and DOMAIN-MODEL
 2. Derive the test-level emphasis per subdomain — shape FOLLOWS architecture (rich core → unit; CRUD-over-DB → integration)
 3. Identify the gnarly bits to unit-test (money, state machines, parsers) and what NOT to test
-4. Pick the persistent critical-path e2e smoke list; set coverage-as-floor + mutation + TDD stance
-5. Write TEST-STRATEGY.md and commit
+4. Pick the persistent critical-path e2e smoke list — the gate is a regression check, not a validation of the app in the world
+5. Probe (never survey) what can actually drive the app and record the certification tier CERT-0…CERT-2, its mechanism, and the four substrate policies (seed accounts, email safety, LLM calls, auth)
+6. Apply the born-fast defaults and record the suite-health baseline the T1–T4 triggers compare against
+7. Set coverage-as-floor + mutation + TDD stance; write TEST-STRATEGY.md and commit
 
-**Output:** `.planning/TEST-STRATEGY.md` — level emphasis per subdomain, unit-test targets, no-duplicate-coverage rules, the persistent e2e smoke list, coverage/mutation stance, and TDD stance. Feeds add-tests, execute-phase, and plan-phase.
+**Output:** `.planning/TEST-STRATEGY.md` — level emphasis per subdomain, unit-test targets, no-duplicate-coverage rules, the persistent e2e smoke list, the certification tier + probe results + mechanism, the certification substrate, the suite-health baseline (and its append-only Coverage-debt sink), coverage/mutation stance, and TDD stance. Feeds add-tests, execute-phase, verify-work's certification step, and plan-phase.
 </objective>
 
 <execution_context>
@@ -41,6 +43,7 @@ Decide WHAT to test, at WHICH level, and HOW MUCH — matched to the architectur
 **Flags:**
 - `--auto` — Skip interactive questions; synthesize the strategy from the ADR / DOMAIN-MODEL using the consensus defaults (behavior-first, sociable, shape-follows-architecture).
 - `--text` — Use plain-text numbered lists instead of TUI menus (required for `/rc` remote sessions).
+- `--tune-up` — Run the suite tune-up flow instead of authoring a strategy: profile → config/cache → suite audit against the strategy → re-baseline (appends a dated `## Suite health` row and records the fix-class). Requires an existing TEST-STRATEGY.md.
 
 **When to run:** after `/gsd-recommend-architecture` (it consumes the architecture decision), before planning/execution. Works without an ADR too — it will ask briefly about the architecture.
 
@@ -58,6 +61,9 @@ Execute end-to-end.
 - Per-subdomain level emphasis recorded with the architecture rung that justifies it
 - Gnarly bits to unit-test identified (money/state-machines/parsers); what-not-to-test stated; no duplicate coverage
 - Persistent critical-path e2e smoke list set; transient e2e distinguished
+- Certification tier (CERT-0 … CERT-2) recorded from a live probe, never from tool presence; mechanism and brief source stated
+- Certification substrate recorded — seed accounts, email safety, LLM call policy, auth — with the honest answer where a vendor has no test mode
+- Suite-health baseline row written (or `unmeasured`), with the T1–T4 triggers and the `--tune-up` flow as its repair path
 - Coverage-as-floor + mutation targets + TDD stance (behavior + small increments; test-first knob) recorded
 - Existing TESTING-STANDARDS.md rigor preserved (sociable default, mock only at ports)
 - TEST-STRATEGY.md written and committed (when commit_docs is true)

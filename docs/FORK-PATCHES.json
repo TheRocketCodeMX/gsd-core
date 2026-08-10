@@ -738,6 +738,16 @@
       ]
     },
     {
+      "path": "gsd-core/workflows/ship.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "Milestone certification sweep",
+        "certification: human \\(CERT-0\\)"
+      ]
+    },
+    {
       "path": "gsd-core/workflows/transition.md",
       "feature": "context",
       "mode": "markers",
@@ -750,9 +760,10 @@
       "path": "gsd-core/workflows/transition.md",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 1,
+      "markers": 2,
       "anchors": [
-        "lightweight drift check"
+        "lightweight drift check",
+        "<step name=\"suite_health_compare\">"
       ]
     },
     {
@@ -1167,7 +1178,17 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "`agentic_certification`: that entry belongs to a certification run"
+        "`agentic_certification`: that entry belongs to a certification run",
+        "\\*\\*Suite metrics \\(suite health\\)\\.\\*\\*"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "SUITE_START_EPOCH=\\$\\(date \\+%s\\)",
+        "Step C — Suite-metrics capture"
       ]
     },
     {
@@ -1176,7 +1197,9 @@
       "mode": "anchors-only",
       "anchors": [
         "kind: unit\\s+#[^\\n]*agentic_certification",
-        "`verification\\[\\]\\.kind`[^\\n]*agentic_certification"
+        "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
+        "^suite-metrics:$",
+        "<suite_metrics_guidance>"
       ]
     },
     {

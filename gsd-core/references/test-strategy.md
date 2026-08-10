@@ -86,7 +86,9 @@ Measured per milestone against the `## Suite health` baseline table in TEST-STRA
 1. **Profile** — slowest files, setup-vs-test split, container lifecycle map. Evidence first; no change without a measurement.
 2. **Config/cache pass** — the born-fast checklist above, at current APIs (the predictable half of most slowdowns).
 3. **Suite audit against the strategy** — implementation-detail tests (a strategy violation first, a perf cost second), duplicated coverage across tiers (push down the pyramid where the strategy permits), obsolete tests, over-broad shared fixtures, accidental serialization. Every deletion or demotion justified by the strategy doc, never by the stopwatch alone.
-4. **Re-baseline** — re-measure, append the new Suite-health row, and **record the fix-class** (config-drift vs test-debt) so the strategy learns which failure mode this project actually has.
+4. **Re-baseline** — re-measure, **append** a new dated Suite-health row (never rewrite or overwrite the previous one: the history *is* the trend T2/T4 compare against), and **record the fix-class** (config-drift vs test-debt) so the strategy learns which failure mode this project actually has.
+
+The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock`, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
 
 ## Output (`TEST-STRATEGY.md`)
 

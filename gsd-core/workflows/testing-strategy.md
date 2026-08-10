@@ -28,6 +28,8 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 
 **Text mode** (`--text` OR `workflow.text_mode: true`): replace every `AskUserQuestion` with a plain-text numbered list.
 
+**If `--tune-up`:** this run is not strategy authoring — it is the **suite tune-up flow** (the repair half of suite health, reached from `transition`'s T1 todo, from the milestone-close todo it writes for T2–T4, or by hand). If `NEW` (no TEST-STRATEGY.md), stop: "No TEST-STRATEGY.md — run `/gsd:testing-strategy` first; there is no strategy to audit the suite against." Otherwise read and execute `gsd-core/workflows/testing-strategy/steps/suite-tune-up.md` end to end, then commit its `## Suite health` append with Step 8's mechanism (message: `docs: re-baseline suite health after tune-up`) and **EXIT** — Steps 2–7 and 9 do not run; a tune-up never rewrites the strategy.
+
 **If `EXISTS` and not `--auto`:** ask Update / View / Skip (header "Strategy"). On Skip: exit ("Existing TEST-STRATEGY.md preserved."). On View: show then Update/Skip.
 
 ## Step 2: Load context
@@ -127,6 +129,8 @@ Suites are **born fast by configuration**, not rescued later. Apply the born-fas
 
 Seed the `## Suite health` baseline: if a test command exists, run it **once, timed**, and record `{test_count, wall_clock, ms/test, containers_started}` with today's date (`containers_started` from Testcontainers/docker output where visible, else `—`). This timed run is **the** measurement `/gsd:cicd-strategy`'s C1-a trigger reads — record it once here, never re-measure it there. Greenfield (no suite yet): record `unmeasured — baseline at the first milestone with a real suite`. The four triggers (T1–T4, reference table) govern re-evaluation: **T1** (dev-loop tier >~90 s local; PR gate >10 min = cicd's C1-a) fires **immediately**; T2/T3/T4 are compared at **milestone close** and schedule a tune-up there. Flat ms/test + rising total = volume, not regression → the remedy is tiering/sharding (C1), not tuning.
 
+This baseline is read by machinery, not by hand: the executor records `suite-metrics:` into SUMMARY frontmatter each time it runs the whole suite (`execute-phase/steps/post-merge-gate.md` Step C), `transition`'s `suite_health_compare` step evaluates the newest measurement against this row, and whichever trigger fires attaches the tune-up flow (`/gsd:testing-strategy --tune-up` → `testing-strategy/steps/suite-tune-up.md`), which appends the next row. Re-baselining is **append-only** — the history is the trend the triggers compare against.
+
 <!-- FORK:context BEGIN -->
 After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
@@ -166,7 +170,7 @@ TEST-STRATEGY.md written — test shape set to follow the architecture.
   Unit-test targets (gnarly bits): [N]
   Gate: [N] smoke flows (agent-healed | hand-maintained) · Certification: [CERT-N — mechanism]
   Substrate: [seed accounts · email catcher/mode · LLM policy · auth policy]
-  Suite health baseline: [wall clock | unmeasured] — T1 checked now; T2–T4 compared at milestone close
+  Suite health baseline: [wall clock | unmeasured] — T1 checked now; T2–T4 compared by `transition` each phase (tune-up: /gsd:testing-strategy --tune-up)
   Coverage = floor; mutation on [critical modules]; TDD = behavior + small increments (test-first: ${TDD_MODE})
 
 Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strategy → /gsd:plan-phase. Skip infra + cicd straight to /gsd:plan-phase only for a local-only / no-deploy project. (plans + /gsd:add-tests will follow this strategy)

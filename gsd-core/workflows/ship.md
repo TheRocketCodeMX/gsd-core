@@ -157,6 +157,50 @@ Verify the work is ready to ship:
    The ledger is **optional and backward-compatible**: on a project where `gsd_run windows status` returns `open_count: 0` (no `.planning/WINDOWS.md` yet, or an empty ledger), the gate passes silently. The gate only blocks when at least one entry is `open`.
 
    If no active `broken-windows` `ship:pre` gate hook is present (gate disabled via `workflow.windows_enforce=false`, the default — tracking continues but the gate is opt-in), skip this check silently.
+
+<!-- FORK:strategy BEGIN -->
+8. **Milestone certification sweep (advisory — never blocks).**
+
+   `verify-work`'s certification step records exactly one outcome line per phase, at the
+   top of that phase's UAT `## Tests`. Each line answers "was *this* phase certified".
+   Nothing answers the milestone-level question, which is the one worth asking before a
+   PR opens: **did every phase in this milestone reach a certification outcome at all?**
+
+   ```bash
+   CERT_POSTURE=$(gsd_run query config-get workflow.certification --default required --raw 2>/dev/null || echo "required")
+   ls -d .planning/phases/*/ 2>/dev/null || true
+   grep -h -m1 '^certification: ' .planning/phases/*/*-UAT.md 2>/dev/null || true
+   ```
+
+   **If `CERT_POSTURE` is `off`:** skip silently — the loop was never asked to certify, so
+   an absent record is not a gap.
+
+   Otherwise map every phase directory to its recorded line and present one table:
+
+   | Outcome | Recorded line | Reading |
+   |---|---|---|
+   | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 limited) — …` | a driver proved the flows |
+   | human | `certification: human (CERT-0)` | satisfied by the human UAT that ran — not a gap |
+   | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
+   | declined | `certification: skipped (declined)` | a decision, recorded |
+   | **not-run** | *no `certification:` line in the phase's UAT.md* | **flag it** |
+
+   A phase with a UAT.md but no `certification:` line is **not-run**: nothing was decided,
+   which is the one state the "recorded, never silent" contract does not allow to pass
+   unremarked. Name those phases explicitly under the table:
+
+   ```
+   ⚠ {N} phase(s) have no recorded certification outcome: {phase list}
+     Certify with /gsd:verify-work {phase}, or accept and ship — this is advisory.
+   ```
+
+   **This check is advisory: it never blocks the ship.** The human ships; a milestone with
+   an uncertified phase is a judgment call, not a mechanical failure, and there is no
+   `--force` to teach anyone to type. **But it is never silent** — print the table on every
+   run, including the all-green one, so "every phase certified" is an observed fact rather
+   than an absence of complaint. A phase directory with no UAT.md at all is reported as
+   `not-verified` and is `/gsd:verify-work`'s business, not this sweep's.
+<!-- FORK:strategy END -->
 </step>
 
 <step name="push_branch">

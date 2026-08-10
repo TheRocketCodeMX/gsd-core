@@ -76,7 +76,7 @@ The gate above is a regression check; certification validates the app in real co
 
 ## Suite health
 
-Baseline at strategy time; one row appended per milestone (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires).
+Baseline at strategy time; one row **appended** per re-baseline (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires). Append-only: a re-baseline never rewrites, overwrites, or replaces an earlier row — the history is the trend the triggers read. Only the tune-up flow's fourth pass writes here.
 
 | Date | test_count | wall_clock | ms/test | containers_started | fix-class of last tune-up |
 |---|---|---|---|---|---|
