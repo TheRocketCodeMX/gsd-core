@@ -72,6 +72,7 @@ export const REASON = Object.freeze({
   WINDOWS_LEDGER_MISSING: 'windows_ledger_missing',
   WINDOWS_LEDGER_MALFORMED: 'windows_ledger_malformed',
   WINDOWS_ID_NOT_FOUND: 'windows_id_not_found',
+  WINDOWS_DUPLICATE_ID: 'windows_duplicate_id',
   WINDOWS_ALREADY_RESOLVED: 'windows_already_resolved',
   WINDOWS_WAIVE_REASON_EMPTY: 'windows_waive_reason_empty',
   WINDOWS_INVALID_KIND: 'windows_invalid_kind',
@@ -421,6 +422,25 @@ export function markFixed(
   reasonOrOpts?: string | { now: string },
   maybeOpts?: { now: string },
 ): Ledger {
+  // The overloaded third parameter is a type hole once this compiles to CJS:
+  // a caller passing a number, a boolean, an array or an explicit null used to
+  // have their argument SILENTLY discarded (a number/boolean fell through both
+  // branches; an array satisfied `typeof === 'object'` and was read as opts,
+  // taking `now` from a nonexistent property). A closure reason that vanishes
+  // without a word is the failure this whole reason column exists to end, so
+  // an unexpected type fails loudly instead.
+  if (
+    reasonOrOpts !== undefined &&
+    typeof reasonOrOpts !== 'string' &&
+    !(typeof reasonOrOpts === 'object' && reasonOrOpts !== null && !Array.isArray(reasonOrOpts))
+  ) {
+    throw new WindowsError(
+      REASON.WINDOWS_INVALID_TEXT,
+      `markFixed third argument must be a reason string or an options object; got ${
+        reasonOrOpts === null ? 'null' : Array.isArray(reasonOrOpts) ? 'array' : typeof reasonOrOpts
+      }.`,
+    );
+  }
   const reasonGiven = typeof reasonOrOpts === 'string' ? reasonOrOpts : undefined;
   const opts =
     (typeof reasonOrOpts === 'object' && reasonOrOpts !== null ? reasonOrOpts : maybeOpts) ??
@@ -451,6 +471,9 @@ export function markFixed(
  * waive/fixed, which stamp resolved_at and enforce assertOpen. amendWindow
  * never touches status, resolved_at, or recorded_at, so a re-worded entry
  * keeps its true history.
+ *
+ * One field is status-sensitive: the reason of a WAIVED entry may be re-worded
+ * but never emptied — see the guard below.
  */
 export function amendWindow(
   ledger: Ledger,
@@ -473,7 +496,22 @@ export function amendWindow(
   // Every amended field goes through the SAME validators the append path uses
   // — an amend must not be a back door around traversal/fence/line checks.
   if (given('description')) amended.description = validateDescription(fields.description);
-  if (given('reason')) amended.reason = normalizeReason(fields.reason, 'reason');
+  if (given('reason')) {
+    const nextReason = normalizeReason(fields.reason, 'reason');
+    // A waived entry is EXEMPT from the ship gate, and its recorded reason is
+    // the entire justification for that exemption. Amend may RE-WORD it; it may
+    // not empty it, which would leave a gate-exempt row carrying no rationale —
+    // precisely the state markWaived refuses to create in the first place. The
+    // reason stays optional on open/fixed rows, where nothing is being excused.
+    if (nextReason === '' && entry.status === 'waived') {
+      throw new WindowsError(
+        REASON.WINDOWS_WAIVE_REASON_EMPTY,
+        `Window ${entry.id} is waived: its reason justifies skipping the ship gate and cannot be cleared. ` +
+          `Re-word it with a non-empty --reason instead.`,
+      );
+    }
+    amended.reason = nextReason;
+  }
   if (given('file')) amended.file = validateFile(fields.file);
   if (given('line')) amended.line = validateLine(fields.line);
 
@@ -493,6 +531,10 @@ export function amendWindow(
 const JSON_FENCE_OPEN = '````json';
 const JSON_FENCE_CLOSE = '````';
 const FORBIDDEN_BACKTICK_RUN = '````';
+
+/** Landmarks bounding the human-readable header prose (see stripHeaderProse). */
+const LEDGER_TITLE = '# Broken Windows Ledger';
+const TABLE_HEAD_MARKER = '| id |';
 
 /**
  * Minimal strict frontmatter parser for flat scalar keys. Only supports the
@@ -574,7 +616,36 @@ function parseJsonBlock(raw: string): WindowEntry[] {
       'Ledger JSON block must be an array.',
     );
   }
-  return parsed.map(validateEntryShape);
+  const entries = parsed.map(validateEntryShape);
+  assertUniqueIds(entries);
+  return entries;
+}
+
+/**
+ * Reject duplicate entry ids — corruption, not drift.
+ *
+ * `id` is the addressing key of every mutation verb: waive/fixed/amend all
+ * rewrite via `entries.map(e => e.id === id ? ... : e)`, so two rows sharing an
+ * id means one `windows fixed 3` closes BOTH of them, silently resolving a
+ * window nobody looked at. Per-entry shape validation cannot see this — it is a
+ * property of the collection — so the check lives here, in the shared parse
+ * path, and therefore fires under the strict read AND under reconcile: reconcile
+ * repairs derived counts, never the authoritative entries, and picking a winner
+ * between two same-id rows would destroy the record the ledger exists to keep.
+ */
+function assertUniqueIds(entries: WindowEntry[]): void {
+  const seen = new Set<number>();
+  for (const e of entries) {
+    if (seen.has(e.id)) {
+      throw new WindowsError(
+        REASON.WINDOWS_DUPLICATE_ID,
+        `Ledger has more than one entry with id ${e.id}. Ids address every mutation verb, ` +
+          `so a duplicate makes one command rewrite several rows. Give each entry a unique id ` +
+          `(reconcile cannot repair this — it re-derives counts, not entries).`,
+      );
+    }
+    seen.add(e.id);
+  }
 }
 
 function validateEntryShape(e: unknown, i: number): WindowEntry {
@@ -742,9 +813,12 @@ function countsOf(ledger: Ledger): LedgerCounts {
  * version or an invalid entry still throws — those are data loss, not drift,
  * and silently "fixing" them would destroy the record the ledger exists to keep.
  *
- * `normalized` reports that the file's bytes differ from what renderLedger
- * emits (a mangled fence, a stale table) even when the counts were already
- * true — re-rendering is safe because the JSON block is authoritative.
+ * `normalized` is computed INDEPENDENTLY of `repaired` and reports the other
+ * repair axis: the counts were ALREADY true, but the file's bytes are not what
+ * renderLedger emits (a mangled fence, a stale table) — re-rendering is safe
+ * because the JSON block is authoritative. The two are disjoint by
+ * construction, so a caller can tell "your counts lied" from "your bytes
+ * drifted"; folding them together made every repair also claim a normalization.
  */
 export function reconcileLedger(
   raw: string,
@@ -760,7 +834,34 @@ export function reconcileLedger(
     recomputed.total_count !== before.total_count;
 
   const ledger = repaired ? { ...recomputed, last_updated: opts.now } : declared;
-  return { ledger, repaired, normalized: renderLedger(ledger) !== raw, before };
+  const normalized =
+    !repaired && stripHeaderProse(renderLedger(ledger)) !== stripHeaderProse(raw);
+  return { ledger, repaired, normalized, before };
+}
+
+/**
+ * Elide the human-readable header prose so two renderings compare on STATE.
+ *
+ * The header is guidance text, not ledger data — and it changes whenever the
+ * tool's own guidance changes (this version added the `amend` and `reconcile`
+ * lines). Comparing raw bytes made reconcile rewrite EVERY ledger written by a
+ * previous version, on a file whose counts and entries were already true:
+ * churn in every repo's diff, attributed to a repair verb that repaired
+ * nothing. Region elided: from the `# Broken Windows Ledger` title up to the
+ * table header (or the JSON fence, when a hand-edited file carries no table),
+ * so everything authoritative — frontmatter, table, entries — still compares
+ * byte-for-byte. A file with no recognizable title is compared whole: an
+ * unrecognizable shape IS a normalization candidate.
+ */
+function stripHeaderProse(text: string): string {
+  const titleIdx = text.indexOf(LEDGER_TITLE);
+  if (titleIdx === -1) return text;
+  const tableIdx = text.indexOf(TABLE_HEAD_MARKER, titleIdx);
+  const fenceIdx = text.indexOf(JSON_FENCE_OPEN, titleIdx);
+  const endIdx =
+    tableIdx !== -1 && (fenceIdx === -1 || tableIdx < fenceIdx) ? tableIdx : fenceIdx;
+  if (endIdx === -1) return text;
+  return text.slice(0, titleIdx) + text.slice(endIdx);
 }
 
 export function renderLedger(ledger: Ledger): string {
@@ -777,7 +878,7 @@ export function renderLedger(ledger: Ledger): string {
   ].join('\n');
 
   const header = [
-    '# Broken Windows Ledger',
+    LEDGER_TITLE,
     '',
     '> Cross-phase defect register. `/gsd-ship` blocks while `open_count > 0`.',
     '> Waive with `gsd-tools windows waive <id> "<reason>"` (reason required).',
@@ -985,7 +1086,12 @@ export function cmdWindowsWaive(
   opts: { raw?: boolean } = {},
 ): void {
   void opts;
-  const { positionals } = parseArgs(args, { flags: [], required: [], positionals: 2 });
+  const { positionals } = parseArgs(args, {
+    flags: [],
+    required: [],
+    positionals: 2,
+    maxPositionals: 2,
+  });
   const idStr = positionals[0];
   const reason = positionals[1];
 
@@ -1012,7 +1118,13 @@ export function cmdWindowsMarkFixed(
 ): void {
   void opts;
   // One REQUIRED positional (the id); a second, when present, is the reason.
-  const { positionals } = parseArgs(args, { flags: [], required: [], positionals: 1 });
+  // A third is refused, not joined — see parseArgs's surplus-positional guard.
+  const { positionals } = parseArgs(args, {
+    flags: [],
+    required: [],
+    positionals: 1,
+    maxPositionals: 2,
+  });
   const id = parseIdOrThrow(positionals[0]);
   const reason = positionals[1];
 
@@ -1129,7 +1241,7 @@ function parseIdOrThrow(raw: string | undefined): number {
 /** Minimal argv parser — flag values via `--flag value` or `--flag=value`. */
 function parseArgs(
   args: string[],
-  spec: { flags: string[]; required: string[]; positionals?: number },
+  spec: { flags: string[]; required: string[]; positionals?: number; maxPositionals?: number },
 ): { values: Record<string, string | undefined>; positionals: string[] } {
   const values: Record<string, string | undefined> = {};
   const positionals: string[] = [];
@@ -1177,6 +1289,21 @@ function parseArgs(
     throw new WindowsError(
       REASON.WINDOWS_USAGE,
       `Expected ${want} positional argument(s); got ${positionals.length}.`,
+    );
+  }
+
+  // A SURPLUS positional is almost always an unquoted multi-word reason:
+  // `windows fixed 1 closed by refactor` used to record the single word
+  // "closed" and drop the rest, writing a rationale nobody typed. Joining the
+  // words would be guessing; the operator's shell already has the answer, so
+  // we say what to type instead. (Explicit beats guessy — CONTRIBUTING.md.)
+  const max = spec.maxPositionals ?? want;
+  if (positionals.length > max) {
+    throw new WindowsError(
+      REASON.WINDOWS_USAGE,
+      `Expected at most ${max} positional argument(s); got ${positionals.length} ` +
+        `(${positionals.map((p) => JSON.stringify(p)).join(' ')}). ` +
+        `Quote multi-word text as ONE argument, e.g. \`windows fixed 1 "closed by refactor"\`.`,
     );
   }
 

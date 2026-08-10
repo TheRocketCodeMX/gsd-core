@@ -462,10 +462,9 @@ const capabilities = {
         "point": "ship:pre",
         "check": {
           "predicate": {
-            "kind": "artifact-frontmatter-equals",
-            "artifact": "WINDOWS.md",
-            "field": "open_count",
-            "equals": 0
+            "kind": "command-exit-zero",
+            "command": "gsd-tools windows status --raw | grep -q '\"open_count\": 0,'",
+            "timeout": 30
           }
         },
         "when": "workflow.windows_enforce",
@@ -4508,10 +4507,9 @@ const byLoopPoint = {
         "point": "ship:pre",
         "check": {
           "predicate": {
-            "kind": "artifact-frontmatter-equals",
-            "artifact": "WINDOWS.md",
-            "field": "open_count",
-            "equals": 0
+            "kind": "command-exit-zero",
+            "command": "gsd-tools windows status --raw | grep -q '\"open_count\": 0,'",
+            "timeout": 30
           }
         },
         "when": "workflow.windows_enforce",

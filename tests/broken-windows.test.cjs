@@ -312,7 +312,17 @@ describe('broken-windows: parse/render roundtrip property', () => {
     resolved_at: e.status === 'open' ? null : '2026-07-19T01:00:00Z',
   }));
 
-  const arbLedger = fc.array(arbEntry, { maxLength: 6 }).map((entries) => {
+  const arbLedger = fc.array(arbEntry, { maxLength: 6 }).map((generated) => {
+    // Ids are the ledger's addressing key, so a duplicate is corruption the
+    // parser rejects (not a ledger any version of the tool could have written).
+    // Dedupe here so the roundtrip property is quantified over LEGAL ledgers.
+    const seen = new Set();
+    const entries = [];
+    for (const e of generated) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      entries.push(e);
+    }
     const open = entries.filter(e => e.status === 'open').length;
     const waived = entries.filter(e => e.status === 'waived').length;
     const fixed = entries.filter(e => e.status === 'fixed').length;
@@ -1190,5 +1200,333 @@ describe('broken-windows CLI: windows reconcile', () => {
     const rec = runGsdTools(['windows', 'reconcile'], tmp);
     assert.equal(rec.success, false);
     assert.match(rec.error, /malformed|frontmatter/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review hardening (code review of the reason/amend/reconcile PR)
+// ---------------------------------------------------------------------------
+
+/** Build an in-memory ledger with one entry in the requested status. */
+function ledgerWithOne(status, { reason = '', now = '2026-08-09T00:00:00Z' } = {}) {
+  let led = emptyLedger(now);
+  ({ ledger: led } = appendWindow(led, makeEntry(), { now }));
+  if (status === 'waived') led = markWaived(led, 1, reason || 'deferred to v2', { now });
+  else if (status === 'fixed') led = markFixed(led, 1, reason, { now });
+  return led;
+}
+
+describe('broken-windows: the REASON enum is a frozen typed surface', () => {
+  test('REASON keys are exactly the documented set (adding a code is a 3-place change)', () => {
+    assert.deepEqual(Object.keys(REASON).sort(), [
+      'WINDOWS_ALREADY_RESOLVED',
+      'WINDOWS_APPEND_MISSING_FIELD',
+      'WINDOWS_DUPLICATE_ID',
+      'WINDOWS_ID_NOT_FOUND',
+      'WINDOWS_INVALID_FILE',
+      'WINDOWS_INVALID_ID',
+      'WINDOWS_INVALID_KIND',
+      'WINDOWS_INVALID_TEXT',
+      'WINDOWS_LEDGER_MALFORMED',
+      'WINDOWS_LEDGER_MISSING',
+      'WINDOWS_OK',
+      'WINDOWS_USAGE',
+      'WINDOWS_WAIVE_REASON_EMPTY',
+    ]);
+  });
+});
+
+// Finding 1 — amend must not strip the justification off a ship-gate-exempt row.
+describe('broken-windows: amend cannot empty a WAIVED entry reason', () => {
+  test('amend --reason "" on a waived entry throws (a waiver without a reason is unjustified exemption)', () => {
+    const led = ledgerWithOne('waived', { reason: 'blocked on upstream' });
+    assert.throws(
+      () => amendWindow(led, 1, { reason: '' }, { now: 't' }),
+      reasonIs(REASON.WINDOWS_WAIVE_REASON_EMPTY),
+    );
+  });
+
+  test('amend --reason "   " on a waived entry throws (whitespace normalizes to empty)', () => {
+    const led = ledgerWithOne('waived', { reason: 'blocked on upstream' });
+    assert.throws(
+      () => amendWindow(led, 1, { reason: '   ' }, { now: 't' }),
+      reasonIs(REASON.WINDOWS_WAIVE_REASON_EMPTY),
+    );
+  });
+
+  test('amend rewrites a waived reason to another NON-empty value (re-wording stays legal)', () => {
+    const led = ledgerWithOne('waived', { reason: 'blocked on upstream' });
+    const out = amendWindow(led, 1, { reason: 'blocked on upstream #3200' }, { now: 't' });
+    assert.equal(out.entries[0].reason, 'blocked on upstream #3200');
+    assert.equal(out.entries[0].status, 'waived');
+    assert.equal(out.waived_count, 1);
+  });
+
+  test('amend --reason "" on an OPEN entry is allowed (reason is optional off the waive path)', () => {
+    let led = ledgerWithOne('open');
+    led = amendWindow(led, 1, { reason: 'noted in passing' }, { now: 't' });
+    const out = amendWindow(led, 1, { reason: '' }, { now: 't' });
+    assert.equal(out.entries[0].reason, '');
+    assert.equal(out.entries[0].status, 'open');
+  });
+
+  test('amend --reason "" on a FIXED entry is allowed (a fix is self-justifying)', () => {
+    const led = ledgerWithOne('fixed', { reason: 'closed by refactor' });
+    const out = amendWindow(led, 1, { reason: '' }, { now: 't' });
+    assert.equal(out.entries[0].reason, '');
+    assert.equal(out.entries[0].status, 'fixed');
+  });
+
+  test('CLI: amend --reason= on a waived row fails and leaves the recorded reason intact', (t) => {
+    const tmp = createTempDir('bw-amend-waived-reason-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const r2 = runGsdTools(['windows', 'waive', '1', 'blocked on upstream'], tmp);
+    assert.equal(r2.success, true, `stderr: ${r2.error || ''}`);
+
+    const r3 = runGsdTools(['windows', 'amend', '1', '--reason='], tmp);
+    assert.equal(r3.success, false, 'clearing a waived reason must be refused');
+    assert.match(r3.error, /waived|reason/i);
+
+    const after = runGsdTools(['windows', 'status'], tmp);
+    assert.equal(after.success, true, `stderr: ${after.error || ''}`);
+    assert.equal(JSON.parse(after.output).ledger.entries[0].reason, 'blocked on upstream');
+  });
+});
+
+// Finding 2 — duplicate ids are corruption: every mutation verb rewrites BY id,
+// so a duplicated id makes one `amend`/`fixed` clobber several rows at once.
+describe('broken-windows: duplicate entry ids are rejected as corruption', () => {
+  const dupeRaw = () => rawLedgerWithCounts(
+    [
+      makeRawEntry({ id: 1, description: 'first row' }),
+      makeRawEntry({ id: 1, description: 'second row wearing the same id' }),
+    ],
+    // Counts AGREE with the entries — the dupe is the only defect, so a
+    // failure here cannot be the count cross-check firing.
+    { open: 2, waived: 0, fixed: 0, total: 2 },
+  );
+
+  test('parseLedger rejects duplicate ids (strict read)', () => {
+    assert.throws(() => parseLedger(dupeRaw()), reasonIs(REASON.WINDOWS_DUPLICATE_ID));
+  });
+
+  test('reconcileLedger rejects duplicate ids too (the lenient path repairs counts, never dupes)', () => {
+    assert.throws(() => reconcileLedger(dupeRaw(), { now: 't' }), reasonIs(REASON.WINDOWS_DUPLICATE_ID));
+  });
+
+  test('CLI: amend on a duplicate-id ledger fails instead of clobbering both rows', (t) => {
+    const tmp = createTempDir('bw-dupe-amend-');
+    t.after(() => cleanup(tmp));
+    writeLedger(tmp, dupeRaw());
+    const before = readLedgerFile(tmp);
+
+    const r = runGsdTools(['windows', 'amend', '1', '--description', 'rewritten'], tmp);
+    assert.equal(r.success, false, 'a dupe-id ledger must not be mutated');
+    assert.match(r.error, /duplicate/i);
+    assert.equal(readLedgerFile(tmp), before, 'the ledger must be left untouched');
+  });
+
+  test('CLI: reconcile refuses a duplicate-id ledger (it is data loss, not drift)', (t) => {
+    const tmp = createTempDir('bw-dupe-reconcile-');
+    t.after(() => cleanup(tmp));
+    writeLedger(tmp, dupeRaw());
+    const r = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(r.success, false);
+    assert.match(r.error, /duplicate/i);
+  });
+});
+
+// Finding 4 — an unquoted multi-word reason used to truncate to its first word.
+describe('broken-windows CLI: extra positionals are a usage error, never a silent truncation', () => {
+  const seed = (tmp) => {
+    const r = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r.success, true, `stderr: ${r.error || ''}`);
+  };
+
+  test('fixed <id> with an UNQUOTED multi-word reason fails and tells the operator to quote it', (t) => {
+    const tmp = createTempDir('bw-fixed-unquoted-');
+    t.after(() => cleanup(tmp));
+    seed(tmp);
+
+    const r = runGsdTools(['windows', 'fixed', '1', 'closed', 'by', 'refactor'], tmp);
+    assert.equal(r.success, false, 'recording only the first word is worse than failing');
+    assert.match(r.error, /quote/i);
+
+    // The row is untouched — no half-recorded closure.
+    const after = runGsdTools(['windows', 'status'], tmp);
+    assert.equal(JSON.parse(after.output).ledger.entries[0].status, 'open');
+  });
+
+  test('fixed <id> with a QUOTED multi-word reason records the whole phrase', (t) => {
+    const tmp = createTempDir('bw-fixed-quoted-');
+    t.after(() => cleanup(tmp));
+    seed(tmp);
+    const r = runGsdTools(['windows', 'fixed', '1', 'closed by refactor'], tmp);
+    assert.equal(r.success, true, `stderr: ${r.error || ''}`);
+    assert.equal(JSON.parse(r.output).ledger.entries[0].reason, 'closed by refactor');
+  });
+
+  test('waive <id> with an UNQUOTED multi-word reason fails the same way', (t) => {
+    const tmp = createTempDir('bw-waive-unquoted-');
+    t.after(() => cleanup(tmp));
+    seed(tmp);
+    const r = runGsdTools(['windows', 'waive', '1', 'deferred', 'to', 'v2'], tmp);
+    assert.equal(r.success, false);
+    assert.match(r.error, /quote/i);
+  });
+
+  test('amend <id> rejects a stray positional (its text belongs to a flag)', (t) => {
+    const tmp = createTempDir('bw-amend-stray-');
+    t.after(() => cleanup(tmp));
+    seed(tmp);
+    const r = runGsdTools(['windows', 'amend', '1', 'rewritten', '--reason', 'r'], tmp);
+    assert.equal(r.success, false);
+    assert.match(r.error, /quote|positional/i);
+  });
+});
+
+// Finding 5 — the string-or-opts third parameter silently swallowed anything else.
+describe('broken-windows: markFixed rejects an unexpected third argument', () => {
+  test('a numeric reason throws instead of being silently dropped', () => {
+    const led = ledgerWithOne('open');
+    assert.throws(() => markFixed(led, 1, 42), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+  });
+
+  test('an array reason throws (typeof [] === "object" would have read as opts)', () => {
+    const led = ledgerWithOne('open');
+    assert.throws(() => markFixed(led, 1, ['closed by refactor']), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+  });
+
+  test('a boolean reason throws', () => {
+    const led = ledgerWithOne('open');
+    assert.throws(() => markFixed(led, 1, true), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+  });
+
+  test('an explicit null reason throws (compiled CJS has no type check — the API must fail loudly)', () => {
+    const led = ledgerWithOne('open');
+    assert.throws(() => markFixed(led, 1, null), reasonIs(REASON.WINDOWS_INVALID_TEXT));
+  });
+
+  test('an omitted (undefined) reason with explicit opts still works', () => {
+    const led = ledgerWithOne('open');
+    const out = markFixed(led, 1, undefined, { now: '2026-08-09T03:00:00Z' });
+    assert.equal(out.entries[0].status, 'fixed');
+    assert.equal(out.entries[0].resolved_at, '2026-08-09T03:00:00Z');
+  });
+});
+
+// Finding 7 — `normalized` conflated with `repaired`, and a header-prose change
+// in the tool made reconcile rewrite every ledger the previous version wrote.
+describe('broken-windows: reconcile reports normalization independently of repair', () => {
+  test('a count repair reports repaired=true and normalized=false (normalized means "bytes drifted while counts were true")', () => {
+    const drifted = rawLedgerWithCounts(
+      [makeRawEntry({ id: 1, status: 'open' })],
+      { open: 2, waived: 0, fixed: 0, total: 2 },
+    );
+    const res = reconcileLedger(drifted, { now: 't' });
+    assert.equal(res.repaired, true);
+    assert.equal(res.normalized, false, 'a repair is not a normalization');
+  });
+
+  test('a ledger whose ONLY difference is the previous version header is left alone', () => {
+    let led = emptyLedger('2026-08-09T00:00:00Z');
+    ({ ledger: led } = appendWindow(led, makeEntry(), { now: '2026-08-09T00:00:00Z' }));
+    const canonical = renderLedger(led);
+    // Exactly the shape a ledger written by the previous tool version has:
+    // identical bytes except for the header guidance lines this PR added.
+    const previousVersion = canonical
+      .split('\n')
+      .filter((l) => !l.startsWith('> Re-word an entry') && !l.startsWith('> Never hand-edit'))
+      .join('\n');
+    assert.notEqual(previousVersion, canonical, 'fixture must actually differ from the canonical render');
+
+    const res = reconcileLedger(previousVersion, { now: 't' });
+    assert.equal(res.repaired, false, 'the counts were already true');
+    assert.equal(res.normalized, false, 'header prose is not ledger state — rewriting it is pure churn');
+  });
+
+  test('CLI: reconcile does not rewrite a previous-version ledger byte-for-byte', (t) => {
+    const tmp = createTempDir('bw-reconcile-oldheader-');
+    t.after(() => cleanup(tmp));
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const previousVersion = readLedgerFile(tmp)
+      .split('\n')
+      .filter((l) => !l.startsWith('> Re-word an entry') && !l.startsWith('> Never hand-edit'))
+      .join('\n');
+    writeLedger(tmp, previousVersion);
+
+    const rec = runGsdTools(['windows', 'reconcile'], tmp);
+    assert.equal(rec.success, true, `stderr: ${rec.error || ''}`);
+    const obj = JSON.parse(rec.output);
+    assert.equal(obj.repaired, false);
+    assert.equal(obj.normalized, false);
+    assert.equal(readLedgerFile(tmp), previousVersion, 'no rewrite: the file was already true');
+  });
+});
+
+// Finding 6 — the ship:pre gate must not describe itself as a raw-frontmatter
+// comparison: `open_count` is hand-editable, and the whole point of the JSON
+// block being authoritative is that the gate reads the CROSS-CHECKED path.
+describe('broken-windows: the ship:pre gate points at the cross-checked read', () => {
+  const registry = require('../gsd-core/bin/lib/capability-registry.cjs');
+
+  const shipGate = () => {
+    const cap = registry.capabilities['broken-windows'];
+    assert.ok(cap, 'the broken-windows capability must be in the registry');
+    const gates = (cap.gates || []).filter((g) => g.point === 'ship:pre');
+    assert.equal(gates.length, 1, 'exactly one ship:pre gate');
+    return gates[0];
+  };
+
+  test('the gate predicate runs the cross-checked status read, not a raw frontmatter comparison', () => {
+    const gate = shipGate();
+    assert.equal(gate.blocking, true);
+    assert.equal(gate.onError, 'halt');
+    assert.equal(gate.when, 'workflow.windows_enforce');
+    const pred = gate.check.predicate;
+    assert.ok(pred, 'ship:pre gates are predicate-shaped in this codebase');
+    // `artifact-frontmatter-equals` compares a HAND-EDITABLE scalar and is not
+    // even in the evaluator's KIND_TABLE; `command-exit-zero` is the only
+    // executable kind, and pointing it at `windows status` buys the entries
+    // cross-check for free (a forged open_count fails the parse, exit != 0).
+    assert.equal(pred.kind, 'command-exit-zero');
+    assert.notEqual(pred.kind, 'artifact-frontmatter-equals');
+    assert.match(pred.command, /windows status/, 'the gate must read through the cross-checked path');
+    assert.equal(typeof pred.timeout, 'number');
+  });
+
+  test('the declared gate command matches what `windows status` actually emits (clean vs open)', (t) => {
+    // The predicate greps a literal out of the status JSON, so the literal and
+    // the emitter are coupled — this test is that coupling, made loud.
+    const needle = shipGate().check.predicate.command.match(/'([^']+)'/)[1];
+    const tmp = createTempDir('bw-gate-command-');
+    t.after(() => cleanup(tmp));
+
+    const clean = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(clean.success, true, `stderr: ${clean.error || ''}`);
+    assert.ok(clean.output.includes(needle), `clean status output must contain ${needle}`);
+
+    const r1 = runGsdTools(['windows', 'append', '--kind', 'stub', '--phase', '2', '--description', 'x'], tmp);
+    assert.equal(r1.success, true, `stderr: ${r1.error || ''}`);
+    const open = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(open.success, true, `stderr: ${open.error || ''}`);
+    assert.ok(!open.output.includes(needle), `an open window must NOT match ${needle}`);
+  });
+
+  test('a hand-edited open_count=0 hiding an open entry does NOT read as clean (the cross-check the gate rides on)', (t) => {
+    const tmp = createTempDir('bw-gate-crosscheck-');
+    t.after(() => cleanup(tmp));
+    // The forgery the gate must survive: frontmatter claims a clean ledger
+    // while the authoritative entries still carry an open window.
+    writeLedger(tmp, rawLedgerWithCounts(
+      [makeRawEntry({ id: 1, status: 'open' })],
+      { open: 0, waived: 0, fixed: 0, total: 1 },
+    ));
+    const r = runGsdTools(['windows', 'status', '--raw'], tmp);
+    assert.equal(r.success, false, 'the gate read must fail closed, not report open_count 0');
+    assert.match(r.error, /counts disagree/i);
   });
 });
