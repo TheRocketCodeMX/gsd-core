@@ -87,7 +87,7 @@ After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md`
 
 ## Step 7: Write TEST-STRATEGY.md
 
-Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, the **CI execution map** (which tiers run at the PR gate vs merge-to-main vs nightly — it feeds `/gsd:cicd-strategy`), and TDD stance (render `tdd_mode=false` as "off", `true` as "on").
+Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, the **CI execution map** (which tiers run at the PR gate, and which — if any — can't fit there and why; `/gsd:cicd-strategy` decides the stage and schedule shape from that, so don't pre-assert extra stages here), and TDD stance (render `tdd_mode=false` as "off", `true` as "on").
 
 Write to `.planning/TEST-STRATEGY.md`.
 
