@@ -2,8 +2,8 @@
   "name": "gsd-core",
   "description": "Marketplace for GSD Core — meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
   "owner": {
-    "name": "open-gsd",
-    "url": "https://github.com/open-gsd"
+    "name": "TheRocketCodeMX",
+    "url": "https://github.com/TheRocketCodeMX"
   },
   "plugins": [
     {
@@ -12,8 +12,8 @@
       "version": "2.3.0",
       "source": "./",
       "author": {
-        "name": "open-gsd",
-        "url": "https://github.com/open-gsd"
+        "name": "TheRocketCodeMX",
+        "url": "https://github.com/TheRocketCodeMX"
       }
     }
   ]

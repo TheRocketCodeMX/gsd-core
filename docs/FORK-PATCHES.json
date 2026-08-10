@@ -807,6 +807,14 @@
       ]
     },
     {
+      "path": "scripts/build-hooks.js",
+      "feature": "grounding",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd-grounding-index-refresh\\.js"
+      ]
+    },
+    {
       "path": "scripts/prompt-injection-scan.sh",
       "feature": "fidelity",
       "mode": "anchors-only",
@@ -1012,6 +1020,15 @@
       "markers": 4,
       "anchors": [
         "empty-legacy-runtime-dir"
+      ]
+    },
+    {
+      "path": "tests/mcp-server-catalog.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "upstream pins the prompt count to its own literal 71",
+        "COMMAND_COUNT"
       ]
     },
     {
