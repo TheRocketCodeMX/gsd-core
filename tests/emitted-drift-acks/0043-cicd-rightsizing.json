@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "paths": {
+    "cicd-strategy.md": {
+      "reason": "#43 right-sizing: the workflow grew from 23,016 to ~39.7 KB because the over-engineering defect it fixes was structural — three pipeline stages asserted as a table with no entry criteria, and matrix/retention/concurrency/nightly never named at all. A check cannot fire on a capability it does not name, so the growth IS the fix: a new Step 2.5 (measure suite wall clock, merges/week, contributors instead of asking), Step 4.5 (the C0–C3 CI rung ladder + the four scheduled-job triggers + the owner/triage-SLA admission gate + the confident C0/D0 floor default), Step 5.5 (the matrix gate), a rewritten Step 6 (Axis D, D0–D5 with the new D0 floor and D3 progressive-rollout rung), and a 12-row over-engineering table replacing a 4-capability paragraph in Step 8. Detail was pushed into gsd-core/references/cicd-strategy.md wherever the workflow could point instead of restate; the file stays inside the DEFAULT 40,960 B cap."
+    },
+    "testing-strategy.md": {
+      "reason": "#43 right-sizing (sibling touch-point, +96 bytes): the CI-execution-map fill instruction said \"which tiers run at the PR gate vs merge-to-main vs nightly\", which pre-asserted a three-stage pipeline in cicd-strategy's own upstream input — fixing cicd-strategy alone would have left the nightly written into TEST-STRATEGY.md as a fact. Reworded to \"which tiers run at the PR gate, and which (if any) can't fit there\", with the stage/schedule shape deferred to cicd-strategy's C1/C2 triggers."
+    }
+  }
+}

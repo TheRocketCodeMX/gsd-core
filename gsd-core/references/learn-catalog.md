@@ -115,10 +115,11 @@ Source skill: `cicd-strategy.md`
 
 | ID | Concept | Source | Prereqs | Visual |
 |---|---|---|---|---|
-| `cicd-pipeline-tiers` | Pipeline follows test tiers — PR vs merge vs nightly; the <10-min budget | `cicd-strategy.md § Test tiers → pipeline stages` | `test-levels` | diagram |
+| `cicd-pipeline-tiers` | The CI rung ladder — one job at the floor; what forces a second stage or a schedule | `cicd-strategy.md § The CI rung ladder (Axis C)` | `test-levels` | diagram |
+| `cicd-rung-ladder` | Two axes (CI surface vs delivery surface); every rung above the floor names its forcing fact | `cicd-strategy.md § The meta-tell` | `cicd-pipeline-tiers` | diagram |
 | `cicd-oidc` | OIDC keyless auth — and the pinned-`sub` trap | `cicd-strategy.md § Auth: OIDC keyless is THE standard` | — | — |
 | `cicd-secrets-split` | Deploy creds (OIDC) vs CI-scoped vs app secrets | `cicd-strategy.md § The secrets split` | `cicd-oidc`, `sec-secrets` | — |
-| `cicd-deployment-ladder` | Trunk + previews + rollback; when flags/canary; why no staging | `cicd-strategy.md § The deployment ladder` | `cicd-pipeline-tiers` | diagram |
+| `cicd-deployment-ladder` | D0–D5: one-command deploy → automated path → flags → weighted rollout → canary; staging is the TOP rung | `cicd-strategy.md § The delivery rung ladder (Axis D)` | `cicd-pipeline-tiers` | diagram |
 | `cicd-flaky-policy` | Quarantine + differentiated retry, never blanket retry-until-green | `cicd-strategy.md § Flaky tests — the canon` | `test-flaky` | — |
 | `cicd-supply-chain` | SHA-pinned actions, lockfile+`ci`, read-only token, secret scanning, branch protection | `cicd-strategy.md § Supply-chain table stakes` | `cicd-oidc` | — |
 | `cicd-publishing` | Tag-driven releases, trusted publishing / provenance (when shipping software) | `cicd-strategy.md § Publishing packages` | `cicd-pipeline-tiers` | — |
