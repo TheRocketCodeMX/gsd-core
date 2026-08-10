@@ -193,7 +193,7 @@ Verify the work is ready to ship:
    | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
    | declined | `certification: skipped (declined)` | a decision, recorded |
    | off | `certification: off (posture)` | certification was configured off when this phase shipped — a decision, not a gap |
-   | pre-adoption | *no line, and the phase's UAT.md predates the earliest recorded `certification:` line (file mtime, falling back to phase order)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
+   | pre-adoption | *no line, and the phase precedes the earliest phase with a recorded `certification:` line (phase order — or `git log -1 --format=%at -- <uat>` where history exists; file mtime only as a last-resort convenience, since a fresh checkout gives every file one mtime)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
    | **not-run** | *no `certification:` line, and not pre-adoption* | **flag it** |
 
    A phase with a UAT.md but no `certification:` line — one that is not pre-adoption, on

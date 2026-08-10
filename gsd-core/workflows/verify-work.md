@@ -231,7 +231,9 @@ It runs HERE — after `extract_tests` computed the checkpoint set, before any c
 mkdir -p "$PHASE_DIR"
 ```
 
-Build test list from extracted deliverables.
+Build test list from extracted deliverables, plus any capsule-added checkpoints handed
+over by `agentic_certification` — ordinary pending checkpoints with no `coverage_id`,
+appended to the test list (on every tier, including CERT-0).
 
 Create file:
 
@@ -735,7 +737,7 @@ predates it.
 This is an **append-only** write: add rows, never rewrite, reorder, regenerate, or
 re-render any other section of the file. `/gsd:testing-strategy` remains the only
 author of the strategy itself; this step only records what the strategy failed to
-predict, so the next `--update` pass can see the project's real failure modes.
+predict, so the next strategy Update pass can see the project's real failure modes.
 
 If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
 create a strategy document from a gap.

@@ -14,7 +14,7 @@
  * the things worth pinning are structures, not wording:
  *
  *   - the CERT-0 → CERT-2 certification ladder exists in the reference, with
- *     the dogfood-verified CERT-1 (limited) tier between 0 and 1;
+ *     the CERT-1 (limited) tier between 0 and 1 (partial-capability environments);
  *   - capability detection PROBES (5-command live probe, per-operation
  *     verdicts) instead of merely finding binaries, and asks exactly ONE
  *     question for what nothing observable answers;
@@ -177,6 +177,11 @@ describe('the probe (reference + workflow)', () => {
     assert.match(s, /per-operation|per-op/i, 'per-operation verdicts are recorded');
     assert.match(s, /throwaway (page|app|fixture)|never the real app/i,
       'the probe runs against a throwaway page, never the real app');
+    // The workflow mirror carries the same ordering — pin it there too.
+    const wf = read(WORKFLOW);
+    const wfFill = wf.search(/goto → snapshot → fill/);
+    assert.ok(wfFill !== -1,
+      'workflows/testing-strategy.md Step 5.5 keeps fill before the click round-trip');
   });
 
   test('a click that reports success but never lands demotes the tier', () => {
@@ -1439,7 +1444,7 @@ describe('Wave 2 review fix wave', () => {
     walk('commands/gsd');
     walk('skills');
     for (const f of mdFiles) {
-      assert.doesNotMatch(read(f), /gsd[:-]testing-strategy[^\n]{0,60}`--update`|`--update`[^\n]{0,60}gsd[:-]testing-strategy/,
+      assert.doesNotMatch(read(f), /gsd[:-]testing-strategy[\s\S]{0,120}`--update`|`--update`[\s\S]{0,120}gsd[:-]testing-strategy/,
         `${f} claims a --update flag that does not exist (argument-hint is --auto/--text/--tune-up)`);
     }
   });
@@ -1470,7 +1475,12 @@ describe('combined fix wave — transition compare (review M2/M3/N1/N4, validati
 
   test('M2 — the step checks for an existing open todo before writing, and updates in place', () => {
     const step = compare();
-    assert.match(step, /grep -l/, 'a duplicate check runs before any todo write');
+    // Final-review MAJOR-1: the check must match FILENAMES — the slugs never appear in
+    // todo bodies, so a grep -l over contents is a dead branch that always misses.
+    assert.match(step, /EXISTING=\$\(ls [^\n]*suite-health-t1[^\n]*suite-tune-up[^\n]*\)/,
+      'the duplicate check lists todo FILES by name glob (contents never carry the slug)');
+    assert.doesNotMatch(step, /grep -l '[^']*suite-(health-t1|tune-up)/,
+      'no content-grep for filename slugs — that branch can never fire');
     assert.match(step, /update it in place|refresh (it|its numbers)|instead of (adding|writing) a second/i,
       'an existing open todo is refreshed, never duplicated — N identical todos at audit-open was the failure');
   });

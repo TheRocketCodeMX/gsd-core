@@ -193,7 +193,7 @@ phase directory — substitute it, as every other step in this file does, before
 
 ```bash
 ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_STRATEGY" || echo "NO_STRATEGY"
-(ls -t $(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null) 2>/dev/null || true) | head -1
+M=$(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true); [ -n "$M" ] && ls -t $M | head -1
 TODAY=$(date -u +%Y-%m-%d)
 ```
 
@@ -203,9 +203,10 @@ last wave must not shadow an earlier wave's clean measurement. From TEST-STRATEG
 `## Suite health` table read **two** rows, which may be the same row:
 
 - the **last** row — the T2 baseline;
-- the last row with a non-empty **fix-class** — the row of the last tune-up, the T4
-  baseline. A table with no fix-class row anywhere means no tune-up has ever run, so
-  **T4 is unevaluable** — never auto-fired off a strategy-time baseline.
+- the last row whose **fix-class is a real class** (`config-drift` / `test-debt` /
+  `mixed …`) — the row of the last tune-up, the T4 baseline. `—` and `— (none yet)`
+  are not fix-classes: a table with no real fix-class row anywhere means no tune-up
+  has ever run, so **T4 is unevaluable** — never auto-fired off a strategy-time baseline.
 
 **Skip silently** — print nothing, block nothing — when `NO_STRATEGY`, when there is no
 `## Suite health` section, when no SUMMARY in this phase carries a `suite-metrics:` block,
@@ -229,7 +230,7 @@ Say so, and point at tiering/sharding (the CI ladder's C1) rather than at tuning
 the suite, not of the transition, so once one fires it keeps firing until a tune-up lands:
 
 ```bash
-EXISTING=$(grep -l 'suite-health-t1\|suite-tune-up' .planning/todos/pending/*.md 2>/dev/null | head -1)
+EXISTING=$(ls .planning/todos/pending/*suite-health-t1*.md .planning/todos/pending/*suite-tune-up*.md 2>/dev/null | head -1)
 ```
 
 If `EXISTING`, refresh its numbers and trigger list in place and stop — never write a

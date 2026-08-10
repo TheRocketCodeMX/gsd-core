@@ -105,7 +105,7 @@ Re-measure the whole suite once, timed, exactly as Pass 1 did, and **append a ne
 row** to `.planning/TEST-STRATEGY.md`'s `## Suite health` table:
 
 ```markdown
-| YYYY-MM-DD | {test_count} | {wall_clock_sec}s | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
+| YYYY-MM-DD | {test_count} | {wall_clock_sec} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
 ```
 
 `wall_clock` is **integer seconds** — a sub-minute suite is the goal, and a format that
@@ -139,8 +139,8 @@ Then report, in this shape:
 ```
 Suite tune-up complete — {trigger} cleared.
 
-  Before: {test_count} tests · {wall_clock_sec}s · {ms/test derived} ms/test · {containers_started} containers
-  After:  {test_count} tests · {wall_clock_sec}s · {ms/test derived} ms/test · {containers_started} containers
+  Before: {test_count} tests · {wall_clock_sec} s · {ms/test derived} ms/test · {containers_started} containers
+  After:  {test_count} tests · {wall_clock_sec} s · {ms/test derived} ms/test · {containers_started} containers
   Fix-class: {config-drift | test-debt | mixed (dominant: …)}
   Changes: {config edits} · {tests moved/demoted/deleted, each with its strategy citation}
 

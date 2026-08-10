@@ -235,7 +235,7 @@ Exactly one line, always, handed to `create_uat_file` with the entries above:
 
 | Situation | Recorded line |
 |---|---|
-| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated` |
+| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated` — append ` · probe exceeded recorded tier` when §4's re-check recorded that note |
 | No capable driver | `certification: human (CERT-0)` |
 | No user-facing surface | `certification: N/A — no user-facing change` |
 | Declined under `offer` | `certification: skipped (declined)` |

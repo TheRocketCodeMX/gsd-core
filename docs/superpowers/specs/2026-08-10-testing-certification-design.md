@@ -34,7 +34,7 @@ New TEST-STRATEGY section `## Certification` records the capability tier, the pr
 |---|---|---|
 | **CERT-2** | Dedicated certifier application; certification brief handed over; builder ≠ certifier enforced naturally | Codex desktop, Claude Desktop (native computer/browser use), onorca |
 | **CERT-1** | The building runtime drives a browser itself; weaker separation, still real-conditions | Claude+Chrome, MCP-Playwright-class tools, orca CLI |
-| **CERT-1 (limited)** | Probe shows partial capability — inspection-grade only (navigate/snapshot/fill/wait/console yes; click-through/screenshot no) | orca headless under Xvfb/WSL2 (dogfood-verified) |
+| **CERT-1 (limited)** | Probe shows partial capability — inspection-grade only (navigate/snapshot/fill/wait/console yes; click-through/screenshot no) | environments where the probe records partial capability (e.g. an Xvfb session failing focus-bound ops) |
 | **CERT-0** | None. Human UAT as today + the scripted smoke set, stated as the fallback, not the strategy | headless CI boxes, locked-down machines |
 
 **Detection probes; it never merely finds binaries** (dogfood-mandated): observable checks first (`command -v codex/orca`, MCP browser tools in the runtime config, `claude` Chrome availability, WSL/headless detection, `playwright.config.*`), then — for any driver found — a **5-command live probe** (goto / snapshot / fill / click-roundtrip against a throwaway page / screenshot — fill before click, the failure mode that defines the limited tier) whose per-operation results are recorded. **One question** covers only what is undetectable (desktop apps on other machines: "do you have Codex desktop / Claude Desktop / onorca available for certification?").
