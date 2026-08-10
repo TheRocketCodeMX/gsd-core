@@ -3362,9 +3362,11 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 
 ### 158. Broken-Windows Ledger
 
-**Behavior:** A cross-phase defect register at `.planning/WINDOWS.md` accumulates stubs, TODOs, skipped tests, unrun verifies, and unmet truths (#1950). `/gsd:ship` blocks while any entry is `open`; an entry can be `waived` only with a recorded reason (auditable) or marked `fixed` (removed from the blocking set). `/gsd:progress` surfaces the open + waived counts.
+**Behavior:** A cross-phase defect register at `.planning/WINDOWS.md` accumulates stubs, TODOs, skipped tests, unrun verifies, and unmet truths (#1950). `/gsd:ship` blocks while any entry is `open`; an entry can be `waived` only with a recorded reason (auditable) or marked `fixed` (removed from the blocking set), optionally with its own recorded reason. `/gsd:progress` surfaces the open + waived counts.
 
-**Commands:** `gsd-tools windows status | append | waive | fixed`.
+**Commands:** `gsd-tools windows status | append | waive | fixed | amend | reconcile`.
+
+**Closing an entry is mechanical — never hand-edit the file.** `fixed <id> "<reason>"` records WHY it closed; `amend <id> --description/--reason/--file/--line` re-words an existing entry at any status (narrowing a row that closed only by halves, correcting a stale file pointer, normalizing a hand-annotated closure). A hand edit desynchronizes the frontmatter counts from the entries, and every read then fails closed — `reconcile` is the repair verb that re-derives the counts from the entries. It is the only lenient read path: normal reads keep the fail-closed cross-check, and reconcile refuses genuine corruption (a broken JSON block or an invalid entry) rather than papering over it.
 
 **Config:** `workflow.windows_enforce` (gate active, default `false` — opt-in enforcement). Enable with `gsd config-set workflow.windows_enforce true`. Tracking (the ledger itself, populated by the executor) is always on; only the ship gate is opt-in.
 

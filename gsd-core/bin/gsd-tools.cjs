@@ -1996,7 +1996,7 @@ function dispatchOverlayCapabilityCommand({ command, args, cwd, raw, error, load
   }
 
   function routeWindows({ args, cwd, raw, error }) {
-    // windows status | append | waive | fixed  (issue #1950)
+    // windows status | append | waive | fixed | amend | reconcile  (issue #1950)
     // All subcommands emit JSON; `--raw` is accepted for forward-compat with
     // capture-stdout hooks but is a no-op (output shape is JSON in both modes).
     const subcommand = args[1];
@@ -2010,9 +2010,13 @@ function dispatchOverlayCapabilityCommand({ command, args, cwd, raw, error, load
         brokenWindows.cmdWindowsWaive(cwd, rest, { raw });
       } else if (subcommand === 'fixed') {
         brokenWindows.cmdWindowsMarkFixed(cwd, rest, { raw });
+      } else if (subcommand === 'amend') {
+        brokenWindows.cmdWindowsAmend(cwd, rest, { raw });
+      } else if (subcommand === 'reconcile') {
+        brokenWindows.cmdWindowsReconcile(cwd, rest, { raw });
       } else {
         error(
-          `Unknown windows subcommand: ${subcommand || '(none)'}. Available: status, append, waive, fixed`,
+          `Unknown windows subcommand: ${subcommand || '(none)'}. Available: status, append, waive, fixed, amend, reconcile`,
           ERROR_REASON.SDK_UNKNOWN_COMMAND,
         );
       }

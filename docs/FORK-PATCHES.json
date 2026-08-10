@@ -356,6 +356,15 @@
       ]
     },
     {
+      "path": "gsd-core/bin/gsd-tools.cjs",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "cmdWindowsAmend",
+        "cmdWindowsReconcile"
+      ]
+    },
+    {
       "path": "gsd-core/bin/lib/legacy-cleanup.cjs",
       "feature": "identity",
       "mode": "markers",
@@ -682,6 +691,15 @@
       ]
     },
     {
+      "path": "gsd-core/workflows/ship.md",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd_run windows reconcile",
+        "windows amend <id>"
+      ]
+    },
+    {
       "path": "gsd-core/workflows/transition.md",
       "feature": "context",
       "mode": "markers",
@@ -765,6 +783,17 @@
       "mode": "anchors-only",
       "anchors": [
         "untrusted-input-boundary\\.md"
+      ]
+    },
+    {
+      "path": "src/broken-windows.cts",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "reconcileLedger",
+        "amendWindow",
+        "WINDOWS_DUPLICATE_ID",
+        "stripHeaderProse"
       ]
     },
     {
@@ -863,6 +892,15 @@
       "mode": "anchors-only",
       "anchors": [
         "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream"
+      ]
+    },
+    {
+      "path": "tests/broken-windows.test.cjs",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "broken-windows CLI: windows reconcile",
+        "WINDOWS_DUPLICATE_ID"
       ]
     },
     {
