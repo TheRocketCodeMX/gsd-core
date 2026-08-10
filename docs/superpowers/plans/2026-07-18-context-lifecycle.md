@@ -4,7 +4,7 @@
 
 **Goal:** Ship the `context` capability — GSD's knowledge lifecycle (MASTER-CONTEXT index, quality-stamped phase capsules inside `<N>-CONTEXT.md`, append-only layers, deterministic anchor verification, calm context-pressure hook, re-anchor procedure) plus the four enforcement-alignment core patches — per `docs/superpowers/specs/2026-07-18-context-lifecycle-design.md`.
 
-**Architecture:** A capability pack (`capabilities/context/`) owning the `/gsd:context` command family (workflow-driven verbs `seed`/`scout`/`flush`/`master` + deterministic CLI verbs `verify`/`provenance` in a new `src/context.cts` + `src/context-command-router.cts`), three templates, and a revived `hooks/gsd-context-monitor.js`. Delivery/growth wiring lands as small marked core patches (`FORK:context`) in discuss-phase, plan-phase, execute-phase, transition, complete-milestone, new-milestone, new-project, resume-project, two agents, the SUMMARY template, and `src/grounding.cts` — every patch registered in `docs/FORK-PATCHES.json` + `docs/FORK-DELTA.md` in the same task that creates it.
+**Architecture:** A capability pack (`capabilities/context/`) owning the `/gsd-context` command family (workflow-driven verbs `seed`/`scout`/`flush`/`master` + deterministic CLI verbs `verify`/`provenance` in a new `src/context.cts` + `src/context-command-router.cts`), three templates, and a revived `hooks/gsd-context-monitor.js`. Delivery/growth wiring lands as small marked core patches (`FORK:context`) in discuss-phase, plan-phase, execute-phase, transition, complete-milestone, new-milestone, new-project, resume-project, two agents, the SUMMARY template, and `src/grounding.cts` — every patch registered in `docs/FORK-PATCHES.json` + `docs/FORK-DELTA.md` in the same task that creates it.
 
 **Tech Stack:** TypeScript-as-CJS (`src/*.cts` → `gsd-core/bin/lib/*.cjs` via `npm run build:lib`), node:test + `node:assert/strict`, existing gsd-tools dispatch (ADR-959 `default:` capability path), managed hooks (`hooks/hooks.json` already registers the monitor on PostToolUse/SubagentStop/Stop/PreCompact — only the file body changes).
 
@@ -158,7 +158,7 @@ describe('context core', () => {
 'use strict';
 /**
  * Context-lifecycle core (capability: context). Deterministic halves of the
- * /gsd:context family: provenance parsing + anchored-claim verification.
+ * /gsd-context family: provenance parsing + anchored-claim verification.
  * Anchor grammar: [anchor: <path>[:<line>] "<substring>"]. Line advisory;
  * substring must be present case-insensitively (mirrors grounding's
  * checkSourceCitation doctrine). ext:-prefixed paths are external repos → skipped.
@@ -420,7 +420,7 @@ Run → FAIL.
 - [ ] **Step 4: Write `gsd-core/templates/milestone-capsule.md`** — slim: frontmatter (`milestone: [label]`, `context_provenance` block), `## Why this milestone`, `## Carried-forward decisions & deferrals` (each entry: what, from-phase, why routed here), `## Verified Facts` (anchor grammar), `## Open questions`.
 - [ ] **Step 5: Pass + commit** — `node --test tests/feat-context-core.test.cjs` → PASS; `npm run test:unit; echo "EXIT=$?"` → `EXIT=0`. `git add gsd-core/templates/ tests/feat-context-core.test.cjs && git commit -m "feat(context): master-context, phase-capsule, milestone-capsule templates"`
 
-### Task 5: `/gsd:context` skill — workflow + command + registration surfaces
+### Task 5: `/gsd-context` skill — workflow + command + registration surfaces
 
 **Files:**
 - Create: `gsd-core/workflows/context.md`
@@ -469,7 +469,7 @@ Run → FAIL.
   All interactive moments get TEXT_MODE numbered-list fallbacks.
 - [ ] **Step 3: Write `commands/gsd/context.md`** — mirror `commands/gsd/roadmap.md`'s structure: `<objective>` (one paragraph + doctrine line), `<execution_context>` `@$HOME/.claude/gsd-core/workflows/context.md`, `<flags>` for the four modes, `<process>` "parse mode token, execute the workflow mode end-to-end".
 - [ ] **Step 4: Register across surfaces** — `src/clusters.cts` (add `gsd-context` following `gsd-roadmap`'s entry shape), `ns-project.md` (requires + row: "context — seed/verify/grow durable project knowledge"), help `full.md` row, INVENTORY + manifest regen (follow the repo's inventory regen script if present, else edit both files), consolidation-test allowlist.
-- [ ] **Step 5: Pass + commit** — `node --test tests/feat-context-skill.test.cjs` → PASS; `npm run test:unit; echo "EXIT=$?"` → `EXIT=0` (this also proves clusters/consolidation/byte-budget suites accept the new skill). `git add -A && git commit -m "feat(context): /gsd:context skill — seed, scout, flush, master modes"`
+- [ ] **Step 5: Pass + commit** — `node --test tests/feat-context-skill.test.cjs` → PASS; `npm run test:unit; echo "EXIT=$?"` → `EXIT=0` (this also proves clusters/consolidation/byte-budget suites accept the new skill). `git add -A && git commit -m "feat(context): /gsd-context skill — seed, scout, flush, master modes"`
 
 ### Task 6: Revive the context-monitor hook (calm flush)
 
@@ -489,7 +489,7 @@ Run → FAIL.
 // 1. no metrics file → empty stdout, exit 0 (subagent/main discrimination)
 // 2. metrics used_pct 50 → empty stdout (below threshold)
 // 3. used_pct 91 + .planning/STATE.md present in cwd → additionalContext contains
-//    '/gsd:context flush' and 'MASTER-CONTEXT.md'
+//    '/gsd-context flush' and 'MASTER-CONTEXT.md'
 // 4. used_pct 91, NO .planning in cwd → empty stdout (non-GSD projects get nothing)
 // 5. used_pct 91 twice in a row (same session) → second call empty (debounce);
 //    used_pct 96 after a 91 → fires despite debounce (escalation)
@@ -506,8 +506,8 @@ Write all eight as real `test()` blocks (build payloads/metrics inline; the debo
 - [ ] **Step 2: Rewrite the hook** — structure copied from the original implementation (`git show 07f44cc1:hooks/gsd-context-monitor.js` is the reference: stdin drain + 3s timeout guard, session_id → metrics path, stale-metrics check at 60s, debounce file with `callsSinceWarn`/`lastLevel`, escalation bypass), with these deltas:
   - Thresholds on **used_pct**: warn ≥ `hook_warn_pct` (default 90), urge ≥ `hook_urge_pct` (default 95); read overrides + `hook_enabled` from `{cwd}/.planning/config.json` keys `context_lifecycle.*` (try/catch; absent file = defaults).
   - **GSD-active gate:** no `.planning/STATE.md` under `cwd` → exit silently (all events).
-  - `hook_event_name === 'PreCompact'` → always emit (if GSD-active + enabled): `"Compaction is coming. Final knowledge flush: append unsaved decisions and discoveries to the current phase capsule and MASTER-CONTEXT.md (run /gsd:context flush). After compaction, the first act is re-anchoring: read MASTER-CONTEXT.md + the phase capsule + the last SUMMARY, then run gsd-tools context verify."`
-  - Warn message: `"Context is ${usedPct}% used. Good moment for a knowledge checkpoint: run /gsd:context flush — update MASTER-CONTEXT.md (supersede stale entries), enrich the current phase capsule, and record position in STATE.md. Then carry on."` Urge message: same intro + `"If you haven't flushed yet this session, do it now — knowledge not written down will not survive compaction."`
+  - `hook_event_name === 'PreCompact'` → always emit (if GSD-active + enabled): `"Compaction is coming. Final knowledge flush: append unsaved decisions and discoveries to the current phase capsule and MASTER-CONTEXT.md (run /gsd-context flush). After compaction, the first act is re-anchoring: read MASTER-CONTEXT.md + the phase capsule + the last SUMMARY, then run gsd-tools context verify."`
+  - Warn message: `"Context is ${usedPct}% used. Good moment for a knowledge checkpoint: run /gsd-context flush — update MASTER-CONTEXT.md (supersede stale entries), enrich the current phase capsule, and record position in STATE.md. Then carry on."` Urge message: same intro + `"If you haven't flushed yet this session, do it now — knowledge not written down will not survive compaction."`
   - `Stop`/`SubagentStop` events → exit 0 silently.
   - Output shape: `{ hookSpecificOutput: { hookEventName: data.hook_event_name || 'PostToolUse', additionalContext: message } }`.
   - Header comment: state the tone contract and that this deliberately replaces the disabled upstream warning hook (link: `docs/superpowers/specs/2026-07-18-context-lifecycle-design.md`). Never spawn child processes (Windows cwd-lock rule not triggered).

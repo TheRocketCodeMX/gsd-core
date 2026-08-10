@@ -55,10 +55,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { cleanup } = require('./helpers.cjs');
 const TOOLS = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 function runGate(dir, phaseDir) {
   try {
-    return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8' }));
+    return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS }));
   } catch (e) {
     return JSON.parse((e.stdout || '{}').trim() || '{}');
   }
@@ -215,7 +216,7 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-grounding-cap-'));
     fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.planning', 'config.json'), '{}');
-    const run = (args) => execFileSync(process.execPath, [TOOLS, ...args], { cwd: dir, encoding: 'utf8' });
+    const run = (args) => execFileSync(process.execPath, [TOOLS, ...args], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS });
 
     const required = JSON.parse(run(['grounding', 'required']));
     assert.ok(Array.isArray(required.required), 'resolver output shape preserved');
@@ -235,6 +236,7 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, GSD_JSON_ERRORS: '1' },
+        timeout: PROBE_TIMEOUT_MS,
       });
       assert.fail('expected non-zero exit');
     } catch (err) {

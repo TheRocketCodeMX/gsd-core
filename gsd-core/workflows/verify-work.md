@@ -39,8 +39,8 @@ If $ARGUMENTS contains a phase number, load context:
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
 GSD_WS=""
-echo "$ARGUMENTS" | grep -qE -- '--ws[[:space:]]+[^[:space:]]+' && GSD_WS=$(echo "$ARGUMENTS" | grep -oE -- '--ws[[:space:]]+[^[:space:]]+')
-PHASE_ARG=$(echo "$ARGUMENTS" | sed -E 's/--ws[[:space:]]+[^[:space:]]+//g' | xargs)
+echo "$ARGUMENTS" | grep -qE -- '--ws[[:space:]]+[A-Za-z0-9._-]+' && GSD_WS=$(echo "$ARGUMENTS" | grep -oE -- '--ws[[:space:]]+[A-Za-z0-9._-]+')
+PHASE_ARG=$(echo "$ARGUMENTS" | sed -E 's/--ws[[:space:]]+[A-Za-z0-9._-]+//g' | xargs)
 
 INIT=$(gsd_run query init.verify-work "${PHASE_ARG}" ${GSD_WS})
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
@@ -48,7 +48,7 @@ AGENT_SKILLS_PLANNER=$(gsd_run query agent-skills gsd-planner)
 AGENT_SKILLS_CHECKER=$(gsd_run query agent-skills gsd-plan-checker)
 ```
 
-Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`.
+Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`, `certification_mode`.
 
 **If `response_language` is set:** All user-facing questions, prompts, and explanations in this workflow MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
@@ -145,42 +145,9 @@ Provide a phase number to start testing (e.g., /gsd:verify-work 4)
 Continue to `create_uat_file`.
 </step>
 
-<step name="automated_ui_verification">
-**Automated UI Verification (when Playwright-MCP is available)**
-
-Before UAT, check UI capability activation and whether Playwright/Puppeteer MCP tools are available.
-
-```bash
-PLAN_HOOKS_JSON=$(gsd_run loop render-hooks plan:pre --raw)
-UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
-```
-
-Set `UI_PHASE_ACTIVE=true` when `PLAN_HOOKS_JSON.activeHooks` contains an active `ui` step hook.
-
-**If Playwright-MCP tools are available in this session (`mcp__playwright__*` tools
-respond to tool calls) AND (`UI_PHASE_ACTIVE` is `true` OR `UI_SPEC_FILE` is non-empty):**
-
-For each UI checkpoint listed in the phase's UI-SPEC.md (or inferred from SUMMARY.md):
-
-1. Use `mcp__playwright__navigate` (or equivalent) to open the component's URL.
-2. Use `mcp__playwright__screenshot` to capture a screenshot.
-3. Compare the screenshot visually against the spec's stated requirements
-   (dimensions, color, layout, spacing).
-4. Automatically mark checkpoints as **passed** or **needs review** based on the
-   visual comparison — no manual question required for items that clearly match.
-5. Flag items that require human judgment (subjective aesthetics, content accuracy)
-   and present only those as manual UAT questions.
-
-If automated verification is not available, fall back to the standard manual
-checkpoint questions defined in this workflow unchanged. This step is entirely
-conditional: if Playwright-MCP is not configured, behavior is unchanged from today.
-
-**Display summary line before proceeding:**
-```
-UI checkpoints: {N} auto-verified, {M} queued for manual review
-```
-
-</step>
+<!-- gsd:section id="automated-ui-verification" when="state:ui-phase-active" -->
+If `section_manifest` is `null` or `"automated-ui-verification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/automated-ui-verification.md`. Otherwise skip — do not read the file.
+<!-- /gsd:section -->
 
 <step name="find_summaries">
 **Find what to test:**
@@ -195,28 +162,11 @@ Read each SUMMARY.md to extract testable deliverables.
 </step>
 
 <step name="extract_tests">
-**MVP-mode UAT framing.** When `MVP_MODE=true`, follow the rules in `@~/.claude/gsd-core/references/verify-mvp-mode.md`. Briefly:
-
-1. Generate the UAT script in three ordered sections: (a) user-flow walk-through derived from the phase's user-story goal, (b) technical checks (deferred — only run after user flow passes), (c) coverage check (goal-backward, narrowed to the user story's outcome clause).
-2. **User-flow steps run first.** Each step is one user action: open, fill, click, type, observe. No HTTP verbs, no JSON shapes, no error codes in user-flow steps.
-3. **Technical checks are deferred.** They run AFTER the user flow passes — same checks as non-MVP mode (endpoint schemas, error states, edge cases), just reordered.
-4. **If user-flow step N fails, do not advance.** The verdict is FAIL; technical checks do not run. The user can re-run after fixing the underlying flow.
+<!-- gsd:section id="mvp-uat-framing" when="state:phase-mvp-mode" -->
+If `section_manifest` is `null` or `"mvp-uat-framing"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/mvp-uat-framing.md`. Otherwise skip — do not read the file.
+<!-- /gsd:section -->
 
 When `MVP_MODE=false` (mode is null, absent, or the phase has no `**Mode:**` line in ROADMAP.md), fall back to the standard UAT generation path — no behavioral change.
-
-**User-story format guard.** When `MVP_MODE=true`, also verify the phase's goal is in User Story format via the centralized validator:
-
-```bash
-PHASE_GOAL=$(gsd_run query roadmap.get-phase "${phase_number}" ${GSD_WS} --pick goal)
-USER_STORY_VALID=$(gsd_run query user-story.validate --story "$PHASE_GOAL" --pick valid)
-if [ "$USER_STORY_VALID" != "true" ]; then
-  echo "Phase ${phase_number} has '**Mode:** mvp' in ROADMAP.md but the **Goal:** is not in user-story format."
-  echo "Run /gsd mvp-phase ${phase_number} to set a user-story goal before verifying."
-  exit 1
-fi
-```
-
-The verb owns the canonical regex `/^As a .+, I want to .+, so that .+\.$/` and returns slot extractions plus per-error guidance when invalid. Halt UAT generation on failure — never attempt to derive user-flow steps from a non-User-Story goal (low-quality UAT).
 
 **Coverage-aware deterministic classification (#1602).** Before deriving checkpoints from prose, classify each SUMMARY's structured `coverage:` block. For each `*-SUMMARY.md`:
 
@@ -270,6 +220,10 @@ Then **prepend** this test to the test list:
 This catches bugs that only manifest on fresh start — race conditions in startup sequences, silent seed failures, missing environment setup — which pass against warm state but break in production.
 </step>
 
+**Agentic certification (unconditional).** Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`.
+
+It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. It is deliberately **not wrapped in a section gate**: the contract is that every phase leaves a *recorded* certification outcome, so there is no configuration under which this dispatch is skipped, and a fragment wrapper would put a written-down silent-skip branch on disk in the one step whose whole contract is "recorded, never silent". The opt-out lives inside the step, which resolves `workflow.certification: off` in its first table and dispatches nothing — recorded, not absent. Same unconditional read-and-execute dispatch as `execute-phase.md`'s post-merge gate (there it sits inside `execute_waves`; here between two steps). The step reads its posture from `certification_mode` in the `INIT` bundle above, so it spawns nothing of its own.
+
 <step name="create_uat_file">
 **Create UAT file with all tests:**
 
@@ -277,7 +231,9 @@ This catches bugs that only manifest on fresh start — race conditions in start
 mkdir -p "$PHASE_DIR"
 ```
 
-Build test list from extracted deliverables.
+Build test list from extracted deliverables, plus any capsule-added checkpoints handed
+over by `agentic_certification` — ordinary pending checkpoints with no `coverage_id`,
+appended to the test list (on every tier, including CERT-0).
 
 Create file:
 
@@ -322,6 +278,18 @@ coverage_id: [D-id]
 ```
 
 The `source: automated` marker is additive — existing consumers that read only `result:` are unaffected.
+
+**Certified entries and the certification outcome.** When the `agentic-certification` section ran, write its results the same way — each checkpoint the certifier PROVED becomes a pre-resolved entry that is NOT presented, and everything it escalated stays an ordinary checkpoint:
+
+```
+### N. [checkpoint description]
+expected: [observable expected outcome from the certification brief]
+result: pass
+source: agentic
+evidence: [transcript ref · captures]
+```
+
+Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
 
 ## Summary
 
@@ -554,8 +522,12 @@ Clear Current Test section:
 
 Commit the UAT file:
 ```bash
-gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
+gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/certification-evidence/"
 ```
+
+Include the certification artifacts only when the run produced them — the brief is the
+canonical record of what was certified, and an uncommitted canonical artifact is a
+contradiction in terms (`commit_docs` governs, as for every `.planning/` write).
 
 Present summary:
 ```
@@ -723,9 +695,54 @@ Spawning parallel debug agents to investigate each issue.
 - Spawn parallel debug agents for each issue
 - Collect root causes
 - Update UAT.md with root causes
-- Proceed to `plan_gap_closure`
+- Proceed to `coverage_gap_capture`
 
 Diagnosis runs automatically - no user prompt. Parallel agents investigate simultaneously, so overhead is minimal and fixes are more accurate.
+</step>
+
+<step name="coverage_gap_capture">
+**Ask what the pyramid missed, and make the answer durable:**
+
+Certification catches it once; the pyramid catches it forever. Every diagnosed gap
+above is a behavior that reached UAT/certification unproven — so before planning the
+fix, answer one question per gap, using the root cause diagnosis already in hand:
+
+> **Which fast test was missing — the one that would have caught this before a human
+> or a certifier ever saw it?**
+
+Answer it as a test that could exist, at the cheapest level that would give
+confidence (`TEST-STRATEGY.md`'s own rule — each behavior tested once, as low as it
+can be proven). "No fast test could have caught this" is a legitimate answer for a
+genuinely judgment- or environment-bound truth; record it as such rather than
+inventing a test.
+
+**Route it (both, not either):**
+
+- The test itself → `/gsd:add-tests` for this phase, which classifies it to a level
+  and writes it. Gaps whose fix is a code change still go through `plan_gap_closure`
+  below; this is additive, not a replacement.
+- A missing behavior no plan covers → it is already a `## Gaps` entry and reaches
+  `plan-phase --gaps` through the existing route. Do not create a second gap id.
+
+**Persist it — TEST-STRATEGY.md's second writer:**
+
+Append one row per answered gap to `.planning/TEST-STRATEGY.md` under its
+`## Coverage debt` section. Create the section (heading + table header) if the file
+predates it.
+
+```
+| {date} | {phase}/{gap_id} | {the behavior that escaped} | {the fast test that was missing, and at which level} | open |
+```
+
+This is an **append-only** write: add rows, never rewrite, reorder, regenerate, or
+re-render any other section of the file. `/gsd:testing-strategy` remains the only
+author of the strategy itself; this step only records what the strategy failed to
+predict, so the next strategy Update pass can see the project's real failure modes.
+
+If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
+create a strategy document from a gap.
+
+Proceed to `plan_gap_closure`.
 </step>
 
 <step name="plan_gap_closure">

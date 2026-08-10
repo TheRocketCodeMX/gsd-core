@@ -28,7 +28,11 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 
 **Text mode** (`--text` OR `workflow.text_mode: true`): replace every `AskUserQuestion` with a plain-text numbered list.
 
+**If `--tune-up`:** this run is not strategy authoring — it is the **suite tune-up flow** (the repair half of suite health, reached from `transition`'s T1 todo, from the milestone-close todo it writes for T2–T4, or by hand). If `NEW` (no TEST-STRATEGY.md), stop: "No TEST-STRATEGY.md — run `/gsd:testing-strategy` first; there is no strategy to audit the suite against." Otherwise read and execute `gsd-core/workflows/testing-strategy/steps/suite-tune-up.md` end to end, then commit its `## Suite health` append with Step 8's mechanism (message: `docs: re-baseline suite health after tune-up`) and **EXIT** — Steps 2–7 and 9 do not run; a tune-up never rewrites the strategy.
+
 **If `EXISTS` and not `--auto`:** ask Update / View / Skip (header "Strategy"). On Skip: exit ("Existing TEST-STRATEGY.md preserved."). On View: show then Update/Skip.
+
+**On Update (and on `--auto` over an existing file):** read the existing file's `## Coverage debt` table before re-deriving anything. Those rows are the only record of where this project's pyramid actually leaks — each one is a behavior that reached UAT or certification unproven. Where they cluster (a subdomain, a level, a kind of behavior), raise that area's level emphasis in Step 3 and add it to Step 4's gnarly-bits list, and say in the wrap-up which rows drove a change. An empty table is the healthy state and needs no comment. Carry the existing rows forward verbatim — this section is append-only and `verify-work` is its writer, not this skill.
 
 ## Step 2: Load context
 
@@ -71,9 +75,49 @@ State what NOT to test: framework/library code, trivial getters/setters, mock be
 
 If existing code already violates a standard you are recording (e.g. money stored as floats), flag it in TEST-STRATEGY.md's Notes as a **pre-test remediation task** (refactor first) — never write tests that enshrine the violating representation.
 
-## Step 5: Persistent critical-path e2e (the smoke list)
+## Step 5: The top of the pyramid — gate vs certify
 
-Ask (AskUserQuestion, header "E2E", or a text list): "Which flows are so essential they must be smoke-tested on every CI run? (e.g., auth, payment, the core journey)." Capture 3–7 → the **persistent** smoke suite (keep it lean, <5 min). Note that everything else is **transient** (throwaway dev-loop e2e, demoted to integration once covered cheaper). If the user asks to e2e every feature/edge case, redirect: that is the ice-cream cone — cap the persistent suite at 3–7 critical journeys (the <5 min budget wins over any test count) and push edge cases down to unit/integration.
+**The top of the pyramid is two different jobs.** **Gate** — deterministic, every commit, CI; scripts gate. **Certify** — realistic, per-change, agentic, human-adjacent; **never a CI gate**. A hermetic ephemeral-environment smoke run is a regression check, not a validation of the app in the world (see `certification.md § The doctrine`). The strategy records both jobs and never conflates them.
+
+**The gate (scripted, agent-maintained).**
+- **Elicit the smoke set.** Ask (AskUserQuestion, header "E2E", or a text list): "Which flows are so essential they must be smoke-tested on every CI run? (e.g., auth, payment, the core journey)." Capture 3–7 → the **persistent** smoke suite (keep it lean, <5 min).
+- **Everything else is transient** — throwaway dev-loop e2e, demoted to integration once covered cheaper. If the user asks to e2e every feature/edge case, redirect: that is the ice-cream cone — cap the persistent suite at 3–7 critical journeys (the <5 min budget wins over any test count) and push edge cases down to unit/integration.
+- **Record the gate's maintenance mechanism.** Where an authoring agent exists, the smoke set is agent-authored and agent-healed via the **planner → generator → healer** loop (Playwright ships all three first-party, `--loop=claude|codex`), with the healer's own guardrail recorded — it must refuse to "fix" a test when the app is **genuinely broken**. Hand-maintained smoke scripts are the fallback where no authoring agent exists.
+
+**The certification mechanism (decided from Step 5.5's probe).** Every user-visible feature gets certified in real conditions at the tier the probe detects; on CERT-0 the requirement is satisfied by human UAT — the invariant is "certification happens," not "an agent does it." Record the mechanism in the template's `## Certification` section.
+
+## Step 5.5: Certification capability detection (probe, don't survey)
+
+**Read `@~/.claude/gsd-core/references/certification.md` now** — it defines the CERT-0/1/1-limited/2 ladder, the probe procedure, the trust doctrine, the brief, and the substrate honesty tables.
+
+Observable checks first — run them, don't ask:
+
+```bash
+command -v codex >/dev/null 2>&1 && echo "codex:present" || echo "codex:missing"
+command -v orca  >/dev/null 2>&1 && echo "orca:present"  || echo "orca:missing"
+ls playwright.config.* >/dev/null 2>&1 && echo "playwright-config:present" || echo "playwright-config:missing"
+grep -qi microsoft /proc/version 2>/dev/null && echo "env:wsl" || echo "env:not-wsl"
+[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && echo "display:present" || echo "display:headless"
+```
+
+Plus the in-session facts: MCP browser tools available (`mcp__playwright__*` responding), `claude` Chrome integration (not under WSL; disabled under API-key auth).
+
+**Trust gate before any launch (sandbox-first).** The first launch of any third-party certifier **in this environment** — including the probe itself, including a bare `--version` — happens under an **isolated HOME** with an **instrumentation audit** (*what did it write? which agent CLIs did it touch?*) before the tool touches the real environment (the reference carries the receipts). "Installed" is not "launched" — `command -v` finding a binary says nothing about what its first run will do to this HOME.
+
+**A binary is a lead, not a capability.** For any driver found, run the reference's **5-command live probe** against a throwaway page — goto → snapshot → fill → click round-trip (verify the click by its *effect*, never its return value; the fill precedes the click because click-after-fill is the failure that defines the limited tier) → screenshot — and record the **per-operation** verdicts. Then ask the **one question** nothing observable answers (header "Certify"): "Do you have Codex desktop, Claude Desktop, or onorca available for certification — on this machine or another?" (capability is a project fact, not a machine fact).
+
+Map results → tier (CERT-0 / CERT-1 (limited) / CERT-1 / CERT-2) and record tier + probe rows + mechanism in `## Certification`. Never present CERT-0 apologetically — human UAT plus the scripted gate is the honest floor; record the deferred capability with the observable fact that would promote it (e.g. "full click-through — re-probe on a visible display session").
+
+## Step 5.7: Certification substrate (four policies)
+
+**Infer before asking.** SECURITY-STRATEGY.md (data classification, secrets floor) and INFRA-STRATEGY.md (environments, mail/LLM vendors) usually answer most of this — draft-from-docs and confirm; never re-interview. Decide the four policies and record them in `## Certification substrate`:
+
+1. **Seed test accounts** — first-class artifacts: an idempotent seed script, role-tagged accounts documented in TEST-STRATEGY, credentials in the env/secret store (agent-usable, never in the repo). Real *seeded* accounts on a real environment — **never real user data** (`data-environments.md` governs).
+2. **Email safety** — sandbox catcher (Mailpit-class) by default, or a **verified** provider test mode — the reference's vendor honesty table: the modes differ in kind (SendGrid validates free; Mailgun/Postmark still bill or count; **Resend has none** — magic recipients only). Real recipients only when deliverability IS the feature, recorded as such.
+3. **LLM integrations** — real calls (the integration is the thing under test): dedicated test key with a hard spend cap, configurable pinned cheap-but-representative model, transcript captured as evidence, and **shape-not-content assertions** (Anthropic disclaims temperature-0 determinism). Stubs remain correct for rate-limited vendors and for deterministic unit/integration tiers.
+4. **OAuth/auth** — a verified provider test mode where one exists (Clerk Testing Tokens, `+clerk_test`, code 424242); otherwise the formalized field pattern: **one-time human auth, persisted session** (gitignored storage state, hygiene per the reference) — an honest, first-class answer. Auth moments and CAPTCHAs always escalate to the human.
+
+Anything here that requires a human in a dashboard (account creation, credential retrieval, catcher provisioning) becomes `{phase}-USER-SETUP.md` material via the `user_setup` PLAN frontmatter — see `templates/user-setup.md`.
 
 ## Step 6: Coverage / mutation / TDD stance
 
@@ -81,13 +125,29 @@ Ask (AskUserQuestion, header "E2E", or a text list): "Which flows are so essenti
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
 - **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them. **If it's absent (greenfield):** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline, write them into TEST-STRATEGY.md's Notes as the initial standards, and offer to generate `TESTING-STANDARDS.md` from them.
 
+## Step 6.5: Born fast + the suite-health baseline
+
+Suites are **born fast by configuration**, not rescued later. Apply the born-fast defaults (`references/test-strategy.md § Suite health` — class-based, explicitly non-exhaustive, current APIs): Testcontainers **reuse is local-only** ("not suited for CI usage" — their own docs; CI levers are singleton containers + image/layer caching); Vitest 4 top-level `maxWorkers`/`isolate` (`poolOptions` is removed); cargo nextest; pytest-xdist. **No invented per-test budgets** — none exist in primary sources; the trigger thresholds are GSD's own heuristics and say so.
+
+Seed the `## Suite health` baseline — this is the table's **first row**, and Step 6.5 is the one writer allowed to create it (every later row is appended by the tune-up flow's fourth pass): if a test command exists, run it **once, timed**, and record `{test_count, wall_clock (integer seconds), containers_started}` with today's date (`containers_started` from Testcontainers/docker output where visible, else `—`; `ms/test` is derived at compare time, never recorded). This timed run is **the** measurement `/gsd:cicd-strategy`'s C1-a trigger reads — record it once here, never re-measure it there. Greenfield (no suite yet): record `unmeasured — baseline at the first milestone with a real suite`. The four triggers (T1–T4, reference table) govern re-evaluation: **T1** (dev-loop tier >~90 s local; PR gate >10 min = cicd's C1-a) fires **immediately**; T2/T3/T4 are compared at **milestone close** and schedule a tune-up there. Flat ms/test + rising total = volume, not regression → the remedy is tiering/sharding (C1), not tuning.
+
+This baseline is read by machinery, not by hand: the executor records `suite-metrics:` into SUMMARY frontmatter each time it runs the whole suite (`execute-phase/steps/post-merge-gate.md` Step C), `transition`'s `suite_health_compare` step evaluates the newest measurement against this row, and whichever trigger fires attaches the tune-up flow (`/gsd:testing-strategy --tune-up` → `testing-strategy/steps/suite-tune-up.md`), which appends the next row. Re-baselining is **append-only** — the history is the trend the triggers compare against.
+
 <!-- FORK:context BEGIN -->
 After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 7: Write TEST-STRATEGY.md
 
-Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill the per-subdomain level table, the gnarly-bits list, what-not-to-test, the integration note, the persistent/transient e2e split, coverage/mutation, the **CI execution map** (which tiers run at the PR gate vs merge-to-main vs nightly — it feeds `/gsd:cicd-strategy`), and TDD stance (render `tdd_mode=false` as "off", `true` as "on").
+Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill:
+- the per-subdomain level table, the gnarly-bits list, what-not-to-test, and the integration note;
+- the persistent/transient e2e split + the gate's maintenance mechanism;
+- the **`## Certification`** section — tier + per-operation probe results + mechanism + brief source (rows from Step 5.5's probe, never from tool presence);
+- the **`## Certification substrate`** — Step 5.7's four policies;
+- coverage/mutation and the TDD stance (render `tdd_mode=false` as "off", `true` as "on");
+- the **`## Suite health`** baseline row — Step 6.5's measurement, or `unmeasured`;
+- the **CI execution map** — which tiers run at the PR gate, and which — if any — can't fit there and why; `/gsd:cicd-strategy` reads "Doesn't fit the PR gate" as its C1 input, so don't pre-assert extra stages here;
+- certification goes on the template's own **"Not a pipeline tier"** line — never into "Doesn't fit the PR gate": it runs outside CI by design and must not be mapped to any CI stage.
 
 Write to `.planning/TEST-STRATEGY.md`.
 
@@ -110,7 +170,9 @@ TEST-STRATEGY.md written — test shape set to follow the architecture.
 
   Per-subdomain levels: [core → unit] · [crud → integration] ...
   Unit-test targets (gnarly bits): [N]
-  Persistent e2e smoke: [N] flows
+  Gate: [N] smoke flows (agent-healed | hand-maintained) · Certification: [CERT-N — mechanism]
+  Substrate: [seed accounts · email catcher/mode · LLM policy · auth policy]
+  Suite health baseline: [wall clock | unmeasured] — T1 checked now; T2–T4 compared by `transition` each phase (tune-up: /gsd:testing-strategy --tune-up)
   Coverage = floor; mutation on [critical modules]; TDD = behavior + small increments (test-first: ${TDD_MODE})
 
 Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strategy → /gsd:plan-phase. Skip infra + cicd straight to /gsd:plan-phase only for a local-only / no-deploy project. (plans + /gsd:add-tests will follow this strategy)
@@ -128,6 +190,10 @@ Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strat
 - **Test each behavior once, at the cheapest level.** No duplicate coverage across unit/integration/e2e.
 - **Coverage is a floor, not a target.** Mutation testing proves assertion quality on critical modules.
 - **TDD = behavior + small uniform increments + regression floor.** Test-first is a knob, not dogma; keep the RED step.
+- **Scripts gate; agents author, heal, and certify.** The smoke gate stays deterministic CI (3–7 flows, <5 min); certification is real-conditions and never a CI gate. On CERT-0, human UAT satisfies it.
+- **Probe capability, never merely find binaries.** The tier comes from per-operation probe results; third-party certifiers launch sandbox-first (isolated HOME + instrumentation audit — before the probe, before even `--version`).
+- **Substrate before certification.** Seeded accounts (never real user data), transport-enforced email safety, spend-capped real LLM calls with shape-not-content assertions, honest auth (verified test mode or auth-once + persisted session).
+- **Born fast, re-evaluated by trigger.** Container reuse local-only; baseline recorded (or `unmeasured`); T1 fires immediately, T2–T4 at milestone close.
 - **Extend, don't replace** TESTING-STANDARDS.md. Respect `commit_docs` / `response_language`.
 </critical_rules>
 
@@ -135,7 +201,9 @@ Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strat
 - ADR/SKELETON + DOMAIN-MODEL loaded; shape derived FROM the architecture (not picked)
 - Per-subdomain level emphasis recorded with the justifying rung
 - Gnarly bits to unit-test identified; what-not-to-test stated; no duplicate coverage
-- Persistent e2e smoke list set; transient e2e distinguished
+- Persistent e2e smoke list set (with its maintenance mechanism); transient e2e distinguished
+- Certification tier probed (per-operation results recorded, or CERT-0 stated honestly) + mechanism decided; substrate's four policies recorded
+- Suite-health baseline recorded (measured and dated, or explicitly `unmeasured`); T1 evaluated immediately, T2–T4 compared at milestone close
 - Coverage-as-floor + mutation targets + TDD stance recorded; TESTING-STANDARDS.md preserved
 - TEST-STRATEGY.md written and committed (when commit_docs is true)
 - User directed to /gsd:plan-phase

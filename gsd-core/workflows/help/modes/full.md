@@ -114,7 +114,7 @@ Usage: `/gsd:discuss-phase 2`
 Usage: `/gsd:discuss-phase 2 --batch`
 Usage: `/gsd:discuss-phase 2 --batch=3`
 
-**`/gsd:plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--prd <file>] [--ingest <path-or-glob>] [--ingest-format <auto|nygard|madr|narrative>] [--reviews] [--text] [--tdd] [--mvp] [--no-tracer] [--no-reversibility-gates]`**
+**`/gsd:plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--skip-ui] [--prd <file>] [--ingest <path-or-glob>] [--ingest-format <auto|nygard|madr|narrative>] [--reviews] [--text] [--bounce] [--skip-bounce] [--chunked] [--tdd] [--mvp] [--granularity <coarse|standard|fine>] [--no-tracer] [--no-reversibility-gates]`**
 Create detailed execution plan for a specific phase.
 
 - `--skip-research` — bypass the research subagent
@@ -122,10 +122,15 @@ Create detailed execution plan for a specific phase.
   - Modifiers: `--research` forces refresh (re-spawn researcher). `--view` prints existing `RESEARCH.md` to stdout without spawning. With neither, auto-uses an existing `RESEARCH.md` (one-line notice, then clean exit).
 - `--gaps` — focus only on closing gaps from a prior plan-check
 - `--skip-verify` — skip the post-plan verifier loop
+- `--skip-ui` — skip the UI-SPEC gate for a detected frontend phase (not recommended for frontend phases)
 - `--ingest <path-or-glob>` — pre-ingest external ADRs/PRDs/SPECs before planning (see *PRD Express Path* below)
 - `--ingest-format <auto|nygard|madr|narrative>` — hint the ADR ingester's parser when `--ingest` is set; defaults to `auto`
+- `--bounce` — run the optional external plan-refinement pass (or set `workflow.plan_bounce: true` to activate by default); requires `workflow.plan_bounce_script`
+- `--skip-bounce` — disable the plan-refinement pass even when `workflow.plan_bounce` config enables it
+- `--chunked` — split the planner run into a short outline pass plus one short per-plan pass each (~3–5 min), committing each plan individually for crash resilience; re-running `--chunked` resumes from the last committed plan (or set `workflow.plan_chunked: true` to activate by default)
 - `--tdd` — plan in test-driven order (tests before code)
 - `--mvp` — MVP enrichment (user story + Walking Skeleton) on top of the default tracer-first ordering (see also `/gsd:mvp-phase`)
+- `--granularity <coarse|standard|fine>` — override the resolved plan granularity for this run (wins over per-phase/top-level config and project defaults)
 - `--no-tracer` — opt out of the default tracer-first slice and plan horizontal layers (legacy default)
 - `--no-reversibility-gates` — suppress the `checkpoint:decision` a `one-way`-door decision normally earns, for intentionally-unattended runs (ratings are still recorded)
 
@@ -656,7 +661,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Planning & Execution
 
 <!-- FORK:strategy BEGIN -->
-- **`/gsd:testing-strategy [--auto] [--text]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md.
+- **`/gsd:testing-strategy [--auto] [--text] [--tune-up]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md. `--tune-up` runs the suite tune-up flow instead: profile → config/cache → suite audit against the strategy → re-baseline.
 - **`/gsd:infrastructure-strategy [--auto] [--text]`** — Recommend infrastructure matched to actual scale and team: compute rung, data layer per environment, observability + IaC floors; writes INFRA-STRATEGY.md.
 - **`/gsd:cicd-strategy [--auto] [--text]`** — Recommend a CI/CD strategy: platform, OIDC auth, secrets split, test-tier→stage mapping, deploy ladder; writes CICD-STRATEGY.md.
 <!-- FORK:strategy END -->

@@ -2,7 +2,7 @@
 
 Two independent update directions:
 
-- **A — your users get your updates.** Already wired: `/gsd:update` runs `npm view @therocketcode/gsd-core@latest`, and the SessionStart hook shows a banner when a newer version exists. You just publish.
+- **A — your users get your updates.** Already wired: `/gsd-update` runs `npm view @therocketcode/gsd-core@latest`, and the SessionStart hook shows a banner when a newer version exists. You just publish.
 - **B — you pull upstream open-gsd improvements** into the fork (git cherry-pick), then publish via A.
 
 We run **our own semver line** — `@therocketcode/gsd-core` is a separate npm package, so our version numbers are independent of upstream's. Record "based on upstream vX.Y.Z" in the CHANGELOG entry for traceability.
@@ -16,7 +16,7 @@ No GitHub Actions / secrets needed. From a clean, green `main`:
 ```bash
 # 1. Add a CHANGELOG entry under a new "## [X.Y.Z] - YYYY-MM-DD" heading
 #    (place it directly below "## [Unreleased]"; Keep a Changelog format, ### Added/Changed/Fixed).
-#    /gsd:update parses this to show users what changed — the heading format matters.
+#    /gsd-update parses this to show users what changed — the heading format matters.
 
 # 2. Bump the version (also syncs the inventory/plugin manifests via the `version` npm script):
 npm version X.Y.Z --no-git-tag-version

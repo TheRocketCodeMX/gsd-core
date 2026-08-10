@@ -69,6 +69,10 @@ Source skills: `test-strategy.md`, `test-doubles.md`, `tdd.md`, `ai-test-quality
 | `test-flaky` | The three causes (async/concurrency/order) + quarantine-not-retry | `flaky-test-checklist.md` | `test-levels` | — |
 | `test-auth-in-tests` | Authenticate-once/storageState; one-account-per-worker (pairs with `test-realistic-data`) | `auth-in-tests.md` | `test-containers` | — |
 | `test-realistic-data` | Synthetic factories over dumps; deterministic, never raw Faker (pairs with `test-auth-in-tests`) | `realistic-test-data.md` | `test-containers` | — |
+| `test-gate-vs-certify` | The top of the pyramid is two jobs — scripts gate in CI; certification validates in real conditions, never a CI gate | `certification.md § The doctrine` | `test-e2e-tiering` | diagram |
+| `test-certification-ladder` | CERT-0→CERT-2 probe-detected tiers; builder ≠ certifier; sandbox-first trust for third-party certifiers | `certification.md § The certification ladder` | `test-gate-vs-certify` | diagram |
+| `test-certification-substrate` | Seeded accounts, transport-enforced email safety, spend-capped real LLM calls (shape-not-content), honest auth | `certification.md § Email safety` + `§ Auth for certification` + `§ LLM integrations` | `test-certification-ladder`, `test-auth-in-tests` | — |
+| `test-suite-health` | Born-fast defaults (reuse is local-only; current APIs) + the four re-evaluation triggers; volume vs regression | `test-strategy.md § Suite health` | `test-levels` | diagram |
 
 ## Track 4 — Security
 Source skills: `security-posture.md`, `fe-be-seam.md`, `untrusted-input-boundary.md`
@@ -115,10 +119,11 @@ Source skill: `cicd-strategy.md`
 
 | ID | Concept | Source | Prereqs | Visual |
 |---|---|---|---|---|
-| `cicd-pipeline-tiers` | Pipeline follows test tiers — PR vs merge vs nightly; the <10-min budget | `cicd-strategy.md § Test tiers → pipeline stages` | `test-levels` | diagram |
+| `cicd-pipeline-tiers` | The CI rung ladder — one job at the floor; what forces a second stage or a schedule | `cicd-strategy.md § The CI rung ladder (Axis C)` | `test-levels` | diagram |
+| `cicd-rung-ladder` | Two axes (CI surface vs delivery surface); every rung above the floor names its forcing fact | `cicd-strategy.md § The meta-tell` | `cicd-pipeline-tiers` | diagram |
 | `cicd-oidc` | OIDC keyless auth — and the pinned-`sub` trap | `cicd-strategy.md § Auth: OIDC keyless is THE standard` | — | — |
 | `cicd-secrets-split` | Deploy creds (OIDC) vs CI-scoped vs app secrets | `cicd-strategy.md § The secrets split` | `cicd-oidc`, `sec-secrets` | — |
-| `cicd-deployment-ladder` | Trunk + previews + rollback; when flags/canary; why no staging | `cicd-strategy.md § The deployment ladder` | `cicd-pipeline-tiers` | diagram |
+| `cicd-deployment-ladder` | D0–D5: one-command deploy → automated path → flags → weighted rollout → canary; staging is the TOP rung | `cicd-strategy.md § The delivery rung ladder (Axis D)` | `cicd-pipeline-tiers` | diagram |
 | `cicd-flaky-policy` | Quarantine + differentiated retry, never blanket retry-until-green | `cicd-strategy.md § Flaky tests — the canon` | `test-flaky` | — |
 | `cicd-supply-chain` | SHA-pinned actions, lockfile+`ci`, read-only token, secret scanning, branch protection | `cicd-strategy.md § Supply-chain table stakes` | `cicd-oidc` | — |
 | `cicd-publishing` | Tag-driven releases, trusted publishing / provenance (when shipping software) | `cicd-strategy.md § Publishing packages` | `cicd-pipeline-tiers` | — |

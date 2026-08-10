@@ -23,6 +23,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const HOOK = path.join(__dirname, '..', 'hooks', 'gsd-context-monitor.js');
 const FORBIDDEN = ['CRITICAL', 'URGENT', 'immediately', 'STOP'];
@@ -74,6 +75,7 @@ function runHook({ sid, cwd, event }) {
   return execFileSync(process.execPath, [HOOK], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
+    timeout: PROBE_TIMEOUT_MS,
   });
 }
 

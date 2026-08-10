@@ -295,12 +295,30 @@
       ]
     },
     {
+      "path": "bin/install.js",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "isManagedStatusline",
+        "existingStatuslineCommand"
+      ]
+    },
+    {
       "path": "bin/lib/ui-safety-gate.cjs",
       "feature": "fidelity",
       "mode": "markers",
       "markers": 2,
       "anchors": [
         "NEGATOR_BEFORE_TOKEN"
+      ]
+    },
+    {
+      "path": "capabilities/broken-windows/capability.json",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "command-exit-zero",
+        "windows status --raw"
       ]
     },
     {
@@ -330,6 +348,22 @@
       ]
     },
     {
+      "path": "CONTEXT.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+      ]
+    },
+    {
+      "path": "docs/COMMANDS.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`automated_ui` \\\\\\| `agentic_certification`"
+      ]
+    },
+    {
       "path": "docs/context-monitor.md",
       "feature": "context-monitor",
       "mode": "whole-file",
@@ -344,6 +378,15 @@
       "anchors": [
         "_reference/\\*\\*",
         "learn\\.cjs"
+      ]
+    },
+    {
+      "path": "gsd-core/bin/gsd-tools.cjs",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "cmdWindowsAmend",
+        "cmdWindowsReconcile"
       ]
     },
     {
@@ -436,6 +479,15 @@
       "anchors": [
         "deviations:",
         "structured mirror of ## Deviations from Plan"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/user-setup.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification_substrate_example",
+        "seed:test-accounts"
       ]
     },
     {
@@ -550,7 +602,8 @@
       "markers": 3,
       "anchors": [
         "/gsd:model-domain",
-        "/gsd:cicd-strategy"
+        "/gsd:cicd-strategy",
+        "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
       ]
     },
     {
@@ -616,8 +669,28 @@
       "feature": "validation",
       "mode": "anchors-only",
       "anchors": [
-        "do not expect others",
-        "exploration is DONE"
+        "do not expect others"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/auto-mode-detection.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "auto-detected brownfield",
+        "gsd:legacy-inventory"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/codebase-map-offer.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 2,
+      "anchors": [
+        "exploration is DONE",
+        "vibe-coded-to-harden",
+        "strategy-flow\\.md"
       ]
     },
     {
@@ -673,6 +746,25 @@
       ]
     },
     {
+      "path": "gsd-core/workflows/ship.md",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd_run windows reconcile",
+        "windows amend <id>"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/ship.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "Milestone certification sweep",
+        "certification: human \\(CERT-0\\)"
+      ]
+    },
+    {
       "path": "gsd-core/workflows/transition.md",
       "feature": "context",
       "mode": "markers",
@@ -685,9 +777,10 @@
       "path": "gsd-core/workflows/transition.md",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 1,
+      "markers": 2,
       "anchors": [
-        "lightweight drift check"
+        "lightweight drift check",
+        "<step name=\"suite_health_compare\">"
       ]
     },
     {
@@ -751,11 +844,30 @@
       ]
     },
     {
+      "path": "scripts/build-hooks.js",
+      "feature": "grounding",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd-grounding-index-refresh\\.js"
+      ]
+    },
+    {
       "path": "scripts/prompt-injection-scan.sh",
       "feature": "fidelity",
       "mode": "anchors-only",
       "anchors": [
         "untrusted-input-boundary\\.md"
+      ]
+    },
+    {
+      "path": "src/broken-windows.cts",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "reconcileLedger",
+        "amendWindow",
+        "WINDOWS_DUPLICATE_ID",
+        "stripHeaderProse"
       ]
     },
     {
@@ -807,9 +919,11 @@
       "path": "src/init.cts",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 2,
+      "markers": 4,
       "anchors": [
-        "has_design_hint"
+        "has_design_hint",
+        "detectCertificationMode",
+        "certification_mode:"
       ]
     },
     {
@@ -818,6 +932,15 @@
       "mode": "anchors-only",
       "anchors": [
         "gsd-grounding-index-refresh\\.js"
+      ]
+    },
+    {
+      "path": "src/runtime-hooks-surface.cts",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "resolveNvmDefaultVersionDir",
+        "projectLegacyManagedNodeCommand"
       ]
     },
     {
@@ -845,6 +968,15 @@
       "mode": "anchors-only",
       "anchors": [
         "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream"
+      ]
+    },
+    {
+      "path": "tests/broken-windows.test.cjs",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "broken-windows CLI: windows reconcile",
+        "WINDOWS_DUPLICATE_ID"
       ]
     },
     {
@@ -902,6 +1034,15 @@
       ]
     },
     {
+      "path": "tests/install.test.cjs",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "#41: managed statusline is re-emitted, repaired, and nvm-normalized",
+        "resolves under a PATH-less"
+      ]
+    },
+    {
       "path": "tests/init.test.cjs",
       "feature": "strategy",
       "mode": "markers",
@@ -918,6 +1059,15 @@
       "markers": 4,
       "anchors": [
         "empty-legacy-runtime-dir"
+      ]
+    },
+    {
+      "path": "tests/mcp-server-catalog.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "upstream pins the prompt count to its own literal 71",
+        "COMMAND_COUNT"
       ]
     },
     {
@@ -995,6 +1145,105 @@
       "mode": "anchors-only",
       "anchors": [
         "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
+      ]
+    },
+    {
+      "path": "src/shell-command-projection.cts",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "'gsd-agent-isolation-guard\\.js'",
+        "'gsd-write-guard\\.js'"
+      ]
+    },
+    {
+      "path": "tests/shell-command-projection-dispatch.test.cjs",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "managed-hook basename sets cover every hook the installer registers in settings\\.json"
+      ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
+      ]
+    },
+    {
+      "path": "tests/config.test.cjs",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "config-set phase_id_convention bracket warns that the grammar has no consumers"
+      ]
+    },
+    {
+      "path": "tests/coverage-metadata-parser.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "coverage classify — agentic_certification evidence",
+        "agentic_certification"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification\\.md`",
+        "verify-work/steps/agentic-certification\\.md",
+        "<step name=\"coverage_gap_capture\">",
+        "##\\s*Coverage debt",
+        "source: agentic"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-plan.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`agentic_certification`: that entry belongs to a certification run",
+        "\\*\\*Suite metrics \\(suite health\\)\\.\\*\\*"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "SUITE_START_EPOCH=\\$\\(date \\+%s\\)",
+        "Step C — Suite-metrics capture"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/summary.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind: unit\\s+#[^\\n]*agentic_certification",
+        "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
+        "^suite-metrics:$",
+        "<suite_metrics_guidance>"
+      ]
+    },
+    {
+      "path": "gsd-core/references/planning-config.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`workflow\\.certification`"
+      ]
+    },
+    {
+      "path": "src/coverage.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "'agentic_certification'"
       ]
     }
   ]

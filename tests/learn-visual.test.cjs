@@ -11,11 +11,12 @@ const VISUAL = path.resolve(__dirname, '..', 'gsd-core', 'visual');
 const SERVER = path.join(VISUAL, 'server.cjs');
 const FRAME = path.join(VISUAL, 'frame-template.html');
 const FILES = ['server.cjs', 'helper.js', 'frame-template.html', 'start-server.sh', 'stop-server.sh'];
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 describe('learn visual companion (vendored, zero-install)', () => {
   test('server.cjs and helper.js parse as valid JS', () => {
-    execFileSync(process.execPath, ['--check', SERVER], { stdio: 'pipe' });
-    execFileSync(process.execPath, ['--check', path.join(VISUAL, 'helper.js')], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--check', SERVER], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
+    execFileSync(process.execPath, ['--check', path.join(VISUAL, 'helper.js')], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
   });
 
   test('server.cjs requires ONLY Node built-ins (zero third-party dependencies)', () => {

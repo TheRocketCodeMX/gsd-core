@@ -465,3 +465,135 @@ describe('coverage module — frozen enum surface (typed-IR lock)', () => {
     );
   });
 });
+
+/**
+ * `kind: agentic_certification` — the evidence kind an agentic certification
+ * run produces (testing-certification design spec §5).
+ *
+ * Before this kind existed the classifier rejected certification evidence with
+ * INVALID_KIND, which routed the deliverable to `present` — i.e. a feature a
+ * certifier had actually driven end-to-end still cost a human prompt, and the
+ * SUMMARY author's only legal options were to lie (`e2e`) or to say nothing
+ * (`other`). What must NOT change is the deterministic auto-pass contract:
+ * the new kind buys admission to the classifier, never a relaxation of the
+ * three-part test (human_judgment false AND non-empty verification AND every
+ * status pass).
+ */
+describe('coverage classify — agentic_certification evidence', () => {
+  test('the frozen kind enum carries agentic_certification', () => {
+    assert.ok(coverage.VALID_KINDS.includes('agentic_certification'));
+  });
+
+  test('auto-passes a certified deliverable (human_judgment:false, status pass)', (t) => {
+    const tmpDir = createTempProject();
+    t.after(() => cleanup(tmpDir));
+
+    const rel = writeSummary(tmpDir, [
+      'coverage:',
+      '  - id: D1',
+      '    description: "Checkout flow certified end-to-end against the seeded account"',
+      '    verification:',
+      '      - kind: agentic_certification',
+      '        ref: "certification:2026-08-10-checkout/transcript.md"',
+      '        status: pass',
+      '    human_judgment: false',
+    ]);
+
+    const result = classify(tmpDir, rel);
+    assert.equal(result.mode, 'coverage');
+    assert.equal(result.total, 1);
+    assert.equal(result.auto_passed.length, 1);
+    assert.equal(result.auto_passed[0].id, 'D1');
+    assert.equal(result.present.length, 0);
+    assert.deepEqual(result.errors, []);
+  });
+
+  test('a failing certification run is presented to the human, never auto-passed', (t) => {
+    const tmpDir = createTempProject();
+    t.after(() => cleanup(tmpDir));
+
+    const rel = writeSummary(tmpDir, [
+      'coverage:',
+      '  - id: D1',
+      '    description: "Checkout flow"',
+      '    verification:',
+      '      - kind: agentic_certification',
+      '        ref: "certification:2026-08-10-checkout/transcript.md"',
+      '        status: fail',
+      '    human_judgment: false',
+    ]);
+
+    const result = classify(tmpDir, rel);
+    assert.equal(result.auto_passed.length, 0);
+    assert.equal(result.present.length, 1);
+    assert.equal(result.present[0].reason, coverage.PRESENT_REASON.VERIFICATION_NOT_PASSING);
+  });
+
+  test('human_judgment:true still routes to the human even with a passing certification', (t) => {
+    const tmpDir = createTempProject();
+    t.after(() => cleanup(tmpDir));
+
+    const rel = writeSummary(tmpDir, [
+      'coverage:',
+      '  - id: D1',
+      '    description: "Onboarding copy reads well"',
+      '    verification:',
+      '      - kind: agentic_certification',
+      '        ref: "certification:2026-08-10-onboarding/transcript.md"',
+      '        status: pass',
+      '    human_judgment: true',
+      '    rationale: "content accuracy is not certifiable by a driver"',
+    ]);
+
+    const result = classify(tmpDir, rel);
+    assert.equal(result.auto_passed.length, 0);
+    assert.equal(result.present.length, 1);
+    assert.equal(result.present[0].reason, coverage.PRESENT_REASON.HUMAN_JUDGMENT);
+  });
+
+  test('a mixed evidence set auto-passes only when EVERY entry passes', (t) => {
+    const tmpDir = createTempProject();
+    t.after(() => cleanup(tmpDir));
+
+    const rel = writeSummary(tmpDir, [
+      'coverage:',
+      '  - id: D1',
+      '    description: "Checkout"',
+      '    verification:',
+      '      - kind: unit',
+      '        ref: "tests/checkout.test.ts#totals"',
+      '        status: pass',
+      '      - kind: agentic_certification',
+      '        ref: "certification:2026-08-10-checkout/transcript.md"',
+      '        status: unknown',
+      '    human_judgment: false',
+    ]);
+
+    const result = classify(tmpDir, rel);
+    assert.equal(result.auto_passed.length, 0);
+    assert.equal(result.present.length, 1);
+    assert.equal(result.present[0].reason, coverage.PRESENT_REASON.VERIFICATION_NOT_PASSING);
+  });
+
+  test('an unknown certification-ish kind is still rejected (the enum did not go open)', (t) => {
+    const tmpDir = createTempProject();
+    t.after(() => cleanup(tmpDir));
+
+    const rel = writeSummary(tmpDir, [
+      'coverage:',
+      '  - id: D1',
+      '    description: "Checkout"',
+      '    verification:',
+      '      - kind: certification',
+      '        ref: "certification:transcript.md"',
+      '        status: pass',
+      '    human_judgment: false',
+    ]);
+
+    const result = classify(tmpDir, rel);
+    assert.equal(result.auto_passed.length, 0);
+    assert.equal(result.present.length, 1);
+    assert.equal(result.present[0].reason, coverage.PRESENT_REASON.VALIDATION_FAILED);
+    assert.ok(result.errors.some((e) => e.code === coverage.ERROR_CODE.INVALID_KIND));
+  });
+});

@@ -27,6 +27,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+// #2544: the single source of truth for the CommonJS module-type marker. The
+// two helpers below are thin boolean-returning shims over these — see the
+// marker section for why this file no longer carries its own copy.
+import {
+  ensureCommonJsMarker as ensureCommonJsMarkerOwned,
+  removeCommonJsMarker as removeCommonJsMarkerOwned,
+} from './commonjs-marker.cjs';
 import {
   CURSOR_HOOK_EVENTS,
   CURSOR_EVENT_SCRIPT_MAP,
@@ -217,61 +224,53 @@ function atomicWriteFileSync(target: string, data: string, options: fs.WriteFile
 //
 // The marker content is byte-identical to installSharedHooksBundle's
 // (bin/install.js installSharedHooksBundle): {"type":"commonjs"}\n.
+//
+// #2544: the two helpers below no longer carry their own copy of the write and
+// remove rules — they DELEGATE to src/commonjs-marker.cts, which #2544 makes the
+// single place both rules are enforced. Keeping a second copy here was not
+// merely redundant; the copies had drifted apart on exactly the two properties
+// that matter:
+//
+//   - ownership probe: `fs.existsSync` FOLLOWS symlinks and reports `false` for
+//     a DANGLING one, so a dangling `package.json` symlink classified as absent
+//     and the write below followed the link outside the directory GSD owns.
+//     `classifyMarker` uses `lstat` + `isFile()`, so a symlink or a directory at
+//     the marker path is classified `foreign` and left strictly alone.
+//   - create: a plain `writeFileSync` leaves the classify->write window open.
+//     `ensureCommonJsMarker` creates with `flag: 'wx'` (O_EXCL), so anything
+//     that appears at the path in between fails with EEXIST instead of being
+//     followed or overwritten.
+//
+// The exported signatures are unchanged (both still return a boolean), so every
+// caller and the #2717 tests are unaffected.
 // ---------------------------------------------------------------------------
-
-/** The exact marker content GSD writes, matching installSharedHooksBundle. */
-const COMMONJS_MARKER_CONTENT = '{"type":"commonjs"}\n';
 
 /**
  * Ensure a `package.json` forcing CommonJS mode exists in `dir` (the directory
  * holding GSD-staged `.js` hook scripts). Idempotent: a no-op if the marker is
- * already present with GSD's content. Overwrites only when the file is absent
- * or already carries GSD's exact marker — it never clobbers a distinct
- * user-authored package.json (it leaves such a file in place; the user owns it).
+ * already present with GSD's content. Never clobbers a distinct user-authored
+ * package.json (it leaves such a file in place; the user owns it).
  *
  * @param dir - absolute path to the directory holding the staged .js hooks
- * @returns `true` if the marker is present after the call (written or already there)
+ * @returns `true` if GSD's marker is present after the call (written or already there)
  */
 function ensureCommonJsMarker(dir: string): boolean {
-  const markerPath = path.join(dir, 'package.json');
-  try {
-    if (fs.existsSync(markerPath)) {
-      const existing = fs.readFileSync(markerPath, 'utf8');
-      // Already GSD's marker (tolerant of trailing-whitespace variants) — done.
-      if (existing.trim() === '{"type":"commonjs"}') return true;
-      // A distinct package.json the user owns — do NOT clobber. The hook will
-      // load as whatever type the user declared; that is the user's choice.
-      return false;
-    }
-    fs.writeFileSync(markerPath, COMMONJS_MARKER_CONTENT);
-    return true;
-  } catch {
-    // Best-effort: a marker write failure must not fail the whole install.
-    return false;
-  }
+  // 'written' | 'unchanged' -> the marker is ours and present.
+  // 'preserved-foreign'     -> a file GSD does not own is there; left untouched.
+  // 'failed'                -> environmental (EACCES/EROFS/ENOSPC); best-effort.
+  const outcome = ensureCommonJsMarkerOwned(dir);
+  return outcome === 'written' || outcome === 'unchanged';
 }
 
 /**
  * Remove the CommonJS marker from `dir` on uninstall — but ONLY if it carries
  * GSD's exact marker content. A user-authored package.json is never deleted.
- * Mirrors the kimi uninstall guard in bin/install.js.
  *
  * @param dir - absolute path to the directory that held the staged .js hooks
  * @returns `true` if a GSD-owned marker was removed
  */
 function removeCommonJsMarkerIfGsdOwned(dir: string): boolean {
-  const markerPath = path.join(dir, 'package.json');
-  try {
-    if (!fs.existsSync(markerPath)) return false;
-    const content = fs.readFileSync(markerPath, 'utf8').trim();
-    if (content === '{"type":"commonjs"}') {
-      fs.unlinkSync(markerPath);
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
+  return removeCommonJsMarkerOwned(dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +377,74 @@ function parseTomlValue(text: string, i: number): { value: unknown; end: number 
 interface NodeNormOpts {
   env?: NodeJS.ProcessEnv;
   existsSync?: (p: string) => boolean;
+  readFileSync?: (p: string) => string;
+  readdirSync?: (p: string) => string[];
+}
+
+/** Compare two `vX.Y.Z` dir names numerically (descending sort comparator). */
+function compareNvmVersionDirs(a: string, b: string): number {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const av = parse(a);
+  const bv = parse(b);
+  for (let i = 0; i < Math.max(av.length, bv.length); i++) {
+    const d = (bv[i] || 0) - (av[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/**
+ * Resolve nvm's `default` alias to a concrete `versions/node/<dir>` name.
+ *
+ * nvm ships no version-independent shim on disk (unlike fnm's aliases dir,
+ * mise's shims dir and volta's bin dir), so the only stable pointer is the
+ * `default` alias file — the version nvm activates for a fresh login shell.
+ * The file holds either a (possibly partial) version (`24`, `24.1.0`,
+ * `v24.1.0`), another alias name (`lts/jod`), or `node`/`stable` meaning
+ * "latest installed". Alias chains are followed for a bounded number of hops.
+ *
+ * Returns null when the alias is absent, unreadable, or names no installed
+ * version — callers must then leave execPath untouched.
+ */
+function resolveNvmDefaultVersionDir(
+  nvmRoot: string,
+  existsSync: (p: string) => boolean,
+  readFileSync: (p: string) => string,
+  readdirSync: (p: string) => string[],
+): string | null {
+  let spec: string | null = null;
+  let aliasName = 'default';
+  for (let hop = 0; hop < 5; hop++) {
+    const aliasFile = `${nvmRoot}/alias/${aliasName}`;
+    if (!existsSync(aliasFile)) return null;
+    let contents: string;
+    try {
+      contents = String(readFileSync(aliasFile)).trim();
+    } catch {
+      return null;
+    }
+    if (!contents) return null;
+    if (/^v?\d/.test(contents)) { spec = contents.replace(/^v/, ''); break; }
+    if (contents === 'node' || contents === 'stable' || contents === 'unstable') { spec = ''; break; }
+    if (!/^[A-Za-z0-9._\-/*]+$/.test(contents) || contents.includes('..')) return null;
+    aliasName = contents;
+  }
+  if (spec === null) return null;
+
+  const versionsDir = `${nvmRoot}/versions/node`;
+  let installed: string[];
+  try {
+    installed = readdirSync(versionsDir) || [];
+  } catch {
+    return null;
+  }
+  const wanted = spec === '' ? null : `v${spec}`;
+  const matches = installed.filter(
+    (d) => /^v\d/.test(d) && (wanted === null || d === wanted || d.startsWith(`${wanted}.`)),
+  );
+  if (matches.length === 0) return null;
+  matches.sort(compareNvmVersionDirs);
+  return matches[0];
 }
 
 function normalizeNodePath(execPath: string, opts?: NodeNormOpts): string {
@@ -449,6 +516,41 @@ function normalizeNodePath(execPath: string, opts?: NodeNormOpts): string {
     const shim = `${voltaMatch[1]}/bin/node${voltaMatch[2] || ''}`;
     if (existsSync(shim)) return shim;
   }
+
+  // nvm pins a concrete version at <NVM_DIR>/versions/node/<ver>/bin/node, and
+  // `nvm use <ver>` selects it for the CURRENT SHELL ONLY — the same transient
+  // selection fnm expresses as a per-shell fnm_multishells path (#977). Baking
+  // that transient version into hooks and statusLine means the command 404s the
+  // moment `nvm uninstall <ver>` prunes it, and Claude Code renders a hook that
+  // exits non-zero with no stdout as a BLANK STATUS BAR (#41).
+  //
+  // nvm has no version-independent shim on disk, so the stable alias fnm/mise/
+  // volta each point at is, for nvm, the `default` alias — the version a fresh
+  // login shell activates. Derive <NVM_DIR> from execPath (a `.nvm` root, or a
+  // custom NVM_DIR the path actually lives under), resolve the alias, and only
+  // rewrite when the resulting binary exists — otherwise fall back to the raw
+  // execPath unchanged, exactly like the mise/volta branches.
+  const nvmMatch = normalizedForMatch.match(
+    /^(.*)\/versions\/node\/[^/]+\/(bin\/)?node(\.exe)?$/,
+  );
+  if (nvmMatch) {
+    const root = nvmMatch[1];
+    const envRoot = env.NVM_DIR ? shellCmdProjection.posixNormalize(env.NVM_DIR).replace(/\/+$/, '') : '';
+    const isNvmRoot = /(^|\/)\.nvm$/.test(root) || (envRoot !== '' && root === envRoot);
+    if (isNvmRoot) {
+      const readFileSync = (opts && opts.readFileSync)
+        || ((p: string) => fs.readFileSync(p, 'utf8'));
+      const readdirSync = (opts && opts.readdirSync)
+        || ((p: string) => fs.readdirSync(p));
+      const versionDir = resolveNvmDefaultVersionDir(root, existsSync, readFileSync, readdirSync);
+      if (versionDir) {
+        // Preserve the matched layout: `<ver>/bin/node` on POSIX,
+        // `<ver>/node.exe` where the runtime laid it out that way.
+        const candidate = `${root}/versions/node/${versionDir}/${nvmMatch[2] || ''}node${nvmMatch[3] || ''}`;
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+  }
   return execPath;
 }
 
@@ -507,6 +609,7 @@ interface SettingsHooks {
 
 interface Settings {
   hooks?: SettingsHooks;
+  statusLine?: HookEntry;
 }
 
 interface RewriteOpts {
@@ -514,56 +617,93 @@ interface RewriteOpts {
   runtime?: string;
 }
 
+/**
+ * Project one legacy managed `node <script>` command string onto the absolute
+ * node runner, or return null when the entry must be left alone (unparseable,
+ * arg-form, unmanaged script, already-stable runner, or no change needed).
+ *
+ * Extracted from the settings.hooks walk so the identical rules can be applied
+ * to `settings.statusLine.command`, which carries the same command shape and
+ * the same managed basename but lives outside settings.hooks (#41).
+ */
+function projectLegacyManagedNodeCommand(
+  entry: HookEntry,
+  absoluteRunner: string,
+  platform: string,
+  runtime: string,
+): string | null {
+  if (!entry || typeof entry.command !== 'string') return null;
+  if (Array.isArray(entry.args) && entry.args.length > 0) return null;
+  let trimmed = entry.command.trim();
+  const hadPowerShellCallOperator = platform === 'win32' && /^&\s+/.test(trimmed);
+  if (hadPowerShellCallOperator) {
+    trimmed = trimmed.replace(/^&\s+/, '').trim();
+  }
+  const m = trimmed.match(/^node\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/) ||
+            trimmed.match(/^("([^"]+)"|'([^']+)'|(\S+))\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/);
+  if (!m) return null;
+
+  let _runnerToken: string, scriptToken: string, scriptPath: string;
+  if (/^node\s+/.test(trimmed)) {
+    _runnerToken = 'node';
+    scriptToken = m[1];
+    scriptPath = m[2] || m[3] || m[4] || '';
+  } else {
+    _runnerToken = m[1];
+    const runnerPath = shellCmdProjection.posixNormalize(m[2] || m[3] || m[4] || '');
+    const stableRunner = normalizeNodePath(runnerPath);
+    if (stableRunner === runnerPath && platform !== 'win32') return null;
+    scriptToken = m[5];
+    scriptPath = m[6] || m[7] || m[8] || '';
+  }
+
+  if (!isManagedHookBasename(scriptPath, { surface: 'settings-json' })) return null;
+
+  const projectedCommand = projectLegacySettingsHookCommand({
+    absoluteRunner,
+    scriptPath,
+    scriptToken,
+    runtime,
+    platform,
+  });
+  if (!projectedCommand) return null;
+  if (entry.command === projectedCommand) return null;
+  return projectedCommand;
+}
+
 function rewriteLegacyManagedNodeHookCommands(settings: Settings, absoluteRunner: string, opts?: RewriteOpts): boolean {
-  if (!settings || !settings.hooks || !absoluteRunner) return false;
+  if (!settings || !absoluteRunner) return false;
+  if (!settings.hooks && !settings.statusLine) return false;
   if (!opts) opts = {};
   const platform = opts.platform || process.platform;
+  const runtime = opts.runtime || 'generic';
   let changed = false;
-  for (const entries of Object.values(settings.hooks)) {
+  for (const entries of Object.values(settings.hooks || {})) {
     if (!Array.isArray(entries)) continue;
     for (const entry of entries) {
       if (!entry || !Array.isArray(entry.hooks)) continue;
       for (const h of entry.hooks) {
-        if (!h || typeof h.command !== 'string') continue;
-        if (Array.isArray(h.args) && h.args.length > 0) continue;
-        let trimmed = h.command.trim();
-        const hadPowerShellCallOperator = platform === 'win32' && /^&\s+/.test(trimmed);
-        if (hadPowerShellCallOperator) {
-          trimmed = trimmed.replace(/^&\s+/, '').trim();
-        }
-        const m = trimmed.match(/^node\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/) ||
-                  trimmed.match(/^("([^"]+)"|'([^']+)'|(\S+))\s+("([^"]+)"|'([^']+)'|(\S+))\s*$/);
-        if (!m) continue;
-
-        let _runnerToken: string, scriptToken: string, scriptPath: string;
-        if (/^node\s+/.test(trimmed)) {
-          _runnerToken = 'node';
-          scriptToken = m[1];
-          scriptPath = m[2] || m[3] || m[4] || '';
-        } else {
-          _runnerToken = m[1];
-          const runnerPath = shellCmdProjection.posixNormalize(m[2] || m[3] || m[4] || '');
-          const stableRunner = normalizeNodePath(runnerPath);
-          if (stableRunner === runnerPath && platform !== 'win32') continue;
-          scriptToken = m[5];
-          scriptPath = m[6] || m[7] || m[8] || '';
-        }
-
-        if (!isManagedHookBasename(scriptPath, { surface: 'settings-json' })) continue;
-
-        const projectedCommand = projectLegacySettingsHookCommand({
-          absoluteRunner,
-          scriptPath,
-          scriptToken,
-          runtime: opts.runtime || 'generic',
-          platform,
-        });
-        if (!projectedCommand) continue;
-        if (h.command === projectedCommand) continue;
-
-        h.command = projectedCommand;
+        const projected = projectLegacyManagedNodeCommand(h, absoluteRunner, platform, runtime);
+        if (projected === null) continue;
+        h.command = projected;
         changed = true;
       }
+    }
+  }
+
+  // #41: `settings.statusLine` is a managed node command in every way that
+  // matters — same `node "<configDir>/hooks/gsd-statusline.js"` shape, same
+  // managed basename — but it lives outside `settings.hooks`, so the #2979
+  // repair pass never visited it. A bare-`node` statusline exits 127 under
+  // Claude Code's PATH-less `sh -c` spawn and renders as a blank status bar.
+  // The managed-only guard inside projectLegacyManagedNodeCommand keeps
+  // third-party statuslines (#2248) untouched.
+  const statusLine = settings.statusLine;
+  if (statusLine && typeof statusLine === 'object') {
+    const projected = projectLegacyManagedNodeCommand(statusLine, absoluteRunner, platform, runtime);
+    if (projected !== null) {
+      statusLine.command = projected;
+      changed = true;
     }
   }
   return changed;
@@ -1271,7 +1411,15 @@ function writeCursorHooksJson(targetDir: string, src: string, opts?: WriteCursor
   // installSharedHooksBundle (the only other writer of this marker); without
   // it, a ~/.cursor/package.json declaring {"type":"module"} makes Node load
   // these require()-using scripts as ESM and every Cursor hook fails silently.
-  ensureCommonJsMarker(hooksDir);
+  //
+  // #2544: gated on having actually staged a script, mirroring
+  // installSharedHooksBundle's `stagedHooks` gate. hooks/ is shared space, and
+  // this function mkdirs it unconditionally — so an ungated write drops a GSD
+  // marker into a directory GSD created but did not fill, which is the same
+  // write-into-someone-else's-territory this issue is about.
+  if (installedScripts.size > 0) {
+    ensureCommonJsMarker(hooksDir);
+  }
 
   const hookOpts: BuildHookCommandOpts = { runtime: 'cursor', platform: opts.platform || process.platform };
   const commands: Record<string, string | null> = {};
@@ -1484,7 +1632,12 @@ function writeWindsurfHooksJson(targetDir: string, src: string, opts?: WriteWind
   // installSharedHooksBundle (the only other writer of this marker); without
   // it, a config-root package.json declaring {"type":"module"} makes Node load
   // these require()-using scripts as ESM and the Windsurf hooks fail silently.
-  ensureCommonJsMarker(hooksDir);
+  //
+  // #2544: gated on having actually staged a script — see the identical gate in
+  // the Cursor writer above and `stagedHooks` in installSharedHooksBundle.
+  if (installedScripts.size > 0) {
+    ensureCommonJsMarker(hooksDir);
+  }
 
   const hookOpts: BuildHookCommandOpts = { runtime: 'windsurf', platform: opts.platform || process.platform };
   const commands: Record<string, string | null> = {};
@@ -1918,6 +2071,67 @@ function applySettingsJsonHooks(settings: any, opts: ApplySettingsJsonHooksOpts)
       console.warn(`  ${yellow}⚠${reset}  Skipped worktree path guard hook — gsd-worktree-path-guard.js not found at target`);
     }
 
+    // Configure PreToolUse hook for Agent-dispatch isolation (#3045)
+    // Hard-blocks an executor Agent() dispatch (subagent_type="gsd-executor")
+    // missing its harness isolation parameter when this project's resolved
+    // dispatch isolation is harness-worktree. Prevents the executor from
+    // silently running and committing in the primary checkout when the
+    // model-authored dispatch omits isolation="worktree".
+    const agentIsolationGuardCommand = isGlobal
+      ? buildHookCommand(targetDir, 'gsd-agent-isolation-guard.js', hookOpts)
+      : localCmd('gsd-agent-isolation-guard.js');
+    const hasAgentIsolationGuardHook = settings.hooks[preToolEvent].some((entry: HookGroup) =>
+      entry.hooks && entry.hooks.some((h: HookEntry) => referencesHook(h as Record<string, unknown>, 'gsd-agent-isolation-guard'))
+    );
+    const agentIsolationGuardFile = path.join(targetDir, 'hooks', 'gsd-agent-isolation-guard.js');
+    if (!hasAgentIsolationGuardHook && fs.existsSync(agentIsolationGuardFile) && agentIsolationGuardCommand) {
+      settings.hooks[preToolEvent].push({
+        // #3045 MAJOR 1: widened from "Agent"-only — hooks.json's own
+        // PostToolUse precedent (context-monitor) already hedges both names,
+        // and the hook itself now accepts tool_name "Task" too.
+        matcher: 'Agent|Task',
+        hooks: [
+          {
+            type: 'command',
+            command: agentIsolationGuardCommand,
+            timeout: 5
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured agent isolation dispatch guard hook`);
+    } else if (!hasAgentIsolationGuardHook && !fs.existsSync(agentIsolationGuardFile)) {
+      console.warn(`  ${yellow}⚠${reset}  Skipped agent isolation guard hook — gsd-agent-isolation-guard.js not found at target`);
+    }
+
+    // Configure PreToolUse hook for catastrophic-shrink protection (#2255, fix 3 of #973)
+    // Hard-blocks a whole-file Write that collapses a curated .planning/ artifact
+    // (ROADMAP.md, milestone roadmaps, STATE.md) far below its on-disk size.
+    // Escape hatches (both named in the block message): the single-use
+    // sentinel .planning/.gsd-allow-shrink (workflow steps — a per-step env
+    // cannot reach a hook) and GSD_ALLOW_PLANNING_SHRINK=1 (interactive).
+    const writeGuardCommand = isGlobal
+      ? buildHookCommand(targetDir, 'gsd-write-guard.js', hookOpts)
+      : localCmd('gsd-write-guard.js');
+    const hasWriteGuardHook = settings.hooks[preToolEvent].some((entry: HookGroup) =>
+      entry.hooks && entry.hooks.some((h: HookEntry) => referencesHook(h as Record<string, unknown>, 'gsd-write-guard'))
+    );
+    const writeGuardFile = path.join(targetDir, 'hooks', 'gsd-write-guard.js');
+    if (!hasWriteGuardHook && fs.existsSync(writeGuardFile) && writeGuardCommand) {
+      settings.hooks[preToolEvent].push({
+        matcher: 'Write',
+        hooks: [
+          {
+            type: 'command',
+            command: writeGuardCommand,
+            timeout: 5
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured write guard hook (catastrophic-shrink protection)`);
+    } else if (!hasWriteGuardHook && !fs.existsSync(writeGuardFile)) {
+      console.warn(`  ${yellow}⚠${reset}  Skipped write guard hook — gsd-write-guard.js not found at target`);
+    }
+
     // Configure commit validation hook (Conventional Commits enforcement, opt-in)
     const validateCommitCommand = isGlobal
       ? buildHookCommand(targetDir, 'gsd-validate-commit.sh', hookOpts)
@@ -2292,6 +2506,7 @@ function buildKimiHooksTomlBlock(targetDir: string, opts: { hookOpts: BuildHookC
     { event: 'PreToolUse', command: cmd('gsd-prompt-guard.js'), matcher: 'WriteFile|StrReplaceFile', timeout: 5 },
     { event: 'PreToolUse', command: cmd('gsd-read-guard.js'), matcher: 'WriteFile|StrReplaceFile', timeout: 5 },
     { event: 'PreToolUse', command: cmd('gsd-worktree-path-guard.js'), matcher: 'WriteFile|StrReplaceFile', timeout: 5 },
+    { event: 'PreToolUse', command: cmd('gsd-write-guard.js'), matcher: 'WriteFile', timeout: 5 },
     { event: 'PreToolUse', command: cmd('gsd-workflow-guard.js'), matcher: 'Shell|WriteFile|StrReplaceFile', timeout: 5 },
     { event: 'PreToolUse', command: cmd('gsd-validate-commit.sh'), matcher: 'Shell', timeout: 5 },
 

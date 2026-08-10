@@ -300,6 +300,56 @@ curl -X POST http://localhost:3000/api/test-email \
 ```
 </sendgrid_example>
 
+<certification_substrate_example>
+
+When TEST-STRATEGY.md's `## Certification substrate` requires seeded accounts, a mail catcher, or a one-time auth session, those human-required halves land here (declared via the same `user_setup` frontmatter — `env_vars` / `dashboard_config` / `local_dev` fields):
+
+```markdown
+# Phase 7: User Setup Required
+
+**Generated:** 2026-08-10
+**Phase:** 07-checkout-flow
+**Status:** Incomplete
+
+Complete these items so certification can run against real, seeded conditions.
+
+## Environment Variables
+
+| Status | Variable | Source | Add to |
+|--------|----------|--------|--------|
+| [ ] | `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` | Seed test account credentials — your secret store entry (never committed) | `.env.local` |
+| [ ] | `SMTP_HOST` / `SMTP_PORT` | Mail catcher transport — `localhost` / `1025` (Mailpit) | `.env.local` |
+
+## Account Setup
+
+- [ ] **Seed test accounts** (roles: admin, member)
+  - Run: `npm run seed:test-accounts` (idempotent — safe to re-run)
+  - Store the generated credentials in the env/secret store; never in the repo, never real user data
+
+## Dashboard Configuration
+
+- [ ] **Mail catcher running** (email safety — the transport is the enforcement point)
+  - Run: `docker run -d -p 8025:8025 -p 1025:1025 <mailpit image>` (image coordinate per the Mailpit project README; the ports are the documented SMTP/API pair)
+  - App SMTP points at `localhost:1025`; assert received mail via the API on `:8025`
+
+- [ ] **One-time auth session** (only if the auth policy is auth-once + persisted session)
+  - Sign in once as the seed account when prompted; the session persists to the gitignored storage-state file
+  - Re-auth when it expires — the certifier will escalate the login moment to you
+
+## Verification
+
+```bash
+grep -E "TEST_ADMIN|SMTP_" .env.local
+curl -s http://localhost:8025/api/v1/info   # catcher reachable
+npm run seed:test-accounts                  # idempotent: second run is a no-op
+```
+
+---
+
+**Once all items complete:** Mark status as "Complete" at top of file.
+```
+</certification_substrate_example>
+
 ---
 
 ## Guidelines

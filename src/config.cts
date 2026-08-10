@@ -88,6 +88,8 @@ const SCHEMA_DEFAULTS: Record<string, unknown> = {
   'context_window': 200000,
   'executor.stall_detect_interval_minutes': 5,
   'executor.stall_threshold_minutes': 10,
+  'planner.stall_detect_interval_minutes': 5,
+  'planner.stall_threshold_minutes': 10,
   'git.create_tag': true,
   // Derived from the defaults manifest rather than restated, so the manifest
   // stays the single source of truth for the smart-zone budget (#2630).
@@ -329,10 +331,20 @@ function buildNewProjectConfig(userChoices: Record<string, unknown>): Record<str
   const ch = choices as Record<string, Record<string, unknown>>;
   const hd = hardcoded as Record<string, Record<string, unknown>>;
 
+  // #2840: `runtime` is host-specific (written by the installer for whichever
+  // runtime's install ran last). On a machine with 2+ runtimes, it poisons every
+  // new project config — e.g. a Codex install's `runtime:"codex"` leaks into
+  // Claude Code projects, resolving agents to wrong model IDs. `resolve_model_ids`
+  // already has a per-install guard (#2297); `runtime` gets the same treatment
+  // by excluding it from the defaults spread. Projects detect the runtime from
+  // the install path / .gsd-runtime marker, not from a copied config key.
+  const safeDefaults = { ...userDefaults };
+  delete safeDefaults['runtime'];
+
   // Three-level deep merge: hardcoded <- userDefaults <- choices
   const config: Record<string, unknown> = {
     ...hardcoded,
-    ...userDefaults,
+    ...safeDefaults,
     ...choices,
     git: {
       ...hd['git'],
@@ -924,6 +936,31 @@ function cmdConfigSet(cwd: string, keyPath: string | undefined, value: string | 
         error(`Invalid reviewer_instances.${instanceName}.${field} '${val}'. Must be a string.`);
       }
     }
+  }
+
+  // FORK GUARD — phase_id_convention: "bracket" is settable but unconsumed.
+  //
+  // The 1.10.0 fix (#2997/#3098) made `phase_id_convention` survive config
+  // resolution, which also made `"bracket"` an accepted value. The bracket
+  // grammar itself (ADR-612) lives in src/phase-id.cts and round-trips, but the
+  // ADR is still "Proposed (PR-0 — ADR only)" and no CLI or roadmap surface
+  // consumes the flag yet: a project that sets it and writes the ADR's canonical
+  // headings (`### [GSD.02] 05: Name`) gets `roadmap analyze` → phase_count 0,
+  // exit 0, no diagnostic. Upstream's sequencing is deliberate; the footgun is
+  // letting a user set the value against a silent failure mode.
+  //
+  // Warning, not an error: staging the value ahead of the consumers is
+  // legitimate, and rejecting it would diverge from upstream's config contract.
+  // stderr keeps `--raw` stdout byte-identical for scripted callers.
+  if (kp === 'phase_id_convention' && parsedValue === 'bracket') {
+    try {
+      process.stderr.write(
+        `gsd: warning — phase_id_convention "bracket" (ADR-612) has no consumers in this release. ` +
+        `The grammar round-trips in the phase-id library, but no CLI or roadmap surface reads it yet, ` +
+        `so bracket-form ROADMAP headings parse to zero phases without an error. ` +
+        `Legacy phase-id parsing stays active until the consumers land.\n`
+      );
+    } catch { /* stderr might be closed in some test harnesses */ }
   }
 
   const setConfigValueResult = setConfigValue(cwd, kp, parsedValue);

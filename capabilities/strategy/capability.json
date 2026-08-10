@@ -1,7 +1,7 @@
 {
   "id": "strategy",
   "role": "feature",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "title": "Strategy chain",
   "description": "Discovery/strategy chain: the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
   "tier": "full",
@@ -28,7 +28,18 @@
   ],
   "agents": [],
   "hooks": [],
-  "config": {},
+  "config": {
+    "workflow.certification": {
+      "type": "enum",
+      "values": [
+        "required",
+        "offer",
+        "off"
+      ],
+      "default": "required",
+      "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': skip the step entirely; verify-work behaves exactly as it did before certification existed. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them."
+    }
+  },
   "commands": [
     {
       "family": "project",
