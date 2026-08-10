@@ -132,12 +132,15 @@ jobs:
     # (see #3057): on PR #3094 it reached 15m05s against this same cap and was
     # CANCELLED, four shas in a row — a change to tests/helpers.cjs scoped in
     # the install-heavy suites and pushed the single Windows lane over the top.
-    # Per #869, a timeout bump only moves that cliff; sharding removes it. The
-    # cap stays at 15 unchanged: each shard now does roughly a third of the
-    # work, so headroom improves rather than needing a raise.
+    # Per #869, a timeout bump only moves that cliff; sharding removes it. For
+    # NORMAL PRs the sharded cost is 4-7m/shard and 15 was ample. Mega-PR
+    # realignments are the exception the fork keeps hitting: on PR #49
+    # (v1.10.0, ~1.6k files) all three windows-24 shards died AT the 15m cap
+    # (runs 93387545686/93387545643/93387545656, 15m04-06s). 30 = ~1.9x that
+    # observed cap-death cost; normal shards are unaffected.
     # tests/ci-test-job-timeout-budget.test.cjs holds every lane here to a
     # headroom factor over its own measured cost.
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       GSD_PLUGIN_ROOT: .ci-gsd-plugin-root-disabled
       # #2854: pin the emitted gate's baseline to the SAME commit the tree was merged

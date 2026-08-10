@@ -129,6 +129,13 @@ ALLOWLIST=(
   # asserts nothing: it is the payload the guard is required to catch, carried
   # as test DATA. Same class as the read-injection-scanner suites above.
   'tests/kimi-payload-field-shadowing.security.test.cjs'
+  # RuleTester fixtures for the local/no-unbounded-spawn ESLint rule contain
+  # child_process call strings (exec('git branch main',{cwd,stdio:'pipe'}),
+  # exec('x',{timeout:1000})) as test DATA the rule must lint for a missing
+  # timeout — not attack vectors. Same class as the no-unguarded-nonportable-exec
+  # and no-bare-npm-exec fixtures above; trips the `exec\(['"]` code-execution
+  # pattern for exactly the same reason.
+  'tests/no-unbounded-spawn.test.cjs'
 )
 
 is_allowlisted() {

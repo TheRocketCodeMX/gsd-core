@@ -344,7 +344,14 @@ const GSD_WINDSURF_HOOK_SCRIPTS = [
 // copy below) — that function stages this helper alongside them. Listing it
 // here keeps uninstall and the manifest managing it for every OTHER runtime
 // that does receive hooks/lib.
-const GSD_HOOK_LIB_FILES = ['git-cmd.js', 'gsd-graphify-rebuild.sh', 'cursor-workspace.js'];
+// isolation-sentinel.js (#3045) is required by gsd-agent-isolation-guard.js and
+// gsd-cursor-subagent-start.js. It ships to hooks/dist/lib via build-hooks.js
+// HOOKS_SUBDIRS_TO_COPY and is therefore staged by the unallowlisted hooks/dist
+// subdir recursion (#3579) — but it was never listed here, so uninstall left it
+// behind (hooks/lib/ then never rmdir'd, since it was not empty) and the install
+// manifest never tracked it, making detect-custom-files flag it as a perpetual
+// false-positive custom file on every update. Same defect class as #941.
+const GSD_HOOK_LIB_FILES = ['git-cmd.js', 'gsd-graphify-rebuild.sh', 'cursor-workspace.js', 'isolation-sentinel.js'];
 
 /**
  * Directory name GSD stages its shared hook bundle under, inside a runtime's

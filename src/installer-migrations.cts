@@ -919,6 +919,27 @@ function applyInstallerMigrationPlan({
         });
       }
     }
+    // Zero-action pending migrations are applied too. `plan()` already ran and
+    // found nothing to do, so the migration is complete — that is exactly what
+    // the action-free path (markPendingMigrationsApplied) records. Without this
+    // loop the two paths disagree: a no-op migration stays pending forever
+    // whenever some UNRELATED migration in the same run happens to have work,
+    // so the ledger would reflect sibling migrations rather than the
+    // migration's own outcome. `actionsByMigrationId` is keyed off
+    // `plan.actions`, the same source as `journal.appliedMigrationIds`, so this
+    // only ever records migrations that planned nothing at all — a migration
+    // whose actions were planned is left to the journal loop above.
+    for (const migration of plan.pendingMigrations || []) {
+      const migrationId = migration.id as string;
+      if (applied.has(migrationId)) continue;
+      if (actionsByMigrationId.has(migrationId)) continue;
+      nextApplied.push({
+        id: migrationId,
+        appliedAt,
+        journal: null,
+        checksum: migrationChecksum(migration),
+      });
+    }
     writeInstallState(configDir, {
       schemaVersion: 1,
       appliedMigrations: nextApplied,
