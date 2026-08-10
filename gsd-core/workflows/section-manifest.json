@@ -210,6 +210,11 @@
         "read": "gsd-core/workflows/verify-work/steps/automated-ui-verification.md"
       },
       {
+        "id": "agentic-certification",
+        "when": "always",
+        "read": "gsd-core/workflows/verify-work/steps/agentic-certification.md"
+      },
+      {
         "id": "mvp-uat-framing",
         "when": "state:phase-mvp-mode",
         "read": "gsd-core/workflows/verify-work/steps/mvp-uat-framing.md"

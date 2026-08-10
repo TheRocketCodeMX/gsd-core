@@ -149,6 +149,10 @@ Continue to `create_uat_file`.
 If `section_manifest` is `null` or `"automated-ui-verification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/automated-ui-verification.md`. Otherwise skip — do not read the file.
 <!-- /gsd:section -->
 
+<!-- gsd:section id="agentic-certification" when="always" -->
+If `section_manifest` is `null` or `"agentic-certification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`. Otherwise skip — do not read the file. `when="always"` because the contract is that every phase leaves a **recorded** certification outcome; the step itself resolves `workflow.certification: off` and dispatches nothing.
+<!-- /gsd:section -->
+
 <step name="find_summaries">
 **Find what to test:**
 
@@ -673,9 +677,54 @@ Spawning parallel debug agents to investigate each issue.
 - Spawn parallel debug agents for each issue
 - Collect root causes
 - Update UAT.md with root causes
-- Proceed to `plan_gap_closure`
+- Proceed to `coverage_gap_capture`
 
 Diagnosis runs automatically - no user prompt. Parallel agents investigate simultaneously, so overhead is minimal and fixes are more accurate.
+</step>
+
+<step name="coverage_gap_capture">
+**Ask what the pyramid missed, and make the answer durable:**
+
+Certification catches it once; the pyramid catches it forever. Every diagnosed gap
+above is a behavior that reached UAT/certification unproven — so before planning the
+fix, answer one question per gap, using the root cause diagnosis already in hand:
+
+> **Which fast test was missing — the one that would have caught this before a human
+> or a certifier ever saw it?**
+
+Answer it as a test that could exist, at the cheapest level that would give
+confidence (`TEST-STRATEGY.md`'s own rule — each behavior tested once, as low as it
+can be proven). "No fast test could have caught this" is a legitimate answer for a
+genuinely judgment- or environment-bound truth; record it as such rather than
+inventing a test.
+
+**Route it (both, not either):**
+
+- The test itself → `/gsd:add-tests` for this phase, which classifies it to a level
+  and writes it. Gaps whose fix is a code change still go through `plan_gap_closure`
+  below; this is additive, not a replacement.
+- A missing behavior no plan covers → it is already a `## Gaps` entry and reaches
+  `plan-phase --gaps` through the existing route. Do not create a second gap id.
+
+**Persist it — TEST-STRATEGY.md's second writer:**
+
+Append one row per answered gap to `.planning/TEST-STRATEGY.md` under its
+`## Coverage debt` section. Create the section (heading + table header) if the file
+predates it.
+
+```
+| {date} | {phase}/{gap_id} | {the behavior that escaped} | {the fast test that was missing, and at which level} | open |
+```
+
+This is an **append-only** write: add rows, never rewrite, reorder, regenerate, or
+re-render any other section of the file. `/gsd:testing-strategy` remains the only
+author of the strategy itself; this step only records what the strategy failed to
+predict, so the next `--update` pass can see the project's real failure modes.
+
+If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
+create a strategy document from a gap.
+
+Proceed to `plan_gap_closure`.
 </step>
 
 <step name="plan_gap_closure">

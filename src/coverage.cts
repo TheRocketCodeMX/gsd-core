@@ -63,8 +63,16 @@ const ERROR_CODE = Object.freeze({
   MALFORMED_BLOCK: 'malformed_block',
 });
 
+// FORK:strategy — `agentic_certification` (testing-certification design spec §5).
+// An agentic certification run against a real environment produces none of the
+// pre-existing ref shapes (no test path, no Playwright artifact, no command), so
+// before this kind existed its evidence could only be filed as `other` — which
+// the classifier accepts but which tells a reader nothing. Admission to the enum
+// is ALL this buys: the deterministic auto-pass contract below is unchanged, so a
+// certification entry still has to be `status: pass` on a `human_judgment: false`
+// deliverable to skip the human prompt.
 const VALID_KINDS = Object.freeze([
-  'unit', 'integration', 'e2e', 'automated_ui', 'manual_procedural', 'other',
+  'unit', 'integration', 'e2e', 'automated_ui', 'agentic_certification', 'manual_procedural', 'other',
 ]);
 const VALID_STATUSES = Object.freeze(['pass', 'fail', 'unknown']);
 

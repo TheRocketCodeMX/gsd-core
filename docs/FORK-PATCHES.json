@@ -1149,6 +1149,59 @@
       "anchors": [
         "config-set phase_id_convention bracket warns that the grammar has no consumers"
       ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd:section id=\"agentic-certification\"",
+        "verify-work/steps/agentic-certification\\.md",
+        "<step name=\"coverage_gap_capture\">",
+        "##\\s*Coverage debt"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-plan.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind: agentic_certification"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/summary.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind: unit\\s+#[^\\n]*agentic_certification",
+        "`verification\\[\\]\\.kind`[^\\n]*agentic_certification"
+      ]
+    },
+    {
+      "path": "gsd-core/references/planning-config.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`workflow\\.certification`"
+      ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification: 'required'",
+        "VALID_CERTIFICATION_MODES"
+      ]
+    },
+    {
+      "path": "src/coverage.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "'agentic_certification'"
+      ]
     }
   ]
 }

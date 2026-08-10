@@ -643,6 +643,7 @@
       "review/steps/reviewer-instances-note-2.md",
       "transition/steps/workstream-collision-check.md",
       "update/steps/channel-banner.md",
+      "verify-work/steps/agentic-certification.md",
       "verify-work/steps/automated-ui-verification.md",
       "verify-work/steps/mvp-uat-framing.md"
     ]

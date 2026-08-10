@@ -84,6 +84,16 @@ Baseline at strategy time; one row appended per milestone (the T1–T4 triggers 
 
 - **Born-fast defaults applied:** [container singleton (reuse local-only) · framework config at current APIs — see the reference checklist]
 
+## Coverage debt
+
+Appended by `verify-work`'s coverage-gap step — one row per gap that reached UAT or
+certification unproven. Append-only; `/gsd:testing-strategy` reads it on `--update` to
+see this project's real failure modes. Empty is the healthy state.
+
+| Date | Phase / gap | Behavior that escaped | Fast test that was missing (and at which level) | Status |
+|---|---|---|---|---|
+| [—] | [—] | [none yet] | [—] | [—] |
+
 ## TDD stance
 
 - Behavior-level tests, **small uniform increments**, regression floor, real RED step.

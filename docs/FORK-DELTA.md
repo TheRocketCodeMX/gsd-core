@@ -94,6 +94,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/security-strategy.md`
 - `gsd-core/workflows/strategy-chain/modes/advance.md`
 - `gsd-core/workflows/testing-strategy.md`
+- `gsd-core/workflows/verify-work/steps/agentic-certification.md`
 - `capabilities/strategy/capability.json`
 - `src/project-command-router.cts`
 - `src/project.cts`
@@ -333,6 +334,12 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `src/shell-command-projection.cts` | managed-hook-coverage | anchors-only | `gsd-agent-isolation-guard.js` (#3069) and `gsd-write-guard.js` (#2301) added to BOTH managed-basename sets (`MANAGED_HOOK_BASENAMES_BY_SURFACE['settings-json']` and `MANAGED_HOOK_COMMAND_BASENAMES_BY_SURFACE['settings-json']`). The installer registers both into settings.json `PreToolUse`, but upstream never added them to the sets, so uninstall left them registered against already-deleted files (broken hook on every `Write` and every `Agent`/`Task` dispatch) and the #41 legacy bare-`node` repair skipped them. Found by realistic testing of the v1.10.0 realignment (`.superpowers/sdd/flows-110-report.md` §Flow 4). **UPSTREAM-ISSUE CANDIDATE** — upstream ships both hooks in `hooks/` + `hooks/managed-hooks-registry.cjs` and has the identical omission |
 | `tests/shell-command-projection-dispatch.test.cjs` | managed-hook-coverage | anchors-only | the regression block pinning both guards in both sets (basename form, command form, and the `"$CLAUDE_PROJECT_DIR"`-anchored local-install form) |
 | `src/config.cts` | bracket-guard | anchors-only | `cmdConfigSet` emits a stderr `gsd: warning —` when `phase_id_convention` is set to `bracket`: ADR-612 is still "Proposed (PR-0)" and no CLI/roadmap surface consumes the grammar, so bracket-form ROADMAP headings parse to **zero phases, exit 0, silently**. The 1.10.0 #2997/#3098 fix made the key survive resolution, which also made `"bracket"` settable — upstream's PR sequencing is intentional, letting users set it against a silent failure mode is the fork-visible footgun. Warning, not rejection: staging the value ahead of the consumers stays legal and the config contract does not diverge from upstream. stdout is untouched so `--raw` stays byte-identical. Drop this block when the bracket consumers land upstream. **UPSTREAM-ISSUE CANDIDATE** |
+| `gsd-core/workflows/verify-work.md` | strategy | anchors-only | certification in the loop (testing-certification design spec §5, §7): the `agentic-certification` section gate before UAT (dispatches the fork-owned `verify-work/steps/agentic-certification.md`), and the `coverage_gap_capture` step between `diagnose_issues` and `plan_gap_closure` — the "which fast test was missing" question that gives `TEST-STRATEGY.md` its second (append-only) writer |
+| `gsd-core/workflows/execute-plan.md` | strategy | anchors-only | the `kind: agentic_certification` evidence-ref bullet in the `coverage:` authoring guidance (its ref is the run's evidence bundle, never a test path; executors never author one) |
+| `gsd-core/templates/summary.md` | strategy | anchors-only | `agentic_certification` in both `verification[].kind` enum locations (inline comment + field-semantics table). Admission only — the deterministic auto-pass contract is untouched |
+| `gsd-core/references/planning-config.md` | strategy | anchors-only | the `workflow.certification` row in the Workflow Fields table (`required` \| `offer` \| `off`, default `required`) |
+| `src/config.cts` | strategy | anchors-only | `workflow.certification` default (`'required'`) in the config schema + its `cmdConfigSet` enum validation |
+| `src/coverage.cts` | strategy | anchors-only | `'agentic_certification'` in the frozen `VALID_KINDS` enum the UAT coverage classifier validates against |
 | `tests/config.test.cjs` | bracket-guard | anchors-only | the warning's contract: value still written, `gsd: warning —` idiom naming key + value + "no consumers" + "legacy", clean `--raw` stdout, and no warning for `milestone-prefixed` / `null` |
 
 ### Deletion-only deltas (nothing to anchor — guarded by tests instead)
