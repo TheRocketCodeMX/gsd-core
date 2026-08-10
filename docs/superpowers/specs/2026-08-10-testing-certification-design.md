@@ -107,5 +107,6 @@ TDD, behavior-not-implementation, the coverage philosophy, e2e-tiering, the ≤1
 
 - **Fork-owned edits:** `gsd-core/workflows/testing-strategy.md` (+ new steps), `gsd-core/references/testing-strategy*.md` (+ new certification/substrate/suite-health references), `gsd-core/templates/test-strategy.md` (Certification + Substrate + Suite-health sections), `templates/user-setup.md` extension, the tune-up flow file, learn-catalog touchpoint.
 - **Marked patches (upstream-shared):** `verify-work.md` (certification section before UAT), `templates/summary.md` (evidence kind + suite-metrics frontmatter), the UAT coverage classifier, `transition.md` (compare step), executor capture instruction, config schema (`workflow.certification`). Every patch manifested (FORK-PATCHES/FORK-DELTA) in-task.
+- **Wave-2/3 obligation (tracked, from Wave 1 review N3):** refresh `commands/gsd/testing-strategy.md` + the emitted `skills/gsd-testing-strategy/SKILL.md` mirrors ("How it works" list, Output sentence, success-criteria bullets) to the certification-era scope in the wave that touches emitted skills — expect an emitted-drift ack.
 - Changeset type Changed (minor). Branch off post-alignment `next`.
 - Follow-ups queued, not in scope: courtesy reports to stablyai (4 findings), fork issue #47 (layer verification) untouched by this work.

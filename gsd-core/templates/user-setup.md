@@ -329,7 +329,7 @@ Complete these items so certification can run against real, seeded conditions.
 ## Dashboard Configuration
 
 - [ ] **Mail catcher running** (email safety — the transport is the enforcement point)
-  - Run: `docker run -d -p 8025:8025 -p 1025:1025 axllent/mailpit`
+  - Run: `docker run -d -p 8025:8025 -p 1025:1025 <mailpit image>` (image coordinate per the Mailpit project README; the ports are the documented SMTP/API pair)
   - App SMTP points at `localhost:1025`; assert received mail via the API on `:8025`
 
 - [ ] **One-time auth session** (only if the auth policy is auth-once + persisted session)

@@ -30,6 +30,13 @@
  * A `describe('citation honesty')` block guards the claims the research pass
  * deliberately refused to ship (agentic-qa-research.md, excluded-claims
  * appendix) — the ones a future edit is most likely to "helpfully" restore.
+ * The OSWorld ban there is POLICY, not an accident: even a correctly-dated,
+ * caveated citation stays out of shipped doctrine — benchmark numbers live in
+ * the research digest only.
+ *
+ * Wording pins are alternation-based on purpose: a legitimate copy-edit must
+ * survive; only the two verbatim VENDOR quotes ("not suited for CI usage",
+ * "not be fully deterministic") are pinned byte-exact.
  */
 
 const { test, describe } = require('node:test');
@@ -131,7 +138,23 @@ describe('the certification ladder (reference)', () => {
     const ref = read(CERT_REF);
     assert.match(ref, /[Bb]uilder ≠ certifier/, 'the separation doctrine must be named');
     assert.match(ref, /different model family/i, 'fresh eyes = a different model family, no shared blind spots');
-    assert.match(ref, /project fact, not a machine fact/i, 'capability may live on another machine/tool');
+    assert.match(ref, /project([- ]level)? fact/i, 'capability is a fact about the project…');
+    assert.match(ref, /machine fact|another machine/i, '…not about the machine in front of you');
+  });
+
+  test('ladder order is doctrine: CERT-2 → CERT-1 → CERT-1 (limited) → CERT-0', () => {
+    const ref = read(CERT_REF);
+    const rows = tableRowsAfter(ref, 'The certification ladder');
+    const idx = (tier) => rows.findIndex((r) => r.includes(`**${tier}**`));
+    assert.ok(idx('CERT-2') < idx('CERT-1'), 'CERT-2 leads the ladder');
+    assert.ok(idx('CERT-1') < idx('CERT-1 (limited)'), 'the limited tier sits below full CERT-1');
+    assert.ok(idx('CERT-1 (limited)') < idx('CERT-0'), 'the limited tier sits above the CERT-0 floor');
+  });
+
+  test('the Claude Desktop capability claim ships with its vendor status, dated', () => {
+    const ref = read(CERT_REF);
+    assert.match(ref, /Claude Desktop[^\n]*research preview|research preview[^\n]*Claude Desktop/i,
+      'the vendor\'s own release status rides with the claim — never bare marketing');
   });
 });
 
@@ -139,12 +162,14 @@ describe('the probe (reference + workflow)', () => {
   test('detection probes — it never merely finds binaries', () => {
     const ref = read(CERT_REF);
     const s = section(ref, 'The probe');
-    assert.match(s, /binar/i, 'the "a binary is a lead, not a capability" doctrine');
+    assert.match(s, /binary[^.\n]{0,80}(lead|not a capability|says nothing)/i,
+      'the "a binary is a lead, not a capability" doctrine');
     for (const op of [/goto|navigate/i, /snapshot/i, /click/i, /screenshot/i]) {
       assert.match(s, op, `the 4-command live probe must include ${op}`);
     }
     assert.match(s, /per-operation|per-op/i, 'per-operation verdicts are recorded');
-    assert.match(s, /throwaway page/i, 'the probe runs against a throwaway page, never the real app');
+    assert.match(s, /throwaway (page|app|fixture)|never the real app/i,
+      'the probe runs against a throwaway page, never the real app');
   });
 
   test('a click that reports success but never lands demotes the tier', () => {
@@ -175,7 +200,8 @@ describe('the probe (reference + workflow)', () => {
     const wf = read(WORKFLOW);
     assert.match(wf, /4-command|four-command/i, 'the live probe is named in the workflow');
     assert.match(wf, /per-operation|per-op/i, 'per-operation verdicts recorded in TEST-STRATEGY');
-    assert.match(wf, /lead, not a capability/i, 'the binary-is-a-lead doctrine reaches the workflow');
+    assert.match(wf, /binary[^.\n]{0,80}(lead|not a capability)/i,
+      'the binary-is-a-lead doctrine reaches the workflow');
   });
 });
 
@@ -187,6 +213,30 @@ describe('trust doctrine (sandbox-first, with receipts)', () => {
     assert.match(s, /instrumentation audit/i);
     assert.match(s, /what did it write/i, 'the audit questions are spelled out');
     assert.match(s, /which agent CLIs/i);
+  });
+
+  test('the trust gate precedes the probe — a first launch is never the probe', () => {
+    const ref = read(CERT_REF);
+    const trustAt = ref.search(/^##[^\n]*trust doctrine/im);
+    const probeAt = ref.search(/^##[^\n]*The probe/im);
+    assert.ok(trustAt !== -1 && probeAt !== -1, 'both sections exist');
+    assert.ok(trustAt < probeAt,
+      'sandbox-first must be read BEFORE the probe instruction — the dogfood showed a bare --version instruments the environment');
+    const wfStep = section(read(WORKFLOW), 'Step 5.5');
+    const wfTrust = wfStep.search(/isolated HOME/i);
+    const wfProbe = wfStep.search(/4-command|four-command/i);
+    assert.ok(wfTrust !== -1 && wfProbe !== -1 && wfTrust < wfProbe,
+      'the workflow orders the trust gate ahead of the probe');
+  });
+
+  test('the gate covers ANY first launch in this environment — not just newly-acquired tools', () => {
+    const ref = read(CERT_REF);
+    const s = section(ref, 'trust doctrine');
+    assert.match(s, /in this environment/i, 'installed-but-never-launched-here is the realistic case');
+    assert.match(s, /--version/, 'even a bare --version launch counts (the empirical finding)');
+    const wf = read(WORKFLOW);
+    assert.doesNotMatch(wf, /newly[- ]acquired/i,
+      '"newly-acquired" under-scopes the gate: command -v finds tools that never launched in this HOME');
   });
 
   test('the onorca receipts justify the doctrine (empirical, dated)', () => {
@@ -274,7 +324,7 @@ describe('vendor honesty — email', () => {
   test('real recipients only when deliverability IS the feature, recorded as such', () => {
     const ref = read(CERT_REF);
     const s = section(ref, 'Email safety');
-    assert.match(s, /deliverability IS the feature/i);
+    assert.match(s, /deliverability[^.\n]{0,30}(feature|under test)/i);
   });
 });
 
@@ -291,7 +341,7 @@ describe('LLM integrations under certification', () => {
   test('assertions on shape, never content — with Anthropic\'s own determinism disclaimer', () => {
     const ref = read(CERT_REF);
     const s = section(ref, 'LLM integrations');
-    assert.match(s, /shape, never content/i);
+    assert.match(s, /shape,? (never|not) content|shape[- ]not[- ]content/i);
     assert.match(s, /not be fully deterministic/,
       'the verbatim Anthropic quote: even temperature 0.0 is not fully deterministic');
   });
@@ -349,7 +399,7 @@ describe('suite health (the existing testing reference)', () => {
   test('volume vs regression: flat ms/test + rising total is tiering work, not tuning work', () => {
     const ref = read(TEST_REF);
     const s = section(ref, 'Suite health');
-    assert.match(s, /volume, not (a )?regression/i);
+    assert.match(s, /volume, (not|rather than) (a )?regression/i);
     assert.match(s, /tiering|sharding/i, 'the remedy for volume is C1, not a tune-up');
   });
 
@@ -359,7 +409,7 @@ describe('suite health (the existing testing reference)', () => {
     for (const pass of [/[Pp]rofile/, /[Cc]onfig\/cache/, /audit against the strategy/i, /[Rr]e-baseline/]) {
       assert.match(s, pass, `tune-up pass missing: ${pass}`);
     }
-    assert.match(s, /config before tests/i, 'the predictable half comes first');
+    assert.match(s, /config (pass )?(before|precedes) tests/i, 'the predictable half comes first');
     assert.match(s, /fix-class/i, 'config-drift vs test-debt is recorded so the strategy learns');
     assert.match(s, /config-drift/i);
     assert.match(s, /test-debt/i);
@@ -387,7 +437,7 @@ describe('the workflow: two jobs at the top', () => {
     assert.match(wf, /planner/i);
     assert.match(wf, /generator/i);
     assert.match(wf, /healer/i, 'the vendor-converged maintenance loop is named');
-    assert.match(wf, /genuinely broken/i,
+    assert.match(wf, /(genuinely|actually|truly) broken/i,
       'the healer guardrail: refuse to "fix" a test when the app is actually broken');
     assert.match(wf, /[Hh]and-maintained/, 'the no-authoring-agent fallback is stated');
   });
@@ -495,6 +545,22 @@ describe('the template materializes rows from decisions', () => {
     }
     assert.match(tpl, /C1\/C2|C1 \/ C2/, 'the map still points at cicd-strategy\'s triggers');
   });
+
+  test('certification never rides the C1 input field — it gets its own labelled line', () => {
+    const tpl = read(TEMPLATE);
+    const c1Field = tpl.split('\n').find((l) => l.includes("Doesn't fit the PR gate"));
+    assert.ok(c1Field, 'the C1 input field exists');
+    // cicd-strategy maps this field rule-driven into a post-merge stage; a
+    // certification mention here is an instruction to schedule the thing the
+    // doctrine forbids from CI.
+    assert.doesNotMatch(c1Field, /certif/i,
+      'certification must not appear in the field cicd maps to CI stages');
+    assert.match(tpl, /[Nn]ot a pipeline tier/,
+      'the non-CI status lives on its own line, structurally unmappable');
+    const wf = read(WORKFLOW);
+    assert.match(wf, /[Nn]ot a pipeline tier/,
+      'the workflow render instruction mirrors the template split');
+  });
 });
 
 describe('user-setup: the operational substrate has its artifact', () => {
@@ -518,15 +584,18 @@ describe('citation honesty', () => {
       // the field; no benchmark headline ships at all (X1–X5).
       assert.doesNotMatch(text, /OSWorld/i, `${file}: no OSWorld citation ships`);
       assert.doesNotMatch(text, /12\.24|72\.36|87\.4|Odysseys/i, `${file}: excluded benchmark number`);
-      // Vendor self-reports with no methodology (X17, X18).
-      assert.doesNotMatch(text, /3[-–—]?4[×x] faster|3[×x] faster/i, `${file}: unmethodized speed headline`);
+      // Vendor self-reports with no methodology (X17, X18) — including the
+      // spelled-out "3–4 times faster" shape of the Testcontainers Cloud claim.
+      assert.doesNotMatch(text, /\b3\s*[-–—]?\s*4\s*(×|x|times)\s*(faster|speed)|\b3\s*(×|x|times)\s*(faster|speed)/i,
+        `${file}: unmethodized speed headline`);
     }
   });
 
   test('no invented per-test budget ships anywhere', () => {
     for (const file of SHIPPED) {
       const text = read(file);
-      assert.doesNotMatch(text, /each (unit )?test (must|should) (run|complete|finish) in under/i,
+      // Any "tests … under N ms/s" sentence shape, not just one phrasing.
+      assert.doesNotMatch(text, /(unit )?tests?[^.\n]{0,40}\b(must|should)\b[^.\n]{0,40}(under|below|less than|<)\s*\d+\s*(ms|milliseconds?|seconds?)\b/i,
         `${file}: no primary source publishes a per-test budget (X16)`);
     }
   });
@@ -534,7 +603,7 @@ describe('citation honesty', () => {
   test('the 60-second Google number never ships as a budget (X15)', () => {
     for (const file of SHIPPED) {
       const text = read(file);
-      assert.doesNotMatch(text, /small tests? (must|should) (run|complete|finish) in (under |less than )?60/i,
+      assert.doesNotMatch(text, /tests?[^.\n]{0,60}\b(in|under|within|less than)\s*60\s*s(econds)?\b/i,
         `${file}: the 60s figure is a kill threshold with unresolved scope, not a budget`);
     }
   });

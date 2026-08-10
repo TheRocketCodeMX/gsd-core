@@ -1,6 +1,6 @@
 # Certification — the top of the pyramid is two different jobs
 
-Reference for `/gsd:testing-strategy` (the gate-vs-certify, capability-detection, and substrate steps) and for the verify-work certification section. Every capability claim below traces to a vendor's own page or a dated live probe — where a vendor is silent, the silence is recorded as the finding, never papered over.
+Reference for `/gsd:testing-strategy` (the gate-vs-certify, capability-detection, and substrate steps). Every capability claim below traces to a vendor's own page or a dated live probe — where a vendor is silent, the silence is recorded as the finding, never papered over.
 
 ## The doctrine
 
@@ -15,6 +15,7 @@ Why an agent cannot be the gate — each point primary-sourced:
 - **The capable tools are desktop-session-bound.** The agent browsers developers actually have (Claude Code `--chrome`, Codex desktop, Cursor's pane, onorca's pane) run in a visible desktop session; the tools with documented `--headless`/`--isolated`/`--storage-state` are Playwright wearing an agent hat.
 - **Agents author and heal; scripts gate.** Microsoft's Playwright-MCP README steers coding agents to the Playwright CLI+skills; OpenAI's own Codex frontend guidance says to enable the Playwright interactive skill. Two vendors independently converge on "point the agent at Playwright" — that convergence, not a GSD opinion, is what makes the scripted gate an *agent-maintained artifact* rather than a hand-written liability.
 - **Builder ≠ certifier.** The certifying agent should not be the implementing agent: fresh eyes, a **different model family**, no shared blind spots. Certification capability is a **project fact, not a machine fact** — the certifier may live on a different machine or tool than the builder, which is why the ladder below is recorded in TEST-STRATEGY.md rather than sniffed per session.
+- **The fit itself is vendor-endorsed.** The same Anthropic guidance that disclaims precision names **automated software testing** as a use case to focus on precisely because it sits where "speed isn't critical" — the one primary-source citation *for* agentic certification, and it is framed as a latency concession, which is exactly the non-gating, human-adjacent slot this doctrine gives it.
 
 ## The certification ladder
 
@@ -22,30 +23,30 @@ Recorded in TEST-STRATEGY.md `## Certification` — the tier, the probe results 
 
 | Tier | What it is | Examples |
 |---|---|---|
-| **CERT-2** | A dedicated certifier application, separate from the building runtime; the certification brief is handed over; builder ≠ certifier is enforced naturally by the tool boundary | Codex desktop, Claude Desktop (native computer/browser use), onorca |
+| **CERT-2** | A dedicated certifier application, separate from the building runtime; the certification brief is handed over; builder ≠ certifier is enforced naturally by the tool boundary | Codex desktop, Claude Desktop (computer use — research preview; see Tool notes), onorca |
 | **CERT-1** | The building runtime drives a browser itself — weaker separation (same session, same model family), still real-conditions validation | Claude Code + Chrome, MCP-Playwright-class tools in the session, orca CLI on a visible display |
 | **CERT-1 (limited)** | The probe shows partial capability — **inspection-grade only**: navigate/goto, snapshot, fill, wait, console reads work; click-through submission and screenshots do not. Certifies what can be read, not what must be clicked | orca headless under Xvfb/WSL2 (dogfood-verified, 2026-08) |
 | **CERT-0** | No driver capable in this environment. Human UAT + the scripted smoke gate — stated as the **fallback**, not the strategy; the deferred row records what would promote it | headless CI boxes, locked-down machines |
 
 Never present CERT-0 apologetically: the invariant is "certification happens," not "an agent does it." On CERT-0 the human IS the certifier and the brief below is written for them.
 
+## Third-party certifier trust doctrine (mandatory — read before any launch)
+
+**Sandbox-first.** The first launch of any third-party certifier tool **in this environment** — including the probe below, including a bare `--version` — happens in an **isolated HOME**, followed by an **instrumentation audit** — *what did it write? which agent CLIs did it touch?* — before it is granted the real environment. "Installed" is not "launched": a binary that has never run under this HOME gets the same treatment as a fresh download.
+
+The receipts (live dogfood, 2026-08, onorca 1.4.178 on WSL2): the first launch of even a bare `--version` silently wrote **8 hook entries** into the installed codex CLI's `hooks.json` — pre/post tool use, permission requests, session and prompt events — all executing the tool's own hook script, and **self-granted `trusted_hash` entries** in codex's `config.toml` so those hooks run without prompting. **Zero consent UI.** Sandbox-HOME containment held: with `HOME` pointed at a sandbox, every write — including the codex instrumentation — landed inside it and the real environment stayed clean.
+
+**Point, don't prescribe.** onorca is named as the lowest-friction capability acquisition today — a genuinely scriptable agent-browser CLI with per-identity profiles and real (if **undocumented**) headless operation under `orca serve` + Xvfb, where click-through and screenshots fail in the current build. Its headless browser semantics are verified empirically, not by the vendor; its docs contain no QA/testing/CI story. Named option with the trust caveat; no install prescriptions until a tool earns default status. Re-evaluate at later releases.
+
 ## The probe — capability is measured, never assumed
 
 **A binary on PATH is a lead, not a capability.** `command -v orca` succeeding says nothing about whether a click lands in this environment — the dogfood machine had a working binary, a working `goto`, and a click that returned `ok:true` while no request ever reached the server. Detection therefore has three stages:
 
 1. **Observable checks first — run them, don't ask:** `command -v codex` / `command -v orca`; MCP browser tools present in the runtime (`mcp__playwright__*` responding); `claude` Chrome availability (not under WSL; disabled under API-key auth); WSL/headless/display detection; `playwright.config.*`; installed Playwright agent skills.
-2. **The 4-command live probe** — for every driver found, against a **throwaway page** (never the real app): `goto` → `snapshot` → **click round-trip** → `screenshot`. The click is verified by its *effect* (did the state change actually land — a POST received, a navigation observed), never by its return value. Record the **per-operation** verdicts with the date; failures are data: goto/snapshot pass + click/screenshot fail is exactly the CERT-1 (limited) shape.
+2. **The 4-command live probe** — for every driver found (after the trust gate above; a tool's first launch in this environment is never the probe), against a **throwaway page** (never the real app): `goto` → `snapshot` → **click round-trip** → `screenshot`. The click is verified by its *effect* (did the state change actually land — a POST received, a navigation observed), never by its return value. Record the **per-operation** verdicts with the date; failures are data: goto/snapshot pass + click/screenshot fail is exactly the CERT-1 (limited) shape.
 3. **One question** — only for what nothing observable answers, because desktop certifier apps may live on another machine: *"Do you have Codex desktop, Claude Desktop, or onorca available for certification — on this machine or another?"* That is the whole interview.
 
 Map the results to a tier and write tier + probe rows + mechanism into `## Certification`. Re-probe when the environment changes (new display, new machine, new driver) — the recorded rows say exactly what to re-check.
-
-## Third-party certifier trust doctrine (mandatory)
-
-**Sandbox-first.** The first launch of any third-party certifier tool happens in an **isolated HOME**, followed by an **instrumentation audit** — *what did it write? which agent CLIs did it touch?* — before it is granted the real environment.
-
-The receipts (live dogfood, 2026-08, onorca 1.4.178 on WSL2): the first launch of even a bare `--version` silently wrote **8 hook entries** into the installed codex CLI's `hooks.json` — pre/post tool use, permission requests, session and prompt events — all executing the tool's own hook script, and **self-granted `trusted_hash` entries** in codex's `config.toml` so those hooks run without prompting. **Zero consent UI.** Sandbox-HOME containment held: with `HOME` pointed at a sandbox, every write — including the codex instrumentation — landed inside it and the real environment stayed clean.
-
-**Point, don't prescribe.** onorca is named as the lowest-friction capability acquisition today — a genuinely scriptable agent-browser CLI with per-identity profiles and real (if **undocumented**) headless operation under `orca serve` + Xvfb, where click-through and screenshots fail in the current build. Its headless browser semantics are verified empirically, not by the vendor; its docs contain no QA/testing/CI story. Named option with the trust caveat; no install prescriptions until a tool earns default status. Re-evaluate at later releases.
 
 ## The certification brief
 
@@ -90,7 +91,7 @@ Real recipients only when **deliverability IS the feature** under test — and t
 Certification and smoke use **real calls** when **the integration is the thing under test** — key wiring, prompt assembly, tool schemas, streaming, error handling. Neither major vendor ships a test billing mode, so the cost is bounded structurally:
 
 - a **dedicated test key** in its own workspace/project with a **hard spend cap** (the workspace/project is the blast-radius primitive; archiving revokes);
-- a **configurable pinned model** at the cheap-but-representative tier — pin the dated snapshot, since aliases float and even a pinned ID doesn't pin serving behavior;
+- a **configurable pinned model** at the cheap-but-representative tier — pin a dated snapshot (some vendor aliases resolve to the latest snapshot; dateless current-generation IDs generally do not) — and note that even a pinned ID doesn't pin serving behavior;
 - the **transcript captured as evidence** of the run.
 
 **Assertions on shape, never content.** Anthropic's own disclaimer: even with `temperature` of `0.0`, results "will **not be fully deterministic**." Assert status, schema/structured-output validity, tool-call names, non-emptiness, latency bounds — never expected prose. Content-grading belongs to the non-gating eval tier (`ai-evals.md`), not to a gate.
@@ -103,6 +104,7 @@ Capabilities as documented by each vendor — the strategy names options and rec
 
 - **Playwright CLI + skills / Playwright MCP** — the CI-shaped substrate: headless by default, `--isolated`, `--storage-state`, traces/video/screenshots as evidence; what both Microsoft and OpenAI steer coding agents toward. The planner→generator→healer agents (`npx playwright init-agents --loop=claude|codex|vscode|opencode`) are the first-party authoring/maintenance loop for the scripted gate; the **healer skips tests it believes reflect genuinely broken functionality** — the guardrail that keeps self-healing from becoming self-deceiving.
 - **Claude Code `--chrome`** — drives real, visible Chrome sharing the user's login state; pauses and hands login/CAPTCHA to the human; not available under WSL, disabled under API-key auth. A certifier, not a gate.
+- **Claude Desktop (Cowork / Claude Code in the desktop app)** — **computer use in research preview** (vendor-documented, fetched 2026-08): clicks, types, opens apps, and drives the browser via Claude in Chrome, on macOS and Windows (Pro/Max plans); asks permission per application; the desktop session must be active and the app open — the vendor's own statement of the desktop-session-bound shape. A certifier surface, not a gate.
 - **Codex desktop / ChatGPT app browser** — an app surface with a built-in browser; brief-driven certification fits it; no CLI/CI surface documented.
 - **onorca** — desktop ADE with the most complete scriptable agent-browser CLI found (snapshot/`@eN` refs, console, network, `--json`); trust caveat and headless limits above.
 - **Cursor agent browser** — in-IDE pane; navigate/click/type/screenshot/console/network; nothing documented about unattended execution.
@@ -110,4 +112,4 @@ Capabilities as documented by each vendor — the strategy names options and rec
 The shape to remember: **the tools developers actually have on the desktop cannot run unattended, and the tools that can run unattended are Playwright.** That is why the gate is scripted and certification is human-adjacent — not a compromise, the only arrangement the primary sources support.
 
 ---
-*Consumed by `/gsd:testing-strategy` (capability detection, substrate, gate-vs-certify) and the verify-work certification section. The tier, probe rows, mechanism, and substrate live in `.planning/TEST-STRATEGY.md`.*
+*Consumed by `/gsd:testing-strategy` (capability detection, substrate, gate-vs-certify). The tier, probe rows, mechanism, and substrate live in `.planning/TEST-STRATEGY.md`.*

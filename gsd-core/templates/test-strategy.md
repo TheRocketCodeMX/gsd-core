@@ -71,7 +71,8 @@ The gate above is a regression check; certification validates the app in real co
      run structurally cannot do). Do not pre-assert a nightly here — cicd-strategy reads this
      table as an input, so a row written on spec becomes a "fact" downstream. -->
 
-- **Doesn't fit the PR gate:** [which tiers, and why they can't run there — feeds cicd-strategy's C1 decision] · certification (runs outside CI by design — real conditions, human-adjacent)
+- **Doesn't fit the PR gate:** [which tiers, and why they can't run there — feeds cicd-strategy's C1 decision]
+- **Not a pipeline tier:** certification — runs outside CI by design (real conditions, human-adjacent); never map it to any CI stage, C1 does not apply (see `## Certification`)
 
 ## Suite health
 
