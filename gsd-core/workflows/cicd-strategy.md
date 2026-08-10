@@ -42,7 +42,7 @@ cat .planning/codebase/STACK.md 2>/dev/null || true
 ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"   # plus the ## Mode block cat'd above — Origin is authoritative
 # ── MEASURE, don't ask (§ Step 2.5). A number derived from the repo beats a number the user guesses.
 echo "MERGES_90D=$(git log --since='90 days ago' --first-parent --oneline HEAD 2>/dev/null | wc -l)"   # ÷13 → merges/week (the C3 trigger)
-echo "CONTRIBUTORS_90D=$(git shortlog -sn --since='90 days ago' 2>/dev/null | wc -l)"                   # the TBD 15-vs-16 threshold
+echo "CONTRIBUTORS_90D=$(git shortlog -sn --since='90 days ago' HEAD 2>/dev/null | wc -l)"              # the TBD 15-vs-16 threshold (HEAD is required — without a revision shortlog reads stdin and always returns 0)
 ls .github/workflows/ 2>/dev/null || echo "NO_CI_YET"                                                    # brownfield CI surface
 grep -rl "schedule:" .github/workflows/ 2>/dev/null || true                                              # existing scheduled jobs
 grep -rl "matrix:" .github/workflows/ 2>/dev/null || true                                                # existing matrix legs
