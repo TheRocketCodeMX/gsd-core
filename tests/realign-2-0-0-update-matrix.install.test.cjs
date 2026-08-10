@@ -389,7 +389,13 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
 
   test('A4: hooks dir matches the shipped hook set — old fork hooks gone, grounding hook present', { skip: !runnable }, () => {
     const hooksDir = path.join(cellAHome, '.claude', 'hooks');
-    const installed = fs.readdirSync(hooksDir).filter((f) => f !== 'lib');
+    // `lib` is the helper subdir (asserted by its own entries, not this set).
+    // `package.json` is the CommonJS marker #2544 stages INSIDE hooks/ — the
+    // directory GSD owns — so `require` keeps working in hooks/*.js under an
+    // ambient "type": "module". Both are install artifacts by design, not
+    // hook scripts, so neither belongs in the HOOKS_TO_COPY comparison.
+    const HOOKS_DIR_NON_HOOK_ENTRIES = new Set(['lib', 'package.json']);
+    const installed = fs.readdirSync(hooksDir).filter((f) => !HOOKS_DIR_NON_HOOK_ENTRIES.has(f));
     assert.deepEqual(
       installed.sort(),
       [...HOOKS_TO_COPY].sort(),
