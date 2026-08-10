@@ -75,7 +75,7 @@ Run mutation testing (Stryker) **incrementally on changed files** as part of acc
 - mutation score ≥ the strategy's floor (default **80**) on the gnarly-bit/critical modules touched;
 - every surviving mutant is either killed with a new/strengthened test or explicitly waived with a one-line reason.
 
-This is the only gate that catches vacuous suites *systemically*. Full-codebase mutation runs are too slow for this loop — schedule those nightly (see the strategy's CI execution map); changed-files incremental is the per-change gate.
+This is the only gate that catches vacuous suites *systemically*. Full-codebase mutation runs are too slow for this loop — run them out of the per-change loop: post-merge, on `workflow_dispatch`, or scheduled per the CI rung ladder's C2 criteria (a schedule needs a job a PR run structurally cannot do, plus a named owner and a triage SLA). Changed-files incremental is the per-change gate.
 
 ## F. Self-interrogation before declaring done
 

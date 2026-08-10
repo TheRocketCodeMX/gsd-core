@@ -42,8 +42,13 @@ The shape is an *output* of the architecture, not a chosen target. Sociable test
 | Pipeline stage | Runs | Budget |
 |---|---|---|
 | PR gate (blocking) | small + fast medium + 3–7 e2e smoke [+ changed-files mutation if fast] | ≤10 min |
-| Merge to main | full medium + e2e portfolio subset | — |
-| Nightly / scheduled | full e2e portfolio + full mutation run [+ vendor sandbox smoke, non-blocking] | — |
+
+<!-- One stage is the correct default. Add a second or scheduled row ONLY if cicd-strategy's
+     C1/C2 triggers fire (measured suite >10 min · a tier that can't run on a PR · a job a PR
+     run structurally cannot do). Do not pre-assert a nightly here — cicd-strategy reads this
+     table as an input, so a row written on spec becomes a "fact" downstream. -->
+
+- **Doesn't fit the PR gate:** [which tiers, and why they can't run there — feeds cicd-strategy's C1 decision]
 
 ## TDD stance
 
