@@ -51,12 +51,13 @@ const HOOKS_TO_COPY = [
   // .planning/config.json changes mid-session. Must ship to dist so the
   // installer can copy it to the target hooks/ dir and register FileChanged.
   'gsd-config-reload.js',
-  // Fork FileChanged hook (grounding, #11) — refreshes the Sources-of-Truth
-  // grounding index when a strategy/source doc lands mid-session. Referenced by
-  // the plugin manifest (hooks/hooks.json) AND registered into settings.json by
-  // applySettingsJsonHooks; must ship to dist so classic (non-plugin) installs
-  // receive the file the registration points at.
-  'gsd-grounding-index-refresh.js',
+  // Agent-dispatch isolation guard (#3045): blocks an executor Agent()
+  // dispatch missing its harness isolation parameter when the project
+  // resolves to harness-worktree. Requires the sibling
+  // gsd-core/bin/lib/{runtime-name-policy,capability-registry}.cjs modules
+  // at runtime — those ship as part of the full gsd-core/ tree, not via this
+  // list.
+  'gsd-agent-isolation-guard.js',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',
   'gsd-read-injection-scanner.js',
@@ -64,6 +65,8 @@ const HOOKS_TO_COPY = [
   'gsd-update-banner.js',
   'gsd-workflow-guard.js',
   'gsd-worktree-path-guard.js',
+  // Catastrophic-shrink guard for curated .planning/ artifacts (#2255, fix 3 of #973)
+  'gsd-write-guard.js',
   // Community hooks (bash, opt-in via .planning/config.json hooks.community)
   'gsd-session-state.sh',
   'gsd-validate-commit.sh',

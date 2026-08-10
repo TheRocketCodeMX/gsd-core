@@ -177,6 +177,8 @@ None - no external service configuration required.
 
 **Population:** Frontmatter is populated during summary creation in execute-plan.md. See `<step name="create_summary">` for field-by-field guidance.
 
+**Status (#2830):** `status: complete` is the default — the plan finished. Use `status: halted` instead when the plan reached a designed stop (a gate failure, a spike concluding without expanding into the full build, or any other intentional non-completion) and intentionally left tasks unfinished. `halted` is machine-read: any plan whose `depends_on` (directly or transitively) names a halted plan is reported as blocked, not offered to the executor, until the halt is resolved and re-summarized as `complete`.
+
 **Deviations:** `deviations:` is a structured mirror of the `## Deviations from Plan` prose section. Frontmatter-only readers (the default-budget planner) see ONLY this — the prose section is invisible to them; an empty prose section means this key is omitted.
 </frontmatter_guidance>
 

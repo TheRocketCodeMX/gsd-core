@@ -313,6 +313,15 @@
       ]
     },
     {
+      "path": "capabilities/broken-windows/capability.json",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "command-exit-zero",
+        "windows status --raw"
+      ]
+    },
+    {
       "path": "commands/gsd/ns-manage.md",
       "feature": "learn",
       "mode": "anchors-only",
@@ -634,8 +643,28 @@
       "feature": "validation",
       "mode": "anchors-only",
       "anchors": [
-        "do not expect others",
-        "exploration is DONE"
+        "do not expect others"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/auto-mode-detection.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "auto-detected brownfield",
+        "gsd:legacy-inventory"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/codebase-map-offer.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 2,
+      "anchors": [
+        "exploration is DONE",
+        "vibe-coded-to-harden",
+        "strategy-flow\\.md"
       ]
     },
     {

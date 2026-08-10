@@ -969,7 +969,7 @@ continues. Drift detection cannot fail verification.
 | `granularity` | enum | `standard` | `coarse`, `standard`, or `fine` |
 | `model_profile` | enum | `balanced` | `quality`, `balanced`, `budget`, or `inherit` |
 | `models.<phase_type>` | enum | (none) | Per-phase-type tier override (`planning`, `discuss`, `research`, `execution`, `verification`, `completion`). Values: `opus`, `sonnet`, `haiku`, `inherit`. Coarse phase-level tuning that wins over `model_profile` but loses to per-agent `model_overrides`. See [CONFIGURATION.md](CONFIGURATION.md#per-phase-type-models-models--added-in-v140). Added in v1.40 |
-| `granularities.<phase_type>` | enum | (none) | Per-phase-type granularity override (`planning`, `discuss`, `research`, `execution`, `verification`, `completion`). Values: `coarse`, `standard`, `fine`. Mirrors `models.<phase_type>` for granularity. See [CONFIGURATION.md](CONFIGURATION.md#core-settings). Added in v1.43 ([#68](https://github.com/TheRocketCodeMX/gsd-core/issues/68)). `/gsd:plan-phase --granularity <coarse\|standard\|fine>` overrides all config-based granularity for a single invocation (takes precedence over `granularities.planning`, top-level `granularity`, and `planning.granularity`). ([#703](https://github.com/TheRocketCodeMX/gsd-core/issues/703)) |
+| `granularities.<phase_type>` | enum | (none) | Per-phase-type granularity override (`planning`, `discuss`, `research`, `execution`, `verification`, `completion`). Values: `coarse`, `standard`, `fine`. Mirrors `models.<phase_type>` for granularity. See [CONFIGURATION.md](CONFIGURATION.md#core-settings). Added in v1.43 ([#68](https://github.com/open-gsd/gsd-core/issues/68)). `/gsd-plan-phase --granularity <coarse\|standard\|fine>` overrides all config-based granularity for a single invocation (takes precedence over `granularities.planning`, top-level `granularity`, and `planning.granularity`). ([#703](https://github.com/open-gsd/gsd-core/issues/703)) |
 | `dynamic_routing.enabled` | boolean | `false` | Master switch for failure-tier escalation. When `true`, agents resolve to `tier_models[default_tier]` and escalate one tier on orchestrator-detected soft failure. Capped by `max_escalations`. See [CONFIGURATION.md](CONFIGURATION.md#dynamic-routing-with-failure-tier-escalation-dynamic_routing--added-in-v140). Added in v1.40 |
 | `workflow.research` | boolean | `true` | Domain research before planning |
 | `workflow.plan_check` | boolean | `true` | Plan verification loop |
@@ -1095,7 +1095,7 @@ fix(03-01): correct auth token expiry
 - Codex emits `service_tier: flex` for light-tier agents; GSD skills appear in the Codex `/skills` picker via `SKILL.md` (no `agents/openai.yaml` sidecar is emitted — doing so caused duplicate autocomplete entries, #1326)
 
 **Native packaging:**
-- **Claude Code:** GSD Core ships a `.claude-plugin/plugin.json` manifest, enabling installation and lifecycle management via `claude plugin install|enable|disable|update gsd-core`. Commands load under the `/gsd-core:` namespace (e.g. `/gsd-core:plan-phase`), avoiding slash-command collisions with the classic npm installer which uses `/gsd:`. Always-on guard and update hooks are wired automatically via `hooks/hooks.json`. The plugin path is additive — the npm installer (`npx @therocketcode/gsd-core`) remains fully supported.
+- **Claude Code:** GSD Core ships a `.claude-plugin/plugin.json` manifest, enabling installation and lifecycle management via `claude plugin install|enable|disable|update gsd-core`. Commands load under the `/gsd-core:` namespace (e.g. `/gsd-core:plan-phase`), avoiding slash-command collisions with the classic npm installer which uses `/gsd:`. Always-on guard and update hooks are wired automatically via `hooks/hooks.json`. The plugin path is additive — the npm installer (`npx @opengsd/gsd-core`) remains fully supported.
 
 ---
 
@@ -1128,7 +1128,7 @@ When the user declines (or keeps a non-GSD) statusline, the installer offers a S
 GSD update available: 1.39.0 → 1.40.0. Run /gsd-update.
 ```
 
-The banner is silent when up-to-date and rate-limits "check failed" diagnostics to once per 24 hours. Removed cleanly by `npx @therocketcode/gsd-core --uninstall` or by deleting the SessionStart entry that references `gsd-update-banner.js`.
+The banner is silent when up-to-date and rate-limits "check failed" diagnostics to once per 24 hours. Removed cleanly by `npx @opengsd/gsd-core --uninstall` or by deleting the SessionStart entry that references `gsd-update-banner.js`.
 
 ### 38. Developer Profiling
 
@@ -1514,7 +1514,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 55. Multi-Runtime Installer Selection
 
-**Part of:** `npx @therocketcode/gsd-core`
+**Part of:** `npx @opengsd/gsd-core`
 
 **Purpose:** Select multiple runtimes in a single interactive install session.
 
@@ -1533,7 +1533,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 56. Windsurf Runtime Support
 
-**Part of:** `npx @therocketcode/gsd-core`
+**Part of:** `npx @opengsd/gsd-core`
 
 **Purpose:** Add Windsurf as a supported AI CLI runtime for GSD installation and execution.
 
@@ -1753,7 +1753,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 68. Claude Code Skills Migration
 
-**Part of:** `npx @therocketcode/gsd-core`
+**Part of:** `npx @opengsd/gsd-core`
 
 **Purpose:** Migrate GSD commands to Claude Code 2.1.88+ skills format with backward compatibility.
 
@@ -2017,7 +2017,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 85. New Runtime Support (Trae, Cline, Augment Code)
 
-**Part of:** `npx @therocketcode/gsd-core`
+**Part of:** `npx @opengsd/gsd-core`
 
 **Purpose:** Extend GSD installation to Trae IDE, Cline, and Augment Code runtimes.
 
@@ -2359,7 +2359,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 104. New Runtime Support (Cline, CodeBuddy, Qwen Code)
 
-**Part of:** `npx @therocketcode/gsd-core`
+**Part of:** `npx @opengsd/gsd-core`
 
 **Purpose:** Extend GSD installation to Cline, CodeBuddy, and Qwen Code runtimes.
 
@@ -2551,7 +2551,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 **Purpose:** Allow projects to store their CLAUDE.md in a non-root location. The `claude_md_path` config key controls where `/gsd-profile-user` and related commands write the generated CLAUDE.md file.
 
 **Requirements:**
-- REQ-CMDPATH-01: `claude_md_path` defaults to `./.claude/CLAUDE.md` (a valid project-scoped memory location; changed from `./CLAUDE.md` in v1.5 per [#1098](https://github.com/TheRocketCodeMX/gsd-core/issues/1098) so generated content does not pollute a hand-crafted repo-root `CLAUDE.md`)
+- REQ-CMDPATH-01: `claude_md_path` defaults to `./.claude/CLAUDE.md` (a valid project-scoped memory location; changed from `./CLAUDE.md` in v1.5 per [#1098](https://github.com/open-gsd/gsd-core/issues/1098) so generated content does not pollute a hand-crafted repo-root `CLAUDE.md`)
 - REQ-CMDPATH-02: Profile generation commands read the path from config and write to the specified location
 - REQ-CMDPATH-03: Relative paths are resolved from the project root
 - REQ-CMDPATH-04: `generate-claude-md` never overwrites an existing instruction file that lacks GSD section markers (a hand-crafted file) unless `--force` is passed
@@ -2687,11 +2687,11 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
   - `/gsd-config` — folds settings-advanced (`--advanced`), settings-integrations (`--integrations`), set-profile (`--profile`)
   - `/gsd-workspace` — folds new-workspace (`--new`), list-workspaces (`--list`), remove-workspace (`--remove`)
 - REQ-CONSOLIDATE-02: Six existing parents absorb wrap-up / sub-operations as flags: `/gsd-update --sync`, `/gsd-update --reapply`, `/gsd-sketch --wrap-up`, `/gsd-spike --wrap-up`, `/gsd-map-codebase --fast`, `/gsd-map-codebase --query`, `/gsd-code-review --fix`, `/gsd-progress --do`, `/gsd-progress --next`.
-- REQ-CONSOLIDATE-03: `/gsd:next` is not the retired workflow-advance command; it is reserved for the state-aware smart-entry launcher. Workflow advancement remains under `/gsd-progress --next`.
+- REQ-CONSOLIDATE-03: `/gsd-next` is not the retired workflow-advance command; it is reserved for the state-aware smart-entry launcher. Workflow advancement remains under `/gsd-progress --next`.
 - REQ-CONSOLIDATE-04: Deleted micro-skill slash forms (the bare `gsd-add-todo`, `gsd-add-backlog`, `gsd-plant-seed`, `gsd-check-todos`, `gsd-add-phase`, `gsd-insert-phase`, `gsd-remove-phase`, `gsd-edit-phase`, `gsd-new-workspace`, `gsd-list-workspaces`, `gsd-remove-workspace`, `gsd-settings-advanced`, `gsd-settings-integrations`, `gsd-set-profile`, `gsd-sketch-wrap-up`, `gsd-spike-wrap-up`, `gsd-reapply-patches`, `gsd-code-review-fix`, …) MUST resolve to "Unknown command" — no shadow stubs.
 - REQ-CONSOLIDATE-05: `autonomous.md` invokes `/gsd-code-review --fix` (was previously calling the deleted `gsd-code-review-fix`).
 
-**Reference issue:** [#2790](https://github.com/TheRocketCodeMX/gsd-core/issues/2790)
+**Reference issue:** [#2790](https://github.com/open-gsd/gsd-core/issues/2790)
 
 ---
 
@@ -2720,7 +2720,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-NS-03: The body of each namespace router contains a routing table that maps user intent to the correct concrete sub-skill on the post-#2790 consolidated surface.
 - REQ-NS-04: Tests validate namespace files exist, include matching command `requires`, and reference only existing sub-skill files.
 
-**Reference issue:** [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792)
+**Reference issue:** [#2792](https://github.com/open-gsd/gsd-core/issues/2792)
 
 ---
 
@@ -2736,7 +2736,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-CTX-GUARD-02: The same triage is exposed as `gsd-tools.cjs validate context --tokens-used <int> --context-window <int>` — a structured envelope for status-line and hook callers (#125). Both flags are required; the handler returns the same `{ percent, state }` envelope as the pure classifier in REQ-CTX-GUARD-03.
 - REQ-CTX-GUARD-03: The classifier (`bin/lib/context-utilization.cjs`) is pure: input `(tokensUsed, contextWindow)`, output `{ percent, state }`. Easy to unit-test, easy to reuse from any caller.
 
-**Reference issue:** [#2792](https://github.com/TheRocketCodeMX/gsd-core/issues/2792)
+**Reference issue:** [#2792](https://github.com/open-gsd/gsd-core/issues/2792)
 
 ---
 
@@ -2753,7 +2753,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-LIFECYCLE-02: `formatGsdState()` checks the lifecycle fields in priority order and emits the first matching scene (Phase active → Idle next-recommended → Milestone complete → Default fallback).
 - REQ-LIFECYCLE-03: All four fields default to undefined; existing STATE.md files render byte-for-byte identically.
 
-**Reference issue:** [#2833](https://github.com/TheRocketCodeMX/gsd-core/issues/2833) — see [`docs/STATE-MD-LIFECYCLE.md`](reference/state-md.md) for the full field reference and rendering rules.
+**Reference issue:** [#2833](https://github.com/open-gsd/gsd-core/issues/2833) — see [`docs/STATE-MD-LIFECYCLE.md`](reference/state-md.md) for the full field reference and rendering rules.
 
 ---
 
@@ -2793,7 +2793,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-PHASE-MODELS-02: Configs without a `models` block behave byte-for-byte identically to pre-v1.41 behavior.
 - REQ-PHASE-MODELS-03: `discuss` and `completion` are accepted by the schema for forward compatibility; setting them today is a no-op until a subagent maps to each.
 
-**Reference issue:** [#3023](https://github.com/TheRocketCodeMX/gsd-core/pull/3030)
+**Reference issue:** [#3023](https://github.com/open-gsd/gsd-core/pull/3030)
 
 ---
 
@@ -2814,7 +2814,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - REQ-DYNROUTE-02: New resolver `resolveModelForTier(cwd, agent, attempt)` in `core.cjs` is the single call-site for orchestrator integration.
 - REQ-DYNROUTE-03: `max_escalations` caps the escalation chain to prevent runaway cost.
 
-**Reference issue:** [#3024](https://github.com/TheRocketCodeMX/gsd-core/pull/3031)
+**Reference issue:** [#3024](https://github.com/open-gsd/gsd-core/pull/3031)
 
 ---
 
@@ -2827,14 +2827,14 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 - The hook reads the existing `~/.cache/gsd/gsd-update-check.json` cache — the same cache used by the statusline — and prints a banner only when an update is available.
 - Silent when up-to-date.
 - Failure diagnostics rate-limited to once per 24 h.
-- Cleanly removed by `npx @therocketcode/gsd-core --uninstall`.
+- Cleanly removed by `npx @opengsd/gsd-core --uninstall`.
 
 **Requirements:**
 - REQ-BANNER-01: Banner does not install without explicit opt-in.
 - REQ-BANNER-02: No additional network requests — reuses the existing background update-check cache.
 - REQ-BANNER-03: Uninstall path removes the banner hook.
 
-**Reference issue:** [#2795](https://github.com/TheRocketCodeMX/gsd-core/pull/2795)
+**Reference issue:** [#2795](https://github.com/open-gsd/gsd-core/pull/2795)
 
 ---
 
@@ -2853,7 +2853,7 @@ Users who run a memory / knowledge-base MCP server (for example, ExoCortex-style
 
 No new commands or daemon process — purely a documentation artifact that maps existing primitives onto a tracker-driven workflow.
 
-**Reference issue:** [#2840](https://github.com/TheRocketCodeMX/gsd-core/pull/2840)
+**Reference issue:** [#2840](https://github.com/open-gsd/gsd-core/pull/2840)
 
 ---
 
@@ -2881,7 +2881,7 @@ Source commit: abc1234 (3 commits behind HEAD)
 
 **Fallback:** pre-v0.7 graphs and non-git checkouts return `commit_stale: null`; callers fall back to the existing mtime-based `stale` flag. No behavior change for existing users.
 
-**Reference issue:** [#3170](https://github.com/TheRocketCodeMX/gsd-core/issues/3170)
+**Reference issue:** [#3170](https://github.com/open-gsd/gsd-core/issues/3170)
 
 ---
 
@@ -2899,7 +2899,7 @@ Source commit: abc1234 (3 commits behind HEAD)
 - Executor install failures stop for human verification instead of auto-trying similarly named packages.
 
 **Requirements:**
-- REQ-PKG-GATE-01: Research MUST record package registry, age, download/source signals, slopcheck verdict, and disposition.
+- REQ-PKG-GATE-01: Research MUST record package registry, age, download/source signals, legitimacy verdict, and disposition.
 - REQ-PKG-GATE-02: Planner MUST gate unverified or suspicious package installs before execution.
 - REQ-PKG-GATE-03: Executor MUST NOT auto-substitute package names after failed package-manager installs.
 
@@ -2918,7 +2918,7 @@ Source commit: abc1234 (3 commits behind HEAD)
 | `standard` | Core plus common phase-management commands |
 | `full` | Complete surface; default |
 
-**Runtime control:** `/gsd:surface` lists profile state and enables, disables, or resets skill clusters without reinstalling.
+**Runtime control:** `/gsd-surface` lists profile state and enables, disables, or resets skill clusters without reinstalling.
 
 **Requirements:**
 - REQ-SURFACE-01: Installer MUST resolve `--profile=<name>` and persist the active profile in `.gsd-profile`.
@@ -3218,7 +3218,7 @@ Each surfaced prohibition is resolved to exactly one of three states:
 | `dismissed` | Not a genuine prohibition (requires a non-empty reason) | Recorded with its reason; empty dismissals are rejected |
 | `unresolved` | Deferred | Soft-gates the spec; surfaced as a planner assumption |
 
-Each resolved prohibition carries a `verification` tier — `test` (a negative test can enforce it) or `judgment` (only human/LLM judgment can). At verify time, judgment-tier prohibitions route to a never-silent / never-hard-halt soft gate (autonomous emits an `unverified-prohibition — human review recommended` flag); test-tier prohibitions are enforced via the deterministic `check prohibition-enforcement` gate — green when the wired negative test / lint rule passes, hard-gate (flagged, non-green) when missing or failing, in both interactive and autonomous modes (#1259, ADR-550 D5d). Under `--auto`, the probe **never auto-dismisses**. Canon-bound concerns (OWASP / GDPR / fairness) are referred to `/gsd:secure-phase` rather than minting SPEC prohibitions (ADR-550 D6).
+Each resolved prohibition carries a `verification` tier — `test` (a negative test can enforce it) or `judgment` (only human/LLM judgment can). At verify time, judgment-tier prohibitions route to a never-silent / never-hard-halt soft gate (autonomous emits an `unverified-prohibition — human review recommended` flag); test-tier prohibitions are enforced via the deterministic `check prohibition-enforcement` gate — green when the wired negative test / lint rule passes, hard-gate (flagged, non-green) when missing or failing, in both interactive and autonomous modes (#1259, ADR-550 D5d). Under `--auto`, the probe **never auto-dismisses**. Canon-bound concerns (OWASP / GDPR / fairness) are referred to `/gsd-secure-phase` rather than minting SPEC prohibitions (ADR-550 D6).
 
 The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, so the section is not merely documentation.
 
@@ -3255,7 +3255,7 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 **Reference:** [`gsd capability` command reference](reference/gsd-capability-command.md) · [ADR-1244](adr/1244-capability-ecosystem.md)
 ### 148. Smart Entry Launcher
 
-**Command:** `/gsd:next`
+**Command:** `/gsd-next`
 
 **Tool:** `gsd-tools smart-entry [--json]`
 
@@ -3276,15 +3276,15 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 
 ## v1.7.0 Features
 
-> These are features new to **@therocketcode/gsd-core 1.7.0** (the current release line: 1.0.0 → 1.2.0 → … → 1.6.1 → 1.7.0). The preceding `v1.27`–`v1.43.0` sections use the retired get-shit-done-cc / get-shit-done-redux feature numbering and are not gsd-core releases — see [Legacy Release Notes](RELEASE-NOTES-LEGACY.md).
+> These are features new to **@opengsd/gsd-core 1.7.0** (the current release line: 1.0.0 → 1.2.0 → … → 1.6.1 → 1.7.0). The preceding `v1.27`–`v1.43.0` sections use the retired get-shit-done-cc / get-shit-done-redux feature numbering and are not gsd-core releases — see [Legacy Release Notes](RELEASE-NOTES-LEGACY.md).
 
 ### 149. Embeddable Orchestration System (Host-Integration Interface)
 
 **Purpose:** Express every host integration against one public, versioned contract (ADR-1239 Phase A, #1690) instead of bespoke per-host wiring, so onboarding a new host becomes additive descriptor work.
 
-**Behavior:** The interface exposes six interface points (`command`, `dispatch`, `model`, `hooks`, `state`, `artifact`), eight negotiated axes, and a `PROTOCOL_VERSION` handshake that negotiates down to `min(host, engine)`. In 1.7.0, 14 runtimes were migrated onto the interface via imperative adapters (OpenCode #2087, Cursor #2089, Cline #2090, Hermes #2091, Qwen #2092, Kilo #2093, Trae #2094, Kimi #2095, Antigravity #2096, Augment #2097), a declarative adapter (Codex #2088), plus full lifecycle-hook wiring for CodeBuddy (#2098), GitHub Copilot (#2099), and Windsurf (#2100). Descriptors gained an `extensionEvents` vocabulary (#1946), and `/gsd:surface` now reproduces a runtime's agent output byte-for-byte from the installer's descriptors (#1575).
+**Behavior:** The interface exposes six interface points (`command`, `dispatch`, `model`, `hooks`, `state`, `artifact`), eight negotiated axes, and a `PROTOCOL_VERSION` handshake that negotiates down to `min(host, engine)`. In 1.7.0, 14 runtimes were migrated onto the interface via imperative adapters (OpenCode #2087, Cursor #2089, Cline #2090, Hermes #2091, Qwen #2092, Kilo #2093, Trae #2094, Kimi #2095, Antigravity #2096, Augment #2097), a declarative adapter (Codex #2088), plus full lifecycle-hook wiring for CodeBuddy (#2098), GitHub Copilot (#2099), and Windsurf (#2100). Descriptors gained an `extensionEvents` vocabulary (#1946), and `/gsd-surface` now reproduces a runtime's agent output byte-for-byte from the installer's descriptors (#1575).
 
-**New runtimes:** ZCode (Z.ai — Agentic Development Environment for GLM-5.2, #1925), pi (`npx @therocketcode/gsd-core --pi`, #2102), and a repo-local VS Code extension driven through the adapter (#2103). The retired Gemini CLI now redirects to Antigravity CLI, its official successor (#1928).
+**New runtimes:** ZCode (Z.ai — Agentic Development Environment for GLM-5.2, #1925), pi (`npx @opengsd/gsd-core --pi`, #2102), and a repo-local VS Code extension driven through the adapter (#2103). The retired Gemini CLI now redirects to Antigravity CLI, its official successor (#1928).
 
 **Reference:** [The Embeddable Orchestration System](explanation/embeddable-orchestration-system.md) · [Host-Integration Interface](reference/host-integration-interface.md) · [Interface versioning policy](explanation/interface-versioning-policy.md)
 
@@ -3348,7 +3348,7 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 
 ### 156. API-Coverage Gate
 
-**Command:** `/gsd:verify-work`
+**Command:** `/gsd-verify-work`
 
 **Purpose:** A phase that integrates an external API, SDK, or service can no longer seal verification without a decided coverage matrix (#1562).
 
@@ -3362,11 +3362,9 @@ The load-bearing wire is the `plan-phase` lift into `must_haves.prohibitions`, s
 
 ### 158. Broken-Windows Ledger
 
-**Behavior:** A cross-phase defect register at `.planning/WINDOWS.md` accumulates stubs, TODOs, skipped tests, unrun verifies, and unmet truths (#1950). `/gsd:ship` blocks while any entry is `open`; an entry can be `waived` only with a recorded reason (auditable) or marked `fixed` (removed from the blocking set), optionally with its own recorded reason. `/gsd:progress` surfaces the open + waived counts.
+**Behavior:** A cross-phase defect register at `.planning/WINDOWS.md` accumulates stubs, TODOs, skipped tests, unrun verifies, and unmet truths (#1950). `/gsd-ship` blocks while any entry is `open`; an entry can be `waived` only with a recorded reason (auditable) or marked `fixed` (removed from the blocking set). `/gsd-progress` surfaces the open + waived counts.
 
-**Commands:** `gsd-tools windows status | append | waive | fixed | amend | reconcile`.
-
-**Closing an entry is mechanical — never hand-edit the file.** `fixed <id> "<reason>"` records WHY it closed; `amend <id> --description/--reason/--file/--line` re-words an existing entry at any status (narrowing a row that closed only by halves, correcting a stale file pointer, normalizing a hand-annotated closure). A hand edit desynchronizes the frontmatter counts from the entries, and every read then fails closed — `reconcile` is the repair verb that re-derives the counts from the entries. It is the only lenient read path: normal reads keep the fail-closed cross-check, and reconcile refuses genuine corruption (a broken JSON block or an invalid entry) rather than papering over it.
+**Commands:** `gsd-tools windows status | append | waive | fixed`.
 
 **Config:** `workflow.windows_enforce` (gate active, default `false` — opt-in enforcement). Enable with `gsd config-set workflow.windows_enforce true`. Tracking (the ledger itself, populated by the executor) is always on; only the ship gate is opt-in.
 
