@@ -55,7 +55,7 @@ const OLD_PACKAGE_SIGNALS = [
 const LEGACY_CACHE_FILENAMES = [
   'gsd-update-check.json',
   // The upstream @opengsd per-package cache. Written SPLIT so the tree-wide
-  // branding sweep (scripts/sync-upstream.sh maps opengsd-gsd-core →
+  // branding sweep (scripts/sync-upstream.sh maps therocketcode-gsd-core →
   // therocketcode-gsd-core) can never rewrite it into the CURRENT package's
   // cache name — that exact accident once made cleanup flag the live cache
   // (#607 data-loss guard, pinned by tests/issue-607-legacy-cleanup.test.cjs).

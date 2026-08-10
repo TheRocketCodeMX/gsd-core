@@ -1845,7 +1845,7 @@
     {
       "id": "RELEASE-NOTES.EXAMPLE.hotfix",
       "klass": "RELEASE-NOTES",
-      "value": "v1.41.1 (https://github.com/open-gsd/gsd-core/releases/tag/v1.41.1) - 14 fixes grouped by 6 subgroups",
+      "value": "v1.41.1 (https://github.com/TheRocketCodeMX/gsd-core/releases/tag/v1.41.1) - 14 fixes grouped by 6 subgroups",
       "line": 616
     },
     {
@@ -1857,7 +1857,7 @@
     {
       "id": "RELEASE-NOTES.EXAMPLE.rc",
       "klass": "RELEASE-NOTES",
-      "value": "v1.7.0-rc.1 (https://github.com/open-gsd/gsd-core/releases/tag/v1.7.0-rc.1) - intro + Added/Changed/Fixed/Documentation taxonomy",
+      "value": "v1.7.0-rc.1 (https://github.com/TheRocketCodeMX/gsd-core/releases/tag/v1.7.0-rc.1) - intro + Added/Changed/Fixed/Documentation taxonomy",
       "line": 617
     },
     {
@@ -1929,19 +1929,19 @@
     {
       "id": "RELEASE-NOTES.STANDARD.footer.full-changelog",
       "klass": "RELEASE-NOTES",
-      "value": "**Full Changelog**: https://github.com/open-gsd/gsd-core/compare/<prev>...<this>",
+      "value": "**Full Changelog**: https://github.com/TheRocketCodeMX/gsd-core/compare/<prev>...<this>",
       "line": 599
     },
     {
       "id": "RELEASE-NOTES.STANDARD.footer.hotfix",
       "klass": "RELEASE-NOTES",
-      "value": "Install/upgrade: \\`npx @opengsd/gsd-core@latest\\`",
+      "value": "Install/upgrade: \\`npx @therocketcode/gsd-core@latest\\`",
       "line": 597
     },
     {
       "id": "RELEASE-NOTES.STANDARD.footer.rc",
       "klass": "RELEASE-NOTES",
-      "value": "Install for testing: \\`npx @opengsd/gsd-core@next\\` (per branch->dist-tag policy)",
+      "value": "Install for testing: \\`npx @therocketcode/gsd-core@next\\` (per branch->dist-tag policy)",
       "line": 598
     },
     {
@@ -1971,13 +1971,13 @@
     {
       "id": "RELEASE-NOTES.TEMPLATE.hotfix",
       "klass": "RELEASE-NOTES",
-      "value": "## Fixed\\n\\n### <subgroup>\\n- **<bold change>** — <explanation>. (#<PR>)\\n\\n---\\n\\nInstall/upgrade: \\`npx @opengsd/gsd-core@latest\\`\\n\\n**Full Changelog**: <compare-url>",
+      "value": "## Fixed\\n\\n### <subgroup>\\n- **<bold change>** — <explanation>. (#<PR>)\\n\\n---\\n\\nInstall/upgrade: \\`npx @therocketcode/gsd-core@latest\\`\\n\\n**Full Changelog**: <compare-url>",
       "line": 620
     },
     {
       "id": "RELEASE-NOTES.TEMPLATE.rc",
       "klass": "RELEASE-NOTES",
-      "value": "<one-paragraph intro>\\n\\n## Added\\n### <subgroup>\\n- **<change>** — <explanation>. (#<PR>)\\n\\n## Changed\\n### Architecture\\n- **<refactor>** — <user-visible benefit>. (#<PR>)\\n\\n## Fixed\\n### <subgroup>\\n- **<fix>** — <explanation>. (#<PR>)\\n\\n## Documentation\\n- **<docs change>** — <reason>. (#<PR>)\\n\\n---\\n\\nThis is a release candidate. Install for testing:\\n\\`\\`\\`bash\\nnpx @opengsd/gsd-core@next\\n\\`\\`\\`\\n\\n**Full Changelog**: <compare-url>",
+      "value": "<one-paragraph intro>\\n\\n## Added\\n### <subgroup>\\n- **<change>** — <explanation>. (#<PR>)\\n\\n## Changed\\n### Architecture\\n- **<refactor>** — <user-visible benefit>. (#<PR>)\\n\\n## Fixed\\n### <subgroup>\\n- **<fix>** — <explanation>. (#<PR>)\\n\\n## Documentation\\n- **<docs change>** — <reason>. (#<PR>)\\n\\n---\\n\\nThis is a release candidate. Install for testing:\\n\\`\\`\\`bash\\nnpx @therocketcode/gsd-core@next\\n\\`\\`\\`\\n\\n**Full Changelog**: <compare-url>",
       "line": 621
     },
     {
@@ -2073,7 +2073,7 @@
     {
       "id": "RULESET.CODERABBIT.GUARD.OPEN_PRS",
       "klass": "RULESET",
-      "value": "gh pr list --repo open-gsd/gsd-core --author @me --state open; repeat near end because open PR set can change mid-run",
+      "value": "gh pr list --repo TheRocketCodeMX/gsd-core --author @me --state open; repeat near end because open PR set can change mid-run",
       "line": 543
     },
     {

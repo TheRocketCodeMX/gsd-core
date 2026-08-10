@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-29
-- **Issue:** [#2619](https://github.com/open-gsd/gsd-core/issues/2619) (`enhancement` + `approved-enhancement`)
-- **Completes:** [ADR-0174](0174-retire-gsd-sdk-package-boundary.md) §6 — the observability seam, decided 2026-05-23 and shipped un-wired; wired on the live dispatch path 2026-07-28 by [#2620](https://github.com/open-gsd/gsd-core/issues/2620) / PR [#2621](https://github.com/open-gsd/gsd-core/pull/2621) (see D1)
+- **Issue:** [#2619](https://github.com/TheRocketCodeMX/gsd-core/issues/2619) (`enhancement` + `approved-enhancement`)
+- **Completes:** [ADR-0174](0174-retire-gsd-sdk-package-boundary.md) §6 — the observability seam, decided 2026-05-23 and shipped un-wired; wired on the live dispatch path 2026-07-28 by [#2620](https://github.com/TheRocketCodeMX/gsd-core/issues/2620) / PR [#2621](https://github.com/TheRocketCodeMX/gsd-core/pull/2621) (see D1)
 - **Supersedes:** nothing. This ADR **narrows one bullet** of [ADR-0174](0174-retire-gsd-sdk-package-boundary.md) §6 — the *unconditional* stderr-on-error rule (`0174:105`) — and **discloses** that narrowing rather than retconning it (D1b). ADR-0174 keeps its `Accepted` status and stays load-bearing, and no lifecycle back-link is claimed: a disclosed partial supersede of a single rule is not an ADR-level supersession. Per `CONTRIBUTING.md:174` and `docs/contributor-standards.md:146`, a change that intentionally revisits an ADR decision must call it out explicitly — this field is that call-out.
 - **Mirrors:** [ADR-1577](1577-untrusted-input-boundary-and-injection-blocking.md) — the *inbound* untrusted-input boundary. This ADR adds the *outbound* one.
 - **Constrained by:** [ADR-857](857-capability-system.md) (observability is core substrate, never a Feature Capability), [ADR-0001](0001-dispatch-policy-module.md) / [ADR-0012](0012-command-routing-hub.md) (the dispatch seam the events ride)
@@ -119,4 +119,4 @@ Integrity against a deceptive agent (signed commits with an out-of-environment k
 - [ADR-0001](0001-dispatch-policy-module.md) / [ADR-0012](0012-command-routing-hub.md) — the dispatch seam.
 - `CONTEXT.md` §"Dispatch Observability Module" — the third surface describing this contract as live.
 - `docs/CONFIGURATION.md:1667-1668,1730` — `GSD_AUDIT` / `GSD_AUDIT_ARGS` documented as working.
-- Issues: [#2619](https://github.com/open-gsd/gsd-core/issues/2619) (this ADR), [#2620](https://github.com/open-gsd/gsd-core/issues/2620) / PR [#2621](https://github.com/open-gsd/gsd-core/pull/2621) (D1), [#2202](https://github.com/open-gsd/gsd-core/issues/2202) (unknown-key loss).
+- Issues: [#2619](https://github.com/TheRocketCodeMX/gsd-core/issues/2619) (this ADR), [#2620](https://github.com/TheRocketCodeMX/gsd-core/issues/2620) / PR [#2621](https://github.com/TheRocketCodeMX/gsd-core/pull/2621) (D1), [#2202](https://github.com/TheRocketCodeMX/gsd-core/issues/2202) (unknown-key loss).

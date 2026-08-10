@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-01
-- **Issue:** [#2966](https://github.com/open-gsd/gsd-core/issues/2966)
+- **Issue:** [#2966](https://github.com/TheRocketCodeMX/gsd-core/issues/2966)
 - **Supersedes:** —
 - **Relationship to prior work:** Extends `RULESET.TESTS.feedback-loop-convergence` (`CONTEXT.md`) from its existing single instance, `tests/estimate-loop-convergence.test.cjs`, to the full five-step loop.
 

@@ -169,7 +169,7 @@ flowchart LR
 From a terminal **in your project directory**, run the installer:
 
 ```bash
-npx @opengsd/gsd-core@latest --claude --local
+npx @therocketcode/gsd-core@latest --claude --local
 ```
 
 This tutorial uses `--local`, so GSD is installed only in this project. On a

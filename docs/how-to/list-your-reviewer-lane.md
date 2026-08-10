@@ -58,7 +58,7 @@ Append **exactly one** object to `docs/registries/reviewers.json`:
     "configKeys": ["acme.api_key"],
     "runtimeCompat": ["all"]
   },
-  "discussion": "https://github.com/open-gsd/gsd-core/discussions/1236"
+  "discussion": "https://github.com/TheRocketCodeMX/gsd-core/discussions/1236"
 }
 ```
 

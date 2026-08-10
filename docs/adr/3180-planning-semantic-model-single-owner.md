@@ -2,9 +2,9 @@
 
 - **Status:** Accepted (Phase 0 — ADR only; locks the contract Phases 1–5 execute against. No production code lands in this PR.)
 - **Date:** 2026-08-07
-- **Issue:** [#3180](https://github.com/open-gsd/gsd-core/issues/3180) is the **scope authority** (`epic` + `approved-enhancement` + `type: chore`), which is why this ADR carries its number. [#3182](https://github.com/open-gsd/gsd-core/issues/3182) is the Phase-0 tracking sub-issue this PR closes — the epic stays open until the final phase merges. This follows [ADR-3128](3128-adaptive-runtime-evidence.md), whose filename likewise tracks its scope-authority issue while its PR referenced a separate docs sub-issue.
+- **Issue:** [#3180](https://github.com/TheRocketCodeMX/gsd-core/issues/3180) is the **scope authority** (`epic` + `approved-enhancement` + `type: chore`), which is why this ADR carries its number. [#3182](https://github.com/TheRocketCodeMX/gsd-core/issues/3182) is the Phase-0 tracking sub-issue this PR closes — the epic stays open until the final phase merges. This follows [ADR-3128](3128-adaptive-runtime-evidence.md), whose filename likewise tracks its scope-authority issue while its PR referenced a separate docs sub-issue.
 - **Supersedes:** nothing
-- **Relationship to prior work:** extends [ADR-2121](2121-phase-identifier-parsing-consolidation.md), which consolidated phase-identifier **syntax** and proved the mechanism (`scripts/lint-phase-id-drift.cjs` reports 0 independent re-derivations). This ADR applies the same mechanism one layer up, to the **semantics** of the `.planning/` model. Distinct from [#1879](https://github.com/open-gsd/gsd-core/issues/1879) (absent-vs-corrupt across I/O read paths), [#2143](https://github.com/open-gsd/gsd-core/issues/2143) (the document-parsing layer beneath), and [#3051](https://github.com/open-gsd/gsd-core/issues/3051) (why the suite did not catch these).
+- **Relationship to prior work:** extends [ADR-2121](2121-phase-identifier-parsing-consolidation.md), which consolidated phase-identifier **syntax** and proved the mechanism (`scripts/lint-phase-id-drift.cjs` reports 0 independent re-derivations). This ADR applies the same mechanism one layer up, to the **semantics** of the `.planning/` model. Distinct from [#1879](https://github.com/TheRocketCodeMX/gsd-core/issues/1879) (absent-vs-corrupt across I/O read paths), [#2143](https://github.com/TheRocketCodeMX/gsd-core/issues/2143) (the document-parsing layer beneath), and [#3051](https://github.com/TheRocketCodeMX/gsd-core/issues/3051) (why the suite did not catch these).
 
 Symbol names are the durable anchors throughout. Line references, where given, are as of `next` @ `cbd180c5c` and will drift.
 
@@ -240,7 +240,7 @@ Considered and not applicable: `choose-boring-technology` (no new dependency; fi
 - `scripts/lint-phase-id-drift.cjs` — the guard pattern Decision 4 models
 - `CONTRIBUTING.md` § *Prohibited: Raw Text Matching on Test Outputs* — why `scope` is a frozen enum
 - `CONTRIBUTING.md` § *Fixture provenance (#2371)* — why the identity test alone is insufficient
-- Phase sub-issues: [#3183](https://github.com/open-gsd/gsd-core/issues/3183), [#3184](https://github.com/open-gsd/gsd-core/issues/3184), [#3185](https://github.com/open-gsd/gsd-core/issues/3185), [#3186](https://github.com/open-gsd/gsd-core/issues/3186), [#3187](https://github.com/open-gsd/gsd-core/issues/3187)
+- Phase sub-issues: [#3183](https://github.com/TheRocketCodeMX/gsd-core/issues/3183), [#3184](https://github.com/TheRocketCodeMX/gsd-core/issues/3184), [#3185](https://github.com/TheRocketCodeMX/gsd-core/issues/3185), [#3186](https://github.com/TheRocketCodeMX/gsd-core/issues/3186), [#3187](https://github.com/TheRocketCodeMX/gsd-core/issues/3187)
 
 ## Amendments
 
