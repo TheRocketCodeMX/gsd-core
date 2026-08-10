@@ -24,6 +24,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const FIXTURE_CHANGELOG = [
   '# Changelog',
@@ -50,7 +51,7 @@ function runExtract(cliPath, changelogPath) {
     '--from', '1.7.2',
     '--to', '1.7.3',
     '--changelog', changelogPath,
-  ], { encoding: 'utf8', windowsHide: true });
+  ], { encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
 }
 
 describe('update workflow changelog preview tooling (changeset cli)', () => {

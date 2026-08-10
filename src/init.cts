@@ -1176,7 +1176,7 @@ function cmdInitNewProject(cwd: string, raw: boolean, options: Record<string, un
   // Fork flags ride in upstream's generic `options` record (upstream's #2932/#2992
   // signature evolution): `--design` is a value-flag (string when present, else null),
   // `--no-design` a boolean flag.
-  const designArg = typeof options['design'] === 'string' && options['design'] ? (options['design'] as string) : null;
+  const designArg = typeof options['design'] === 'string' && options['design'] ? options['design'] : null;
   const designDismissed = options['noDesign'] === true;
   if (designArg) {
     hasDesignHint = true;

@@ -39,6 +39,7 @@ const { execFileSync } = require('node:child_process');
 
 const { cleanup, createTempDir, runNpm, isUsageOutput } = require('./helpers.cjs');
 const { HOOKS_TO_COPY } = require('../scripts/build-hooks.js');
+const { GIT_TIMEOUT_MS, PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const INSTALL_2 = path.join(REPO_ROOT, 'bin', 'install.js');
@@ -56,6 +57,7 @@ function tagAvailable() {
     execFileSync('git', ['rev-parse', '-q', '--verify', `${FORK_TAG}^{commit}`], {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: GIT_TIMEOUT_MS,
     });
     return true;
   } catch (_) {
@@ -453,7 +455,7 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
     // Usage renders (exit 1 by design when no command given).
     let usage = '';
     try {
-      execFileSync(process.execPath, [tools], { encoding: 'utf-8', cwd: cellAProject, stdio: ['ignore', 'pipe', 'pipe'] });
+      execFileSync(process.execPath, [tools], { encoding: 'utf-8', cwd: cellAProject, stdio: ['ignore', 'pipe', 'pipe'], timeout: PROBE_TIMEOUT_MS });
     } catch (err) {
       usage = `${err.stdout || ''}${err.stderr || ''}`;
     }
@@ -462,7 +464,7 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
     const grounding = execFileSync(
       process.execPath,
       [tools, 'query', 'grounding', 'required', '--cwd', cellAProject],
-      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PROBE_TIMEOUT_MS },
     );
     const parsed = JSON.parse(grounding);
     assert.ok(Array.isArray(parsed.required), 'grounding required must return a required[] source set');

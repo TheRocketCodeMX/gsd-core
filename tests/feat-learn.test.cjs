@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const TOOLS_PATH = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
 
@@ -15,6 +16,7 @@ function runLearn(args, env = {}) {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, ...env },
+    timeout: PROBE_TIMEOUT_MS,
   });
   return JSON.parse(out.trim());
 }
@@ -113,6 +115,7 @@ describe('learn capability dispatch (Rocket capability pack, issue #25)', () => 
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, ...env },
+        timeout: PROBE_TIMEOUT_MS,
       });
       assert.fail(`expected non-zero exit for: learn ${args.join(' ')}`);
     } catch (err) {
