@@ -292,12 +292,6 @@ function buildNewProjectConfig(userChoices: Record<string, unknown>): Record<str
       ui_safety_gate: true,
       ai_integration_phase: true,
       api_coverage_gate: true,
-      // FORK:strategy — certification in the verify loop (testing-certification
-      // design spec §5). `required` is the default on purpose: the invariant is
-      // "certification happens", not "an agent does it" — on CERT-0 the human
-      // UAT that already runs IS the certification, so the default costs a
-      // project with no driver nothing. `offer` asks; `off` opts out entirely.
-      certification: 'required',
       human_verify_mode: 'end-of-phase',
       context_guard_mode: 'warn',
       text_mode: false,
@@ -824,10 +818,6 @@ function cmdConfigSet(cwd: string, keyPath: string | undefined, value: string | 
   if (kp === 'ship.pr_body_sections') {
     validateShipPrBodySections(parsedValue);
   }
-
-  // FORK:strategy — certification posture in the verify loop.
-  const VALID_CERTIFICATION_MODES = ['required', 'offer', 'off'];
-  if (kp === 'workflow.certification') assertEnumValue(parsedValue, val, VALID_CERTIFICATION_MODES, 'workflow.certification');
 
   // Human verification checkpoint mode (#3309)
   const VALID_HUMAN_VERIFY_MODES = ['mid-flight', 'end-of-phase'];

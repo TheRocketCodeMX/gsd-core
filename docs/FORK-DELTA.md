@@ -338,7 +338,6 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/execute-plan.md` | strategy | anchors-only | the `kind: agentic_certification` evidence-ref bullet in the `coverage:` authoring guidance (its ref is the run's evidence bundle, never a test path; executors never author one) |
 | `gsd-core/templates/summary.md` | strategy | anchors-only | `agentic_certification` in both `verification[].kind` enum locations (inline comment + field-semantics table). Admission only — the deterministic auto-pass contract is untouched |
 | `gsd-core/references/planning-config.md` | strategy | anchors-only | the `workflow.certification` row in the Workflow Fields table (`required` \| `offer` \| `off`, default `required`) |
-| `src/config.cts` | strategy | anchors-only | `workflow.certification` default (`'required'`) in the config schema + its `cmdConfigSet` enum validation |
 | `src/coverage.cts` | strategy | anchors-only | `'agentic_certification'` in the frozen `VALID_KINDS` enum the UAT coverage classifier validates against |
 | `tests/config.test.cjs` | bracket-guard | anchors-only | the warning's contract: value still written, `gsd: warning —` idiom naming key + value + "no consumers" + "legacy", clean `--raw` stdout, and no warning for `milestone-prefixed` / `null` |
 

@@ -1187,15 +1187,6 @@
       ]
     },
     {
-      "path": "src/config.cts",
-      "feature": "strategy",
-      "mode": "anchors-only",
-      "anchors": [
-        "certification: 'required'",
-        "VALID_CERTIFICATION_MODES"
-      ]
-    },
-    {
       "path": "src/coverage.cts",
       "feature": "strategy",
       "mode": "anchors-only",

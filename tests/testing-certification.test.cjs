@@ -638,7 +638,7 @@ const VERIFY_WORK = 'gsd-core/workflows/verify-work.md';
 const CERT_STEP = 'gsd-core/workflows/verify-work/steps/agentic-certification.md';
 const SUMMARY_TPL = 'gsd-core/templates/summary.md';
 const EXECUTE_PLAN = 'gsd-core/workflows/execute-plan.md';
-const CONFIG_CTS = 'src/config.cts';
+const STRATEGY_CAP = 'capabilities/strategy/capability.json';
 const COVERAGE_CTS = 'src/coverage.cts';
 const PLANNING_CONFIG = 'gsd-core/references/planning-config.md';
 
@@ -808,14 +808,36 @@ describe('evidence schema — kind: agentic_certification', () => {
 });
 
 describe('workflow.certification — the config key', () => {
-  test('the schema default is `required`', () => {
-    assert.match(read(CONFIG_CTS), /certification:\s*'required'/);
+  // Declared on the FEDERATED capability surface (ADR-1244), exactly like
+  // `workflow.ui_review` in capabilities/ui — NOT as a patch to the central
+  // schema. That is what keeps the fork's config delta at zero upstream-shared
+  // patches, and it is why the assertions below read the capability descriptor
+  // rather than src/config.cts.
+  const slice = () => JSON.parse(read(STRATEGY_CAP)).config['workflow.certification'];
+
+  test('the strategy capability declares the key', () => {
+    assert.ok(slice(), 'capabilities/strategy/capability.json must declare workflow.certification');
   });
 
-  test('the value is enum-validated to required | offer | off', () => {
-    const text = read(CONFIG_CTS);
-    assert.match(text, /'required',\s*'offer',\s*'off'/);
-    assert.match(text, /kp === 'workflow\.certification'/);
+  test('the default is `required`', () => {
+    assert.equal(slice().default, 'required');
+  });
+
+  test('the value is enum-typed to required | offer | off', () => {
+    assert.equal(slice().type, 'enum');
+    assert.deepEqual(slice().values, ['required', 'offer', 'off']);
+  });
+
+  test('the generated capability registry carries the same slice', () => {
+    const registry = read('gsd-core/bin/lib/capability-registry.cjs');
+    assert.match(registry, /workflow\.certification/);
+    assert.match(registry, /"required"/);
+  });
+
+  test('the declaration is not ALSO patched into the central schema', () => {
+    // Two owners for one key is the failure mode the federated surface exists
+    // to prevent; a stray central default would silently shadow the capability.
+    assert.doesNotMatch(read('src/config.cts'), /certification/);
   });
 
   test('planning-config documents the key with its default and values', () => {
