@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { cleanup } = require('./helpers.cjs');
 const TOOLS = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 // Counter-instinctive fixture: the ADR mandates Transaction Script for the
 // `ledger` subdomain — a model would instinctively reach for a Domain Model.
@@ -26,7 +27,7 @@ function fixture(planGrounding, gateOff) {
   return { dir, phaseDir };
 }
 function gate(dir, phaseDir) {
-  try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8' })); }
+  try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
   catch (e) { return JSON.parse((e.stdout || '{}').trim() || '{}'); }
 }
 

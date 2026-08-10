@@ -224,8 +224,18 @@ describe('ADR-857 Phase 6 capstone conformance (#1139)', () => {
     // trim itself (their steps/prd-express-path.md extraction), so replaying
     // the fork's §1.6/§13a/oracle blocks lands above the old freeze. Same
     // policy, same intent: ratchet this back down at the next upstream shrink.
+    //
+    // v1.10.0 realignment replay (align/upstream-1.10.0): the promised
+    // ratchet-down happened — upstream SHRANK plan-phase (their section-manifest
+    // extraction moved whole steps out of the host body), so plan-phase.md
+    // ratchets 96875 → 91071 (measured 91007 + 64 headroom). execute-phase.md
+    // is forced UP 93600 → 93985 (measured 93921 + 64): upstream's own 1.10.0
+    // body is 93400 LF bytes — zero headroom under the old freeze — so the
+    // fork's two condensed FORK:context lines (+521 B, already extracted-down
+    // in the v1.9.0 replay) cannot fit at any compression. Ratchet back down
+    // at the next upstream shrink.
     const { lfByteCount } = require('../scripts/workflow-size.cjs');
-    const PRE_PHASE6 = { 'plan-phase.md': 96875, 'execute-phase.md': 93600 };
+    const PRE_PHASE6 = { 'plan-phase.md': 91071, 'execute-phase.md': 93985 };
     const notShrunk = [];
     for (const [file, frozen] of Object.entries(PRE_PHASE6)) {
       const now = lfByteCount(path.join(ROOT, 'gsd-core', 'workflows', file));

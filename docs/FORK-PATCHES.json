@@ -313,6 +313,15 @@
       ]
     },
     {
+      "path": "capabilities/broken-windows/capability.json",
+      "feature": "windows-ledger",
+      "mode": "anchors-only",
+      "anchors": [
+        "command-exit-zero",
+        "windows status --raw"
+      ]
+    },
+    {
       "path": "commands/gsd/ns-manage.md",
       "feature": "learn",
       "mode": "anchors-only",
@@ -634,8 +643,28 @@
       "feature": "validation",
       "mode": "anchors-only",
       "anchors": [
-        "do not expect others",
-        "exploration is DONE"
+        "do not expect others"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/auto-mode-detection.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "auto-detected brownfield",
+        "gsd:legacy-inventory"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/new-project/steps/codebase-map-offer.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 2,
+      "anchors": [
+        "exploration is DONE",
+        "vibe-coded-to-harden",
+        "strategy-flow\\.md"
       ]
     },
     {
@@ -775,6 +804,14 @@
       "mode": "anchors-only",
       "anchors": [
         "\"name\": \"@therocketcode/gsd-core\""
+      ]
+    },
+    {
+      "path": "scripts/build-hooks.js",
+      "feature": "grounding",
+      "mode": "anchors-only",
+      "anchors": [
+        "gsd-grounding-index-refresh\\.js"
       ]
     },
     {
@@ -986,6 +1023,15 @@
       ]
     },
     {
+      "path": "tests/mcp-server-catalog.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "upstream pins the prompt count to its own literal 71",
+        "COMMAND_COUNT"
+      ]
+    },
+    {
       "path": "tests/planner-decomposition.test.cjs",
       "feature": "fidelity",
       "mode": "anchors-only",
@@ -1060,6 +1106,39 @@
       "mode": "anchors-only",
       "anchors": [
         "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
+      ]
+    },
+    {
+      "path": "src/shell-command-projection.cts",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "'gsd-agent-isolation-guard\\.js'",
+        "'gsd-write-guard\\.js'"
+      ]
+    },
+    {
+      "path": "tests/shell-command-projection-dispatch.test.cjs",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "managed-hook basename sets cover every hook the installer registers in settings\\.json"
+      ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
+      ]
+    },
+    {
+      "path": "tests/config.test.cjs",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "config-set phase_id_convention bracket warns that the grammar has no consumers"
       ]
     }
   ]

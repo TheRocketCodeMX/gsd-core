@@ -8,7 +8,7 @@
 - **CI rung (Axis C):** [C0 — one workflow, one job] — forcing fact for anything above C0: [n/a]
 - **Delivery rung (Axis D):** [D0 — one-command deploy, no prod users] — forcing fact for anything above D0: [n/a]
 - **Suite wall clock:** [N min, measured YYYY-MM-DD | unmeasured — no suite yet; assume under budget, re-measure at the first milestone with a real suite]
-- **Merges/week:** [N, from `git log --first-parent`] · **Contributors (90d):** [N, from `git shortlog -sn`]
+- **Merges/week:** [N, from `git log --first-parent`] · **Contributors (90d):** [N, from `git shortlog -sn HEAD`]
 - **Production users:** [none yet | a handful of internal/pilot users | real external users]
 - **Deploy cadence aimed for:** [whenever it's ready | weekly | release train]
 

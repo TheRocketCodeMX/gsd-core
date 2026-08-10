@@ -274,6 +274,27 @@ describe('the workflow measures instead of asking', () => {
     assert.match(wf, /git shortlog/, 'contributor count must be measured, not guessed');
   });
 
+  // `git shortlog` with no revision argument reads STDIN whenever stdout is not
+  // a TTY — which is always true inside an agent's Bash tool. Without an explicit
+  // revision the emitted command blocks on an empty stdin and CONTRIBUTORS_90D
+  // resolves to 0 for every project, silently mis-answering the C3 15-vs-16
+  // contributor threshold and the trunk-based-development judgement.
+  // Reproduced during realistic testing of the v1.10.0 realignment
+  // (.superpowers/sdd/flows-110-report.md §Flow 6): fixture 0 vs 1, this repo 0 vs 40.
+  test('every emitted git shortlog carries an explicit revision (never reads stdin)', () => {
+    const wf = read(WORKFLOW);
+    const invocations = wf.match(/git shortlog[^\n|)]*/g) || [];
+    assert.ok(invocations.length > 0, 'expected at least one git shortlog invocation to check');
+    for (const invocation of invocations) {
+      assert.match(
+        invocation,
+        /git shortlog\s.*\bHEAD\b/,
+        `"${invocation.trim()}" has no revision argument — git shortlog then reads stdin ` +
+          'under the agent\'s non-TTY stdout and the count is always 0',
+      );
+    }
+  });
+
   test('suite wall clock is measured — or explicitly recorded as unmeasured', () => {
     const wf = read(WORKFLOW);
     assert.match(wf, /wall clock/i, 'the single number that decides the pipeline shape');

@@ -2,7 +2,7 @@
 
 **Goal:** Give developers a coherent, high-bar way to *learn* the engineering concepts the GSD framework enforces — each concept taught **concept-first (what it is, clearly), then application (when/why/how-it-fits)** — sourced entirely from the skills, in one consistent voice.
 
-**Architecture:** `/gsd:learn` is an **inline skill the main agent runs** — not a subagent pipeline. Teaching is conversational and cross-concept (a learner asks about architecture, then testing, then how they connect), so the lesson must live in one context where the agent holds every concept at once and synthesizes across them live. The skill reads the machine-checked catalog (`learn-catalog.md`), loads only the source section(s) for the concept(s) in play, teaches through the five-beat pattern personalized by the existing `USER-PROFILE.md`, and tracks progress. An optional browser layer (reused from the superpowers mechanism) renders the genuinely-visual beats. **No subagents** — they would isolate each concept and defeat the cross-concept teaching that is the point.
+**Architecture:** `/gsd-learn` is an **inline skill the main agent runs** — not a subagent pipeline. Teaching is conversational and cross-concept (a learner asks about architecture, then testing, then how they connect), so the lesson must live in one context where the agent holds every concept at once and synthesizes across them live. The skill reads the machine-checked catalog (`learn-catalog.md`), loads only the source section(s) for the concept(s) in play, teaches through the five-beat pattern personalized by the existing `USER-PROFILE.md`, and tracks progress. An optional browser layer (reused from the superpowers mechanism) renders the genuinely-visual beats. **No subagents** — they would isolate each concept and defeat the cross-concept teaching that is the point.
 
 **Status:** Design approved (brainstorming). This spec feeds the implementation plan. Build wedge = the Testing track, end to end.
 
@@ -55,7 +55,7 @@ The catalog is the single source of *what is teachable* and *where its truth liv
 
 ## 5. Data flow (all inline, one context)
 
-1. **Invoke** `/gsd:learn` → the main agent loads the catalog, `USER-PROFILE.md`, and `LEARNING-PROGRESS.md` (all small).
+1. **Invoke** `/gsd-learn` → the main agent loads the catalog, `USER-PROFILE.md`, and `LEARNING-PROGRESS.md` (all small).
 2. **Select** the concept(s) — by argument, by resume, or by walking prerequisite edges (§6).
 3. **Load on demand** *only* the source section(s) for the concept(s) in play (the catalog's `Source` pointers; read the section, not the whole file — per `context-budget.md`). The agent now holds the concept(s) in its own context.
 4. **Teach inline** through the five beats, conversationally — render beats 1–4, optionally open the browser for `Visual` assets, and run beat 5 via `AskUserQuestion` on a constructed scenario (no repo required). *If* the learner is in a relevant project, optionally grep it for a real instance as a personalized bonus.
@@ -67,9 +67,9 @@ Context stays bounded by reading **per-section, on demand** (the catalog is the 
 
 ## 6. Entry modes
 
-- `/gsd:learn <concept-or-topic>` — jump to a node (resolves fuzzy topic → node ID). If prerequisites are unmet, offer them first; proceed if the learner insists.
-- `/gsd:learn` — guided: resume the last in-progress node, or suggest the next by profile + prerequisite order, or browse tracks.
-- `/gsd:learn --track <track>` — work a whole track in dependency order.
+- `/gsd-learn <concept-or-topic>` — jump to a node (resolves fuzzy topic → node ID). If prerequisites are unmet, offer them first; proceed if the learner insists.
+- `/gsd-learn` — guided: resume the last in-progress node, or suggest the next by profile + prerequisite order, or browse tracks.
+- `/gsd-learn --track <track>` — work a whole track in dependency order.
 
 Flags: `--text` (no browser, terminal-only), `--visual` (force-open the browser where a node has assets), `--review` (re-run comprehension checks on completed nodes; spaced repetition).
 
@@ -101,8 +101,8 @@ Cross-project (user-global) so progress follows the developer, mirroring `USER-P
 
 ## 9. Error & edge handling
 
-- **Runs standalone — no project required.** The curriculum (references), profile, and progress all live in `~/.claude/gsd-core/`, so `/gsd:learn` works in an empty directory or on a fresh machine. The full lesson (concept → how → when → why → practice on a constructed scenario) needs no repo. A junior who has never touched a codebase gets the complete lesson.
-- **No profile yet** → neutral defaults (concise depth, example-then-principle) + a one-line offer to run `/gsd:profile-user`.
+- **Runs standalone — no project required.** The curriculum (references), profile, and progress all live in `~/.claude/gsd-core/`, so `/gsd-learn` works in an empty directory or on a fresh machine. The full lesson (concept → how → when → why → practice on a constructed scenario) needs no repo. A junior who has never touched a codebase gets the complete lesson.
+- **No profile yet** → neutral defaults (concise depth, example-then-principle) + a one-line offer to run `/gsd-profile-user`.
 - **Browser unavailable / headless** → graceful terminal-only render; `Visual` beats degrade to an ASCII sketch + prose.
 - **Unmet prerequisites** → offer the prereq chain; respect an explicit override.
 - **Catalog integrity** → `tests/learn-catalog-*.test.cjs` enforces the completeness contract: every `Source` resolves to a real reference section, every `Prereqs` ID exists, the graph is acyclic, no cross-track duplication. A drift here fails CI.
@@ -124,7 +124,7 @@ What Testing-first legitimately buys is a **development-time validation focus, n
 
 ## 12. Out of scope (v1)
 
-- **`/gsd:learn this`** — explaining the calibration the framework *just made in the learner's project* (the ADR that chose Domain Model, the test shape it derived). High value, but couples to the build loop; design toward it, ship it as a fast-follow.
+- **`/gsd-learn this`** — explaining the calibration the framework *just made in the learner's project* (the ADR that chose Domain Model, the test shape it derived). High value, but couples to the build loop; design toward it, ship it as a fast-follow.
 - Authoring *new* concept content beyond what the references hold (the catalog only renders existing skills).
 - A hosted/web version, accounts, or multi-user progress. Local, single-developer, file-based only.
 - Quizzes-as-assessment / certification. The comprehension check is formative, not graded.

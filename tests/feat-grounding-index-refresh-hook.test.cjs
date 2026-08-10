@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const HOOK = path.resolve(__dirname, '..', 'hooks', 'gsd-grounding-index-refresh.js');
 
@@ -20,6 +21,7 @@ function runHook(event, env) {
     input: JSON.stringify(event),
     encoding: 'utf8',
     env: { ...process.env, GSD_GROUNDING_NO_REFRESH_SPAWN: '1', ...env },
+    timeout: PROBE_TIMEOUT_MS,
   });
   return out.trim();
 }
@@ -37,7 +39,7 @@ function mkProject() {
 describe('gsd-grounding-index-refresh FileChanged hook', () => {
   test('the hook script exists and is valid JS', () => {
     assert.ok(fs.existsSync(HOOK));
-    execFileSync(process.execPath, ['--check', HOOK], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--check', HOOK], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
   });
 
   test('a strategy-doc change → injects the active sources as additionalContext', () => {

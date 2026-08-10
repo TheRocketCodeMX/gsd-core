@@ -3,7 +3,7 @@
 > **In this fork the `gsd-context-monitor.js` hook is revived with a new purpose.**
 > Upstream shipped it as a panicked context-limit warner; this fork replaced it
 > with a **calm knowledge-flush nudge**. Same mechanism, opposite tone: at high
-> context usage it gently suggests a knowledge checkpoint (`/gsd:context flush`)
+> context usage it gently suggests a knowledge checkpoint (`/gsd-context flush`)
 > so durable knowledge is written down before compaction — it never nags the
 > user about the context window itself.
 
@@ -48,7 +48,7 @@ Keys live in the `context_lifecycle` config slice (flat `context_lifecycle.*` or
 
 ## Multi-runtime
 
-On Claude Code and Gemini the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd:context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
+On Claude Code and Gemini the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd-context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
 
 ---
 

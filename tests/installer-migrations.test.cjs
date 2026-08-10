@@ -1293,6 +1293,77 @@ test('marks zero-action pending migrations as applied', () => {
   }
 });
 
+test('records zero-action pending migrations when a sibling migration in the same run has work', () => {
+  // Regression: the ledger recorded zero-action migrations ONLY when the whole
+  // plan was action-free (markPendingMigrationsApplied). As soon as any
+  // UNRELATED migration produced actions, applyInstallerMigrationPlan ran
+  // instead and recorded just the journalled ids, so a no-op migration stayed
+  // pending forever — its ledger entry depended on its siblings' outcomes
+  // rather than its own. Surfaced by the v1.10.0 realignment, where upstream's
+  // new config-root-marker migration gave the fork's v1.14.0 update fixture its
+  // first action-bearing plan and migrations 002/004/005/006/008/009 silently
+  // dropped out of gsd-install-state.json.
+  const configDir = createTempInstall();
+  try {
+    writeFile(configDir, 'hooks/old-hook.js', 'retired\n');
+    writeManifest(configDir, { 'hooks/old-hook.js': sha256('retired\n') });
+
+    const result = runInstallerMigrations({
+      configDir,
+      migrations: [
+        migrationRecord(), // has actions → journalled
+        migrationRecord({
+          id: '2026-05-11-noop-sibling',
+          title: 'No-op sibling',
+          description: 'No-op sibling',
+          destructive: false,
+          plan: () => [],
+        }),
+      ],
+      scope: 'global',
+      now: () => '2026-05-11T00:00:07.000Z',
+    });
+
+    assert.deepEqual(result.appliedMigrationIds, ['2026-05-11-remove-old-hook']);
+    const recorded = readInstallState(configDir).appliedMigrations;
+    assert.deepEqual(
+      recorded.map((entry) => entry.id).sort(),
+      ['2026-05-11-noop-sibling', '2026-05-11-remove-old-hook'],
+    );
+    const noop = recorded.find((entry) => entry.id === '2026-05-11-noop-sibling');
+    // A zero-action migration writes nothing, so it carries no journal — but it
+    // must still pin its checksum, or drift detection never covers it.
+    assert.equal(noop.journal, null);
+    assert.match(noop.checksum, /^sha256:/);
+
+    // Idempotency: a second run must see it as applied and re-plan nothing.
+    const second = runInstallerMigrations({
+      configDir,
+      migrations: [
+        migrationRecord({
+          plan: () => {
+            throw new Error('applied migration planner must not run again');
+          },
+        }),
+        migrationRecord({
+          id: '2026-05-11-noop-sibling',
+          title: 'No-op sibling',
+          description: 'No-op sibling',
+          destructive: false,
+          plan: () => {
+            throw new Error('applied no-op migration planner must not run again');
+          },
+        }),
+      ],
+      scope: 'global',
+      now: () => '2026-05-11T00:00:08.000Z',
+    });
+    assert.deepEqual(second.appliedMigrationIds, []);
+  } finally {
+    cleanup(configDir);
+  }
+});
+
 test('surfaces checksum drift for an already-applied migration without aborting', () => {
   const configDir = createTempInstall();
   try {
@@ -1484,7 +1555,24 @@ test('runs discovered installer migrations against manifest-managed legacy orpha
     assert.equal(fs.existsSync(path.join(configDir, 'hooks/statusline.js')), false);
     assert.equal(fs.readFileSync(path.join(configDir, 'hooks/custom.js'), 'utf8'), 'custom hook\n');
     assert.deepEqual(result.appliedMigrationIds, ['2026-05-11-legacy-orphan-files']);
-    assert.deepEqual(readInstallState(configDir).appliedMigrations.map((entry) => entry.id), ['2026-05-11-legacy-orphan-files']);
+    // `appliedMigrationIds` is the journalled set — migrations that actually
+    // wrote something. The LEDGER is broader: it also records every migration
+    // whose plan() found nothing to do, because such a migration is complete
+    // regardless of what its siblings did. Asserted as a property (every entry
+    // is a real discovered migration, the acting one is present, no dupes)
+    // rather than a literal roster, so adding a migration does not break it.
+    const recordedIds = readInstallState(configDir).appliedMigrations.map((entry) => entry.id);
+    assert.ok(
+      recordedIds.includes('2026-05-11-legacy-orphan-files'),
+      `acting migration must be recorded; got ${JSON.stringify(recordedIds)}`,
+    );
+    const discoveredIds = discoverInstallerMigrations({
+      migrationsDir: path.join(__dirname, '..', 'gsd-core', 'bin', 'lib', 'installer-migrations'),
+    }).map((migration) => migration.id);
+    for (const id of recordedIds) {
+      assert.ok(discoveredIds.includes(id), `ledger entry ${id} must be a discovered migration`);
+    }
+    assert.equal(new Set(recordedIds).size, recordedIds.length, 'ledger must not duplicate entries');
   } finally {
     cleanup(configDir);
   }
@@ -1673,6 +1761,26 @@ test('shipped installer-migration checksums are locked to a committed baseline (
     // old path drops out of the manifest and uninstall can never remove it.
     '2026-07-20-pi-extension-cjs-to-js':
       'sha256:185fa926ae24d83cbdd95c31a9ad2cc8d123e176ad543669b3b0ed75e6ca6f4a',
+    // Migration 007 (NEW, added here per this test's own sanctioned "adding a new
+    // migration" case — not a shipped-body edit): retire the pre-#2544
+    // {"type":"commonjs"} marker at the runtime config root. #2544 moved that
+    // marker into the directories GSD fills, so without this an upgraded install
+    // keeps both and the config root stays pinned to CommonJS. Ownership is proven
+    // by exact content match rather than the manifest — the config-root marker was
+    // never manifest-recorded — so the action declares its own classification.
+    '2026-07-28-retire-config-root-commonjs-marker':
+      'sha256:8f2140cbe8f2dd8f7dfd52a0f6957c5edfe966c52d7e6e4d74ec7366930e0e1d',
+    // Migration 008: retire Cursor's duplicate commands/ surface (#2644).
+    '2026-07-29-cursor-retire-commands-surface':
+      'sha256:d0b2b812a3f752650f2518b48280f74a5937c80ec8412bac493382dfa3db083f',
+    // Migration 009 (NEW, added here per this test's own sanctioned "adding a new
+    // migration" case — not a shipped-body edit): retire pi's reserved hooks/
+    // directory now that the shared hook bundle installs at gsd-hooks/ instead
+    // (#3023). pi warns on hooks/'s mere existence regardless of contents, so an
+    // upgraded install must have both the legacy files AND the emptied directory
+    // itself retired via the new remove-empty-dir action.
+    '2026-08-07-pi-retire-reserved-hooks-dir':
+      'sha256:34264415b00e15e5a1691eae3db9bd24dca11e5c04d78358420a7a8adf115f9e',
   };
 
   const { DEFAULT_MIGRATIONS_DIR, migrationChecksum: computeChecksum } = require('../gsd-core/bin/lib/installer-migrations.cjs');
@@ -1785,6 +1893,256 @@ test('reconciles a drifted applied-migration checksum into install state on appl
 });
 
 
+// ---------------------------------------------------------------------------
+// remove-empty-dir action type (introduced with migration 009, #3023)
+//
+// Deliberately WEAKER than a recursive removal primitive: fs.rmdirSync only,
+// never fs.rmSync / {recursive:true} / {force:true}. A non-empty directory is
+// left in place as a successful no-op, not an error.
+// ---------------------------------------------------------------------------
+{
+  const { test, mock } = require('node:test');
+  const assert = require('node:assert/strict');
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const {
+    applyInstallerMigrationPlan,
+    evaluateRemoveEmptyDir,
+  } = require('../gsd-core/bin/lib/installer-migrations.cjs');
+  const { cleanup, createTempDir } = require('./helpers.cjs');
+
+  test('evaluateRemoveEmptyDir removes a genuinely empty directory', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+    const target = path.join(configDir, 'hooks');
+    fs.mkdirSync(target);
+
+    assert.equal(evaluateRemoveEmptyDir(configDir, target), 'removed');
+    assert.equal(fs.existsSync(target), false);
+  });
+
+  test('evaluateRemoveEmptyDir leaves a non-empty directory in place (planned-but-skipped, not an error)', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+    const target = path.join(configDir, 'hooks');
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, 'still-here.js'), '// user file\n', 'utf8');
+
+    assert.equal(evaluateRemoveEmptyDir(configDir, target), 'skipped-not-empty');
+    assert.equal(fs.existsSync(target), true);
+    assert.equal(fs.existsSync(path.join(target, 'still-here.js')), true);
+  });
+
+  test('evaluateRemoveEmptyDir refuses a symlinked directory (never follows it)', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+    const realElsewhere = createTempDir('gsd-remove-empty-dir-elsewhere-');
+    t.after(() => cleanup(realElsewhere));
+    const linkPath = path.join(configDir, 'hooks');
+    fs.symlinkSync(realElsewhere, linkPath, 'dir');
+
+    assert.equal(evaluateRemoveEmptyDir(configDir, linkPath), 'left-in-place');
+    assert.equal(fs.lstatSync(linkPath).isSymbolicLink(), true, 'the symlink itself must survive untouched');
+    assert.equal(fs.existsSync(realElsewhere), true, 'the real target directory must never be removed through the link');
+  });
+
+  test('evaluateRemoveEmptyDir refuses a target outside configDir', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+    const outside = createTempDir('gsd-remove-empty-dir-outside-');
+    t.after(() => cleanup(outside));
+
+    assert.equal(evaluateRemoveEmptyDir(configDir, outside), 'left-in-place');
+    assert.equal(fs.existsSync(outside), true);
+  });
+
+  test('evaluateRemoveEmptyDir refuses to remove configDir itself', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+
+    assert.equal(evaluateRemoveEmptyDir(configDir, configDir), 'left-in-place');
+    assert.equal(fs.existsSync(configDir), true);
+  });
+
+  test('evaluateRemoveEmptyDir treats an already-absent directory as a clean no-op', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    t.after(() => cleanup(configDir));
+    const target = path.join(configDir, 'hooks');
+    assert.equal(fs.existsSync(target), false);
+
+    let outcome;
+    assert.doesNotThrow(() => { outcome = evaluateRemoveEmptyDir(configDir, target); });
+    assert.equal(outcome, 'missing');
+  });
+
+  test('evaluateRemoveEmptyDir degrades an EACCES from rmdirSync without throwing', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-');
+    const target = path.join(configDir, 'hooks');
+    fs.mkdirSync(target);
+
+    mock.method(fs, 'rmdirSync', () => {
+      const err = new Error('EACCES: permission denied');
+      err.code = 'EACCES';
+      throw err;
+    });
+    // Registered BEFORE the cleanup hook below — node:test runs `t.after`
+    // callbacks in REGISTRATION order, so this guarantees fs.rmdirSync is
+    // restored before cleanup() ever runs. That ordering is load-bearing on
+    // Node 22 (not Node 24): Node 22's recursive `fs.rmSync` still falls
+    // through to the JS rimraf implementation (internal/fs/rimraf.js), which
+    // calls the PUBLIC `fs.rmdirSync` this test mocks; Node 24's native
+    // recursive-rm implementation never touches it. With cleanup's `t.after`
+    // registered FIRST (as it was), cleanup() ran while the mock was still
+    // active on Node 22 — `fs.rmSync` threw the injected EACCES, that
+    // exception aborted the test's remaining `after` hooks before
+    // `mock.restoreAll()` could run, and the still-mocked `fs.rmdirSync` then
+    // poisoned `cleanup()` for every later test in this file for the rest of
+    // the Node 22 process (the node22-only "failed running afterEach/after
+    // hook" cascade across the Codex/migration-008/T3 tests below). Verified
+    // by reproducing both orderings against `node:22` and `node:24` directly.
+    t.after(() => mock.restoreAll());
+    t.after(() => cleanup(configDir));
+
+    let outcome;
+    assert.doesNotThrow(() => { outcome = evaluateRemoveEmptyDir(configDir, target); });
+    assert.equal(outcome, 'left-in-place');
+    assert.equal(fs.existsSync(target), true, 'directory must survive a failed rmdirSync');
+  });
+
+  test('applyInstallerMigrationPlan wires remove-empty-dir through to journal + disk removal', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-apply-');
+    t.after(() => cleanup(configDir));
+    const target = path.join(configDir, 'hooks');
+    fs.mkdirSync(target);
+
+    const result = applyInstallerMigrationPlan({
+      configDir,
+      plan: {
+        blocked: [],
+        actions: [{
+          migrationId: '2026-08-07-pi-retire-reserved-hooks-dir',
+          migrationChecksum: 'sha256:test',
+          type: 'remove-empty-dir',
+          relPath: 'hooks',
+          reason: 'retired reserved directory',
+          classification: 'managed-pristine',
+          originalHash: null,
+          currentHash: null,
+        }],
+      },
+      now: () => '2026-08-07T00:00:00.000Z',
+    });
+
+    assert.equal(fs.existsSync(target), false);
+    const journal = JSON.parse(fs.readFileSync(path.join(configDir, result.journalRelPath), 'utf8'));
+    assert.equal(journal.actions.length, 1);
+    assert.equal(journal.actions[0].status, 'removed');
+    assert.equal(journal.actions[0].type, 'remove-empty-dir');
+  });
+
+  test('applyInstallerMigrationPlan leaves a non-empty remove-empty-dir target on disk and journals it', (t) => {
+    const configDir = createTempDir('gsd-remove-empty-dir-apply-');
+    t.after(() => cleanup(configDir));
+    const target = path.join(configDir, 'hooks');
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, 'user-file.js'), '// preserved\n', 'utf8');
+
+    const result = applyInstallerMigrationPlan({
+      configDir,
+      plan: {
+        blocked: [],
+        actions: [{
+          migrationId: '2026-08-07-pi-retire-reserved-hooks-dir',
+          migrationChecksum: 'sha256:test',
+          type: 'remove-empty-dir',
+          relPath: 'hooks',
+          reason: 'retired reserved directory',
+          classification: 'managed-pristine',
+          originalHash: null,
+          currentHash: null,
+        }],
+      },
+      now: () => '2026-08-07T00:00:01.000Z',
+    });
+
+    assert.equal(fs.existsSync(target), true);
+    assert.equal(fs.existsSync(path.join(target, 'user-file.js')), true);
+    const journal = JSON.parse(fs.readFileSync(path.join(configDir, result.journalRelPath), 'utf8'));
+    assert.equal(journal.actions[0].status, 'skipped-not-empty');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cursor duplicate commands-surface retirement (#2644)
+// ---------------------------------------------------------------------------
+
+{
+  const cursorCommandsMigration = require('../gsd-core/bin/lib/installer-migrations/008-cursor-retire-commands-surface.cjs');
+
+  test('migration 008 plans only manifest-managed gsd-*.md command files', (t) => {
+    const configDir = createTempInstall();
+    t.after(() => cleanup(configDir));
+    writeFile(configDir, 'commands/gsd-help.md', '# help\n');
+    writeFile(configDir, 'commands/gsd-custom.md', '# custom\n');
+    writeFile(configDir, 'commands/not-gsd.md', '# other\n');
+
+    const actions = cursorCommandsMigration.plan({
+      configDir,
+      classifyArtifact(relPath) {
+        if (relPath === 'commands/gsd-help.md') return { classification: 'managed-pristine' };
+        return { classification: 'unknown' };
+      },
+    });
+
+    assert.deepEqual(actions.map((action) => [action.type, action.relPath]), [
+      ['remove-managed', 'commands/gsd-help.md'],
+    ]);
+  });
+
+  test('migration 008 backs up a modified managed command and preserves an unknown neighbor', (t) => {
+    const configDir = createTempInstall();
+    t.after(() => cleanup(configDir));
+    writeFile(configDir, 'commands/gsd-help.md', '# locally modified help\n');
+    writeFile(configDir, 'commands/gsd-custom.md', '# user command\n');
+    writeManifest(configDir, {
+      'commands/gsd-help.md': sha256('# original generated help\n'),
+    });
+
+    const result = runInstallerMigrations({
+      configDir, runtime: 'cursor', scope: 'global', migrations: [cursorCommandsMigration],
+      now: () => '2026-07-29T00:00:00.000Z',
+    });
+
+    assert.equal(result.plan.actions[0].type, 'backup-and-remove');
+    assert.ok(!fs.existsSync(path.join(configDir, 'commands', 'gsd-help.md')));
+    assert.ok(fs.existsSync(path.join(configDir, 'commands', 'gsd-custom.md')),
+      'unmanifested user command must be preserved');
+    const journal = JSON.parse(fs.readFileSync(path.join(configDir, result.journalRelPath), 'utf8'));
+    assert.equal(
+      fs.readFileSync(path.join(configDir, journal.actions[0].backupRelPath), 'utf8'),
+      '# locally modified help\n',
+    );
+  });
+
+  test('migration 008 is scoped to Cursor for both global and local installs', (t) => {
+    for (const scope of ['global', 'local']) {
+      const configDir = createTempInstall();
+      t.after(() => cleanup(configDir));
+      writeFile(configDir, 'commands/gsd-help.md', '# help\n');
+      writeManifest(configDir, { 'commands/gsd-help.md': sha256('# help\n') });
+      const result = runInstallerMigrations({
+        configDir, runtime: 'cursor', scope, migrations: [cursorCommandsMigration],
+        now: () => `2026-07-29T00:00:0${scope === 'global' ? '0' : '1'}.000Z`,
+      });
+      assert.ok(!fs.existsSync(path.join(configDir, 'commands', 'gsd-help.md')),
+        `${scope} Cursor install must retire the duplicate command`);
+      assert.deepEqual(result.appliedMigrationIds, ['2026-07-29-cursor-retire-commands-surface']);
+    }
+  });
+}
+
+
 // ────────────────────────────────────────────────────────────────────────
 // Folded from tests/bug-3357-codex-legacy-hooks-json-migration.test.cjs — consolidation epic #1969 (B5 #1974)
 // ────────────────────────────────────────────────────────────────────────
@@ -1812,7 +2170,8 @@ const { describe, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { runNode } = require('./helpers/process-seam.cjs');
+const { throwIfFailed } = require('./helpers/git-fixture.cjs');
 
 const installModule = require('../bin/install.js');
 const { readInstallState } = require('../gsd-core/bin/lib/installer-migrations.cjs');
@@ -1820,6 +2179,11 @@ const { install, parseTomlToObject, reconcileCodexHooksJsonEvent } = installModu
 const { createTempDir, cleanup } = require('./helpers.cjs');
 const HOOKS_DIST = path.join(__dirname, '..', 'hooks', 'dist');
 const BUILD_HOOKS_SCRIPT = path.join(__dirname, '..', 'scripts', 'build-hooks.js');
+// scripts/build-hooks.js copies pre-built hook files into hooks/dist and
+// syntax-checks them with vm — it does not compile/bundle anything, even
+// run in beforeEach on a fresh worktree. See tests/helpers/timeouts.cjs for
+// the class-norm justification.
+const { BUILD_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 function withCodexHome(codexHome, fn) {
   const previousCodexHome = process.env.CODEX_HOME;
@@ -1877,7 +2241,10 @@ describe('#3357 — Codex install removes legacy GSD hooks.json entries', { conc
 
   beforeEach(() => {
     if (!fs.existsSync(HOOKS_DIST) || fs.readdirSync(HOOKS_DIST).length === 0) {
-      execFileSync(process.execPath, [BUILD_HOOKS_SCRIPT], { stdio: 'pipe' });
+      throwIfFailed(
+        runNode([BUILD_HOOKS_SCRIPT], { timeoutMs: BUILD_TIMEOUT_MS }),
+        `node ${BUILD_HOOKS_SCRIPT}`,
+      );
     }
     tmpRoot = createTempDir('gsd-3357-');
     codexHome = path.join(tmpRoot, '.codex');

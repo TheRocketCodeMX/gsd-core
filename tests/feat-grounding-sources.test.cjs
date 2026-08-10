@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const g = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'grounding.cjs'));
 const TOOLS = path.join(ROOT, 'gsd-core', 'bin', 'gsd-tools.cjs');
@@ -42,7 +43,7 @@ describe('grounding — source-direct citation verification', () => {
     return dir;
   }
   function gate(dir) {
-    try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', path.join(dir, '.planning', 'phase')], { cwd: dir, encoding: 'utf8' })); }
+    try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', path.join(dir, '.planning', 'phase')], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
     catch (e) { return JSON.parse((e.stdout || '{}').trim() || '{}'); }
   }
 

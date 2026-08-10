@@ -642,8 +642,13 @@ describe('H. the execute:wave:pre fragment documents concrete manifest construct
   test('[happy] execute-phase.md is below the ADR-857 Phase 6 pre-phase-6 byte ceiling (#1168), with margin', () => {
     const { lfByteCount } = require('../scripts/workflow-size.cjs');
     const bytes = lfByteCount(WORKFLOW_PATH);
-    assert.ok(bytes < 93600, `execute-phase.md must stay below the frozen pre-phase-6 ceiling (93600); got ${bytes}`);
-    assert.ok(bytes <= 93400, `execute-phase.md should carry a comfortable margin (<=93400) so minor future edits don't re-trip the gate; got ${bytes}`);
+    // FORK (align/upstream-1.10.0): ceiling/margin follow the phase6 freeze raise
+    // 93600 → 93985 — upstream's own 1.10.0 body is 93400 LF bytes (zero headroom),
+    // so the fork's two condensed FORK:context lines (+521 B) cannot fit under the
+    // old values. Margin mirrors the previous 7-byte slack. Ratchet back down at
+    // the next upstream shrink (see tests/phase6-capstone-conformance.test.cjs).
+    assert.ok(bytes < 93985, `execute-phase.md must stay below the frozen pre-phase-6 ceiling (93985); got ${bytes}`);
+    assert.ok(bytes <= 93928, `execute-phase.md should carry a comfortable margin (<=93928) so minor future edits don't re-trip the gate; got ${bytes}`);
   });
 });
 
