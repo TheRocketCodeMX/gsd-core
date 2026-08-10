@@ -608,3 +608,257 @@ describe('citation honesty', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 2 — certification in the loop (spec §5) and the feedback loop (spec §7).
+//
+// Wave 1 pinned the STRATEGY side: what the ladder is, how capability is
+// probed, what the substrate policies are. Wave 2 pins the LOOP side: that a
+// decision recorded in TEST-STRATEGY actually changes what `verify-work` does
+// before UAT, that agentic evidence has a first-class kind the deterministic
+// classifier can auto-pass, and that a certification failure has somewhere to
+// go besides a code fix.
+//
+// Same discipline as above: structural anchors and alternations, never GSD
+// prose verbatim (Wave 1 review N8). The things pinned here are the ones whose
+// loss would silently re-open a hole:
+//
+//   - the section runs BEFORE the UAT checkpoint machinery (ordering, by index);
+//   - the trust gate precedes any launch/probe in the step file (ordering);
+//   - the brief is canonical and the script is an accelerant (never inverted);
+//   - a skip is RECORDED, never silent (the CTO's explicit decision);
+//   - builder ≠ certifier survives;
+//   - `agentic_certification` exists in BOTH summary.md locations, the
+//     execute-plan ref examples, and the classifier's enum — a partial landing
+//     is the failure mode (the classifier rejects what the template invites);
+//   - the deterministic auto-pass contract is NOT weakened to let it in.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VERIFY_WORK = 'gsd-core/workflows/verify-work.md';
+const CERT_STEP = 'gsd-core/workflows/verify-work/steps/agentic-certification.md';
+const SUMMARY_TPL = 'gsd-core/templates/summary.md';
+const EXECUTE_PLAN = 'gsd-core/workflows/execute-plan.md';
+const CONFIG_CTS = 'src/config.cts';
+const COVERAGE_CTS = 'src/coverage.cts';
+const PLANNING_CONFIG = 'gsd-core/references/planning-config.md';
+
+/** Index of the first match of `re` in `text`, or -1. Used for ORDER assertions. */
+function at(text, re) {
+  const m = text.match(re);
+  return m ? m.index : -1;
+}
+
+describe('certification in the loop — the verify-work section gate', () => {
+  test('verify-work declares an `agentic-certification` section that dispatches a step file', () => {
+    const text = read(VERIFY_WORK);
+    assert.match(
+      text,
+      /<!--\s*gsd:section\s+id="agentic-certification"\s+when="[^"]+"\s*-->/,
+      'verify-work.md must carry a gsd:section gate with id="agentic-certification"'
+    );
+    assert.match(
+      text,
+      /verify-work\/steps\/agentic-certification\.md/,
+      'the section must dispatch the fork-owned step file'
+    );
+  });
+
+  test('the section is a sibling of automated-ui-verification (same dispatch contract)', () => {
+    const text = read(VERIFY_WORK);
+    // Both gates use the manifest-gated read-or-skip contract; the certification
+    // gate must not invent a second dispatch convention.
+    const certGate = text.slice(at(text, /id="agentic-certification"/));
+    assert.match(certGate.slice(0, 700), /section_manifest/, 'the gate must honor `section_manifest`');
+    assert.match(certGate.slice(0, 700), /Otherwise skip|do not read the file/i, 'the gate must be skippable');
+    assert.match(certGate.slice(0, 700), /<!--\s*\/gsd:section\s*-->/, 'the gate must be closed');
+  });
+
+  test('certification runs BEFORE the UAT checkpoint machinery', () => {
+    const text = read(VERIFY_WORK);
+    const gate = at(text, /id="agentic-certification"/);
+    const extract = at(text, /<step name="extract_tests">/);
+    const present = at(text, /<step name="present_test">/);
+    assert.ok(gate > -1 && extract > -1 && present > -1);
+    assert.ok(gate < extract, 'the certification gate must precede extract_tests');
+    assert.ok(gate < present, 'the certification gate must precede present_test');
+  });
+
+  test('the step file exists and is a well-formed workflow step', () => {
+    const text = read(CERT_STEP);
+    assert.match(text, /<step name="agentic_certification">/);
+    assert.match(text, /<\/step>/);
+  });
+});
+
+describe('the certification step: detect → auto-resolve → escalate', () => {
+  const text = () => read(CERT_STEP);
+
+  test('it reads the TEST-STRATEGY certification decision, not tool presence', () => {
+    const t = text();
+    assert.match(t, /TEST-STRATEGY/, 'the recorded project decision is the input');
+    assert.match(t, /##\s*Certification\b/, 'it consumes the `## Certification` section');
+    assert.match(t, /##\s*Certification substrate/, 'it consumes the substrate section');
+  });
+
+  test('it honors the workflow.certification config key', () => {
+    assert.match(text(), /workflow\.certification/);
+    assert.match(text(), /\brequired\b[\s\S]{0,80}\boffer\b[\s\S]{0,80}\boff\b/, 'all three modes are handled');
+  });
+
+  test('it re-checks the recorded driver at runtime instead of trusting the strategy-time probe', () => {
+    const t = text();
+    assert.match(
+      t,
+      /re-?(check|probe|verif)|verify (the )?driver|still (capable|available)/i,
+      'a strategy-time probe is a lead, not a live capability'
+    );
+  });
+
+  test('the trust gate precedes any launch or probe (post-fix-wave ordering)', () => {
+    const t = text();
+    const trust = at(t, /isolated HOME|sandbox-first|sandbox HOME/i);
+    const launch = at(t, /first launch|launch(ing)? (it|the (tool|driver))|run the (live )?probe/i);
+    assert.ok(trust > -1, 'the step must carry the sandbox-first trust gate');
+    assert.ok(launch > -1, 'the step must describe a launch/probe');
+    assert.ok(trust < launch, 'the trust gate must come BEFORE the first launch/probe (references/certification.md is the authority)');
+  });
+
+  test('the brief is canonical and any script is an accelerant', () => {
+    const t = text();
+    assert.match(t, /brief/i);
+    assert.match(t, /canonical/i);
+    assert.match(t, /accelerant|never canonical|derived from the brief/i, 'a starter script is never the canonical artifact');
+    // Sourced from the UAT present[] set + the capsule's observable acceptance.
+    assert.match(t, /present\[\]|present\b[^\n]{0,40}checkpoint/i, 'the brief is built from the UAT present[] checkpoints');
+    assert.match(t, /What Done Looks Like/, "the capsule's observable acceptance signals feed the brief");
+    assert.match(t, /certifier-agnostic|human-readable/i, 'the brief is not tied to one certifier');
+  });
+
+  test('results write back as auto-verified UAT entries with source: agentic', () => {
+    const t = text();
+    assert.match(t, /source:\s*agentic/, 'the `source: automated` precedent extends, it is not replaced');
+    assert.match(t, /result:\s*pass/, 'certified checkpoints are written pre-resolved');
+    assert.match(t, /transcript/i, 'evidence refs are attached');
+    assert.match(t, /screenshot|console|network/i, 'evidence includes what the probe said the driver can capture');
+  });
+
+  test('judgment, auth and CAPTCHA always escalate to the human', () => {
+    const t = text();
+    assert.match(t, /CAPTCHA/i);
+    assert.match(t, /auth/i);
+    assert.match(t, /human[\s\S]{0,60}(judgment|judgement)|judgment[\s\S]{0,60}human/i);
+    assert.match(t, /escalat/i);
+  });
+
+  test('CERT-0 degrades to human UAT with a recorded certification line', () => {
+    const t = text();
+    assert.match(t, /CERT-0/);
+    assert.match(t, /certification:\s*human\s*\(CERT-0\)/, 'the CERT-0 outcome is recorded, not inferred');
+    assert.match(t, /unchanged (from )?today|behavior is unchanged/i, "today's UAT flow is untouched on CERT-0");
+  });
+
+  test('a no-user-facing-surface phase skips with a RECORDED N/A — never silently', () => {
+    const t = text();
+    assert.match(t, /certification:\s*N\/A\s*—\s*no user-facing change/, 'the exact recorded skip line');
+    assert.match(t, /never silent|not silent|never a silent/i, 'the skip is explicitly non-silent');
+  });
+
+  test('builder ≠ certifier is stated AND has a per-mechanism separation story', () => {
+    const t = text();
+    assert.match(t, /builder\s*(≠|!=|is not|must not be)\s*(the )?certifi/i);
+    assert.match(t, /CERT-2/, 'the tool-boundary mechanism');
+    assert.match(t, /CERT-1/, 'the weaker same-session mechanism needs its own answer');
+    assert.match(t, /fresh (eyes|session|context)|different (model|session)|not the session that built/i);
+  });
+
+  test('it degrades to today’s behavior when nothing is available', () => {
+    const t = text();
+    assert.match(t, /unchanged|fall back|falls back/i);
+  });
+});
+
+describe('evidence schema — kind: agentic_certification', () => {
+  test('the SUMMARY template carries the new kind in BOTH enum locations', () => {
+    const text = read(SUMMARY_TPL);
+    const hits = [...text.matchAll(/agentic_certification/g)];
+    assert.ok(hits.length >= 2, `expected the kind in both the inline enum and the field-semantics table, found ${hits.length}`);
+    // The inline enum comment and the `verification[].kind` table row are the
+    // two places a downstream author actually reads.
+    assert.match(text, /kind:\s*unit\s+#[^\n]*agentic_certification/, 'the inline enum comment lists it');
+    assert.match(text, /`verification\[\]\.kind`[^\n]*agentic_certification/, 'the field-semantics table lists it');
+  });
+
+  test('execute-plan’s evidence-ref guidance knows the certification ref shape', () => {
+    const text = read(EXECUTE_PLAN);
+    assert.match(text, /agentic_certification/);
+    assert.match(text, /transcript/i, 'the ref for a certification run is its transcript/evidence bundle');
+  });
+
+  test('the classifier enum accepts it', () => {
+    assert.match(read(COVERAGE_CTS), /'agentic_certification'/);
+  });
+
+  test('the deterministic auto-pass contract is NOT weakened to admit it', () => {
+    const text = read(SUMMARY_TPL);
+    // The three-part test survives verbatim in substance: human_judgment false
+    // AND non-empty verification AND every status pass.
+    assert.match(text, /human_judgment:\s*false.{0,40}AND.{0,60}verification.{0,40}AND.{0,60}status/is);
+    assert.match(text, /false-positive ships a bug/i, 'the fail-safe rationale stays');
+  });
+});
+
+describe('workflow.certification — the config key', () => {
+  test('the schema default is `required`', () => {
+    assert.match(read(CONFIG_CTS), /certification:\s*'required'/);
+  });
+
+  test('the value is enum-validated to required | offer | off', () => {
+    const text = read(CONFIG_CTS);
+    assert.match(text, /'required',\s*'offer',\s*'off'/);
+    assert.match(text, /kp === 'workflow\.certification'/);
+  });
+
+  test('planning-config documents the key with its default and values', () => {
+    const text = read(PLANNING_CONFIG);
+    const row = text.split('\n').find((l) => l.includes('`workflow.certification`'));
+    assert.ok(row, 'planning-config.md must carry a `workflow.certification` row in the Workflow Fields table');
+    assert.match(row, /`"required"`/, 'the documented default is required');
+    assert.match(row, /`"offer"`/);
+    assert.match(row, /`"off"`/);
+  });
+});
+
+describe('the feedback loop — certification/UAT failure asks which test was missing', () => {
+  test('verify-work carries a coverage-gap step', () => {
+    const text = read(VERIFY_WORK);
+    assert.match(text, /<step name="coverage_gap[^"]*">/, 'a named step owns the coverage-gap question');
+    assert.match(
+      text,
+      /which (fast )?test (was|is) missing|what test did we miss|missing (fast )?test/i,
+      'the question itself must survive a copy-edit-resistant alternation'
+    );
+  });
+
+  test('it routes to add-tests and to gap planning', () => {
+    const text = read(VERIFY_WORK);
+    const step = text.slice(at(text, /<step name="coverage_gap[^"]*">/));
+    assert.match(step.slice(0, 4000), /add-tests/);
+    assert.match(step.slice(0, 4000), /plan-phase --gaps|--gaps/);
+  });
+
+  test('the answer is APPENDED to TEST-STRATEGY under a marked section (never a rewrite)', () => {
+    const text = read(VERIFY_WORK);
+    const step = text.slice(at(text, /<step name="coverage_gap[^"]*">/), at(text, /<step name="coverage_gap[^"]*">/) + 4000);
+    assert.match(step, /TEST-STRATEGY/);
+    assert.match(step, /##\s*Coverage debt/, 'the marked section it appends under');
+    assert.match(step, /append/i);
+    assert.match(step, /never (rewrite|regenerate|rewrites)|do not rewrite|not a rewrite/i, 'TEST-STRATEGY gains a narrow second writer, not a second author');
+  });
+
+  test('the template gives TEST-STRATEGY the section to be appended to', () => {
+    const text = read(TEMPLATE);
+    assert.match(text, /##\s*Coverage debt/);
+    const rows = tableRowsAfter(text, '## Coverage debt');
+    assert.ok(rows.length >= 1, 'the coverage-debt table ships with its shape');
+  });
+});
