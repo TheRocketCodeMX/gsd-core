@@ -106,6 +106,34 @@ const { readVerificationStatus } = verificationMod;
 const { evaluateUatPassed } = uatPredicateMod;
 const { resolveLoopHooks } = loopResolverMod;
 const { loadRegistry } = capabilityLoaderMod;
+// FORK:strategy BEGIN
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- capability-activation.cjs is an export= CommonJS module
+import capabilityActivationMod = require('./capability-activation.cjs');
+const { resolveConfigKey: _resolveConfigKey } = capabilityActivationMod;
+
+/**
+ * `workflow.certification` for verify-work's certification step (Wave 2 review T4).
+ * The step file used to resolve this itself, which forced a ~4.5 KB runtime-launcher
+ * preamble and a process spawn into a file that is read on EVERY verify-work run just to
+ * answer one enum. Resolved once here instead, through the same federated
+ * `resolveConfigKey` precedence the runtime uses (config -> workstream -> root ->
+ * capability-registry schema default), so the bundle and the CLI can never disagree.
+ * Bounded and non-throwing: any failure degrades to the schema default `required`,
+ * because a certification posture that cannot be read is not a licence to skip.
+ */
+function detectCertificationMode(cwd: string): string {
+  try {
+    const config = loadConfig(cwd);
+    const registry = loadRegistry({ includeInstalled: true, cwd, gsdHome: process.env['GSD_HOME'] });
+    const r = _resolveConfigKey('workflow.certification', { config, cwd, registry });
+    return r.found && typeof r.value === 'string' && ['required', 'offer', 'off'].includes(r.value)
+      ? r.value
+      : 'required';
+  } catch {
+    return 'required';
+  }
+}
+// FORK:strategy END
 const { resolveCapabilityRuntimeState } = capabilityStateMod;
 
 // Unused but imported for structural parity
@@ -1589,6 +1617,11 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     // when this same fact is already true). Resolved once here, exposed so
     // the step body can consume it directly instead of recomputing it.
     ui_phase_active: uiPhaseActive,
+
+    // FORK:strategy BEGIN
+    // Certification posture for the agentic-certification step (Wave 2 review T4).
+    certification_mode: detectCertificationMode(cwd),
+    // FORK:strategy END
   };
 
   // #2994 (Phase 6.3): additive, optional field — degrades to null, never throws.

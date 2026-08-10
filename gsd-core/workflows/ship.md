@@ -157,6 +157,64 @@ Verify the work is ready to ship:
    The ledger is **optional and backward-compatible**: on a project where `gsd_run windows status` returns `open_count: 0` (no `.planning/WINDOWS.md` yet, or an empty ledger), the gate passes silently. The gate only blocks when at least one entry is `open`.
 
    If no active `broken-windows` `ship:pre` gate hook is present (gate disabled via `workflow.windows_enforce=false`, the default — tracking continues but the gate is opt-in), skip this check silently.
+
+<!-- FORK:strategy BEGIN -->
+8. **Milestone certification sweep (advisory — never blocks).**
+
+   `verify-work`'s certification step records exactly one outcome line per phase, at the
+   top of that phase's UAT `## Tests`. Each line answers "was *this* phase certified".
+   Nothing answers the milestone-level question, which is the one worth asking before a
+   PR opens: **did every phase in this milestone reach a certification outcome at all?**
+
+   ```bash
+   ls -d .planning/phases/*/ 2>/dev/null || true
+   grep -H -m1 '^certification: ' .planning/phases/*/*-UAT.md 2>/dev/null || true
+   ```
+
+   This sweep **self-suppresses from the evidence** rather than reading
+   `workflow.certification` here — the loop host resolves no capability-owned config key
+   inline (ADR-857 Phase 6), and the recorded lines are the better signal anyway: they
+   describe what actually happened, not what the posture happens to be today.
+
+   **If no phase carries a `certification:` line at all**, certification is not in use on
+   this project (posture `off`, or a milestone that predates it). Print one line —
+   `[certification: not in use on this project]` — and continue. Never flag every phase in
+   that case: an absent record everywhere is a project-level fact, not N gaps.
+
+   **Otherwise** map every phase directory to its recorded line and present one table —
+   built by iterating the `ls -d` phase list in order and looking each phase up, never by
+   grep's own output order (parallel `grep` drop-ins reorder identical inputs, and this
+   table's value is being diffable run to run):
+
+   | Outcome | Recorded line | Reading |
+   |---|---|---|
+   | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — …` | a driver proved the flows |
+   | human | `certification: human (CERT-0)` | satisfied by the human UAT that ran — not a gap |
+   | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
+   | declined | `certification: skipped (declined)` | a decision, recorded |
+   | off | `certification: off (posture)` | certification was configured off when this phase shipped — a decision, not a gap |
+   | pre-adoption | *no line, and the phase precedes the earliest phase with a recorded `certification:` line (phase order — or `git log -1 --format=%at -- <uat>` where history exists; file mtime only as a last-resort convenience, since a fresh checkout gives every file one mtime)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
+   | **not-run** | *no `certification:` line, and not pre-adoption* | **flag it** |
+
+   A phase with a UAT.md but no `certification:` line — one that is not pre-adoption, on
+   a project where other phases have one — is **not-run**: nothing was decided, which is
+   the one state the "recorded, never silent" contract does not allow to pass unremarked.
+   Pre-adoption phases are the exception that keeps this warning readable: flagging every
+   pre-adoption phase forever is a warning that is wrong on every run, and those stop
+   being read. Name the genuinely not-run phases explicitly under the table:
+
+   ```
+   ⚠ {N} phase(s) have no recorded certification outcome: {phase list}
+     Certify with /gsd:verify-work {phase}, or accept and ship — this is advisory.
+   ```
+
+   **This check is advisory: it never blocks the ship.** The human ships; a milestone with
+   an uncertified phase is a judgment call, not a mechanical failure, and there is no
+   `--force` to teach anyone to type. **But it is never silent** — print the table on every
+   run, including the all-green one, so "every phase certified" is an observed fact rather
+   than an absence of complaint. A phase directory with no UAT.md at all is reported as
+   `not-verified` and is `/gsd:verify-work`'s business, not this sweep's.
+<!-- FORK:strategy END -->
 </step>
 
 <step name="push_branch">

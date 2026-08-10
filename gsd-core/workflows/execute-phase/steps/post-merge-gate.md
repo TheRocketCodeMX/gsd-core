@@ -100,8 +100,10 @@ fi
 TEST_CMD=$(gsd_run query normalize-test-command "$TEST_CMD" --cwd . 2>/dev/null || echo "$TEST_CMD")
 TEST_GATE_TIMEOUT=$(gsd_run query config-get workflow.test_gate_timeout 2>/dev/null || echo "600")
 TEST_EXIT=0
+SUITE_START_EPOCH=$(date +%s)
 gsd_run run-with-timeout "$TEST_GATE_TIMEOUT" -- bash -c "$TEST_CMD" 2>&1
 TEST_EXIT=$?
+SUITE_WALL_CLOCK_SEC=$(( $(date +%s) - SUITE_START_EPOCH ))
 if [ "${TEST_EXIT}" -eq 0 ]; then
   echo "✓ Post-merge test gate passed — no cross-plan conflicts"
 elif [ "${TEST_EXIT}" -eq 124 ]; then
@@ -119,3 +121,27 @@ fi
 **If `TEST_EXIT` is non-zero (test failure):** Increment `WAVE_FAILURE_COUNT` to track
 cumulative failures across waves. Subsequent waves should report:
 `⚠ Note: ${WAVE_FAILURE_COUNT} prior wave(s) had test failures`
+
+**Step C — Suite-metrics capture (suite health):**
+
+This gate is the only place in the loop that runs the project's *whole* suite, so it is
+where the measurement is taken. Record it into the `suite-metrics:` frontmatter block of
+each SUMMARY written for the plans completed in this wave (the orchestrator is already
+the single writer for post-merge artifacts — step 5.7). Schema and contract:
+`~/.claude/gsd-core/templates/summary.md` `<suite_metrics_guidance>`.
+
+| Field | Where it comes from |
+|---|---|
+| `test_count` | The count the runner itself printed in the output above (e.g. `# tests`, `N passed`, `ok N`). Read it; never grep the repo for test files. |
+| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, recorded as integer **seconds** exactly as measured. Never reformatted into minutes-and-seconds — the clock started before the runner did, and the seconds value is what the compare divides. |
+| `containers_started` | Testcontainers/docker lines in the same output (`Creating container`, `Container … started`) where visible, **else `—`**. `—` is an honest answer; `0` is a claim. |
+
+**ms/test is not recorded here** — `transition`'s `suite_health_compare` derives it from
+these two numbers so one value can never disagree with itself.
+
+**When the gate did not actually measure a suite, record nothing.** No runner was
+detected (`TEST_CMD` fell through to `true`), or `TEST_EXIT` is `124` (the run timed out,
+so `SUITE_WALL_CLOCK_SEC` is the budget rather than the suite) → **omit the block
+entirely**. An absent block means "not measured here" and the compare skips silently; an
+invented row silently moves a T1–T4 trigger. A failing suite (`TEST_EXIT` non-zero) still
+ran and still gets its metrics — a red suite has a wall clock like any other.

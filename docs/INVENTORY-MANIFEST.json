@@ -240,6 +240,7 @@
       "autonomous-smart-discuss.md",
       "autonomous-ui-design-contract.md",
       "brownfield-adaptation.md",
+      "certification.md",
       "checkpoints.md",
       "cicd-strategy.md",
       "common-bug-patterns.md",
@@ -640,8 +641,10 @@
       "quick/steps/worktree-pre-dispatch-commit.md",
       "review/steps/reviewer-instances-note-1.md",
       "review/steps/reviewer-instances-note-2.md",
+      "testing-strategy/steps/suite-tune-up.md",
       "transition/steps/workstream-collision-check.md",
       "update/steps/channel-banner.md",
+      "verify-work/steps/agentic-certification.md",
       "verify-work/steps/automated-ui-verification.md",
       "verify-work/steps/mvp-uat-framing.md"
     ]

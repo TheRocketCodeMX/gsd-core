@@ -3428,7 +3428,18 @@ const capabilities = {
     ],
     "agents": [],
     "hooks": [],
-    "config": {},
+    "config": {
+      "workflow.certification": {
+        "type": "enum",
+        "values": [
+          "required",
+          "offer",
+          "off"
+        ],
+        "default": "required",
+        "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': skip the step entirely; verify-work behaves exactly as it did before certification existed. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them."
+      }
+    },
     "commands": [
       {
         "family": "project",
@@ -4611,6 +4622,7 @@ const configKeys = {
   "workflow.security_enforcement": "security",
   "workflow.security_asvs_level": "security",
   "workflow.security_block_on": "security",
+  "workflow.certification": "strategy",
   "workflow.tdd_mode": "tdd",
   "workflow.ui_phase": "ui",
   "workflow.ui_review": "ui",
@@ -5023,6 +5035,17 @@ const configSchema = {
       "medium",
       "low",
       "none"
+    ]
+  },
+  "workflow.certification": {
+    "owner": "strategy",
+    "type": "enum",
+    "default": "required",
+    "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': skip the step entirely; verify-work behaves exactly as it did before certification existed. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them.",
+    "values": [
+      "required",
+      "offer",
+      "off"
     ]
   },
   "workflow.tdd_mode": {

@@ -348,6 +348,22 @@
       ]
     },
     {
+      "path": "CONTEXT.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+      ]
+    },
+    {
+      "path": "docs/COMMANDS.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`automated_ui` \\\\\\| `agentic_certification`"
+      ]
+    },
+    {
       "path": "docs/context-monitor.md",
       "feature": "context-monitor",
       "mode": "whole-file",
@@ -466,6 +482,15 @@
       ]
     },
     {
+      "path": "gsd-core/templates/user-setup.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification_substrate_example",
+        "seed:test-accounts"
+      ]
+    },
+    {
       "path": "gsd-core/templates/verification-report.md",
       "feature": "fidelity",
       "mode": "anchors-only",
@@ -577,7 +602,8 @@
       "markers": 3,
       "anchors": [
         "/gsd:model-domain",
-        "/gsd:cicd-strategy"
+        "/gsd:cicd-strategy",
+        "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
       ]
     },
     {
@@ -729,6 +755,16 @@
       ]
     },
     {
+      "path": "gsd-core/workflows/ship.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "Milestone certification sweep",
+        "certification: human \\(CERT-0\\)"
+      ]
+    },
+    {
       "path": "gsd-core/workflows/transition.md",
       "feature": "context",
       "mode": "markers",
@@ -741,9 +777,10 @@
       "path": "gsd-core/workflows/transition.md",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 1,
+      "markers": 2,
       "anchors": [
-        "lightweight drift check"
+        "lightweight drift check",
+        "<step name=\"suite_health_compare\">"
       ]
     },
     {
@@ -882,9 +919,11 @@
       "path": "src/init.cts",
       "feature": "strategy",
       "mode": "markers",
-      "markers": 2,
+      "markers": 4,
       "anchors": [
-        "has_design_hint"
+        "has_design_hint",
+        "detectCertificationMode",
+        "certification_mode:"
       ]
     },
     {
@@ -1139,6 +1178,72 @@
       "mode": "anchors-only",
       "anchors": [
         "config-set phase_id_convention bracket warns that the grammar has no consumers"
+      ]
+    },
+    {
+      "path": "tests/coverage-metadata-parser.test.cjs",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "coverage classify — agentic_certification evidence",
+        "agentic_certification"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification\\.md`",
+        "verify-work/steps/agentic-certification\\.md",
+        "<step name=\"coverage_gap_capture\">",
+        "##\\s*Coverage debt",
+        "source: agentic"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-plan.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`agentic_certification`: that entry belongs to a certification run",
+        "\\*\\*Suite metrics \\(suite health\\)\\.\\*\\*"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "SUITE_START_EPOCH=\\$\\(date \\+%s\\)",
+        "Step C — Suite-metrics capture"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/summary.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "kind: unit\\s+#[^\\n]*agentic_certification",
+        "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
+        "^suite-metrics:$",
+        "<suite_metrics_guidance>"
+      ]
+    },
+    {
+      "path": "gsd-core/references/planning-config.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "`workflow\\.certification`"
+      ]
+    },
+    {
+      "path": "src/coverage.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "'agentic_certification'"
       ]
     }
   ]

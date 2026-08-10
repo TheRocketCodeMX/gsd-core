@@ -661,7 +661,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 ### Planning & Execution
 
 <!-- FORK:strategy BEGIN -->
-- **`/gsd:testing-strategy [--auto] [--text]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md.
+- **`/gsd:testing-strategy [--auto] [--text] [--tune-up]`** — Recommend a test strategy matched to the architecture (shape follows architecture; levels; what to test); writes TEST-STRATEGY.md. `--tune-up` runs the suite tune-up flow instead: profile → config/cache → suite audit against the strategy → re-baseline.
 - **`/gsd:infrastructure-strategy [--auto] [--text]`** — Recommend infrastructure matched to actual scale and team: compute rung, data layer per environment, observability + IaC floors; writes INFRA-STRATEGY.md.
 - **`/gsd:cicd-strategy [--auto] [--text]`** — Recommend a CI/CD strategy: platform, OIDC auth, secrets split, test-tier→stage mapping, deploy ladder; writes CICD-STRATEGY.md.
 <!-- FORK:strategy END -->
