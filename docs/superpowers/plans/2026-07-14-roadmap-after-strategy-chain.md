@@ -38,7 +38,7 @@ nags self-silence during new-project because there is no premature roadmap to re
   - ROADMAP.md present, no marker, strategy artifacts exist → elaborate-mode.
   - ROADMAP.md present + marker → "already current; re-elaborate? (y/N)".
 - On completion in `--auto`: chain onward via `advance.md`-style dispatch to
-  `Skill(gsd-discuss-phase, "1 --auto")`. Interactive: print `Next: /gsd:discuss-phase 1`.
+  `Skill(gsd-discuss-phase, "1 --auto")`. Interactive: print `Next: /gsd-discuss-phase 1`.
 - **Steps:** (1) write the skill body reusing the existing spawn prompt; (2) add the 3-way
   idempotency guard; (3) register across the 6 surfaces above; (4) `gen:capability-registry`
   / inventory regen if needed.
@@ -53,8 +53,8 @@ nags self-silence during new-project because there is no premature roadmap to re
   yet) — commit only PROJECT/REQUIREMENTS/INSTRUCTION_FILE at this point.
 - Step 9 handoff (`:1573-1600`): unchanged when `NEXT_STRATEGY` is set (the chain reaches the
   roadmap at its end). When `NEXT_STRATEGY` is **empty** (prototype / user skipped
-  strategy): auto → `SlashCommand("/gsd:roadmap --auto")` (which then chains to discuss-phase);
-  interactive → pointer `Next: /gsd:roadmap`.
+  strategy): auto → `SlashCommand("/gsd-roadmap --auto")` (which then chains to discuss-phase);
+  interactive → pointer `Next: /gsd-roadmap`.
 - **Byte win:** new-project shrinks by ~55 lines — helps its budget, doesn't hurt it.
 
 ### Task 3 — `advance.md`: create the roadmap at chain completion
@@ -66,7 +66,7 @@ nags self-silence during new-project because there is no premature roadmap to re
   goes through the **Skill** dispatch of `gsd-roadmap`, not an Agent spawn. ✓ compliant.
 - Empty-plan fallback (`:31`): same substitution.
 - Interactive no-op branch (`:17`): the printed `Next:` transition pointer becomes
-  `/gsd:roadmap` instead of `/gsd:discuss-phase 1` when the next target is the build loop.
+  `/gsd-roadmap` instead of `/gsd-discuss-phase 1` when the next target is the build loop.
 
 ### Task 4 — `new-milestone`: defer its roadmapper spawn too
 **File:** `gsd-core/workflows/new-milestone.md`
@@ -88,7 +88,7 @@ of erroring on a missing roadmap. (Grep for its ROADMAP/STATE reads; guard them.
 
 ### Task 6 — `discuss-phase` / `plan-phase`: last-resort guard (defense-in-depth)
 If someone reaches `discuss-phase`/`plan-phase` with NO roadmap at all (skipped the flow),
-point them to `/gsd:roadmap` rather than failing with "phase not found". One conditional
+point them to `/gsd-roadmap` rather than failing with "phase not found". One conditional
 line each; §1.6 in plan-phase stays for the *elaborate* case.
 
 ## Tests (Task 7)
@@ -105,7 +105,7 @@ line each; §1.6 in plan-phase stays for the *elaborate* case.
 ## Verification (realistic, on the shippable artifact)
 1. **Auto greenfield:** new-project → strategy chain → confirm ROADMAP.md is created ONCE, at
    chain end, carrying the elaborate marker; run plan-phase → §1.6 never flags stale.
-2. **Interactive:** last strategy step points to `/gsd:roadmap`; it creates the roadmap then
+2. **Interactive:** last strategy step points to `/gsd-roadmap`; it creates the roadmap then
    points to discuss-phase.
 3. **Skip-all-strategies:** empty Strategy Plan → roadmap still created (coarse) at the build
    entry before discuss-phase.

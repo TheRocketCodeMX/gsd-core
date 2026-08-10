@@ -51,7 +51,7 @@ superseded in layers, never silently trusted.
 
 ## 3. Naming (and a rename prep task)
 
-The capability id is **`context`**, command family **`/gsd:context`**. The `rocket-` prefix
+The capability id is **`context`**, command family **`/gsd-context`**. The `rocket-` prefix
 is dropped repo-wide as a prep task: `rocket-learn` → `learn`, `rocket-strategy` →
 `strategy`, `rocket-grounding` → `grounding`. Rationale: fork-vs-upstream ownership is
 already authoritatively tracked in `docs/FORK-DELTA.md`; the prefix duplicated that with a
@@ -70,7 +70,7 @@ for "a seeded CONTEXT file".
 
 **In scope (this spec):**
 1. The artifact tier (MASTER-CONTEXT, phase seeds, future-milestone capsules, discussion logs).
-2. The `/gsd:context` command family (seed / verify / scout / flush / master).
+2. The `/gsd-context` command family (seed / verify / scout / flush / master).
 3. Lifecycle wiring: capture, deliver, verify, grow (including discuss-phase
    append-never-replace and the re-anchor procedure).
 4. The revived calm context-monitor hook.
@@ -105,7 +105,7 @@ Bounded **index**, target ≤ ~150 lines. Sections (proven in viken):
    reading list points at them; MASTER is the pointer hub.
 
 Created **adaptively** (see §11): only when seeding has real cross-phase content. Curated by
-`/gsd:context master`: supersede stale facts, overflow depth into deep docs, keep the bound.
+`/gsd-context master`: supersede stale facts, overflow depth into deep docs, keep the bound.
 
 ### 5.2 Phase seeds — inside the existing `<N>-CONTEXT.md`
 
@@ -137,7 +137,7 @@ stamp is the defense.
 Capsules grow in appended layers; later layers **override** earlier claims; nothing is
 deleted. Canonical layer headings:
 
-- `## Scout corrections (<date>)` — output of `/gsd:context scout` (confirm-or-refute pass).
+- `## Scout corrections (<date>)` — output of `/gsd-context scout` (confirm-or-refute pass).
 - `## Discussion additions (<date>)` — discuss-phase's `<decisions>`/`<deferred>` output.
 - `## Orchestrator curation (<date>)` — post-research/post-plan curation notes.
 
@@ -161,7 +161,7 @@ Raw capture at source, append-only, no size bound (they are logs, read on demand
 from MASTER's Key references when relevant). Capsules and strategy artifacts distill from
 them; the logs preserve what distillation drops.
 
-## 6. Command family — `/gsd:context`
+## 6. Command family — `/gsd-context`
 
 Dispatched via the capability registry `default:` case to a `context-command-router.cts`
 (ADR-959 command-family pattern, same as `learn`/`grounding`).
@@ -244,7 +244,7 @@ All verbs have TEXT_MODE fallbacks for every interaction.
 - **Measurement:** `used_pct` / `remaining_percentage` from the bridge file (written by the
   statusline hook); stale metrics (>60s) ignored.
 - **Thresholds (config):** at **90% used** — inject calm `additionalContext`: *"Good moment
-  for a break: run `/gsd:context flush` — update MASTER-CONTEXT, supersede stale entries,
+  for a break: run `/gsd-context flush` — update MASTER-CONTEXT, supersede stale entries,
   enrich the current phase capsule."* At **95%** — one firmer repeat. Debounced (no repeat
   within N tool uses), escalation bypasses debounce once.
 - **PreCompact:** final flush instruction + reminder that the post-compaction first act is

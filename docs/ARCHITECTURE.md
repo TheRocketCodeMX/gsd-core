@@ -287,7 +287,7 @@ Runtime hooks that integrate with the host AI agent:
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `gsd-statusline.js` | `statusLine` | Displays model (long-context suffixes like `(1M context)` collapse to a compact `(1M)` badge), task, directory, and context usage bar |
-| `gsd-context-monitor.js` | `PostToolUse` / `PreCompact` | **Calm knowledge-flush nudge in this fork** — same mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests a knowledge checkpoint (`/gsd:context flush`); on `PreCompact` it emits a final flush + re-anchor reminder. Main-session-only; gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`. See [context-monitor.md](context-monitor.md). |
+| `gsd-context-monitor.js` | `PostToolUse` / `PreCompact` | **Calm knowledge-flush nudge in this fork** — same mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests a knowledge checkpoint (`/gsd-context flush`); on `PreCompact` it emits a final flush + re-anchor reminder. Main-session-only; gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`. See [context-monitor.md](context-monitor.md). |
 | `gsd-check-update.js` | `SessionStart` | Foreground trigger for the background update check |
 | `gsd-ensure-canonical-path.js` | `SessionStart` | For Claude Code plugin installs, symlinks `~/.claude/gsd-core/{bin,contexts,references,templates,workflows}` to the plugin's bundled tree so `@~/.claude/gsd-core/...` includes resolve; runs first in `SessionStart`, no-op in classic installs, self-heals after `claude plugin update` (#997) |
 | `gsd-check-update-worker.js` | (helper) | Background worker spawned by `gsd-check-update.js`; no direct event registration |
@@ -827,7 +827,7 @@ Runtime Engine (Claude Code / Antigravity CLI)
 
 ### Context Monitor Thresholds (calm knowledge-flush nudge)
 
-This fork repurposed the hook: instead of panicked context-limit warnings it emits a calm suggestion to checkpoint durable knowledge (`/gsd:context flush`) before compaction. Thresholds are on `used_pct` (higher = more context consumed) and configurable via the `context_lifecycle` slice.
+This fork repurposed the hook: instead of panicked context-limit warnings it emits a calm suggestion to checkpoint durable knowledge (`/gsd-context flush`) before compaction. Thresholds are on `used_pct` (higher = more context consumed) and configurable via the `context_lifecycle` slice.
 
 | `used_pct`                          | Level | Agent Behavior                                             |
 | ----------------------------------- | ----- | ---------------------------------------------------------- |

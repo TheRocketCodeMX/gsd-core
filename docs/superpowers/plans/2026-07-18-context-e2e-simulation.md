@@ -44,7 +44,7 @@ gsd_run config-set context_lifecycle.discussion_logs true
 Skill: gsd-new-project      (args: --auto ; feed a small but real multi-phase brief)
 Skill: gsd-roadmap          (--auto ; runs at the strategy-chain → build-loop transition)
 ```
-Seeding fires automatically at roadmap approval because `seed_offer=auto` (equivalent to `/gsd:context seed --milestone`). The orchestrator itself writes the capsules (never a fresh-context subagent).
+Seeding fires automatically at roadmap approval because `seed_offer=auto` (equivalent to `/gsd-context seed --milestone`). The orchestrator itself writes the capsules (never a fresh-context subagent).
 
 **Assert (each must pass):**
 ```bash
@@ -209,7 +209,7 @@ grep -Eiq 'locked decision|per (the )?capsule|CONTEXT\.md' "$PH"PLAN.md && echo 
 
 ## Scenario 4 — calm flush hook fires at high `used_pct`, then flush mode runs
 
-**Goal:** the revived `gsd-context-monitor.js` hook emits a calm knowledge-flush nudge (never a panic) when metrics cross the threshold; `/gsd:context flush` then updates the knowledge artifacts.
+**Goal:** the revived `gsd-context-monitor.js` hook emits a calm knowledge-flush nudge (never a panic) when metrics cross the threshold; `/gsd-context flush` then updates the knowledge artifacts.
 
 **Drive — inject a 91% metrics file and fire the hook:**
 ```bash
@@ -226,7 +226,7 @@ echo "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$PW
 **Assert — the nudge is present and calm:**
 ```bash
 # a flush suggestion was injected as additionalContext
-grep -q '/gsd:context flush' /tmp/hook_out.json && echo OK
+grep -q '/gsd-context flush' /tmp/hook_out.json && echo OK
 grep -q 'knowledge checkpoint' /tmp/hook_out.json && echo OK
 # TONE CONTRACT: never panic language
 grep -Eqi 'CRITICAL|URGENT|immediately|STOP' /tmp/hook_out.json && { echo "TONE VIOLATION"; exit 1; } || echo "TONE-OK"
