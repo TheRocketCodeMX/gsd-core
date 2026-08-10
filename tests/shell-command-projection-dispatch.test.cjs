@@ -778,6 +778,63 @@ describe('bug #3439: shell projection module owns managed-hook policy and legacy
   });
 });
 
+// ─── managed-hook set coverage: every settings.json PreToolUse hook ───────────
+//
+// Realistic-testing finding (align/upstream-1.10.0, flows-110-report.md §Flow 4):
+// `gsd-agent-isolation-guard.js` (#3069) and `gsd-write-guard.js` (#2301) are
+// registered into settings.json PreToolUse by the installer but were absent from
+// BOTH managed-basename sets in src/shell-command-projection.cts. The two sets
+// are the sole authority for
+//   - uninstall's per-hook filter (isManagedHookCommand) — omission leaves the
+//     registrations pointing at deleted files, so every Write and every
+//     Agent/Task dispatch spawns a missing script in a post-uninstall session;
+//   - the legacy bare-`node` rewrite (#41 / #2979) — omission means a stale
+//     bare-`node` runner is never repaired and exits 127 under Claude Code's
+//     PATH-less `sh -c` spawn.
+// UPSTREAM-ISSUE CANDIDATE: upstream ships both hooks (hooks/ +
+// managed-hooks-registry.cjs) and has the same omission in its own sets.
+//
+// The generic guard below (registry ∩ settings-json hooks ⊆ managed sets) is
+// what makes the NEXT such hook fail here instead of in an operator's session.
+describe('managed-hook basename sets cover every hook the installer registers in settings.json', () => {
+  const SETTINGS_JSON_PRE_TOOL_USE_HOOKS = [
+    'gsd-agent-isolation-guard.js',
+    'gsd-write-guard.js',
+  ];
+
+  for (const basename of SETTINGS_JSON_PRE_TOOL_USE_HOOKS) {
+    test(`${basename} is a managed settings-json hook basename`, () => {
+      assert.equal(
+        isManagedHookBasename(`/Users/me/.claude/hooks/${basename}`, { surface: 'settings-json' }),
+        true,
+        `${basename} is registered into settings.json PreToolUse by the installer; ` +
+          'without it in MANAGED_HOOK_BASENAMES_BY_SURFACE the legacy bare-node rewrite skips it',
+      );
+    });
+
+    test(`${basename} is a managed settings-json hook command (uninstall strips it)`, () => {
+      assert.equal(
+        isManagedHookCommand(`"/usr/local/bin/node" "/Users/me/.claude/hooks/${basename}"`, {
+          surface: 'settings-json',
+        }),
+        true,
+        `${basename} must be in MANAGED_HOOK_COMMAND_BASENAMES_BY_SURFACE — ` +
+          'uninstall filters settings.json hook entries with isManagedHookCommand, so an ' +
+          'omitted basename survives uninstall pointing at an already-deleted file',
+      );
+    });
+
+    test(`${basename} is also managed in the "$CLAUDE_PROJECT_DIR"-anchored local-install form`, () => {
+      assert.equal(
+        isManagedHookCommand(`"/usr/local/bin/node" "$CLAUDE_PROJECT_DIR"/.claude/hooks/${basename}`, {
+          surface: 'settings-json',
+        }),
+        true,
+      );
+    });
+  }
+});
+
 describe('#1693 regression: Windows legacy-node rewrite must not double-quote a "$CLAUDE_PROJECT_DIR"-anchored local hook path', () => {
   const winRunner = '"C:/Program Files/nodejs/node.exe"';
 

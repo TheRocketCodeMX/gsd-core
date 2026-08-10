@@ -1107,6 +1107,23 @@
       "anchors": [
         "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
       ]
+    },
+    {
+      "path": "src/shell-command-projection.cts",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "'gsd-agent-isolation-guard\\.js'",
+        "'gsd-write-guard\\.js'"
+      ]
+    },
+    {
+      "path": "tests/shell-command-projection-dispatch.test.cjs",
+      "feature": "managed-hook-coverage",
+      "mode": "anchors-only",
+      "anchors": [
+        "managed-hook basename sets cover every hook the installer registers in settings\\.json"
+      ]
     }
   ]
 }

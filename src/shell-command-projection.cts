@@ -208,6 +208,14 @@ const MANAGED_HOOK_BASENAMES_BY_SURFACE: Record<string, Set<string>> = {
     // registered into settings.json PreToolUse; without it here the legacy
     // bare-`node` rewrite skips it and uninstall leaves it registered.
     'gsd-worktree-path-guard.js',
+    // Same omission class, found by realistic testing of the v1.10.0 realignment:
+    // both guards are registered into settings.json PreToolUse by the installer
+    // (agent-isolation on Agent|Task, write-guard on Write) but were never added
+    // to the managed sets when they arrived upstream. Without them here the legacy
+    // bare-`node` rewrite skips two hooks that gate every subagent dispatch and
+    // every Write. FORK-DELTA: upstream has the same gap (UPSTREAM-ISSUE CANDIDATE).
+    'gsd-agent-isolation-guard.js',
+    'gsd-write-guard.js',
     // Fork grounding FileChanged hook (#11) — managed node hook.
     'gsd-grounding-index-refresh.js',
   ]),
@@ -232,6 +240,13 @@ const MANAGED_HOOK_COMMAND_BASENAMES_BY_SURFACE: Record<string, Set<string>> = {
     // (isManagedHookCommand) left them registered — including a PostToolUse
     // entry pointing at the already-deleted gsd-graphify-update.sh.
     'gsd-worktree-path-guard.js',
+    // Same class again (realistic testing of the v1.10.0 realignment): both
+    // PreToolUse guards were absent, so uninstall's per-hook filter left them
+    // registered against already-deleted scripts — every Write and every
+    // Agent|Task dispatch in a post-uninstall session spawned a missing file.
+    // FORK-DELTA: upstream has the same gap (UPSTREAM-ISSUE CANDIDATE).
+    'gsd-agent-isolation-guard.js',
+    'gsd-write-guard.js',
     'gsd-graphify-update.sh',
     'gsd-grounding-index-refresh.js',
     'gsd-session-state.sh',

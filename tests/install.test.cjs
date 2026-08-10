@@ -40,6 +40,7 @@ const {
   getDirName,
   getConfigDirFromHome,
   install,
+  finishInstall,
   uninstall,
   writeManifest,
   allRuntimes,
@@ -3041,6 +3042,94 @@ describe('Bug #2979 (#3002 CR): rewriteLegacyManagedNodeHookCommands rewrites ba
     assert.equal(
       settings.hooks.PreToolUse[0].hooks[0].command,
       '"C:/nvm4w/nodejs/node.exe" "C:/Users/me/.gemini/hooks/gsd-prompt-guard.js"',
+    );
+  });
+});
+
+// ─── managed-hook set coverage for the two PreToolUse guards ──────────────────
+//
+// Realistic-testing finding (align/upstream-1.10.0, flows-110-report.md §Flow 4):
+// `gsd-agent-isolation-guard.js` and `gsd-write-guard.js` are registered into
+// settings.json PreToolUse by the installer but were missing from both managed
+// basename sets in src/shell-command-projection.cts. Two reproduced consequences,
+// pinned below:
+//   1. the legacy bare-`node` repair pass (#41 / #2979) skipped them, so a stale
+//      runner kept exiting 127 under Claude Code's PATH-less `sh -c` spawn;
+//   2. uninstall left them registered against already-deleted hook files, so every
+//      Write and every Agent/Task dispatch in a post-uninstall session spawned a
+//      missing script.
+// UPSTREAM-ISSUE CANDIDATE — upstream ships both hooks and has the same omission.
+describe('legacy bare-node repair covers the PreToolUse write/agent-isolation guards', () => {
+  for (const basename of ['gsd-agent-isolation-guard.js', 'gsd-write-guard.js']) {
+    test(`rewrites a bare-node PreToolUse entry for ${basename}`, () => {
+      const settings = {
+        hooks: {
+          PreToolUse: [{
+            matcher: 'Write',
+            hooks: [{ type: 'command', command: `node "/Users/me/.claude/hooks/${basename}"` }],
+          }],
+        },
+      };
+      const changed = rewriteLegacyManagedNodeHookCommands(settings, '"/usr/local/bin/node"');
+      assert.equal(changed, true, `${basename} must be recognised as managed, otherwise the bare-node repair skips it`);
+      assert.equal(
+        settings.hooks.PreToolUse[0].hooks[0].command,
+        `"/usr/local/bin/node" "/Users/me/.claude/hooks/${basename}"`,
+      );
+    });
+  }
+});
+
+describe('uninstall strips every managed PreToolUse hook registration from settings.local.json', () => {
+  let tmpDir;
+  let previousCwd;
+
+  beforeEach(() => {
+    tmpDir = createTempDir('gsd-uninstall-pretooluse-');
+    previousCwd = process.cwd();
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(previousCwd);
+    cleanup(tmpDir);
+  });
+
+  test('no gsd- hook registration survives uninstall (write guard + agent isolation guard included)', () => {
+    // install() builds the settings object; finishInstall() serializes it —
+    // the same two-step the CLI runs (bin/install.js finalize()).
+    const result = install(false, 'claude');
+    finishInstall(
+      result.settingsPath,
+      result.settings,
+      result.statuslineCommand,
+      false,
+      'claude',
+      false,
+      result.configDir,
+      {},
+    );
+
+    const settingsPath = path.join(tmpDir, '.claude', 'settings.local.json');
+    const before = fs.readFileSync(settingsPath, 'utf8');
+    // Pre-condition: the installer really does register both guards.
+    assert.ok(before.includes('gsd-write-guard'), 'pre-condition: write guard must be registered by install');
+    assert.ok(before.includes('gsd-agent-isolation-guard'), 'pre-condition: agent isolation guard must be registered by install');
+
+    uninstall(false, 'claude');
+
+    const after = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : '';
+    assert.ok(
+      !after.includes('gsd-write-guard'),
+      `uninstall left gsd-write-guard.js registered against a deleted file:\n${after}`,
+    );
+    assert.ok(
+      !after.includes('gsd-agent-isolation-guard'),
+      `uninstall left gsd-agent-isolation-guard.js registered against a deleted file:\n${after}`,
+    );
+    assert.ok(
+      !after.includes('gsd-'),
+      `uninstall must leave zero gsd- references in settings.local.json:\n${after}`,
     );
   });
 });
