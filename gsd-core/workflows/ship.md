@@ -169,7 +169,7 @@ Verify the work is ready to ship:
    ```bash
    CERT_POSTURE=$(gsd_run query config-get workflow.certification --default required --raw 2>/dev/null || echo "required")
    ls -d .planning/phases/*/ 2>/dev/null || true
-   grep -h -m1 '^certification: ' .planning/phases/*/*-UAT.md 2>/dev/null || true
+   grep -H -m1 '^certification: ' .planning/phases/*/*-UAT.md 2>/dev/null || true
    ```
 
    **If `CERT_POSTURE` is `off`:** skip silently — the loop was never asked to certify, so
