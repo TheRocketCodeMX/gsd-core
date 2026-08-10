@@ -167,15 +167,21 @@ Verify the work is ready to ship:
    PR opens: **did every phase in this milestone reach a certification outcome at all?**
 
    ```bash
-   CERT_POSTURE=$(gsd_run query config-get workflow.certification --default required --raw 2>/dev/null || echo "required")
    ls -d .planning/phases/*/ 2>/dev/null || true
    grep -H -m1 '^certification: ' .planning/phases/*/*-UAT.md 2>/dev/null || true
    ```
 
-   **If `CERT_POSTURE` is `off`:** skip silently — the loop was never asked to certify, so
-   an absent record is not a gap.
+   This sweep **self-suppresses from the evidence** rather than reading
+   `workflow.certification` here — the loop host resolves no capability-owned config key
+   inline (ADR-857 Phase 6), and the recorded lines are the better signal anyway: they
+   describe what actually happened, not what the posture happens to be today.
 
-   Otherwise map every phase directory to its recorded line and present one table:
+   **If no phase carries a `certification:` line at all**, certification is not in use on
+   this project (posture `off`, or a milestone that predates it). Print one line —
+   `[certification: not in use on this project]` — and continue. Never flag every phase in
+   that case: an absent record everywhere is a project-level fact, not N gaps.
+
+   **Otherwise** map every phase directory to its recorded line and present one table:
 
    | Outcome | Recorded line | Reading |
    |---|---|---|
@@ -185,9 +191,10 @@ Verify the work is ready to ship:
    | declined | `certification: skipped (declined)` | a decision, recorded |
    | **not-run** | *no `certification:` line in the phase's UAT.md* | **flag it** |
 
-   A phase with a UAT.md but no `certification:` line is **not-run**: nothing was decided,
-   which is the one state the "recorded, never silent" contract does not allow to pass
-   unremarked. Name those phases explicitly under the table:
+   A phase with a UAT.md but no `certification:` line, on a project where other phases
+   have one, is **not-run**: nothing was decided, which is the one state the "recorded,
+   never silent" contract does not allow to pass unremarked. Name those phases explicitly
+   under the table:
 
    ```
    ⚠ {N} phase(s) have no recorded certification outcome: {phase list}

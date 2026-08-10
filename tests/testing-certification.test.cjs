@@ -1330,11 +1330,18 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
     assert.match(sweep, /never silent|always print|print the table even/i);
   });
 
-  test('`workflow.certification: off` skips it silently — the loop was never asked to certify', () => {
+  test('it self-suppresses from the evidence, not from an inline capability config read', () => {
+    // ADR-857 Phase 6: the loop host resolves no capability-owned config key
+    // inline (tests/phase6-capstone-conformance.test.cjs enforces it, and
+    // tests/workflow-compat.test.cjs already bans the same shape for
+    // workflow.tdd_mode). The recorded lines are the better signal anyway.
     const text = read(SHIP);
+    assert.doesNotMatch(text, /config-get\s+workflow\.certification/, 'no inline capability config read in the host loop');
     const sweep = text.slice(at(text, /certification sweep/i), at(text, /certification sweep/i) + 4000);
-    assert.match(sweep, /workflow\.certification/);
-    assert.match(sweep, /off/);
+    assert.match(sweep, /self-suppress/i);
+    assert.match(sweep, /no phase carries a `certification:` line|not in use on this project/i,
+      'zero recorded lines anywhere is a project-level fact, not N gaps');
+    assert.match(sweep, /Never flag every phase|not N gaps/i);
   });
 
   test('the sweep sits after the existing ship:pre gates and before the branch is pushed (by index)', () => {
