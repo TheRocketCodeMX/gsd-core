@@ -76,11 +76,11 @@ The gate above is a regression check; certification validates the app in real co
 
 ## Suite health
 
-Baseline at strategy time; one row **appended** per re-baseline (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires). Append-only: a re-baseline never rewrites, overwrites, or replaces an earlier row — the history is the trend the triggers read. Only the tune-up flow's fourth pass writes here.
+Baseline at strategy time — **Step 6.5 writes the first row**; thereafter only the tune-up flow's fourth pass appends (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires). Append-only: a re-baseline never rewrites, overwrites, or replaces an earlier row — the history is the trend the triggers read. `wall_clock` is **integer seconds**; `ms/test` is derived at compare time, never recorded here (one source per number).
 
-| Date | test_count | wall_clock | ms/test | containers_started | fix-class of last tune-up |
-|---|---|---|---|---|---|
-| [DATE] | [N \| unmeasured] | [m:ss \| unmeasured] | [—] | [—] | [— (none yet)] |
+| Date | test_count | wall_clock (s) | containers_started | fix-class of last tune-up |
+|---|---|---|---|---|
+| [DATE] | [N \| unmeasured] | [seconds \| unmeasured] | [—] | [— (none yet)] |
 
 - **Born-fast defaults applied:** [container singleton (reuse local-only) · framework config at current APIs — see the reference checklist]
 

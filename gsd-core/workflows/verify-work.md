@@ -48,7 +48,7 @@ AGENT_SKILLS_PLANNER=$(gsd_run query agent-skills gsd-planner)
 AGENT_SKILLS_CHECKER=$(gsd_run query agent-skills gsd-plan-checker)
 ```
 
-Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`.
+Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`, `certification_mode`.
 
 **If `response_language` is set:** All user-facing questions, prompts, and explanations in this workflow MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
@@ -222,7 +222,7 @@ This catches bugs that only manifest on fresh start — race conditions in start
 
 **Agentic certification (unconditional).** Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`.
 
-It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. It is deliberately **not wrapped in a section gate**: the contract is that every phase leaves a *recorded* certification outcome, so there is no configuration under which this dispatch is skipped, and a fragment wrapper would put a written-down silent-skip branch on disk in the one step whose whole contract is "recorded, never silent". The opt-out lives inside the step, which resolves `workflow.certification: off` in its first table and dispatches nothing — recorded, not absent. Same unconditional-step-file form as `execute-phase.md`'s post-merge gate. The step reads its posture from `certification_mode` in the `INIT` bundle above, so it spawns nothing of its own.
+It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. It is deliberately **not wrapped in a section gate**: the contract is that every phase leaves a *recorded* certification outcome, so there is no configuration under which this dispatch is skipped, and a fragment wrapper would put a written-down silent-skip branch on disk in the one step whose whole contract is "recorded, never silent". The opt-out lives inside the step, which resolves `workflow.certification: off` in its first table and dispatches nothing — recorded, not absent. Same unconditional read-and-execute dispatch as `execute-phase.md`'s post-merge gate (there it sits inside `execute_waves`; here between two steps). The step reads its posture from `certification_mode` in the `INIT` bundle above, so it spawns nothing of its own.
 
 <step name="create_uat_file">
 **Create UAT file with all tests:**
@@ -287,7 +287,7 @@ source: agentic
 evidence: [transcript ref · captures]
 ```
 
-Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)`) at the top of `## Tests`. If the section did not run (`workflow.certification: off`, or the section was excluded), write nothing here — the file is byte-identical to before certification existed.
+Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
 
 ## Summary
 
@@ -520,8 +520,12 @@ Clear Current Test section:
 
 Commit the UAT file:
 ```bash
-gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
+gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/certification-evidence/"
 ```
+
+Include the certification artifacts only when the run produced them — the brief is the
+canonical record of what was certified, and an uncommitted canonical artifact is a
+contradiction in terms (`commit_docs` governs, as for every `.planning/` write).
 
 Present summary:
 ```

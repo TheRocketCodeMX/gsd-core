@@ -15,7 +15,7 @@
  *
  *   - the CERT-0 → CERT-2 certification ladder exists in the reference, with
  *     the dogfood-verified CERT-1 (limited) tier between 0 and 1;
- *   - capability detection PROBES (4-command live probe, per-operation
+ *   - capability detection PROBES (5-command live probe, per-operation
  *     verdicts) instead of merely finding binaries, and asks exactly ONE
  *     question for what nothing observable answers;
  *   - the trust doctrine is sandbox-first WITH its receipts (the onorca
@@ -164,9 +164,16 @@ describe('the probe (reference + workflow)', () => {
     const s = section(ref, 'The probe');
     assert.match(s, /binary[^.\n]{0,80}(lead|not a capability|says nothing)/i,
       'the "a binary is a lead, not a capability" doctrine');
-    for (const op of [/goto|navigate/i, /snapshot/i, /click/i, /screenshot/i]) {
-      assert.match(s, op, `the 4-command live probe must include ${op}`);
+    for (const op of [/goto|navigate/i, /snapshot/i, /fill/i, /click/i, /screenshot/i]) {
+      assert.match(s, op, `the 5-command live probe must include ${op}`);
     }
+    // Validation A F3: the probe must run fill BEFORE the click round-trip —
+    // click-after-fill is the failure mode that defines CERT-1 (limited), and a
+    // probe that never fills structurally cannot measure it.
+    const fillAt = s.search(/\bfill\b/i);
+    const clickAt = s.search(/click round-trip|click.*round.?trip/i);
+    assert.ok(fillAt !== -1 && clickAt !== -1 && fillAt < clickAt,
+      'fill precedes the click round-trip so the probe reproduces click-after-fill');
     assert.match(s, /per-operation|per-op/i, 'per-operation verdicts are recorded');
     assert.match(s, /throwaway (page|app|fixture)|never the real app/i,
       'the probe runs against a throwaway page, never the real app');
@@ -198,7 +205,8 @@ describe('the probe (reference + workflow)', () => {
 
   test('the workflow probes any driver found and records per-operation results', () => {
     const wf = read(WORKFLOW);
-    assert.match(wf, /4-command|four-command/i, 'the live probe is named in the workflow');
+    assert.match(wf, /5-command|five-command/i, 'the live probe is named in the workflow');
+    assert.doesNotMatch(wf, /4-command|four-command/i, 'the probe is 5 commands now — fill is load-bearing (validation A F3)');
     assert.match(wf, /per-operation|per-op/i, 'per-operation verdicts recorded in TEST-STRATEGY');
     assert.match(wf, /binary[^.\n]{0,80}(lead|not a capability)/i,
       'the binary-is-a-lead doctrine reaches the workflow');
@@ -224,7 +232,7 @@ describe('trust doctrine (sandbox-first, with receipts)', () => {
       'sandbox-first must be read BEFORE the probe instruction — the dogfood showed a bare --version instruments the environment');
     const wfStep = section(read(WORKFLOW), 'Step 5.5');
     const wfTrust = wfStep.search(/isolated HOME/i);
-    const wfProbe = wfStep.search(/4-command|four-command/i);
+    const wfProbe = wfStep.search(/5-command|five-command/i);
     assert.ok(wfTrust !== -1 && wfProbe !== -1 && wfTrust < wfProbe,
       'the workflow orders the trust gate ahead of the probe');
   });
@@ -525,16 +533,31 @@ describe('the template materializes rows from decisions', () => {
     }
   });
 
-  test('## Suite health ships the baseline table with the five measured columns', () => {
+  test('## Suite health ships the baseline table with the four measured columns — ms/test is derived, never recorded', () => {
     const tpl = read(TEMPLATE);
     const s = section(tpl, 'Suite health');
     const header = s.split('\n').find((l) => l.includes('test_count'));
     assert.ok(header, 'the baseline table header exists');
-    for (const col of ['test_count', 'wall_clock', 'ms/test', 'containers_started', 'fix-class']) {
+    for (const col of ['test_count', 'wall_clock', 'containers_started', 'fix-class']) {
       assert.ok(header.includes(col), `baseline column missing: ${col}`);
     }
+    // Validation B F5: summary.md forbids recording a derived value ("recording a
+    // derived value invites drift") — the strategy table obeys the same rule.
+    assert.ok(!header.includes('ms/test'), 'ms/test is derived at compare time, never a recorded column');
+    assert.match(s, /derive/i, 'the section says where ms/test comes from instead');
     const rows = tableRowsAfter(tpl, 'Suite health');
     assert.equal(rows.length, 1, 'exactly one baseline row — milestones append, the template never pre-asserts history');
+  });
+
+  test('wall_clock is integer seconds everywhere — m:ss cannot express a healthy suite (validation B F1)', () => {
+    // A 0.3 s suite rendered m:ss reads 0:00, and the next compare derives a
+    // zero baseline to divide by. The healthier the suite, the more broken the
+    // trigger — so the recorded unit is seconds, integer, in every artifact.
+    for (const f of [TEMPLATE, SUMMARY_TEMPLATE, TUNE_UP, POST_MERGE_GATE, EXECUTE_PLAN, TRANSITION]) {
+      assert.doesNotMatch(read(f), /m:ss/, `${f} still records wall_clock as m:ss`);
+    }
+    assert.match(suiteMetricsBlock(read(SUMMARY_TEMPLATE)), /wall_clock:[^\n]*second/i,
+      'the SUMMARY schema names seconds as the unit');
   });
 
   test('the CI execution map survives unchanged in shape (cicd reads it)', () => {
@@ -1047,7 +1070,9 @@ describe('suite-metrics capture — the executor records what it actually ran', 
     assert.match(text, /test_count/);
     assert.match(text, /containers_started/);
     assert.match(text, /Testcontainers|testcontainers/);
-    assert.match(text, /else\s*`—`|otherwise\s*`—`|`—`/, 'containers_started falls back to an em dash, never a guess');
+    const containersRow = text.split('\n').find((l) => l.includes('`containers_started`'));
+    assert.ok(containersRow, 'the containers_started contract row exists');
+    assert.match(containersRow, /`—`/, 'containers_started falls back to an em dash, never a guess');
   });
 
   test('a timed-out or absent suite records NOTHING (an unmeasured run is not a measurement)', () => {
@@ -1109,13 +1134,17 @@ describe('the transition compare — baseline vs latest, evaluated against T1–
     assert.match(step, /test-strategy\.md|references\/test-strategy/, 'points at the reference table, does not re-invent thresholds');
   });
 
-  test('T1 fires immediately; T2/T3/T4 schedule at milestone close', () => {
+  test('T1 fires immediately; T2/T3/T4 schedule at milestone close (routing, not just presence)', () => {
     const step = stepBody(read(TRANSITION), '<step name="suite_health_compare">');
-    assert.match(step, /T1[^\n]*(immediate|now)|immediate[^\n]*T1/i);
-    assert.match(step, /milestone close/i);
-    const t1 = at(step, /T1/);
-    const close = at(step, /milestone close/i);
-    assert.ok(t1 !== -1 && close !== -1, 'both routes exist');
+    const t1Route = at(step, /T1 → an immediate todo/);
+    const laterRoute = at(step, /T2 \/ T3 \/ T4 →/);
+    assert.ok(t1Route !== -1, 'the T1-immediate route paragraph exists');
+    assert.ok(laterRoute !== -1, 'the T2–T4 scheduled route paragraph exists');
+    assert.ok(t1Route < laterRoute, 'immediate route stated before the scheduled route');
+    const t1Para = step.slice(t1Route, laterRoute);
+    assert.doesNotMatch(t1Para, /milestone close/i, 'T1 must not be deferred to milestone close');
+    assert.match(t1Para, /immediate|written now|now\b/i, 'T1 is the immediate route');
+    assert.match(step.slice(laterRoute), /milestone close/i, 'T2–T4 are the milestone-close route');
   });
 
   test('both routes attach the tune-up flow by its entry point', () => {
@@ -1194,12 +1223,15 @@ describe('the suite tune-up flow (§8.4) — four ordered passes, order is doctr
     assert.match(pass, /never (merely )?"?made faster"?|not (merely )?because it is faster|justified by the strategy/i);
   });
 
-  test('pass 4 records the fix-class with BOTH of its values', () => {
+  test('pass 4 records the fix-class — config-drift, test-debt, or mixed with the dominant named', () => {
     const text = read(TUNE_UP);
     const pass = text.slice(at(text, /##\s*Pass 4/));
     assert.match(pass, /fix[- ]class/i);
     assert.match(pass, /config[- ]drift/i);
     assert.match(pass, /test[- ]debt/i);
+    // Validation B F8: a run where config supplied 90% of the win must not
+    // record pure test-debt — the column exists to teach the real failure mode.
+    assert.match(pass, /mixed/i, 'a mixed run records both contributions, dominant first');
   });
 
   test('re-baselining APPENDS a new dated row — history is the trend the triggers read', () => {
@@ -1300,15 +1332,27 @@ describe('the emitted mirror carries the certification-era scope (tracked N3)', 
   });
 });
 
+// The sweep block, bounded by its own FORK:strategy markers rather than a fixed
+// byte window (Wave 3 review T4: a +4000 slice ran past </step> into push_branch).
+function shipSweep() {
+  const text = read(SHIP);
+  const sweepAt = at(text, /certification sweep/i);
+  const begins = [...text.matchAll(/<!-- FORK:strategy BEGIN -->/g)].map((m) => m.index);
+  const ends = [...text.matchAll(/<!-- FORK:strategy END -->/g)].map((m) => m.index);
+  for (let i = 0; i < begins.length; i++) {
+    if (begins[i] < sweepAt && sweepAt < ends[i]) return text.slice(begins[i], ends[i]);
+  }
+  assert.fail('the certification sweep must sit inside a FORK:strategy marker pair');
+}
+
 describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () => {
   test('ship carries the sweep at the pre-gate surface', () => {
     const text = read(SHIP);
     assert.match(text, /certification sweep/i);
   });
 
-  test('it enumerates all four recorded outcomes the certification step can write', () => {
-    const text = read(SHIP);
-    const sweep = text.slice(at(text, /certification sweep/i), at(text, /certification sweep/i) + 4000);
+  test('it enumerates the recorded outcomes the certification step can write', () => {
+    const sweep = shipSweep();
     assert.match(sweep, /agentic \(CERT/i, 'certified');
     assert.match(sweep, /human \(CERT-0\)/i, 'human');
     assert.match(sweep, /N\/A/, 'recorded N-A');
@@ -1316,15 +1360,13 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
   });
 
   test('a phase with no recorded outcome is FLAGGED, not omitted', () => {
-    const text = read(SHIP);
-    const sweep = text.slice(at(text, /certification sweep/i), at(text, /certification sweep/i) + 4000);
+    const sweep = shipSweep();
     assert.match(sweep, /flag/i);
     assert.match(sweep, /no certification (outcome )?(line )?recorded|never recorded|no `certification:` line/i);
   });
 
   test('it is advisory — it never blocks, and it is never silent', () => {
-    const text = read(SHIP);
-    const sweep = text.slice(at(text, /certification sweep/i), at(text, /certification sweep/i) + 4000);
+    const sweep = shipSweep();
     assert.match(sweep, /advisory/i);
     assert.match(sweep, /never blocks?|does not block|non-blocking/i);
     assert.match(sweep, /never silent|always print|print the table even/i);
@@ -1337,7 +1379,7 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
     // workflow.tdd_mode). The recorded lines are the better signal anyway.
     const text = read(SHIP);
     assert.doesNotMatch(text, /config-get\s+workflow\.certification/, 'no inline capability config read in the host loop');
-    const sweep = text.slice(at(text, /certification sweep/i), at(text, /certification sweep/i) + 4000);
+    const sweep = shipSweep();
     assert.match(sweep, /self-suppress/i);
     assert.match(sweep, /no phase carries a `certification:` line|not in use on this project/i,
       'zero recorded lines anywhere is a project-level fact, not N gaps');
@@ -1383,6 +1425,23 @@ describe('Wave 2 review fix wave', () => {
     const debt = section(tpl, 'Coverage debt');
     assert.doesNotMatch(debt, /`--update`/, 'no flag is claimed that does not exist');
     assert.match(debt, /append-only/i);
+    // Wave 3 review M1: the phantom flag came back in a NEW file, walking through
+    // the template-scoped guard above. Sweep the whole authored corpus instead.
+    const mdFiles = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (e.name.endsWith('.md')) mdFiles.push(rel);
+      }
+    };
+    walk('gsd-core');
+    walk('commands/gsd');
+    walk('skills');
+    for (const f of mdFiles) {
+      assert.doesNotMatch(read(f), /gsd[:-]testing-strategy[^\n]{0,60}`--update`|`--update`[^\n]{0,60}gsd[:-]testing-strategy/,
+        `${f} claims a --update flag that does not exist (argument-hint is --auto/--text/--tune-up)`);
+    }
   });
 
   test('T4 — the certification step reads its posture from the INIT bundle, not its own spawn', () => {
@@ -1397,5 +1456,279 @@ describe('Wave 2 review fix wave', () => {
     const src = read('src/init.cts');
     const fn = src.slice(at(src, /function detectCertificationMode/), at(src, /function detectCertificationMode/) + 900);
     assert.match(fn, /catch\s*\{[\s\S]{0,80}return 'required'/, 'an unreadable posture is not a licence to skip');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Combined fix wave: Wave 3 review (M1–M3, N1–N6, T1–T4) + validation
+// scenarios A/B/C. Each test pins one finding so the fix cannot silently
+// regress. The probe/wall-clock/fix-class edits live in the suites above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('combined fix wave — transition compare (review M2/M3/N1/N4, validation B F6/F7/F9/F11)', () => {
+  const compare = () => stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+
+  test('M2 — the step checks for an existing open todo before writing, and updates in place', () => {
+    const step = compare();
+    assert.match(step, /grep -l/, 'a duplicate check runs before any todo write');
+    assert.match(step, /update it in place|refresh (it|its numbers)|instead of (adding|writing) a second/i,
+      'an existing open todo is refreshed, never duplicated — N identical todos at audit-open was the failure');
+  });
+
+  test('M2/B-F6 — T2–T4 get a deterministic filename, not just a directory', () => {
+    const step = compare();
+    assert.match(step, /suite-tune-up-milestone-close\.md/,
+      'the milestone-close todo has a stable name the duplicate check can find');
+  });
+
+  test('B-F7 — a fired T2–T4 is visible in the transition output, not silently deferred', () => {
+    const step = compare();
+    assert.match(step, /\[suite health: T\{?n?\}? fired|fired — tune-up scheduled/i,
+      'one line names the scheduled trigger; a trigger is never a silent row');
+  });
+
+  test('M3 — T4 reads the last tune-up row (fix-class), not merely the last row', () => {
+    const step = compare();
+    assert.match(step, /fix-class/, 'the fix-class column is how the step finds the last tune-up');
+    assert.match(step, /unevaluable|not evaluable|cannot be evaluated/i,
+      'a table with no tune-up row anywhere makes T4 unevaluable, never auto-fired');
+  });
+
+  test('N1 — the step says which tier budget the measured wall_clock belongs to', () => {
+    const step = compare();
+    assert.match(step, /whole suite[^\n]*PR[- ]gate|PR[- ]gate tier|PR-gate/i,
+      'the post-merge gate measures the whole suite, so the number is PR-gate tier unless the strategy says otherwise');
+    assert.match(step, /strategy time|Step 6\.5/i, 'the dev-loop budget is checked at strategy time, not here');
+  });
+
+  test('N4 — the read is the newest SUMMARY that CARRIES a suite-metrics block', () => {
+    const step = compare();
+    assert.match(step, /that carries|grep -l '\^?suite-metrics/,
+      'a doc-only newest SUMMARY must not shadow an earlier measured one');
+  });
+
+  test('B-F9 — T3 is declared unevaluable when containers_started is an em dash', () => {
+    const step = compare();
+    const t3Row = step.split('\n').find((l) => l.includes('**T3'));
+    assert.ok(t3Row, 'the T3 row exists');
+    assert.match(t3Row, /—/, 'the em-dash case is named in the T3 row itself');
+  });
+
+  test('B-F11 — the XX-current placeholder is named as a placeholder to substitute', () => {
+    const step = compare();
+    assert.match(step, /XX-current[^\n]*(placeholder|substitute)|(placeholder|substitute)[^\n]*XX-current/i);
+  });
+});
+
+describe('combined fix wave — certification step (validation A F1/F2/F4/F5/F7/F9, C F1/F4/F6)', () => {
+  const step = () => read(CERT_STEP);
+
+  test('A-F1 — the preamble no longer contradicts §5 on who writes the brief', () => {
+    const preamble = step().slice(0, at(step(), /^##\s*1\./m));
+    assert.match(preamble, /writes only the brief|the brief file itself.*create_uat_file writes/is,
+      'the step writes the brief; create_uat_file writes the entries and the outcome line');
+    assert.doesNotMatch(preamble, /writes none of them itself/,
+      'the old sentence was wrong for one of its three items');
+  });
+
+  test('A-F2/C-F4 — the re-check demotes only; promotion belongs to the strategy', () => {
+    const s4 = step().slice(at(step(), /^##\s*4\./m), at(step(), /^##\s*5\./m));
+    assert.match(s4, /only demote|never promote|demotes; it never promotes/i);
+    assert.match(s4, /gsd:testing-strategy/, 'the stale row has an owner: the strategy skill, not this run');
+    assert.match(s4, /exceed/i, 'the probe-beats-the-row case is named, not left to improvisation');
+  });
+
+  test('C-F4 — CERT-0 short-circuits the re-check instead of inviting a sniff', () => {
+    const s4 = step().slice(at(step(), /^##\s*4\./m), at(step(), /^##\s*5\./m));
+    assert.match(s4, /CERT-0[^\n]{0,120}(skip|no driver to re-check|short-circuit)/i,
+      'on CERT-0 the mechanism names no driver, so there is no subject — and command -v is the sniff §1 bans');
+  });
+
+  test('A-F11 — the trust gate has a failure branch, and "this HOME" means the real one', () => {
+    const s3 = step().slice(at(step(), /^##\s*3\./m), at(step(), /^##\s*4\./m));
+    assert.match(s3, /permanently sandbox|stays sandboxed|keep the tool.*sandbox|certif[a-z]* from inside the sandbox/is,
+      'an audit that finds instrumentation keeps the tool sandboxed — the outcome the doc itself predicts');
+    assert.match(s3, /real HOME/, 'the exemption clause names which HOME it means');
+  });
+
+  test('A-F4 — the separation table covers all four tiers, including CERT-1 (limited)', () => {
+    const s6 = step().slice(at(step(), /^##\s*6\./m), at(step(), /^##\s*7\./m));
+    for (const tier of ['CERT-2', 'CERT-1 (limited)', 'CERT-1', 'CERT-0']) {
+      assert.ok(s6.includes(`**${tier}**`), `separation row missing: ${tier}`);
+    }
+  });
+
+  test('A-F5 — same-family separation has a decision test, not a contradiction', () => {
+    const s6 = step().slice(at(step(), /^##\s*6\./m), at(step(), /^##\s*7\./m));
+    assert.match(s6, /accepted (weakest|minimum)|weakest accepted/i);
+    assert.match(s6, /violation only|only a violation|only when fresh context/i,
+      'the agent can tell when same-family is acceptable vs when to route to the human');
+  });
+
+  test('A-F7 — both the recorded and the display line count checkpoints', () => {
+    const t = step();
+    assert.doesNotMatch(t, /flows certified/, 'a brief flow can cover zero or several checkpoints');
+    assert.match(t, /checkpoints certified/, 'the checkpoint is the unit UAT counts');
+  });
+
+  test('A-F9 — evidence bundle and starter script have prescribed paths', () => {
+    const t = step();
+    assert.match(t, /certification-evidence\//, 'the evidence bundle path is prescribed like the brief path');
+    assert.match(t, /CERTIFICATION-SCRIPT/, 'the starter script path is prescribed');
+  });
+
+  test('C-F6 — the CERT-0 display line does not misframe the human path as escalations', () => {
+    const s8 = step().slice(at(step(), /^##\s*8\./m));
+    assert.match(s8, /for human certification/i,
+      'a normal CERT-0 run reads "N checkpoints for human certification", not "0 certified, N escalated"');
+  });
+
+  test('A-F8/C-F1 — capsule-added checks reach the checkpoint set on every tier', () => {
+    const t = step();
+    assert.match(t, /capsule-added/i, 'the case is named');
+    assert.match(t, /coverage_id/, 'their checkpoint shape (no coverage_id) is defined');
+    const s5to7 = t.slice(at(t, /^##\s*5\./m));
+    assert.match(s5to7, /never (be )?silently dropped|can never be dropped|reaches? the (human|checkpoint set|UAT)/i,
+      'a capsule-added check must reach a human or a driver — CERT-0 dropped them entirely');
+  });
+});
+
+describe('combined fix wave — off posture and the ship sweep (review N2, validation C F2/F5)', () => {
+  test('C-F2 — off is recorded, not absent: the posture is the decision', () => {
+    const t = read(CERT_STEP);
+    assert.match(t, /certification: off \(posture\)/,
+      'an off-era phase carries a line saying so — otherwise it is indistinguishable from a failed run forever');
+    const modeTable = t.slice(at(t, /^\| `workflow\.certification` \|/m), at(t, /^##\s*2\./m));
+    assert.doesNotMatch(modeTable, /Record nothing/i, 'off no longer records nothing');
+  });
+
+  test('C-F2 — the outcome table and create_uat_file both know the off line', () => {
+    const s8 = read(CERT_STEP).slice(at(read(CERT_STEP), /^##\s*8\./m));
+    assert.match(s8, /off \(posture\)/);
+    assert.match(read(VERIFY_WORK), /off \(posture\)/, 'the UAT writer records it too');
+  });
+
+  test('review T1 — the dead "section was excluded" branch is gone from create_uat_file', () => {
+    assert.doesNotMatch(read(VERIFY_WORK), /or the section was excluded/,
+      'the dispatch is deliberately not a section; there is nothing to exclude');
+  });
+
+  test('N2 — pre-adoption phases are classified, not flagged forever', () => {
+    const sweep = shipSweep();
+    assert.match(sweep, /pre-adoption/i, 'a UAT that predates the earliest recorded line is pre-adoption');
+    assert.match(sweep, /not counted|never counted|excluded from the ⚠|not in the ⚠/i,
+      'pre-adoption phases stay out of the warning count — a warning wrong on every run stops being read');
+  });
+
+  test('C-F2 — the sweep reads the off posture line as a decision, not a gap', () => {
+    const sweep = shipSweep();
+    assert.match(sweep, /off \(posture\)/, 'the off outcome has a table row');
+  });
+
+  test('C-F5 — the table joins on the ordered phase list, not on grep output order', () => {
+    const sweep = shipSweep();
+    assert.match(sweep, /phase list in order|iterat[a-z]+ the `?ls -d`? (phase )?list|in `ls -d` order/i,
+      'parallel grep drop-ins reorder; the ls -d list is already ordered');
+  });
+});
+
+describe('combined fix wave — writers, precedents, and the enum clamp (review N3/N6, C F7, A F10)', () => {
+  test('N3 — suite-metrics has a stated precedence: the post-merge gate wins in a phase run', () => {
+    const g = read(SUMMARY_TEMPLATE);
+    assert.match(g, /authoritative|overwrites/i,
+      'two writers, one rule: the gate measurement overwrites a plan-written block; standalone keeps its own');
+  });
+
+  test('N6 — detectCertificationMode clamps to its declared enum', () => {
+    const src = read('src/init.cts');
+    const fn = src.slice(at(src, /function detectCertificationMode/), at(src, /function detectCertificationMode/) + 900);
+    assert.match(fn, /\[\s*'required',\s*'offer',\s*'off'\s*\]\.includes/,
+      'an out-of-enum string degrades to required like every other unreadable posture');
+  });
+
+  test('C-F7 — the precedent claim states its own placement difference', () => {
+    const vw = read(VERIFY_WORK);
+    assert.match(vw, /inside[^\n]*execute_waves|execute_waves[^\n]*inside/i,
+      'the post-merge-gate precedent matches on form, not placement — say so');
+  });
+
+  test('A-F10 — the certification artifacts are committed with the UAT file', () => {
+    const vw = read(VERIFY_WORK);
+    const commitAt = at(vw, /query commit/);
+    assert.ok(commitAt !== -1, 'the commit step exists');
+    assert.match(vw.slice(commitAt - 400, commitAt + 600), /CERTIFICATION-BRIEF|certification-evidence|certification artifacts/i,
+      'the canonical artifact is tracked, not left orphaned in .planning/');
+  });
+});
+
+describe('combined fix wave — tune-up flow and born-fast checklist (review M1, validation B F2/F3/F4/F10)', () => {
+  test('M1 — the strategy-question route names the real affordance, not a phantom flag', () => {
+    const t = read(TUNE_UP);
+    assert.match(t, /Update path|the Update (path|branch)/,
+      'the Update path is an AskUserQuestion branch, not a flag');
+    assert.doesNotMatch(t, /`--update`/);
+  });
+
+  test('B-F2 — the profile dichotomy has a third bucket: waits inside test bodies', () => {
+    const t = read(TUNE_UP);
+    const pass1 = t.slice(at(t, /##\s*Pass 1/), at(t, /##\s*Pass 2/));
+    assert.match(pass1, /(sleep|wait|retr)[a-z]*[^\n]*(bodies|body)|bodies[^\n]*(sleep|wait|retr)/i,
+      'non-assertion body time (sleeps/retries/backoff) is the most common sink and it routes to Pass 3, not to sharding');
+  });
+
+  test('B-F3 — the serialization audit class owns unconditional waits', () => {
+    const t = read(TUNE_UP);
+    const pass3 = t.slice(at(t, /##\s*Pass 3/), at(t, /##\s*Pass 4/));
+    assert.match(pass3, /unconditional waits|fixed `?sleep/i, 'fixed sleeps have a home class now');
+    assert.match(pass3, /[Pp]oll, never sleep/, 'the flaky-test-checklist doctrine is inherited, not re-derived');
+  });
+
+  test('B-F4 — the born-fast JS/TS rungs include node --test and Jest', () => {
+    const ref = read(TEST_REF);
+    const s = section(ref, 'Suite health');
+    assert.match(s, /node --test|node:test/, 'the runner GSD itself uses is on the checklist');
+    assert.match(s, /--test-concurrency/, 'with its concurrency knob');
+    assert.match(s, /Jest/, 'and the largest runner by installs is not absent');
+  });
+
+  test('B-F10 — the first Suite-health row has a named writer', () => {
+    const tpl = read(TEMPLATE);
+    const s = section(tpl, 'Suite health');
+    assert.match(s, /Step 6\.5|strategy time[^\n]*first row|first row[^\n]*strategy/i,
+      'the strategy writes the baseline row; thereafter only the tune-up appends');
+  });
+});
+
+describe('combined fix wave — dogfood corrections in the reference (validation A §3/§4)', () => {
+  test('the CERT-1 (limited) example no longer claims the refuted dogfood row', () => {
+    const ref = read(CERT_REF);
+    const rows = tableRowsAfter(ref, 'certification ladder');
+    const limited = rows.find((r) => r.includes('CERT-1 (limited)'));
+    assert.ok(limited, 'the limited tier still exists — partial-capability environments are real');
+    assert.doesNotMatch(limited, /dogfood-verified/,
+      'the dogfood machine turned out to be full CERT-1 once Xvfb came up cleanly — the row was an artifact');
+  });
+
+  test('the probe section carries the re-probe lesson: rows describe a launch, not the machine', () => {
+    const ref = read(CERT_REF);
+    const s = section(ref, 'The probe');
+    assert.match(s, /records? a (launch|date)|describe[sd]? a (launch|date)|launch, not the (tool|machine)/i,
+      'the same box failed click/screenshot under a broken Xvfb and passed both under a clean one');
+  });
+
+  test('the trust receipts name the full blast radius: three agent CLIs plus the state dir', () => {
+    const ref = read(CERT_REF);
+    const s = section(ref, 'trust doctrine');
+    assert.match(s, /Claude Code|claude/i, 'claude settings hooks are in the receipt');
+    assert.match(s, /Gemini/i, 'gemini settings hooks are in the receipt');
+    assert.match(s, /state (dir|directory)/i, 'the tool\'s own state directory is named');
+  });
+});
+
+describe('combined fix wave — spec honesty (review T2)', () => {
+  test('the spec describes the shipped shape: an unconditional dispatch, not a section gate', () => {
+    const spec = read('docs/superpowers/specs/2026-08-10-testing-certification-design.md');
+    assert.doesNotMatch(spec, /capability-gated section/,
+      'the wave deliberately rejected the section wrapper; the canonical spec must not still specify it');
   });
 });

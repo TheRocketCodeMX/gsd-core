@@ -32,7 +32,7 @@ actuals:
 # test suite. OMIT the whole block otherwise; see <suite_metrics_guidance> below.
 suite-metrics:
   test_count: [tests the runner itself reported]
-  wall_clock: [m:ss — measured, never estimated]
+  wall_clock: [integer seconds — measured, never estimated]
   containers_started: [N from Testcontainers/docker output where visible, else —]
 
 # Tech tracking
@@ -215,12 +215,12 @@ None - no external service configuration required.
 <suite_metrics_guidance>
 **Purpose (suite health):** `suite-metrics:` is the *measured* half of the suite-health loop. The run that executed the project's whole test suite records what it observed; `transition`'s `suite_health_compare` step reads the newest SUMMARY's block against the `## Suite health` baseline row in `.planning/TEST-STRATEGY.md` and evaluates the T1–T4 triggers from `references/test-strategy.md § Suite health`. Executor records actuals, downstream computes — the same division as `actuals:` above.
 
-**Who writes it:** whoever ran the suite. In a phase run that is `execute-phase`'s post-merge test gate (`execute-phase/steps/post-merge-gate.md`, Step C), which measures the run it already performs. In a standalone plan whose own `<verification>` ran the whole suite, `execute-plan`'s `create_summary` writes it.
+**Who writes it:** whoever ran the suite. In a phase run that is `execute-phase`'s post-merge test gate (`execute-phase/steps/post-merge-gate.md`, Step C), which measures the run it already performs — **its measurement is authoritative in a phase run and overwrites any block a plan wrote** (a plan's own `<verification>` and the gate can legitimately differ). In a standalone plan whose own `<verification>` ran the whole suite, `execute-plan`'s `create_summary` writes it, and only on that path does its block survive.
 
 | Field | Contract |
 |---|---|
 | `test_count` | The count the runner itself reported. Never a grep, never a guess. |
-| `wall_clock` | `m:ss`, measured around the run. Never estimated, never a budget. |
+| `wall_clock` | Integer **seconds**, measured around the run. Never estimated, never a budget — and never minutes-and-seconds formatting, which rounds a healthy sub-minute suite to `0:00` and breaks the trigger arithmetic. |
 | `containers_started` | From Testcontainers/docker output where visible, else `—`. `—` is an honest answer; `0` is a claim. |
 
 **ms/test is deliberately NOT a field here.** It is derived at compare time (`wall_clock ÷ test_count`) so one number can never disagree with itself. Recording a derived value invites drift, and the trigger table reads the derived one.

@@ -60,6 +60,8 @@ The checklist names *classes* of lever; the concrete flags below are the **curre
 
 - **Container-backed integration (Testcontainers-class):** one container per suite run (singleton/`globalSetup`), never per test file. **Reuse is LOCAL-ONLY** — Testcontainers' own docs: reusable containers are **"not suited for CI usage"** (still experimental, disables the reaper so containers leak, and the API isn't portable: four languages, four call shapes; Node defaults reuse to *enabled* while ignoring the property Java documents; Python documents no reuse at all). CI levers are different: image/layer caching, pre-pulled images, file-level parallelism.
 - **Vitest 4 (JS/TS):** top-level `maxWorkers` and `isolate` — `poolOptions` was removed in Vitest 4, so the most-copied snippet on the internet targets a dead API; the default pool is `forks`. `isolate: false` is a *measured* trade, never a default: Vitest documents the preconditions (no side effects, proper cleanup) but no failure mode — the warning that shared module state can turn a real failure into a false pass is GSD's own, and a false pass is strictly worse than a slow suite.
+- **Node built-in runner (`node --test`, JS/TS):** stable since Node 20 — and what GSD's own suite runs. `--test-concurrency` governs file-level parallelism; `--experimental-test-isolation=none` is the same measured trade as Vitest's `isolate: false` (per-file process isolation off, same false-pass warning). Measure it — on some suites it is *slower*.
+- **Jest (JS/TS):** `maxWorkers` (defaults to cores−1); `--runInBand` is a debugging mode, not a config; the transform cache is the sleeper lever.
 - **Rust:** `cargo nextest` — per-test processes, structured timings, `--partition` sharding, retries that mark flakes distinctly. Its own benchmarks span **1.37×–3.38×** vs `cargo test` (methodology excludes build time) — ship the range, never a headline multiple.
 - **Python:** `pytest-xdist` (`-n auto`, `--dist` modes) for distribution; order-independence is **pytest-randomly**'s job, not xdist's. Measure the tail with `--durations=N`.
 - **Go:** `-parallel` (within a binary, needs `t.Parallel()`) and `-p` (across packages) are orthogonal knobs; the result cache is the sleeper lever (`-count=1` disables it deliberately).
@@ -68,7 +70,7 @@ The checklist names *classes* of lever; the concrete flags below are the **curre
 
 ### The four triggers (trend + absolutes)
 
-Measured per milestone against the `## Suite health` baseline table in TEST-STRATEGY.md (`test_count`, `wall_clock`, `ms/test`, `containers_started`, fix-class of last tune-up):
+Measured per milestone against the `## Suite health` baseline table in TEST-STRATEGY.md (`test_count`, `wall_clock` in integer seconds, `containers_started`, fix-class of last tune-up; `ms/test` is derived at compare time, never recorded):
 
 | Trigger | Signal | Fires |
 |---|---|---|
@@ -85,10 +87,10 @@ Measured per milestone against the `## Suite health` baseline table in TEST-STRA
 
 1. **Profile** — slowest files, setup-vs-test split, container lifecycle map. Evidence first; no change without a measurement.
 2. **Config/cache pass** — the born-fast checklist above, at current APIs (the predictable half of most slowdowns).
-3. **Suite audit against the strategy** — implementation-detail tests (a strategy violation first, a perf cost second), duplicated coverage across tiers (push down the pyramid where the strategy permits), obsolete tests, over-broad shared fixtures, accidental serialization. Every deletion or demotion justified by the strategy doc, never by the stopwatch alone.
+3. **Suite audit against the strategy** — implementation-detail tests (a strategy violation first, a perf cost second), duplicated coverage across tiers (push down the pyramid where the strategy permits), obsolete tests, over-broad shared fixtures, accidental serialization and unconditional waits (fixed sleeps standing in for condition polling — poll, never sleep, per `flaky-test-checklist.md`). Every deletion or demotion justified by the strategy doc, never by the stopwatch alone.
 4. **Re-baseline** — re-measure, **append** a new dated Suite-health row (never rewrite or overwrite the previous one: the history *is* the trend T2/T4 compare against), and **record the fix-class** (config-drift vs test-debt) so the strategy learns which failure mode this project actually has.
 
-The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock`, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
+The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock` in integer seconds, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
 
 ## Output (`TEST-STRATEGY.md`)
 

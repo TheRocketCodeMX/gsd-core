@@ -39,10 +39,15 @@ to audit the suite *against*, and this flow degenerates into a stopwatch. Stop a
 1. **The slowest files.** Use the runner's own tail reporter, not intuition — `--durations=N`
    (pytest), `--reporter=verbose` / the slow-test threshold (vitest), `cargo nextest run`'s
    structured timings, `go test -v` package timings. Record the top ~10 with their times.
-2. **The setup-vs-test split.** How much of the wall clock is `beforeAll` / fixtures /
-   migrations / image pulls, and how much is assertions? A suite that is 80 % setup has a
-   config problem; a suite that is 80 % assertions has a volume problem. They have
-   different remedies, and picking the wrong one wastes the tune-up.
+2. **The setup-vs-test split — three buckets, not two.** How much of the wall clock is
+   `beforeAll` / fixtures / migrations / image pulls; how much is assertions; and how much
+   is **waits inside test bodies** — fixed sleeps, retries, polling backoff? Count the
+   fixed-duration waits (`sleep`, `setTimeout`-style delays) as a profile artifact. A
+   suite that is 80 % setup has a config problem (Pass 2); 80 % assertions is a volume
+   problem (tiering/sharding, not tuning); 80 % waits inside bodies is a serialization
+   problem (Pass 3's serialization/waits class). They have different remedies, and picking
+   the wrong one wastes the tune-up — the most common wall-clock sink in async suites is
+   the third bucket, which a two-way split misroutes to sharding.
 3. **The container lifecycle map.** How many containers start, when, and per what — per
    run, per suite, per file, or (the pathology) per test. Compare against
    `containers_started` in the latest SUMMARY's `suite-metrics:` block.
@@ -86,13 +91,13 @@ subdomain, what-not-to-test, and the no-duplicate-coverage rule. Five classes, e
 | **Duplicated coverage across tiers** | the same behavior proven at e2e *and* integration *and* unit | test each behavior **once**, at the cheapest level that gives confidence — push it down the pyramid where the strategy permits |
 | **Obsolete tests** | cover a removed feature, a migrated adapter, or a decision the project reversed | nothing in the strategy asks for them |
 | **Over-broad shared fixtures** | one fixture seeding the world so twelve tests can use three rows of it | the setup share Pass 1 measured |
-| **Accidental serialization** | a shared port/file/DB/global that forces workers into a queue | parallel-safe isolation is a standard, not an optimization |
+| **Accidental serialization / unconditional waits** | a shared port/file/DB/global that forces workers into a queue — or fixed `sleep()`s standing in for condition polling | parallel-safe isolation is a standard, not an optimization; **poll, never sleep** (`flaky-test-checklist.md`) |
 
 **Never delete a test to hit a number.** A test that is slow *and* load-bearing gets
 moved, not removed. If a deletion or demotion cannot cite a line of the strategy, it does
-not happen in this flow — raise it as a strategy question instead (`/gsd:testing-strategy`
-`--update`), because changing what the project tests is a strategy decision, not a
-tune-up decision.
+not happen in this flow — raise it as a strategy question instead (run
+`/gsd:testing-strategy` and take the Update path), because changing what the project
+tests is a strategy decision, not a tune-up decision.
 
 ## Pass 4: Re-baseline — append the row, record the fix-class
 
@@ -100,22 +105,30 @@ Re-measure the whole suite once, timed, exactly as Pass 1 did, and **append a ne
 row** to `.planning/TEST-STRATEGY.md`'s `## Suite health` table:
 
 ```markdown
-| YYYY-MM-DD | {test_count} | {m:ss} | {ms/test} | {containers_started \| —} | {config-drift \| test-debt} |
+| YYYY-MM-DD | {test_count} | {wall_clock_sec}s | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
 ```
+
+`wall_clock` is **integer seconds** — a sub-minute suite is the goal, and a format that
+rounds the goal to zero breaks the very trigger this table feeds. `ms/test` is derived at
+compare time, never recorded (the same one-source-per-number rule the SUMMARY schema
+states).
 
 **Append. Never rewrite, overwrite, or replace the previous row.** The history *is* the
 trend the T2/T4 triggers compare against — a table with one row can only ever answer
 "how fast is it now", never "is it decaying". The same append-only rule the
 `## Coverage debt` section follows.
 
-**Record the fix-class** — one of exactly two values, chosen from where the win actually
-came from:
+**Record the fix-class** — where the win actually came from:
 
-- **`config-drift`** — Pass 2 cleared it. The suite's *configuration* fell behind (stale
-  framework API, lost cache, container lifecycle regression). Expect recurrence at the
-  next framework major; the remedy is watching release notes.
-- **`test-debt`** — Pass 3 was needed. The suite accumulated tests the strategy does not
-  ask for. Expect recurrence as the team grows; the remedy is review discipline.
+- **`config-drift`** — Pass 2 alone cleared it. The suite's *configuration* fell behind
+  (stale framework API, lost cache, container lifecycle regression). Expect recurrence at
+  the next framework major; the remedy is watching release notes.
+- **`test-debt`** — Pass 3 was needed and supplied the win. The suite accumulated tests
+  the strategy does not ask for. Expect recurrence as the team grows; the remedy is
+  review discipline.
+- **`mixed (dominant: config-drift | test-debt)`** — both passes contributed materially.
+  Record the dominant contributor; a 90 %-config win filed as pure test-debt mis-teaches
+  the trend this column exists to teach.
 
 Recording it is the point: over several milestones the column tells the project which
 failure mode it actually has, which is the only way the *next* tune-up starts in the
@@ -126,9 +139,9 @@ Then report, in this shape:
 ```
 Suite tune-up complete — {trigger} cleared.
 
-  Before: {test_count} tests · {m:ss} · {ms/test} ms/test · {containers_started} containers
-  After:  {test_count} tests · {m:ss} · {ms/test} ms/test · {containers_started} containers
-  Fix-class: {config-drift | test-debt}
+  Before: {test_count} tests · {wall_clock_sec}s · {ms/test derived} ms/test · {containers_started} containers
+  After:  {test_count} tests · {wall_clock_sec}s · {ms/test derived} ms/test · {containers_started} containers
+  Fix-class: {config-drift | test-debt | mixed (dominant: …)}
   Changes: {config edits} · {tests moved/demoted/deleted, each with its strategy citation}
 
   New Suite-health row appended to .planning/TEST-STRATEGY.md (history preserved).

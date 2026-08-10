@@ -181,20 +181,27 @@ Verify the work is ready to ship:
    `[certification: not in use on this project]` — and continue. Never flag every phase in
    that case: an absent record everywhere is a project-level fact, not N gaps.
 
-   **Otherwise** map every phase directory to its recorded line and present one table:
+   **Otherwise** map every phase directory to its recorded line and present one table —
+   built by iterating the `ls -d` phase list in order and looking each phase up, never by
+   grep's own output order (parallel `grep` drop-ins reorder identical inputs, and this
+   table's value is being diffable run to run):
 
    | Outcome | Recorded line | Reading |
    |---|---|---|
-   | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 limited) — …` | a driver proved the flows |
+   | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — …` | a driver proved the flows |
    | human | `certification: human (CERT-0)` | satisfied by the human UAT that ran — not a gap |
    | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
    | declined | `certification: skipped (declined)` | a decision, recorded |
-   | **not-run** | *no `certification:` line in the phase's UAT.md* | **flag it** |
+   | off | `certification: off (posture)` | certification was configured off when this phase shipped — a decision, not a gap |
+   | pre-adoption | *no line, and the phase's UAT.md predates the earliest recorded `certification:` line (file mtime, falling back to phase order)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
+   | **not-run** | *no `certification:` line, and not pre-adoption* | **flag it** |
 
-   A phase with a UAT.md but no `certification:` line, on a project where other phases
-   have one, is **not-run**: nothing was decided, which is the one state the "recorded,
-   never silent" contract does not allow to pass unremarked. Name those phases explicitly
-   under the table:
+   A phase with a UAT.md but no `certification:` line — one that is not pre-adoption, on
+   a project where other phases have one — is **not-run**: nothing was decided, which is
+   the one state the "recorded, never silent" contract does not allow to pass unremarked.
+   Pre-adoption phases are the exception that keeps this warning readable: flagging every
+   pre-adoption phase forever is a warning that is wrong on every run, and those stop
+   being read. Name the genuinely not-run phases explicitly under the table:
 
    ```
    ⚠ {N} phase(s) have no recorded certification outcome: {phase list}

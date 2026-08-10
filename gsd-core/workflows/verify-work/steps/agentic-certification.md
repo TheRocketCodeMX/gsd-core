@@ -8,18 +8,19 @@ probe procedure, trust gate, brief format, and substrate policies live in
 @~/.claude/gsd-core/references/certification.md — this step is the loop-side
 mechanics and never restates a capability claim the reference does not make.
 
-**The invariant is "certification happens", not "an agent does it."** Unless
-`workflow.certification` is `off` — the one deliberate, configured opt-out, resolved
-in §1's table below — every phase leaves this step with exactly one recorded outcome.
-Within that scope there is no silent path: an absent outcome is always a bug, never a
-default.
+**The invariant is "certification happens", not "an agent does it."** Every phase
+leaves this step with exactly one recorded outcome — including under
+`workflow.certification: off`: `off` is the one deliberate, configured opt-out,
+resolved in §1's table below, and it records its posture and dispatches nothing.
+There is no silent path: an absent outcome is always a bug, never a default.
 
 **Where this sits.** `extract_tests` has already run, so the checkpoint set exists;
 `create_uat_file` has NOT, so `{phase_num}-UAT.md` does not exist yet. This step
-therefore *produces* three things and writes none of them itself: the brief file, the
-set of certified (pre-resolved) checkpoint entries, and the one outcome line.
-`create_uat_file` writes the latter two into UAT.md — the single UAT sink, no parallel
-artifact. Nothing is presented to the human until after this step.
+therefore *produces* three things and **writes only the brief itself** (§5, plus its
+derived script and evidence bundle): the brief file, the set of certified
+(pre-resolved) checkpoint entries, and the one outcome line. `create_uat_file` writes
+the latter two into UAT.md — the single UAT sink, no parallel artifact. Nothing is
+presented to the human until after this step.
 
 ## 1. Read the decision (never sniff for tools)
 
@@ -45,7 +46,7 @@ Resolve the mode first:
 |---|---|
 | `required` | Run this step. Its outcome is recorded on every phase. |
 | `offer` | Ask once whether to certify this phase. Declining records `certification: skipped (declined)` with the reason — a decline is a decision, not an absence. |
-| `off` | Skip. Record nothing, dispatch nothing: `verify-work` behaves exactly as it did before certification existed. |
+| `off` | Dispatch nothing, prompt nothing — but the posture is itself a decision, so it is recorded: emit `certification: off (posture)` as the outcome line and stop. One inert line is what keeps an `off`-era phase distinguishable from a failed run forever (the ship sweep reads it as a decision, never a gap). |
 
 **No `## Certification` section** (the project never ran `/gsd:testing-strategy`, or
 ran it before certification existed) → treat as **CERT-0** and note that
@@ -79,15 +80,29 @@ audit what it wrote: which files appeared, which agent CLIs did it touch? Only
 then grant it the real environment. "Installed" is not "launched": a binary that
 has never run under this HOME is treated exactly like a fresh download.
 
-The receipt behind this rule (a first launch that silently instrumented an
-installed agent CLI with hooks and self-granted trust entries, zero consent) is
+The receipt behind this rule (a first launch that silently instrumented three
+installed agent CLIs with hooks and self-granted trust entries, zero consent) is
 recorded in `certification.md § Third-party certifier trust doctrine`. Do not
 reorder this gate behind the capability check to save a step.
 
-A driver that has already been launched under this HOME, on this machine, since
-the recorded probe date does not repeat the gate.
+**If the audit finds instrumentation** — hooks written into agent CLIs,
+self-granted trust entries, anything beyond the tool's own state directory — do
+not grant the real environment. Keep the tool **permanently sandboxed**: run the
+certification itself from inside the isolated HOME (the app under test and the
+seeded accounts are reachable from there), and name the finding in the outcome.
+A tool that instruments without consent never graduates; this is the branch the
+audit exists to take, not a failure of the run.
+
+A driver already granted the **real HOME** on this machine — launched there after
+a clean audit, since the recorded probe date — does not repeat the gate. A prior
+*sandbox* launch never satisfies it, least of all one whose audit found
+instrumentation.
 
 ## 4. Re-check the recorded capability
+
+**On CERT-0, skip this section** — the mechanism names no driver, so there is no
+subject to re-check, and `command -v`-ing for one anyway is the sniff §1 bans. A
+binary on PATH that the mechanism does not name is not a certifier.
 
 **A recorded probe is a lead, not a live capability.** The tier in TEST-STRATEGY
 was measured on a date, on a machine, under a display that may no longer exist.
@@ -101,10 +116,18 @@ Re-check the specific driver the mechanism names before relying on it:
 - Did the environment change in a way the recorded rows call out (no display,
   WSL/headless, API-key auth)?
 
-Record what you found. **A re-check that fails is not an error — it is a
-demotion**: fall to the highest tier the live result supports (commonly CERT-1
-(limited), inspection-grade only, or CERT-0) and say so in the outcome line.
-Never certify with a capability the re-check did not confirm.
+Record what you found. **The re-check demotes; it never promotes the record.**
+A re-check that fails is a demotion: fall to the highest tier the live result
+supports (commonly CERT-1 (limited), inspection-grade only, or CERT-0) and say
+so in the outcome line. Never certify with a capability the re-check did not
+confirm. When the live probe **exceeds** the recorded rows — an operation
+recorded failing now passes — use what the probe proved for this run (an
+effect-verified operation is evidence regardless of the row), but say so in the
+outcome line (`probe exceeded recorded tier`) and route the stale row to its
+owner: tell the user to re-run `/gsd:testing-strategy` (Update path) to re-probe
+and promote the record. This step never edits TEST-STRATEGY's `## Certification`
+rows — tier promotion is a strategy decision, not a certification-run side
+effect.
 
 ## 5. Build the brief — the canonical artifact
 
@@ -121,12 +144,23 @@ Sources, both already computed by this workflow or already shipped with the phas
    written as a real-conditions script). `auto_passed[]` entries are already
    deterministically proven; do not re-certify them.
 2. The capsule's `## What Done Looks Like` in `{phase_dir}/*-CONTEXT.md` — observable
-   acceptance signals. It **may ADD checks, never remove them**.
+   acceptance signals. It **may ADD checks, never remove them** — and an added check
+   is a first-class checkpoint, not brief decoration: hand every **capsule-added**
+   check to `create_uat_file` as an ordinary checkpoint (it carries no `coverage_id`,
+   since it maps to no SUMMARY deliverable — the legacy prose-checkpoint shape). That
+   is what guarantees it reaches the driver on CERT-1+ and the human on CERT-0; a
+   check that lives only in the brief can never be silently dropped this way, and on
+   CERT-0 "silently dropped" is exactly what would otherwise happen.
 
 Shape (per `certification.md § The certification brief`): preconditions from the
 substrate (seeded account, environment, mail catcher running) → numbered flows,
 each with an *observable* expected outcome → the evidence to capture → the
 escalation points. Write it to `{phase_dir}/{phase_num}-CERTIFICATION-BRIEF.md`.
+The run's evidence goes to `{phase_dir}/certification-evidence/` (snapshots,
+console/network captures, and the driver command/output log that serves as the
+transcript in a non-interactive runtime); the starter script, when emitted, to
+`{phase_dir}/{phase_num}-CERTIFICATION-SCRIPT.{ext}` — prescribed paths, like the
+brief's, so the artifacts are committed and findable rather than invented per run.
 
 **Independence.** Acceptance is anchored to the brief's expected outcomes, which
 come from human-authored sources — never to the driver's own narration of what it
@@ -146,12 +180,15 @@ depends on the mechanism, and the step must say which one it used:
 | Tier | How separation is achieved |
 |---|---|
 | **CERT-2** | Structural. The brief is handed to a dedicated certifier application (possibly on another machine); the building session hands over and stops. |
-| **CERT-1** | Weakest case — same runtime, same model family. Achieve it by dispatching a **fresh subagent** that receives ONLY the brief and the environment: no plan, no diff, no build transcript. A certifier that has read the implementation is not certifying, it is confirming. |
+| **CERT-1** | The accepted weakest case — same runtime, same model family. Achieve it by dispatching a **fresh subagent** that receives ONLY the brief and the environment: no plan, no diff, no build transcript. A certifier that has read the implementation is not certifying, it is confirming. |
+| **CERT-1 (limited)** | Same as CERT-1 — a fresh brief-only subagent. The limited tier narrows *what* can be certified (inspection-grade scope), not *who* certifies it. |
 | **CERT-0** | The human is the certifier — separation is total. |
 
-If neither structural nor fresh-context separation is available, say so in the
-outcome line and route the affected flows to the human rather than claiming a
-certification the arrangement cannot support.
+The gradient, strongest first: structural (CERT-2) → fresh-context on a different
+model family → fresh-context on the same family — the **accepted minimum**, not a
+violation. It becomes a violation only when fresh context is also unavailable: then
+say so in the outcome line and route the affected flows to the human rather than
+claiming a certification the arrangement cannot support.
 
 ## 7. Run, and write results back into UAT.md
 
@@ -198,10 +235,15 @@ Exactly one line, always, handed to `create_uat_file` with the entries above:
 
 | Situation | Recorded line |
 |---|---|
-| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 limited) — {N} flows certified, {M} escalated` |
+| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated` |
 | No capable driver | `certification: human (CERT-0)` |
 | No user-facing surface | `certification: N/A — no user-facing change` |
 | Declined under `offer` | `certification: skipped (declined)` |
+| Posture is `off` | `certification: off (posture)` |
+
+The counting unit is the **checkpoint** (what UAT counts), never the brief's flows —
+a flow can cover zero or several checkpoints. The tier token is always the ladder's
+own spelling, `CERT-1 (limited)`, so exact-match consumers see one form.
 
 **On `certification: human (CERT-0)` the requirement is satisfied by the human UAT
 that follows** — the brief from step 5 is written *for the human*, and today's UAT
@@ -211,6 +253,9 @@ flow is otherwise unchanged from today. There is nothing apologetic about CERT-0
 ```
 Certification: {tier} — {N} checkpoints certified, {M} escalated to UAT
 ```
+On CERT-0 render instead `Certification: CERT-0 — {N} checkpoints for human certification` —
+nothing was escalated; the human was the certifier from the start,
+which is the framing this section itself insists on.
 
 If no driver is available and `workflow.certification` is not `off`, behavior falls
 back to the standard manual checkpoint questions defined in this workflow,

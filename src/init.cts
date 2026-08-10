@@ -113,7 +113,7 @@ const { resolveConfigKey: _resolveConfigKey } = capabilityActivationMod;
 
 /**
  * `workflow.certification` for verify-work's certification step (Wave 2 review T4).
- * The step file used to resolve this itself, which forced a 4,520-byte runtime-launcher
+ * The step file used to resolve this itself, which forced a ~4.5 KB runtime-launcher
  * preamble and a process spawn into a file that is read on EVERY verify-work run just to
  * answer one enum. Resolved once here instead, through the same federated
  * `resolveConfigKey` precedence the runtime uses (config -> workstream -> root ->
@@ -126,7 +126,9 @@ function detectCertificationMode(cwd: string): string {
     const config = loadConfig(cwd);
     const registry = loadRegistry({ includeInstalled: true, cwd, gsdHome: process.env['GSD_HOME'] });
     const r = _resolveConfigKey('workflow.certification', { config, cwd, registry });
-    return r.found && typeof r.value === 'string' ? r.value : 'required';
+    return r.found && typeof r.value === 'string' && ['required', 'offer', 'off'].includes(r.value)
+      ? r.value
+      : 'required';
   } catch {
     return 'required';
   }

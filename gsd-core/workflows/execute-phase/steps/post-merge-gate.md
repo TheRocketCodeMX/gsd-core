@@ -133,7 +133,7 @@ the single writer for post-merge artifacts — step 5.7). Schema and contract:
 | Field | Where it comes from |
 |---|---|
 | `test_count` | The count the runner itself printed in the output above (e.g. `# tests`, `N passed`, `ok N`). Read it; never grep the repo for test files. |
-| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, formatted `m:ss`. It is measured, not estimated — the clock started before the runner did. |
+| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, recorded as integer **seconds** exactly as measured. Never reformatted into minutes-and-seconds — the clock started before the runner did, and the seconds value is what the compare divides. |
 | `containers_started` | Testcontainers/docker lines in the same output (`Creating container`, `Container … started`) where visible, **else `—`**. `—` is an honest answer; `0` is a claim. |
 
 **ms/test is not recorded here** — `transition`'s `suite_health_compare` derives it from
