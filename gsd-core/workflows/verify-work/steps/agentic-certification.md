@@ -11,6 +11,13 @@ mechanics and never restates a capability claim the reference does not make.
 **The invariant is "certification happens", not "an agent does it."** Every phase
 leaves this step with exactly one recorded outcome. There is no silent path.
 
+**Where this sits.** `extract_tests` has already run, so the checkpoint set exists;
+`create_uat_file` has NOT, so `{phase_num}-UAT.md` does not exist yet. This step
+therefore *produces* three things and writes none of them itself: the brief file, the
+set of certified (pre-resolved) checkpoint entries, and the one outcome line.
+`create_uat_file` writes the latter two into UAT.md — the single UAT sink, no parallel
+artifact. Nothing is presented to the human until after this step.
+
 ## 1. Read the decision (never sniff for tools)
 
 Certification capability is a **project** fact, not a machine fact. Read it, do not
@@ -43,12 +50,13 @@ strategy section.
 
 ## 2. Scope: is there anything to certify?
 
-Certification acts on user-visible surface. From the SUMMARYs already located in
-this run, decide whether this phase changed anything a person could observe —
-the same USER-OBSERVABLE test the legacy extraction applies.
+Certification acts on user-visible surface. From the checkpoint set `extract_tests`
+just produced (and the SUMMARYs behind it), decide whether this phase changed
+anything a person could observe — the same USER-OBSERVABLE test that extraction
+applies.
 
-If nothing did (a pure refactor, a type change, an internal migration), write into
-`{phase_num}-UAT.md` under `## Tests`, then continue to the normal UAT path:
+If nothing did (a pure refactor, a type change, an internal migration), emit this as
+the outcome line for `create_uat_file` and stop; the UAT path continues unchanged:
 
 ```
 certification: N/A — no user-facing change
@@ -102,9 +110,11 @@ dedicated certifier app, an in-session driver, or a human on CERT-0.
 
 Sources, both already computed by this workflow or already shipped with the phase:
 
-1. The **`present[]` checkpoint set** from `uat.classify-coverage` (the deliverables
-   that were *going* to cost a human prompt) — plus the legacy prose checkpoints
-   when the SUMMARY has no `coverage:` block. `auto_passed[]` entries are already
+1. The **`present[]` checkpoint set** `extract_tests` just classified via
+   `uat.classify-coverage` (the deliverables that were *going* to cost a human
+   prompt) — plus the legacy prose checkpoints when the SUMMARY has no `coverage:`
+   block, and the injected cold-start smoke test when there is one (it is already
+   written as a real-conditions script). `auto_passed[]` entries are already
    deterministically proven; do not re-certify them.
 2. The capsule's `## What Done Looks Like` in `{phase_dir}/*-CONTEXT.md` — observable
    acceptance signals. It **may ADD checks, never remove them**.
@@ -142,8 +152,9 @@ certification the arrangement cannot support.
 ## 7. Run, and write results back into UAT.md
 
 Run the brief's flows. For each checkpoint the driver **proved** — an observable
-expected outcome from the brief actually occurred — write a pre-resolved entry into
-`{phase_num}-UAT.md` (the same file, the single UAT sink; no parallel artifact):
+expected outcome from the brief actually occurred — hand `create_uat_file` a
+pre-resolved entry (it writes them into `{phase_num}-UAT.md`, the single UAT sink;
+no parallel artifact):
 
 ```
 ### N. [checkpoint description]
@@ -168,16 +179,18 @@ evidence kind is `agentic_certification` and the `ref` is the evidence bundle.
 - anything the driver attempted and could not prove. A flow that "looked fine" is
   not certified — presence is not behavior.
 
-Escalated items become ordinary UAT checkpoints and flow through `present_test`
+Escalated items stay ordinary UAT checkpoints and flow through `present_test`
 unchanged.
 
-**A failed flow is an issue, not a demotion.** Record it through the normal issue
-path so it lands in `## Gaps` with a `gap_id`, and let `coverage_gap_capture` ask
-what fast test was missing.
+**A failed flow is an issue, not a demotion.** Leave its checkpoint unresolved and
+let the normal `process_response` path record it, so it lands in `## Gaps` with a
+`gap_id` — and `coverage_gap_capture` then asks what fast test was missing. Never
+write a `result: issue` entry from here; the issue path infers severity from the
+human's own words.
 
 ## 8. Record the outcome
 
-Exactly one line, always, before the UAT questions begin:
+Exactly one line, always, handed to `create_uat_file` with the entries above:
 
 | Situation | Recorded line |
 |---|---|

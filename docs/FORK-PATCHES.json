@@ -1158,7 +1158,8 @@
         "gsd:section id=\"agentic-certification\"",
         "verify-work/steps/agentic-certification\\.md",
         "<step name=\"coverage_gap_capture\">",
-        "##\\s*Coverage debt"
+        "##\\s*Coverage debt",
+        "source: agentic"
       ]
     },
     {

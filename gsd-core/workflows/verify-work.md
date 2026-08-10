@@ -149,10 +149,6 @@ Continue to `create_uat_file`.
 If `section_manifest` is `null` or `"automated-ui-verification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/automated-ui-verification.md`. Otherwise skip — do not read the file.
 <!-- /gsd:section -->
 
-<!-- gsd:section id="agentic-certification" when="always" -->
-If `section_manifest` is `null` or `"agentic-certification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`. Otherwise skip — do not read the file. `when="always"` because the contract is that every phase leaves a **recorded** certification outcome; the step itself resolves `workflow.certification: off` and dispatches nothing.
-<!-- /gsd:section -->
-
 <step name="find_summaries">
 **Find what to test:**
 
@@ -224,6 +220,10 @@ Then **prepend** this test to the test list:
 This catches bugs that only manifest on fresh start — race conditions in startup sequences, silent seed failures, missing environment setup — which pass against warm state but break in production.
 </step>
 
+<!-- gsd:section id="agentic-certification" when="always" -->
+If `section_manifest` is `null` or `"agentic-certification"` is in its `included` list: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`. Otherwise skip — do not read the file. It runs HERE — after `extract_tests` computed the checkpoint set, before any checkpoint is presented — because the certification brief is generated from the `present[]` entries and its results are written by `create_uat_file` below. `when="always"` because the contract is that every phase leaves a **recorded** certification outcome; the step itself resolves `workflow.certification: off` and dispatches nothing.
+<!-- /gsd:section -->
+
 <step name="create_uat_file">
 **Create UAT file with all tests:**
 
@@ -276,6 +276,18 @@ coverage_id: [D-id]
 ```
 
 The `source: automated` marker is additive — existing consumers that read only `result:` are unaffected.
+
+**Certified entries and the certification outcome.** When the `agentic-certification` section ran, write its results the same way — each checkpoint the certifier PROVED becomes a pre-resolved entry that is NOT presented, and everything it escalated stays an ordinary checkpoint:
+
+```
+### N. [checkpoint description]
+expected: [observable expected outcome from the certification brief]
+result: pass
+source: agentic
+evidence: [transcript ref · captures]
+```
+
+Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)`) at the top of `## Tests`. If the section did not run (`workflow.certification: off`, or the section was excluded), write nothing here — the file is byte-identical to before certification existed.
 
 ## Summary
 

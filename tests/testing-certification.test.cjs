@@ -673,14 +673,28 @@ describe('certification in the loop — the verify-work section gate', () => {
     assert.match(certGate.slice(0, 700), /<!--\s*\/gsd:section\s*-->/, 'the gate must be closed');
   });
 
-  test('certification runs BEFORE the UAT checkpoint machinery', () => {
+  test('certification runs AFTER the checkpoint set exists and BEFORE any checkpoint is presented', () => {
+    // Both halves matter. Before `extract_tests` there is no `present[]` set to
+    // build a brief from (and UAT.md does not exist yet either); after
+    // `present_test` the human has already done the work certification exists to
+    // take over. The window is exactly extract_tests → create_uat_file.
     const text = read(VERIFY_WORK);
     const gate = at(text, /id="agentic-certification"/);
     const extract = at(text, /<step name="extract_tests">/);
+    const create = at(text, /<step name="create_uat_file">/);
     const present = at(text, /<step name="present_test">/);
-    assert.ok(gate > -1 && extract > -1 && present > -1);
-    assert.ok(gate < extract, 'the certification gate must precede extract_tests');
+    assert.ok(gate > -1 && extract > -1 && create > -1 && present > -1);
+    assert.ok(extract < gate, 'the certification gate must FOLLOW extract_tests — present[] is its brief source');
+    assert.ok(gate < create, 'the certification gate must precede create_uat_file — that step writes its results');
     assert.ok(gate < present, 'the certification gate must precede present_test');
+  });
+
+  test('create_uat_file knows how to write certified entries and the outcome line', () => {
+    const text = read(VERIFY_WORK);
+    const create = text.slice(at(text, /<step name="create_uat_file">/), at(text, /<step name="present_test">/));
+    assert.match(create, /source:\s*agentic/, 'the pre-resolved certified entry shape');
+    assert.match(create, /certification:\s*human\s*\(CERT-0\)/, 'the outcome line is recorded into UAT.md');
+    assert.match(create, /byte-identical|unchanged/i, 'with the section off, the file is what it always was');
   });
 
   test('the step file exists and is a well-formed workflow step', () => {
