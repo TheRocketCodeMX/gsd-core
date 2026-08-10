@@ -54,7 +54,11 @@ const HEADROOM_FACTOR = 1.5;
 const LANE_COSTS = [
   {
     job: 'test',
-    measuredMinutes: 8,
+    measuredMinutes: 16,
+    // Mega-PR realignment cost: on PR #49 (v1.10.0 pull, ~1.6k files) every
+    // windows-24 shard died AT the old 15m cap — the true cost exceeds it, so
+    // 15m06s (cap death) is the observed floor, budgeted as 16 measured.
+    // Evidence: runs 93387545686 / 93387545643 / 93387545656.
     // Sharded three ways as of #2952, so this is ONE shard's cost, not the
     // whole unit suite. Run 30677442953: shard 1/3 7m12s, 2/3 4m32s, 3/3 3m59s.
     // Shard 1 is the long pole because the unsharded aux suites ride on it.
