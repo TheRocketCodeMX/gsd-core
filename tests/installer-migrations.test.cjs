@@ -1293,6 +1293,77 @@ test('marks zero-action pending migrations as applied', () => {
   }
 });
 
+test('records zero-action pending migrations when a sibling migration in the same run has work', () => {
+  // Regression: the ledger recorded zero-action migrations ONLY when the whole
+  // plan was action-free (markPendingMigrationsApplied). As soon as any
+  // UNRELATED migration produced actions, applyInstallerMigrationPlan ran
+  // instead and recorded just the journalled ids, so a no-op migration stayed
+  // pending forever — its ledger entry depended on its siblings' outcomes
+  // rather than its own. Surfaced by the v1.10.0 realignment, where upstream's
+  // new config-root-marker migration gave the fork's v1.14.0 update fixture its
+  // first action-bearing plan and migrations 002/004/005/006/008/009 silently
+  // dropped out of gsd-install-state.json.
+  const configDir = createTempInstall();
+  try {
+    writeFile(configDir, 'hooks/old-hook.js', 'retired\n');
+    writeManifest(configDir, { 'hooks/old-hook.js': sha256('retired\n') });
+
+    const result = runInstallerMigrations({
+      configDir,
+      migrations: [
+        migrationRecord(), // has actions → journalled
+        migrationRecord({
+          id: '2026-05-11-noop-sibling',
+          title: 'No-op sibling',
+          description: 'No-op sibling',
+          destructive: false,
+          plan: () => [],
+        }),
+      ],
+      scope: 'global',
+      now: () => '2026-05-11T00:00:07.000Z',
+    });
+
+    assert.deepEqual(result.appliedMigrationIds, ['2026-05-11-remove-old-hook']);
+    const recorded = readInstallState(configDir).appliedMigrations;
+    assert.deepEqual(
+      recorded.map((entry) => entry.id).sort(),
+      ['2026-05-11-noop-sibling', '2026-05-11-remove-old-hook'],
+    );
+    const noop = recorded.find((entry) => entry.id === '2026-05-11-noop-sibling');
+    // A zero-action migration writes nothing, so it carries no journal — but it
+    // must still pin its checksum, or drift detection never covers it.
+    assert.equal(noop.journal, null);
+    assert.match(noop.checksum, /^sha256:/);
+
+    // Idempotency: a second run must see it as applied and re-plan nothing.
+    const second = runInstallerMigrations({
+      configDir,
+      migrations: [
+        migrationRecord({
+          plan: () => {
+            throw new Error('applied migration planner must not run again');
+          },
+        }),
+        migrationRecord({
+          id: '2026-05-11-noop-sibling',
+          title: 'No-op sibling',
+          description: 'No-op sibling',
+          destructive: false,
+          plan: () => {
+            throw new Error('applied no-op migration planner must not run again');
+          },
+        }),
+      ],
+      scope: 'global',
+      now: () => '2026-05-11T00:00:08.000Z',
+    });
+    assert.deepEqual(second.appliedMigrationIds, []);
+  } finally {
+    cleanup(configDir);
+  }
+});
+
 test('surfaces checksum drift for an already-applied migration without aborting', () => {
   const configDir = createTempInstall();
   try {
@@ -1484,7 +1555,24 @@ test('runs discovered installer migrations against manifest-managed legacy orpha
     assert.equal(fs.existsSync(path.join(configDir, 'hooks/statusline.js')), false);
     assert.equal(fs.readFileSync(path.join(configDir, 'hooks/custom.js'), 'utf8'), 'custom hook\n');
     assert.deepEqual(result.appliedMigrationIds, ['2026-05-11-legacy-orphan-files']);
-    assert.deepEqual(readInstallState(configDir).appliedMigrations.map((entry) => entry.id), ['2026-05-11-legacy-orphan-files']);
+    // `appliedMigrationIds` is the journalled set — migrations that actually
+    // wrote something. The LEDGER is broader: it also records every migration
+    // whose plan() found nothing to do, because such a migration is complete
+    // regardless of what its siblings did. Asserted as a property (every entry
+    // is a real discovered migration, the acting one is present, no dupes)
+    // rather than a literal roster, so adding a migration does not break it.
+    const recordedIds = readInstallState(configDir).appliedMigrations.map((entry) => entry.id);
+    assert.ok(
+      recordedIds.includes('2026-05-11-legacy-orphan-files'),
+      `acting migration must be recorded; got ${JSON.stringify(recordedIds)}`,
+    );
+    const discoveredIds = discoverInstallerMigrations({
+      migrationsDir: path.join(__dirname, '..', 'gsd-core', 'bin', 'lib', 'installer-migrations'),
+    }).map((migration) => migration.id);
+    for (const id of recordedIds) {
+      assert.ok(discoveredIds.includes(id), `ledger entry ${id} must be a discovered migration`);
+    }
+    assert.equal(new Set(recordedIds).size, recordedIds.length, 'ledger must not duplicate entries');
   } finally {
     cleanup(configDir);
   }
