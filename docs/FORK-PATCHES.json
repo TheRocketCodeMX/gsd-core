@@ -1124,6 +1124,22 @@
       "anchors": [
         "managed-hook basename sets cover every hook the installer registers in settings\\.json"
       ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
+      ]
+    },
+    {
+      "path": "tests/config.test.cjs",
+      "feature": "bracket-guard",
+      "mode": "anchors-only",
+      "anchors": [
+        "config-set phase_id_convention bracket warns that the grammar has no consumers"
+      ]
     }
   ]
 }

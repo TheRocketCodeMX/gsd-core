@@ -984,6 +984,97 @@ describe('config-set unknown key (no suggestion)', () => {
   });
 });
 
+// ─── phase_id_convention: "bracket" has no consumers yet ─────────────────────
+//
+// ADR-612 (bracket phase-id grammar) is still "Proposed / PR-0 — ADR only".
+// The grammar primitives landed in src/phase-id.cts, but no CLI or roadmap
+// surface consumes the flag: with `phase_id_convention: "bracket"` set and the
+// ADR's canonical headings (`### [GSD.02] 05: Name`), `roadmap analyze` returns
+// phase_count 0, exit 0, no warning. Upstream's sequencing is deliberate; the
+// fork's footgun is that the 1.10.0 #2997/#3098 fix (the key now survives
+// resolution) makes "bracket" *settable* while the failure mode stays silent.
+// Minimal fork guard: config-set warns at the point of setting. Not an error —
+// the value is still written, so a user tracking ADR-612 can stage it.
+// Recorded as UPSTREAM-ISSUE CANDIDATE (.superpowers/sdd/feats-110-report.md §5).
+describe('config-set phase_id_convention bracket warns that the grammar has no consumers', () => {
+  const processSeam = require('./helpers/process-seam.cjs');
+  const TOOLS = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
+
+  // runGsdTools drops stderr on exit 0; this warning is a stderr-on-success
+  // contract, so drive the seam directly to keep both streams.
+  function runCapturingStderr(argv, cwd) {
+    return processSeam.runNode([TOOLS, ...argv], {
+      cwd,
+      env: { ...process.env, GSD_TEST_MODE: '1' },
+      timeoutMs: 60000,
+    });
+  }
+
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('setting "bracket" succeeds, writes the value, and warns on stderr', () => {
+    const result = runCapturingStderr(['config-set', 'phase_id_convention', 'bracket'], tmpDir);
+    assert.strictEqual(result.exitCode, 0, `config-set must still succeed; stderr: ${result.stderr}`);
+    assert.strictEqual(
+      readConfig(tmpDir).phase_id_convention,
+      'bracket',
+      'the value must still be written — this is a warning, not a rejection',
+    );
+    assert.match(
+      result.stderr,
+      /gsd: warning —/,
+      `expected the gsd warning idiom on stderr, got: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /phase_id_convention/,
+      `warning must name the key, got: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /bracket/,
+      `warning must name the value, got: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /no consumer|not consumed|no CLI/i,
+      `warning must say the grammar has no consumers yet, got: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /legacy/i,
+      `warning must say legacy phase-id parsing remains active, got: ${result.stderr}`,
+    );
+  });
+
+  test('stdout stays clean so --raw consumers are unaffected', () => {
+    const result = runCapturingStderr(['config-set', 'phase_id_convention', 'bracket', '--raw'], tmpDir);
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stdout.trim(), 'phase_id_convention=bracket');
+  });
+
+  test('the other accepted conventions do NOT warn', () => {
+    for (const value of ['milestone-prefixed', 'null']) {
+      const result = runCapturingStderr(['config-set', 'phase_id_convention', value], tmpDir);
+      assert.strictEqual(result.exitCode, 0, `config-set ${value} must succeed; stderr: ${result.stderr}`);
+      assert.doesNotMatch(
+        result.stderr,
+        /gsd: warning —/,
+        `phase_id_convention=${value} must not warn, got: ${result.stderr}`,
+      );
+    }
+  });
+});
+
 // ─── config-get (additional coverage) ────────────────────────────────────────
 
 describe('config-get edge cases', () => {
