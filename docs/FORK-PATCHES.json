@@ -466,6 +466,15 @@
       ]
     },
     {
+      "path": "gsd-core/templates/user-setup.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification_substrate_example",
+        "seed:test-accounts"
+      ]
+    },
+    {
       "path": "gsd-core/templates/verification-report.md",
       "feature": "fidelity",
       "mode": "anchors-only",

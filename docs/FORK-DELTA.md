@@ -52,6 +52,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/references/architecture-decision.md`
 - `gsd-core/references/auth-in-tests.md`
 - `gsd-core/references/brownfield-adaptation.md`
+- `gsd-core/references/certification.md`
 - `gsd-core/references/cicd-strategy.md`
 - `gsd-core/references/contract-testing.md`
 - `gsd-core/references/data-environments.md`
@@ -100,6 +101,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `tests/project-query-verbs.test.cjs`
 - `tests/roadmap-after-strategy.test.cjs`
 - `tests/strategy-config-and-marker-contracts.test.cjs`
+- `tests/testing-certification.test.cjs`
 
 ### fidelity — quality contract + execute-phase guards
 
@@ -263,6 +265,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/templates/project.md` | strategy, grounding | anchors-only | `## Mode`, `## Sources`, `## Strategy Plan` + Skip-ledger (inside fenced template body) |
 | `gsd-core/templates/requirements.md` | dod | anchors-only | `[CROSS-CUTTING]` traceability row |
 | `gsd-core/templates/summary.md` | context | anchors-only | `deviations:` frontmatter field + guidance (structured mirror of `## Deviations from Plan`, inside fenced template body) |
+| `gsd-core/templates/user-setup.md` | strategy | anchors-only | certification-substrate example (seed accounts, mail catcher, one-time auth session — inside fenced template body) |
 | `gsd-core/templates/verification-report.md` | fidelity | anchors-only | Mode & Source Fidelity verdict table (inside fenced template body) |
 | `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |

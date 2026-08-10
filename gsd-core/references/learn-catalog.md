@@ -69,6 +69,10 @@ Source skills: `test-strategy.md`, `test-doubles.md`, `tdd.md`, `ai-test-quality
 | `test-flaky` | The three causes (async/concurrency/order) + quarantine-not-retry | `flaky-test-checklist.md` | `test-levels` | — |
 | `test-auth-in-tests` | Authenticate-once/storageState; one-account-per-worker (pairs with `test-realistic-data`) | `auth-in-tests.md` | `test-containers` | — |
 | `test-realistic-data` | Synthetic factories over dumps; deterministic, never raw Faker (pairs with `test-auth-in-tests`) | `realistic-test-data.md` | `test-containers` | — |
+| `test-gate-vs-certify` | The top of the pyramid is two jobs — scripts gate in CI; certification validates in real conditions, never a CI gate | `certification.md § The doctrine` | `test-e2e-tiering` | diagram |
+| `test-certification-ladder` | CERT-0→CERT-2 probe-detected tiers; builder ≠ certifier; sandbox-first trust for third-party certifiers | `certification.md § The certification ladder` | `test-gate-vs-certify` | diagram |
+| `test-certification-substrate` | Seeded accounts, transport-enforced email safety, spend-capped real LLM calls (shape-not-content), honest auth | `certification.md § Email safety` + `§ Auth for certification` + `§ LLM integrations` | `test-certification-ladder`, `test-auth-in-tests` | — |
+| `test-suite-health` | Born-fast defaults (reuse is local-only; current APIs) + the four re-evaluation triggers; volume vs regression | `test-strategy.md § Suite health` | `test-levels` | diagram |
 
 ## Track 4 — Security
 Source skills: `security-posture.md`, `fe-be-seam.md`, `untrusted-input-boundary.md`
