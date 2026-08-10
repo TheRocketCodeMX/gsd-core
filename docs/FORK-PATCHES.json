@@ -295,6 +295,15 @@
       ]
     },
     {
+      "path": "bin/install.js",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "isManagedStatusline",
+        "existingStatuslineCommand"
+      ]
+    },
+    {
       "path": "bin/lib/ui-safety-gate.cjs",
       "feature": "fidelity",
       "mode": "markers",
@@ -821,6 +830,15 @@
       ]
     },
     {
+      "path": "src/runtime-hooks-surface.cts",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "resolveNvmDefaultVersionDir",
+        "projectLegacyManagedNodeCommand"
+      ]
+    },
+    {
       "path": "src/profile-output.cts",
       "feature": "grounding",
       "mode": "markers",
@@ -899,6 +917,15 @@
       "markers": 1,
       "anchors": [
         "Uncommitted \\(staged \\+ worktree\\) changes are part of"
+      ]
+    },
+    {
+      "path": "tests/install.test.cjs",
+      "feature": "statusline-reemit",
+      "mode": "anchors-only",
+      "anchors": [
+        "#41: managed statusline is re-emitted, repaired, and nvm-normalized",
+        "resolves under a PATH-less"
       ]
     },
     {
