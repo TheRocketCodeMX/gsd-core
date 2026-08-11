@@ -1,7 +1,7 @@
 {
   "id": "context",
   "role": "feature",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "title": "Context lifecycle — durable project knowledge",
   "description": "The knowledge lifecycle: MASTER-CONTEXT index, quality-stamped phase capsules inside <N>-CONTEXT.md, append-only layers, deterministic anchor verification (gsd-tools context verify), the calm context-pressure flush hook, and the re-anchor procedure. Doctrine: plans are perishable; context is durable.",
   "tier": "full",
