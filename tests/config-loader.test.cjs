@@ -1301,3 +1301,82 @@ describe('#2997: phase_id_convention is not silently dropped on a clean read', (
     } finally { cleanup(tmpDir); }
   });
 });
+
+// ─── e2e-5 F5 — the shipped config template did not validate against the ─────
+// shipped schema. `templates/config.json` declares `gates` (8 toggles) and
+// `safety` (2), and four workflow branches read exactly those keys
+// (transition.md:118/:578/:713, execute-plan.md:78, complete-milestone.md:178),
+// but neither section was registered — so every `gsd-tools` call on a
+// freshly-initialized project printed
+//   "unknown config key(s) … gates, safety — these will be ignored"
+// which is BOTH noise and false: `config-get gates.confirm_transition` returns
+// the configured value and the branches demonstrably honour it.
+describe('e2e-5 F5 — gates/safety are registered config sections', () => {
+  const { isValidConfigKey } = require('../gsd-core/bin/lib/config-schema.cjs');
+  const { createTempProject } = require('./helpers.cjs');
+  const TEMPLATE = require('path').join(__dirname, '..', 'gsd-core', 'templates', 'config.json');
+
+  let tmpDir2;
+  let stderrCapture2;
+  let origStderrWrite2;
+
+  beforeEach(() => {
+    tmpDir2 = createTempProject();
+    stderrCapture2 = '';
+    origStderrWrite2 = process.stderr.write;
+    process.stderr.write = (chunk) => { stderrCapture2 += chunk; return true; };
+    _resetRuntimeWarningCacheForTests();
+  });
+
+  afterEach(() => {
+    process.stderr.write = origStderrWrite2;
+    cleanup(tmpDir2);
+  });
+
+  test('every gates.* / safety.* key a shipped workflow reads is a valid config key', () => {
+    const keys = [
+      'gates.confirm_project', 'gates.confirm_phases', 'gates.confirm_roadmap',
+      'gates.confirm_breakdown', 'gates.confirm_plan', 'gates.execute_next_plan',
+      'gates.issues_review', 'gates.confirm_transition',
+      // complete-milestone.md:178 branches on this one; no template ships it.
+      'gates.confirm_milestone_scope',
+      'safety.always_confirm_destructive', 'safety.always_confirm_external_services',
+    ];
+    const invalid = keys.filter((k) => !isValidConfigKey(k));
+    assert.deepStrictEqual(invalid, [], `unregistered config keys: ${invalid.join(', ')}`);
+  });
+
+  test('the shipped config template produces no unknown-key warning', () => {
+    const template = JSON.parse(fs.readFileSync(TEMPLATE, 'utf-8'));
+    fs.writeFileSync(
+      path.join(tmpDir2, '.planning', 'config.json'),
+      JSON.stringify(template, null, 2),
+    );
+
+    loadConfig(tmpDir2);
+
+    assert.ok(
+      !stderrCapture2.includes('unknown config key'),
+      'the SHIPPED template must validate against the SHIPPED schema, got: ' + stderrCapture2,
+    );
+  });
+
+  test('a configured gates/safety value is readable through config-get (the branch reader)', () => {
+    // This is the surface the workflows use — `<if mode="interactive"
+    // OR="custom with gates.confirm_transition true">`. The warning claimed these
+    // keys "will be ignored"; they are not, which is why the warning had to go.
+    const { runGsdTools } = require('./helpers.cjs');
+    fs.writeFileSync(
+      path.join(tmpDir2, '.planning', 'config.json'),
+      JSON.stringify({ gates: { confirm_transition: false }, safety: { always_confirm_destructive: true } }),
+    );
+
+    const gate = runGsdTools(['config-get', 'gates.confirm_transition', '--raw'], tmpDir2);
+    assert.ok(gate.success, `config-get gates.confirm_transition failed: ${gate.error}`);
+    assert.strictEqual(gate.output.trim(), 'false');
+
+    const safety = runGsdTools(['config-get', 'safety.always_confirm_destructive', '--raw'], tmpDir2);
+    assert.ok(safety.success, `config-get safety.always_confirm_destructive failed: ${safety.error}`);
+    assert.strictEqual(safety.output.trim(), 'true');
+  });
+});

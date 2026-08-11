@@ -106,7 +106,18 @@
     "agent_skills_security.trusted_global_roots",
     "capabilities.strict_known_registries",
     "capabilities.auto_update",
-    "security.injection_blocking"
+    "security.injection_blocking",
+    "gates.confirm_project",
+    "gates.confirm_phases",
+    "gates.confirm_roadmap",
+    "gates.confirm_breakdown",
+    "gates.confirm_plan",
+    "gates.execute_next_plan",
+    "gates.issues_review",
+    "gates.confirm_transition",
+    "gates.confirm_milestone_scope",
+    "safety.always_confirm_destructive",
+    "safety.always_confirm_external_services"
   ],
   "runtimeStateKeys": [
     "workflow._auto_chain_active"

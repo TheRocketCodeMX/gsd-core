@@ -29,6 +29,98 @@ describe('CANONICAL_EXACT', () => {
       assert.ok(CANONICAL_EXACT.has(name), `expected ${name} in CANONICAL_EXACT`);
     }
   });
+
+  // ─── e2e-5 F1: the roster missed 17 of the 23 root artifacts the shipped
+  // workflows actually write, so `validate health` told users to DELETE
+  // TEST-STRATEGY.md, SECURITY-STRATEGY.md, MASTER-CONTEXT.md and 14 more.
+  test('contains the strategy-chain and context root artifacts the shipped workflows write (e2e-5 F1)', () => {
+    const expected = [
+      'TEST-STRATEGY.md', 'SECURITY-STRATEGY.md', 'INFRA-STRATEGY.md',
+      'CICD-STRATEGY.md', 'DOMAIN-MODEL.md', 'FRONTEND-ARCHITECTURE.md',
+      'LEGACY-INVENTORY.md', 'PRODUCT-BRIEF.md', 'MASTER-CONTEXT.md',
+      'DESIGN-INVENTORY.md', 'PROJECT-DISCUSSION-LOG.md', 'INGEST-CONFLICTS.md',
+      'WINDOWS.md', 'METHODOLOGY.md', 'MEMORY.md', 'INBOX-TRIAGE.md',
+      'DECISIONS-INDEX.md',
+    ];
+    for (const name of expected) {
+      assert.ok(CANONICAL_EXACT.has(name), `expected ${name} in CANONICAL_EXACT`);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Roster-vs-corpus drift gate (e2e-5 F1).
+//
+// The roster went stale because it was hand-maintained against a growing set of
+// writers. This derives the truth MECHANICALLY from the shipped payload: every
+// `.planning/<NAME>.md` literal that any shipped workflow / template / reference /
+// command / skill / agent / capability names must be a canonical artifact. A new
+// workflow that writes a new root artifact fails HERE, at build time, instead of
+// telling a user to delete the file months later.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('CANONICAL_EXACT vs the shipped corpus (drift gate)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const ROOT = path.join(__dirname, '..');
+
+  // Roots that ship in the npm package and are read at runtime by the agent.
+  const CORPUS_ROOTS = [
+    'gsd-core/workflows',
+    'gsd-core/templates',
+    'gsd-core/references',
+    'commands',
+    'skills',
+    'agents',
+    'capabilities',
+  ];
+
+  // `.planning/<NAME>.md` spellings that are deliberately NOT root artifacts.
+  // Each entry must say why — an unexplained entry is the drift this gate exists
+  // to stop.
+  const NOT_ROOT_ARTIFACTS = new Set([
+    // (empty — every literal in the corpus today is a real root artifact)
+  ]);
+
+  function walk(dir) {
+    const out = [];
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) out.push(...walk(full));
+      else if (e.isFile() && /\.(md|json)$/.test(e.name)) out.push(full);
+    }
+    return out;
+  }
+
+  test('every `.planning/<NAME>.md` the shipped corpus names is a canonical artifact', () => {
+    const found = new Map(); // name -> first file that names it
+    for (const root of CORPUS_ROOTS) {
+      for (const file of walk(path.join(ROOT, root))) {
+        const text = fs.readFileSync(file, 'utf-8');
+        for (const m of text.matchAll(/\.planning\/([A-Z][A-Za-z0-9_-]*\.md)\b/g)) {
+          if (!found.has(m[1])) found.set(m[1], path.relative(ROOT, file));
+        }
+      }
+    }
+
+    assert.ok(found.size >= 20, `corpus sweep found only ${found.size} root artifacts — the sweep is broken, not the roster`);
+
+    const missing = [];
+    for (const [name, where] of found) {
+      if (NOT_ROOT_ARTIFACTS.has(name)) continue;
+      if (!isCanonicalPlanningFile(name)) missing.push(`${name} (named by ${where})`);
+    }
+
+    assert.deepStrictEqual(
+      missing,
+      [],
+      'These .planning/ root artifacts are written by shipped workflows but are not in the ' +
+        'artifacts roster, so `validate health` W019 tells users to delete them. Add them to ' +
+        'CANONICAL_EXACT in src/artifacts.cts (or, if the literal is not really a root ' +
+        'artifact, to NOT_ROOT_ARTIFACTS above WITH a reason):\n' + missing.join('\n'),
+    );
+  });
 });
 
 describe('CANONICAL_PATTERNS', () => {
