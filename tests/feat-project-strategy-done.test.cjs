@@ -52,6 +52,39 @@ describe('project strategy-done', () => {
   beforeEach(() => { tmpDir = createTempProject(); });
   afterEach(() => { cleanup(tmpDir); });
 
+  test('e2e-1 F7: the flip is byte-targeted — every byte outside the matched row survives', () => {
+    // A realistic PROJECT.md with Context bullets, uneven blank lines, and
+    // trailing spaces: the write must be a one-line splice, never a re-render.
+    const body = `# Proj
+
+## Context
+
+- bullet one
+- bullet two
+
+- bullet three after a gap
+
+## Strategy Plan
+
+| Step | Status |
+|---|---|
+| testing-strategy | recommended |
+| cicd-strategy | recommended |
+
+## Notes
+
+text with two trailing spaces  
+and an\tembedded tab
+`;
+    writeProject(tmpDir, body);
+    const r = runGsdTools('project strategy-done testing-strategy', tmpDir);
+    assert.ok(r.success, `failed: ${r.error}`);
+    const after = readProject(tmpDir);
+    const expected = body.replace('| testing-strategy | recommended |', '| testing-strategy | done |');
+    assert.strictEqual(after, expected,
+      'strategy-done must splice exactly one line — any other byte difference is the e2e-1 F7 reformat churn');
+  });
+
   test('flips a recommended step to done and reports changed:true', () => {
     writeProject(tmpDir, PLAN);
     const r = runGsdTools('project strategy-done model-domain', tmpDir);

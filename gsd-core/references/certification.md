@@ -30,6 +30,8 @@ Recorded in TEST-STRATEGY.md `## Certification` — the tier, the probe results 
 
 Never present CERT-0 apologetically: the invariant is "certification happens," not "an agent does it." On CERT-0 the human IS the certifier and the brief below is written for them.
 
+**No browser surface?** The ladder still applies — certification is real-conditions exercise of the surface users actually touch: a CLI driven end to end as a user would run it, an API exercised with real dependencies (real DB, real auth, never the test suite's mocks). Record the mechanism the same way (tier + mechanism + brief), and when the *environment* earns a browser tier the *app* cannot yet use, record the browser capability as deferred with its trigger (`first browser surface — re-probe then`) rather than letting the tier imply a mechanism that has nothing to drive.
+
 ## Third-party certifier trust doctrine (mandatory — read before any launch)
 
 **Sandbox-first.** The first launch of any third-party certifier tool **in this environment** — including the probe below, including a bare `--version` — happens in an **isolated HOME**, followed by an **instrumentation audit** — *what did it write? which agent CLIs did it touch?* — before it is granted the real environment. "Installed" is not "launched": a binary that has never run under this HOME gets the same treatment as a fresh download.
@@ -45,6 +47,8 @@ The receipts (live dogfood, 2026-08, onorca 1.4.178 on WSL2): the first launch o
 1. **Observable checks first — run them, don't ask:** `command -v codex` / `command -v orca`; MCP browser tools present in the runtime (`mcp__playwright__*` responding); `claude` Chrome availability (not under WSL; disabled under API-key auth); WSL/headless/display detection; `playwright.config.*`; installed Playwright agent skills.
 2. **The 5-command live probe** — for every driver found (after the trust gate above; a tool's first launch in this environment is never the probe), against a **throwaway page** (never the real app): `goto` → `snapshot` → **`fill`** → **click round-trip** → `screenshot`. The fill comes **before** the click on purpose: click-after-fill is the failure mode that defines CERT-1 (limited), and a probe that never fills structurally cannot measure the tier it assigns. The click is verified by its *effect* (did the state change actually land — a POST received, a navigation observed), never by its return value. Record the **per-operation** verdicts with the date; failures are data: goto/snapshot/fill pass + click/screenshot fail is exactly the CERT-1 (limited) shape.
 3. **One question** — only for what nothing observable answers, because desktop certifier apps may live on another machine: *"Do you have Codex desktop, Claude Desktop, or onorca available for certification — on this machine or another?"* That is the whole interview.
+
+**The throwaway substrate is self-served** — mid-loop there is no probe page lying around, and the two obvious shortcuts are both forbidden (the real app, a remote page — the click must land on a server *you* observe). The recipe: a `data:` URL page covers goto/snapshot, and a ~15-line local HTTP echo server that logs POST bodies hosts fill → click → effect (assert on the server's own log, then tear it down).
 
 Map the results to a tier and write tier + probe rows + mechanism into `## Certification`. Re-probe when the environment changes (new display, new machine, new driver) — the recorded rows say exactly what to re-check.
 

@@ -193,8 +193,11 @@ phase directory — substitute it, as every other step in this file does, before
 
 ```bash
 ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_STRATEGY" || echo "NO_STRATEGY"
-M=$(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true); [ -n "$M" ] && ls -t $M | head -1
-TODAY=$(date -u +%Y-%m-%d)
+M=$(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true)
+[ -n "$M" ] && printf '%s' "$M" | tr '\n' '\0' | xargs -0 ls -t | head -1
+# Local calendar date — the same clock gsd-tools' init.todos hands add-todo, so every
+# writer of .planning/todos/pending/ dates filenames identically.
+TODAY=$(date +%Y-%m-%d)
 ```
 
 Read the `suite-metrics:` frontmatter block (`test_count`, `wall_clock` in integer
@@ -210,15 +213,17 @@ last wave must not shadow an earlier wave's clean measurement. From TEST-STRATEG
 
 **Skip silently** — print nothing, block nothing — when `NO_STRATEGY`, when there is no
 `## Suite health` section, when no SUMMARY in this phase carries a `suite-metrics:` block,
-or when the baseline row reads `unmeasured`. A phase is never held up for a measurement
-nobody took.
+when the baseline row reads `unmeasured`, **or when either side's `wall_clock` is `0`**
+(a pre-floor measurement artifact — treat it exactly like `unmeasured`; the measurement
+floor is 1 s, so a `0` is never a real reading and must never become a divisor). A phase
+is never held up for a measurement nobody took.
 
 **The check.** Derive `ms/test = (wall_clock × 1000) ÷ test_count` here, for both sides
 (it is deliberately not recorded anywhere, so the numbers can never disagree), then:
 
 | Trigger | Fires when | Route |
 |---|---|---|
-| **T1 — tier budget breach** | the measured `wall_clock` exceeds its tier budget. The post-merge gate runs the project's **whole** suite, so this number is the **PR-gate tier** (10 min = cicd's C1-a) unless the strategy's `## Suite health` notes say otherwise; the ~90 s dev-loop budget is checked at strategy time (Step 6.5), not here | **immediately, now** |
+| **T1 — tier budget breach** | the measured `wall_clock` exceeds its tier budget. The post-merge gate runs the project's **whole** suite, so this number is the **PR-gate tier** (10 min = cicd's C1-a) unless the strategy's `## Suite health` section carries a **T1 budget note** line overriding it (the template ships the optional line); the ~90 s dev-loop budget is checked at strategy time (Step 6.5), not here | **immediately, now** |
 | **T2 — ms/test trend** | derived ms/test is >~25 % above the last row's derived ms/test | milestone close |
 | **T3 — container churn** | `containers_started` grew faster than `test_count` — **unevaluable when either side records `—`** (not fired; evaluate the others) | milestone close |
 | **T4 — backstop** | `test_count` is >~40 % above the last tune-up row (found by fix-class, above) and no tune-up has run since | milestone close |

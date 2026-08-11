@@ -1,8 +1,6 @@
 {
   "version": 1,
   "paths": {
-    "cicd-strategy.md": {
-      "reason": "align/upstream-1.10.0 realistic-testing fix (.superpowers/sdd/flows-110-report.md, Flow 6 secondary finding): the Step 2 measured-input `git shortlog -sn --since='90 days ago'` carried no revision argument. `git shortlog` with no revision reads STDIN whenever stdout is not a TTY — always true inside an agent's Bash tool — so CONTRIBUTORS_90D resolved to 0 for every project, silently mis-answering the C3 15-vs-16 contributor threshold and the trunk-based-development judgement (measured: fixture 0 vs 1 with HEAD, this repo 0 vs 40). The +84 bytes is the ` HEAD` token plus the inline comment recording WHY the revision is mandatory, so a future edit cannot drop it back to the stdin-reading form; the comment is the durable half of the fix. Pinned by tests/cicd-rung-ladder.test.cjs ('every emitted git shortlog carries an explicit revision'). 39764 -> 39848 bytes."
-    }
+    "cicd-strategy.md": "[object Object] 2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit — the discussion log ships with the strategy doc it explains. +228 bytes."
   }
 }
