@@ -37,9 +37,10 @@ The shape is an *output* of the architecture, not a chosen target. Sociable test
 
 The gate above is a regression check; certification validates the app in real conditions (see `certification.md`). Never a CI gate.
 
-- **Tier:** [CERT-0 | CERT-1 (limited) | CERT-1 | CERT-2 — from the probe, never from tool presence]
-- **Probe results:** [driver → goto / snapshot / fill / click round-trip / screenshot per-operation verdicts, dated — record the failures too]
-- **Mechanism:** [dedicated certifier app + handed-over brief | building runtime drives the browser | inspection-grade flows only | human UAT (CERT-0)]
+- **Surface type:** [browser | cli | api | library — from ARCHITECTURE/deliverables; decides which probe applies. `library` → `no user-facing surface`, skip the rest]
+- **Tier:** [CERT-0 | CERT-1 (limited) | CERT-1 | CERT-2 — from the probe, never from tool presence. A runnable cli/api surface is CERT-1, not CERT-0]
+- **Probe results:** [per the surface type — **browser:** driver → goto / snapshot / fill / click round-trip / screenshot verdicts, dated; **cli:** command(s) run → stdout / exit / side-effect asserted; **api:** endpoint(s) hit with a seeded token → status / shape / auth-enforced / persisted-effect. Record failures too]
+- **Mechanism:** [dedicated certifier app + handed-over brief | building runtime drives the browser | building runtime drives the CLI/API for real | inspection-grade flows only | human UAT (CERT-0)]
 - **Launch conditions:** [the trust gate's instrumentation-audit result for each third-party driver — "clean audit YYYY-MM-DD" or "instrumentation found (what it wrote, which agent CLIs) — permanently sandboxed under isolated HOME"; this is what lets verify-work re-launch the driver without re-auditing]
 - **Brief source:** UAT items + the capsule's `## What Done Looks Like` — certifier-agnostic; [starter script emitted: yes/no — accelerant, never canonical]
 - **Deferred:** [capability not available — the observable fact that promotes it, e.g. "full click-through — re-probe on a visible display session"]
