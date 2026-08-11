@@ -14,7 +14,7 @@ stops instead of answering:
 
 ```bash
 if [ -z "${PHASE_DIR:-}" ]; then
-  echo "✗ automated-ui-verification: PHASE_DIR is unset in this shell (fenced blocks are separate processes). This step did NOT run — it is NOT a 'no UI spec' result. Re-read phase_dir from the init bundle (gsd_run query init.verify-work {phase}) and re-run this step." >&2
+  echo "✗ automated-ui-verification: PHASE_DIR is unset in this shell (fenced blocks are separate processes). This step did NOT run — it is NOT a 'no UI spec' result. Re-read phase_dir from this run's init bundle (the init.verify-work query verify-work.md already made) and re-run this step." >&2
   exit 1
 fi
 UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
