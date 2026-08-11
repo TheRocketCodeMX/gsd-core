@@ -48,6 +48,7 @@ const ROOT = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const WORKFLOW = 'gsd-core/workflows/testing-strategy.md';
+const ADDTESTS = 'gsd-core/workflows/add-tests.md';
 const CERT_REF = 'gsd-core/references/certification.md';
 const TEST_REF = 'gsd-core/references/test-strategy.md';
 const TEMPLATE = 'gsd-core/templates/test-strategy.md';
@@ -545,6 +546,28 @@ describe('the template materializes rows from decisions', () => {
     for (const policy of [/[Ss]eed test accounts/, /[Ee]mail safety/, /LLM/, /OAuth|auth/]) {
       assert.match(s, policy, `substrate policy missing from template: ${policy}`);
     }
+  });
+
+  // Round 4 (r4-b): the coverage-gap feedback loop must close mechanically, not
+  // hand off, and the "seed accounts" substrate policy must have a real section.
+  test('r4: certification.md carries an authoritative ## Seed accounts section and no dangling ref to it', () => {
+    const ref = read(CERT_REF);
+    assert.match(ref, /^## Seed accounts$/m, 'a ## Seed accounts substrate policy section exists');
+    const s = section(ref, 'Seed accounts');
+    assert.match(s, /idempotent/i, 'the seed script is idempotent (create-or-update, never duplicate)');
+    assert.match(s, /role-tagged|by role|role/i, 'accounts are role-tagged and documented in TEST-STRATEGY');
+    assert.match(s, /env(ironment)?|secret store|secret manager/i, 'credentials live in the env/secret store');
+    assert.match(s, /never (in the |committed|in a URL)/i, 'never in the repo / never in a URL');
+  });
+
+  test('r4: add-tests reads the ## Coverage debt ledger and closes the rows it resolves (Status lifecycle)', () => {
+    const at = read(ADDTESTS);
+    assert.match(at, /## Coverage debt/, 'add-tests reads the coverage-debt ledger');
+    assert.match(at, /open/, 'it selects open rows');
+    assert.match(at, /first-class inputs|not re-derived|prioriti/i, 'named gaps are prioritized inputs, not re-derived');
+    assert.match(at, /open\s*(→|->)\s*closed|transition that row `?open/i,
+      'a resolved row transitions open -> closed');
+    assert.match(at, /closing test|test (path|ref)|closed (→|->)/i, 'the closing test ref is recorded');
   });
 
   test('## Suite health ships the baseline table with the four measured columns — ms/test is derived, never recorded', () => {

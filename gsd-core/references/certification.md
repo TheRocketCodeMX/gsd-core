@@ -76,6 +76,17 @@ The brief is the **canonical artifact** of a certification run; any script is de
 - **Starter scripts are accelerants, never canonical.** When a *scriptable* driver probed capable, an executable starter script MAY be emitted from the brief — regenerate it from the brief when they drift; never the reverse.
 - **Independence.** A certification transcript is agent-authored evidence about agent-authored code — the `ai-test-quality.md` independence requirement applies in full force. Acceptance is anchored to the brief's human-anchored expected outcomes (from `## What Done Looks Like`), never to the driver's own **narration** of what it thinks it did.
 
+## Seed accounts
+
+Certification runs against **seeded test accounts**, never a real user's data and never an account created by hand mid-run. The policy has four parts:
+
+- **An idempotent seed script** owns account creation — re-running it converges to the same state (create-or-update, never duplicate), so a certifier can reset and re-run without drift. It lives with the substrate setup (`templates/user-setup.md`'s `certification_substrate_example`), not inline in a test.
+- **Role-tagged accounts, documented in TEST-STRATEGY.md.** Each seeded account is named by the role it certifies (`admin`, `member`, `unverified`, `billing-past-due`), and the roster — role, purpose, which flows it exercises — is recorded in TEST-STRATEGY.md's `## Certification substrate`, so the brief can reference an account by role rather than by a raw credential.
+- **Credentials in the env/secret store, never in the repo.** The seed script reads secrets from the environment or secret manager; the accounts' passwords/tokens are agent-usable at run time but never committed, never printed into a transcript, never placed in a URL or query param. A seeded auth token is the credential a CLI/API certifier presents (see `## Auth for certification`).
+- **Deterministic identifiers.** Seeded accounts use stable, collision-free identifiers (a dedicated test domain, `seed+{role}@…` plus-addressing routed to the sandbox mail catcher — the transport-level sink defined below) so a certification asserting on "the welcome email" knows exactly which inbox to read.
+
+The seed script is a first-class substrate artifact: if the probe found a scriptable driver, the certification brief names the seeded role it needs, and the setup ran the seed script before the run — a certifier is never asked to invent an account.
+
 ## Auth for certification
 
 The three-way fork: a vendor with a real testing story → use it; a vendor that documents the absence → authenticate once, persist the session; an emulator → know its ceiling. Per provider, verified stories only:

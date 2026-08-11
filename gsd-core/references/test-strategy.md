@@ -117,7 +117,7 @@ When the strategy calls for real-dependency integration tests, auth, or e2e, loa
 - `@~/.claude/gsd-core/references/auth-in-tests.md` — authenticate-once/storageState, token minting, multi-role, JWT vs cookie, one-account-per-worker.
 - `@~/.claude/gsd-core/references/realistic-test-data.md` — synthetic factories by default; anonymized/subset dumps only.
 - `@~/.claude/gsd-core/references/e2e-tiering.md` — persistent smoke vs transient e2e; keep e2e lean.
-- `@~/.claude/gsd-core/references/certification.md` — the certification ladder + probe, the trust doctrine, the brief, and the substrate honesty tables (auth test modes, email vendor modes, LLM shape-not-content).
+- `@~/.claude/gsd-core/references/certification.md` — the certification ladder + probe, the trust doctrine, the brief, and the four substrate policies (seed accounts, auth test modes, email vendor modes, LLM shape-not-content).
 - `@~/.claude/gsd-core/references/contract-testing.md` — for an external dependency you can't run/seed in CI: consumer-driven contracts + provider verification (a verified contract, not a mock).
 - `@~/.claude/gsd-core/references/flaky-test-checklist.md` — fixed clock, seeded RNG, poll-don't-sleep, per-worker isolation.
 
