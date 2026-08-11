@@ -125,7 +125,7 @@ Reply with a number to resume, or provide a phase number to start new.
 Wait for user response.
 
 - If user replies with number (1, 2) → Load that file, go to `resume_from_file`
-- If user replies with phase number → Treat as new session, go to `create_uat_file`
+- If user replies with phase number → **exists-check first**: if `{phase_num}-UAT.md` already exists for that phase, treat exactly as the `$ARGUMENTS`-provided branch below (offer resume or restart — never overwrite). Otherwise it is genuinely new: continue through `find_summaries` → `extract_tests` → the certification dispatch → `create_uat_file` — never jump straight to `create_uat_file`; a session created without the extraction chain has no checkpoint set and no certification outcome.
 
 **If active sessions exist AND $ARGUMENTS provided:**
 
@@ -151,7 +151,7 @@ Provide a phase number to start testing (e.g., /gsd:verify-work 4)
 
 **If no active sessions AND $ARGUMENTS provided:**
 
-Continue to `create_uat_file`.
+Continue through `find_summaries` → `extract_tests` → the certification dispatch → `create_uat_file` (the normal new-session chain below).
 </step>
 
 <!-- gsd:section id="automated-ui-verification" when="state:ui-phase-active" -->
@@ -235,6 +235,8 @@ It runs HERE — after `extract_tests` computed the checkpoint set, before any c
 
 <step name="create_uat_file">
 **Create UAT file with all tests:**
+
+**This step never overwrites.** If `{phase_num}-UAT.md` already exists, stop and go to `resume_from_file` — restart (which archives first, `check_active_session`'s rule) is the only path that may replace an existing file. An exists-check here is the last line of defense for evidence-backed certified entries, the outcome line, and `## Gaps`.
 
 ```bash
 mkdir -p "$PHASE_DIR"
@@ -490,6 +492,8 @@ Resolved gaps are NOT re-diagnosed and do NOT spawn new gap plans. If the user l
 
 Read the full UAT file.
 
+**Certification re-entry — before the pending scan.** If the file carries a `certification:` line, or `{phase_num}-CERTIFICATION-RESULT.md` exists in the phase directory: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md` **§1.5** (the re-entry table) now. It is the only consumer of a returned CERT-2 result (upgrading a `pending` line in place and writing the evidence-backed entries), the only reporter of a still-pending handover, and the only path that re-offers after a posture flip (`off → required`) — every rule in that table is dead prose unless resume consults it, because resume is the branch every re-entry actually takes. It never duplicates a line or an entry; on a resolved outcome it confirms and returns immediately. Then continue below — the scan picks up any checkpoints §1.5 reverted to `[pending]`.
+
 Find first test with `result: [pending]`.
 If no `[pending]` test found → go to `complete_session`.
 
@@ -538,7 +542,7 @@ Clear Current Test section:
 
 Commit the UAT file:
 ```bash
-gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/certification-evidence/"
+gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-RESULT.md" ".planning/phases/XX-name/certification-evidence/"
 ```
 
 Include the certification artifacts only when the run produced them — the brief is the
@@ -807,7 +811,8 @@ inventing a test.
 
 Append one row per answered gap to `.planning/TEST-STRATEGY.md` under its
 `## Coverage debt` section. Create the section (heading + table header) if the file
-predates it.
+predates it — inserted after the last existing `## ` content section and **before
+any trailing footer** (a closing `---` or end-of-file), never appended past it.
 
 ```
 | {date} | {phase}/{gap_id} | {the behavior that escaped} | {the fast test that was missing, and at which level} | open |

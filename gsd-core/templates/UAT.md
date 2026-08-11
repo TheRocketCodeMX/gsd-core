@@ -103,7 +103,7 @@ blocked: [N]
   Closed set (`agentic-certification.md` §8):
   `certification: agentic (CERT-1) — {summary}` ·
   `certification: pending (CERT-2 — brief handed over {date})` ·
-  `certification: human (CERT-0) — {summary}` ·
+  `certification: human (CERT-0)` ·
   `certification: N/A — no user-facing change` ·
   `certification: skipped (declined — {short reason})` ·
   `certification: off (posture)`
@@ -232,7 +232,7 @@ updated: 2025-01-15T10:45:00Z
 
 ## Tests
 
-certification: human (CERT-0) — 6 checkpoints certified by the human at the browser
+certification: human (CERT-0)
 
 ### 1. View Comments on Post
 expected: Comments section expands, shows count and comment list

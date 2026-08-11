@@ -81,7 +81,10 @@ describe('learn-catalog anchors resolve to real headings', () => {
   test('every `§ Section` in the catalog resolves to a heading in its source file', () => {
     const md = fs.readFileSync(CATALOG, 'utf8');
     const rows = md.split(/\r?\n/).filter((l) => /^\|\s*`[a-z0-9-]+`\s*\|/.test(l));
-    assert.ok(rows.length >= 80, `catalog table parsed only ${rows.length} rows — format drifted?`);
+    // Exact-count drift guard: the sweep covers every node the catalog parser
+    // sees — a floor (>= 80) would tolerate silently dropping up to 9 rows.
+    const { nodes: catalogNodes } = require('../gsd-core/bin/lib/learn.cjs').parseCatalog();
+    assert.equal(rows.length, catalogNodes.length, `catalog table parsed ${rows.length} rows but the node list has ${catalogNodes.length} — format drifted?`);
 
     const headCache = new Map();
     const unresolved = [];
@@ -123,7 +126,14 @@ describe('learn-catalog anchors resolve to real headings', () => {
       }
     }
 
-    assert.ok(anchorsChecked >= 80, `only ${anchorsChecked} anchors checked — the parser is broken, not the catalog`);
+    // Exact anchor count, derived from the same rows by an independent parse:
+    // every `§` inside a backticked source span is one anchor to resolve.
+    const expectedAnchors = rows.reduce((n, row) => {
+      const cells = row.split('|').map((c) => c.trim());
+      for (const m of cells[3].matchAll(/`([^`]+)`/g)) n += (m[1].match(/§/g) || []).length;
+      return n;
+    }, 0);
+    assert.equal(anchorsChecked, expectedAnchors, `checked ${anchorsChecked} anchors but the rows carry ${expectedAnchors} — the sweep is skipping anchors`);
     assert.deepStrictEqual(
       unresolved,
       [],

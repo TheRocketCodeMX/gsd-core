@@ -151,7 +151,10 @@ render** — the template supplies missing sections; existing content wins:
   user decision), `## Suite health` (all rows — the history is the trend), and
   `## Coverage debt` (whole section; absent is a valid pre-certification state —
   never create it empty). New sections the template has and the file lacks are
-  **added**, not swapped in via a re-render.
+  **added**, not swapped in via a re-render — inserted **after the last existing
+  `## ` content section and before any trailing footer** (a closing `---` or
+  end-of-file), in the template's own section order; never appended past the
+  footer.
 - **`## Certification` is the project fact.** The re-probe *informs* it: append a
   dated re-probe note; retain the prior dated rows and the `Launch conditions` row
   (that clean-audit receipt is what spares `verify-work` a re-audit). **Never
@@ -179,7 +182,9 @@ gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the S
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
   DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG
+  # A run that created TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
+  TSTD=$([ -f .planning/TESTING-STANDARDS.md ] && echo ".planning/TESTING-STANDARDS.md")
+  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG $TSTD
 else
   echo "TEST-STRATEGY.md written but not committed (commit_docs is false)."
 fi

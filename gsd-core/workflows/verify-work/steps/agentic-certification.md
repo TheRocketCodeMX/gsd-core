@@ -54,6 +54,13 @@ ran it before certification existed) → treat as **CERT-0** and note that
 `/gsd:testing-strategy` would record a tier. Never block a phase on a missing
 strategy section.
 
+**No `## Certification substrate` section** (same pre-certification vintage — the
+common path is upgrade → `verify-work` on the in-flight phase before any strategy
+re-run) → treat all four policies as `N/A — revisit when a surface appears`, state
+exactly that in the brief's preconditions (inferred from the app's observable
+reality, labelled as inferred — never invented silently), and note that
+`/gsd:testing-strategy` would record them. Never block on the missing section.
+
 ## 1.5 Re-entry — read the existing outcome before doing anything
 
 A re-run over a phase whose `{phase_num}-UAT.md` already carries a
@@ -118,10 +125,14 @@ a clean audit, since the recorded probe date — does not repeat the gate. A pri
 instrumentation.
 
 **Where the isolated HOME lives:** a sibling directory under the real `$HOME`
-(e.g. `$HOME/.gsd-cert-sandbox`), never under `/tmp` — some tools refuse to write
-helper binaries under a temp dir, and a HOME that suppresses the writes defeats
-the very audit this gate exists to run (verified live: the same CLI wrote 0 files
-under a `/tmp` HOME and 6 under a `$HOME` sibling).
+(e.g. `$HOME/.gsd-cert-sandbox`), never under `/tmp`. Two live receipts from two
+different CLIs argue the same rule from opposite directions: codex-cli 0.142.5
+refused a `/tmp` HOME outright (0 files written, explicit "refusing to create
+helper binaries under temporary dir") — a HOME that suppresses the writes defeats
+the very audit this gate exists to run — while onorca wrote its full state (332
+files, agent-CLI instrumentation included) under a `/tmp` HOME without complaint,
+proving the audit works anywhere the tool will write. The `$HOME` sibling is the
+location both behaviors tolerate and the audit can always read.
 
 **On CERT-2 the gate travels with the brief.** Nothing launches in this
 environment, so nothing is audited here — but the certifier's first launch on the

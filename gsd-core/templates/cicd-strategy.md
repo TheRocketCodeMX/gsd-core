@@ -41,7 +41,8 @@
 <!-- C0 is ONE stage. Add a second row ONLY if a C1 trigger fired (suite >10 min measured · a tier
      that structurally can't run on a PR · included-minutes breach) — and name that trigger in the
      row. Add a scheduled row ONLY per C2, and name the job (C2-a/b/c/d), its OWNER, and its TRIAGE
-     SLA in the row. "It's more thorough" is not a trigger. -->
+     SLA in the row. "It's more thorough" is not a trigger. TEST-STRATEGY's "Not a pipeline
+     tier" line (certification) is never a row here — it is not a tier and C1 does not apply. -->
 
 - **Concurrency:** [`cancel-in-progress: true` on the PR ref]
 - **Matrix:** [none — no supported-platform promise / OR: legs = the exact supported set, promise = [where it's documented]]
