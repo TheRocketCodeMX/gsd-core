@@ -108,13 +108,14 @@ Re-measure the whole suite once, timed, exactly as Pass 1 did, and **append a ne
 row** to `.planning/TEST-STRATEGY.md`'s `## Suite health` table:
 
 ```markdown
-| YYYY-MM-DD | {test_count} | {wall_clock_sec} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
+| YYYY-MM-DD | {test_count} | {wall_clock_ms} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
 ```
 
-`wall_clock` is **integer seconds** — a sub-minute suite is the goal, and a format that
-rounds the goal to zero breaks the very trigger this table feeds. `ms/test` is derived at
-compare time, never recorded (the same one-source-per-number rule the SUMMARY schema
-states).
+`wall_clock` is **integer milliseconds, minimum 1**, from a real clock bracket — the
+same rule the SUMMARY schema and Step 6.5 state, because this table is the compare's
+baseline and second-resolution rounding is precisely the blindness that once made a
+126 % sub-second regression read as 0.0 %. `ms/test` is derived at compare time, never
+recorded (one source per number).
 
 **Append. Never rewrite, overwrite, or replace the previous row.** The history *is* the
 trend the T2/T4 triggers compare against — a table with one row can only ever answer
@@ -142,8 +143,8 @@ Then report, in this shape:
 ```
 Suite tune-up complete — {trigger} cleared.
 
-  Before: {test_count} tests · {wall_clock_sec} s · {ms/test derived} ms/test · {containers_started} containers
-  After:  {test_count} tests · {wall_clock_sec} s · {ms/test derived} ms/test · {containers_started} containers
+  Before: {test_count} tests · {wall_clock_ms} ms · {ms/test derived} ms/test · {containers_started} containers
+  After:  {test_count} tests · {wall_clock_ms} ms · {ms/test derived} ms/test · {containers_started} containers
   Fix-class: {config-drift | test-debt | mixed (dominant: …)}
   Changes: {config edits} · {tests moved/demoted/deleted, each with its strategy citation}
 

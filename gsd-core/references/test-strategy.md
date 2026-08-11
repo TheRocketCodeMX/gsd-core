@@ -70,12 +70,12 @@ The checklist names *classes* of lever; the concrete flags below are the **curre
 
 ### The four triggers (trend + absolutes)
 
-Measured per milestone against the `## Suite health` baseline table in TEST-STRATEGY.md (`test_count`, `wall_clock` in integer seconds, `containers_started`, fix-class of last tune-up; `ms/test` is derived at compare time, never recorded):
+Measured per milestone against the `## Suite health` baseline table in TEST-STRATEGY.md (`test_count`, `wall_clock` in integer **milliseconds** from a real clock bracket, `containers_started`, fix-class of last tune-up; `ms/test` is derived at compare time, never recorded; legacy second-resolution rows read as × 1000):
 
 | Trigger | Signal | Fires |
 |---|---|---|
 | **T1 — tier budget breach** | dev-loop tier >~90 s locally; PR gate >10 min (= the CI ladder's C1-a) | **Immediately** — a TDD-ergonomics emergency, not a cleanup item |
-| **T2 — ms/test trend** | cost-per-test >~25 % above the milestone baseline — a *structural* regression (config, setup, cache, accidental serialization) | Tune-up scheduled at milestone close |
+| **T2 — ms/test trend** | cost-per-test >~25 % above the milestone baseline **and** the absolute wall-clock delta ≥ 250 ms (the noise floor that keeps millisecond precision from flapping on tiny suites) — a *structural* regression (config, setup, cache, accidental serialization) | Tune-up scheduled at milestone close |
 | **T3 — container churn** | containers-started growing faster than suite count | Tune-up scheduled at milestone close |
 | **T4 — backstop** | suite grew >~40 % since the last tune-up and none happened | Tune-up scheduled at milestone close |
 
@@ -90,7 +90,7 @@ Measured per milestone against the `## Suite health` baseline table in TEST-STRA
 3. **Suite audit against the strategy** — implementation-detail tests (a strategy violation first, a perf cost second), duplicated coverage across tiers (push down the pyramid where the strategy permits), obsolete tests, over-broad shared fixtures, accidental serialization and unconditional waits (fixed sleeps standing in for condition polling — poll, never sleep, per `flaky-test-checklist.md`). Every deletion or demotion justified by the strategy doc, never by the stopwatch alone.
 4. **Re-baseline** — re-measure, **append** a new dated Suite-health row (never rewrite or overwrite the previous one: the history *is* the trend T2/T4 compare against), and **record the fix-class** (config-drift vs test-debt) so the strategy learns which failure mode this project actually has.
 
-The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock` in integer seconds, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
+The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock_ms` in integer milliseconds, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
 
 ## Output (`TEST-STRATEGY.md`)
 

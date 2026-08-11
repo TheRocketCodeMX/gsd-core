@@ -62,17 +62,17 @@ ls .github/dependabot.yml >/dev/null 2>&1 && echo "HAS_DEPENDABOT" || echo "NO_D
 
 ## Step 2.5: Measure, infer, ask — in that order
 
-The number that decides the pipeline's shape is the **suite wall clock**, and nothing upstream in the chain captures it. Derive what you can; ask only what nothing else answers.
+The number that decides the pipeline's shape is the **suite wall clock** — and `/gsd:testing-strategy` (Step 6.5) already records it in TEST-STRATEGY.md's `## Suite health` table. One number, one source: read it before ever re-timing. Derive what you can; ask only what nothing else answers.
 
 **MEASURE — run the command, don't ask:**
 
-- **Suite wall clock** *(the C1 trigger)* — if a test command exists, run it **once, timed** (`time <test command>`) and record the number with today's date. If the repo has no code yet (greenfield at strategy time), record `unmeasured — assume under budget; re-measure at the first milestone with a real suite` and **default to C0**.
+- **Suite wall clock** *(the C1 trigger)* — read the newest dated row of TEST-STRATEGY.md's `## Suite health` table and use it; run `time <test command>` **only when** no measured row exists (no TEST-STRATEGY.md, the row reads `unmeasured`, or the table is absent) — never re-time a number the strategy already recorded, and never produce a second independently-dated value for one fact. If the repo has no code yet (greenfield at strategy time), record `unmeasured — assume under budget; re-measure at the first milestone with a real suite` and **default to C0**.
 - **Merges/week** *(the C3 trigger)* — `MERGES_90D` ÷ 13. **Contributors** *(the trunk-based 15-vs-16 threshold)* — `CONTRIBUTORS_90D`.
 - **Existing CI surface** *(brownfield input)* — the `.github/workflows` listing plus the `schedule:` / `matrix:` greps from Step 2; each one found needs a forcing fact or a rung-down card.
 - **Flake evidence** *(the C2-a trigger)* — ask the CI platform, not the user: `gh run list --status failure --limit 50` re-run patterns, or an existing quarantine/skip list in the test config.
 - **Dependency surface** *(the C2-c trigger)* — lockfile + `HAS_DEPENDABOT`; if Dependabot already covers it, **C2-c is closed**.
 
-**INFER from existing artifacts** (draft-from-docs, present for confirmation — never re-interview): test tiers / smoke list / mutation targets ← `TEST-STRATEGY.md` · deploy target, environments, whether a prod exists, cloud + secret manager ← `INFRA-STRATEGY.md` · **blast radius ← `SECURITY-STRATEGY.md`** · shipped-software vs operated service and brownfield vs greenfield ← `PROJECT.md` `## Mode` · team size ← `PROJECT.md` / `INFRA-STRATEGY.md`.
+**INFER from existing artifacts** (draft-from-docs, present for confirmation — never re-interview): test tiers / smoke list / mutation targets / **suite wall clock** (`## Suite health`, newest row) ← `TEST-STRATEGY.md` · deploy target, environments, whether a prod exists, cloud + secret manager ← `INFRA-STRATEGY.md` · **blast radius ← `SECURITY-STRATEGY.md`** · shipped-software vs operated service and brownfield vs greenfield ← `PROJECT.md` `## Mode` · team size ← `PROJECT.md` / `INFRA-STRATEGY.md`.
 
 **ASK — one round, at most three questions** (header "Context"), and only what nothing above answers:
 
@@ -108,7 +108,7 @@ Use the reference's **CI rung ladder**. The rungs are **independently triggered,
 | Rung | What it is | Adopt only when |
 |---|---|---|
 | **C0 — the floor. Always.** | One workflow file, one job (spelled out in the default block below). | A git repository exists. No exceptions, no project too small. |
-| **C1 — tier the gate** (PR gate + post-merge stage) | PR gate = lint + types + unit + fast in-process medium + the 3–7 persistent smoke e2e; the remainder moves to `push: main`. | **C1-a** measured suite wall clock > 10 min · **C1-b** a tier that structurally cannot run on a PR (fork-invisible secrets, a device farm, a third-party sandbox, a post-merge URL) · **C1-c** projected minutes exceed the included allowance. **Name which one fired.** |
+| **C1 — tier the gate** (PR gate + post-merge stage) | PR gate = lint + types + unit + fast in-process medium + the 3–7 persistent smoke e2e; the remainder moves to `push: main`. | **C1-a** measured suite wall clock > 10 min · **C1-b** a tier that structurally cannot run on a PR (fork-invisible secrets, a device farm, a third-party sandbox, a post-merge URL) — but never certification: a TEST-STRATEGY `Not a pipeline tier` line is outside the pipeline by design, and no C1 trigger may claim it · **C1-c** projected minutes exceed the included allowance. **Name which one fired.** |
 | **C2 — scheduled jobs** | Up to four independently-triggered jobs (below). | A job a `pull_request`/`push` job structurally cannot do, or wall clock with nowhere else to live — **plus the admission gate**. |
 | **C3 — merge queue** | Merge queue in front of `main`. | ~tens of merges/day to one branch; stale-base failures routine (Uber SubmitQueue: ~40% conflict-breakage odds at 16 concurrent conflicting changes). Below ~15 contributors it answers a question the team doesn't have. |
 
@@ -137,7 +137,7 @@ Never present the floor apologetically. "We'll start small and grow into the rea
 **C0 is one stage.** Map TEST-STRATEGY.md's tiers into that single job. Tier into a PR gate + post-merge stage **only when a C1 trigger fired — and say which one** in the strategy doc.
 
 - **PR gate — ≤10 min wall clock (hard budget; CD book + DORA canon):** lint, types, small (unit), fast in-process medium, and the **persistent smoke e2e list from TEST-STRATEGY.md (3–7 flows, happy paths only)**. If the suite doesn't fit, cut the gate — don't stretch the budget. (At C0 this is simply the whole suite; the split only becomes real at C1.)
-- **Post-merge stage (C1 only):** whatever could not fit the budget, or could not run on a PR at all.
+- **Post-merge stage (C1 only):** whatever could not fit the budget, or could not run on a PR at all. (Certification is never a candidate — it is not a pipeline tier.)
 
 **The explicit non-trigger — write it into the doc:** *"the post-merge stage is more thorough"* is **not** a reason. Fowler: "the commit build is the one that has to be done quickly, as a result it will take a number of shortcuts" — later stages exist to **protect the commit build's speed**, not to add thoroughness. **If the whole suite runs in under ten minutes, one stage is the correct pipeline**; a second stage is pure latency plus spend. (Scheduled work is not a pipeline stage — it is Rung C2, with its own trigger, owner, and SLA.)
 
@@ -273,7 +273,7 @@ Next: /gsd:plan-phase   (CI/deploy phases will plan against this strategy)
 
 <success_criteria>
 - TEST-STRATEGY.md (or generic tiers, gap noted) + INFRA-STRATEGY/ADR + SECURITY-STRATEGY context loaded; blast radius taken from SECURITY-STRATEGY rather than re-interviewed
-- **Suite wall clock measured and dated — or explicitly recorded as `unmeasured`** (greenfield); merges/week and contributor count derived from `git`
+- **Suite wall clock read from `## Suite health` where a measured row exists (measured here only when absent) — or explicitly recorded as `unmeasured`** (greenfield); merges/week and contributor count derived from `git`
 - Platform chosen with rationale (GHA default; any cloud-native exception justified by VPC/regulatory or compute-behind-GHA)
 - Auth recorded as pinned-`sub` OIDC (or the documented fallback with rotation); secrets split table filled
 - **CI rung (Axis C) and delivery rung (Axis D) recorded, each non-floor rung carrying the concrete fact that forced it.** A **single-stage** pipeline at C0/D0 is a passing, complete outcome — not a gap

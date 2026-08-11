@@ -70,18 +70,20 @@ The gate above is a regression check; certification validates the app in real co
 <!-- One stage is the correct default. Add a second or scheduled row ONLY if cicd-strategy's
      C1/C2 triggers fire (measured suite >10 min · a tier that can't run on a PR · a job a PR
      run structurally cannot do). Do not pre-assert a nightly here — cicd-strategy reads this
-     table as an input, so a row written on spec becomes a "fact" downstream. -->
+     table as an input, so a row written on spec becomes a "fact" downstream. That rule is
+     for FIRST renders: on an Update, keep the existing recorded stage rows — they are
+     recorded decisions, and deleting one silently reverts it. -->
 
 - **Doesn't fit the PR gate:** [which tiers, and why they can't run there — feeds cicd-strategy's C1 decision]
 - **Not a pipeline tier:** certification — runs outside CI by design (real conditions, human-adjacent); never map it to any CI stage, C1 does not apply (see `## Certification`)
 
 ## Suite health
 
-Baseline at strategy time — **Step 6.5 writes the first row**; thereafter only the tune-up flow's fourth pass appends (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires). Append-only: a re-baseline never rewrites, overwrites, or replaces an earlier row — the history is the trend the triggers read. `wall_clock` is **integer seconds**; `ms/test` is derived at compare time, never recorded here (one source per number).
+Baseline at strategy time — **Step 6.5 writes the first row**; thereafter only the tune-up flow's fourth pass appends (the T1–T4 triggers in `test-strategy.md § Suite health` decide when a tune-up fires). Append-only: a re-baseline never rewrites, overwrites, or replaces an earlier row — the history is the trend the triggers read. `wall_clock` is **integer milliseconds, minimum 1** (both writers use a real millisecond bracket; a legacy row under a `wall_clock (s)` header reads as seconds × 1000); `ms/test` is derived at compare time, never recorded here (one source per number).
 
-| Date | test_count | wall_clock (s) | containers_started | fix-class of last tune-up |
+| Date | test_count | wall_clock (ms) | containers_started | fix-class of last tune-up |
 |---|---|---|---|---|
-| [DATE] | [N \| unmeasured] | [seconds \| unmeasured] | [—] | [— (none yet)] |
+| [DATE] | [N \| unmeasured] | [milliseconds \| unmeasured] | [—] | [— (none yet)] |
 
 - **Born-fast defaults applied:** [container singleton (reuse local-only) · framework config at current APIs — see the reference checklist]
 - **T1 budget note (optional):** [only when the PR-gate tier budget differs from the default 10 min — state the budget and why; `transition`'s T1 reads this line]
