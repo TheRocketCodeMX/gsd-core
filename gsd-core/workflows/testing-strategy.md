@@ -28,7 +28,7 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 
 **Text mode** (`--text` OR `workflow.text_mode: true`): replace every `AskUserQuestion` with a plain-text numbered list.
 
-**If `--tune-up`:** this run is not strategy authoring — it is the **suite tune-up flow** (the repair half of suite health, reached from `transition`'s T1 todo, from the milestone-close todo it writes for T2–T4, or by hand). If `NEW` (no TEST-STRATEGY.md), stop: "No TEST-STRATEGY.md — run `/gsd:testing-strategy` first; there is no strategy to audit the suite against." Otherwise read and execute `gsd-core/workflows/testing-strategy/steps/suite-tune-up.md` end to end, then commit its `## Suite health` append with Step 8's mechanism (message: `docs: re-baseline suite health after tune-up`) and **EXIT** — Steps 2–7 and 9 do not run; a tune-up never rewrites the strategy.
+**If `--tune-up`:** this run is not strategy authoring — it is the **suite tune-up flow** (the repair half of suite health, reached from `transition`'s T1 todo, from the milestone-close todo it writes for T2–T4, or by hand). If `NEW` (no TEST-STRATEGY.md), stop: "No TEST-STRATEGY.md — run `/gsd:testing-strategy` first; there is no strategy to audit the suite against." Otherwise read and execute `@$HOME/.claude/gsd-core/workflows/testing-strategy/steps/suite-tune-up.md` end to end, then commit its `## Suite health` append with Step 8's mechanism (message: `docs: re-baseline suite health after tune-up`) and **EXIT** — Steps 2–7 and 9 do not run; a tune-up never rewrites the strategy.
 
 **If `EXISTS` and not `--auto`:** ask Update / View / Skip (header "Strategy"). On Skip: exit ("Existing TEST-STRATEGY.md preserved."). On View: show then Update/Skip.
 
@@ -69,7 +69,7 @@ Record subdomain → primary level + the rung that justifies it. Do NOT announce
 
 ## Step 4: Gnarly bits + what NOT to test
 
-From DOMAIN-MODEL + REQUIREMENTS, identify the **pure, logic-dense** code that earns unit tests: money/currency (**integer minor units or exact decimal — never float**), complex conditionals/**state machines**, **parsers**, **algorithms**, pure functions. List them as unit-test targets.
+From DOMAIN-MODEL + REQUIREMENTS — both optional; when either is absent, derive from PROJECT.md's requirements plus the ADR/architecture and the source itself, and say so in the doc — identify the **pure, logic-dense** code that earns unit tests: money/currency (**integer minor units or exact decimal — never float**), complex conditionals/**state machines**, **parsers**, **algorithms**, pure functions. List them as unit-test targets.
 
 State what NOT to test: framework/library code, trivial getters/setters, mock behavior; and the rule — **each behavior tested once, at the cheapest level** (no duplicate unit+integration+e2e coverage of the same behavior).
 
@@ -117,7 +117,7 @@ Map results → tier (CERT-0 / CERT-1 (limited) / CERT-1 / CERT-2) and record ti
 3. **LLM integrations** — real calls (the integration is the thing under test): dedicated test key with a hard spend cap, configurable pinned cheap-but-representative model, transcript captured as evidence, and **shape-not-content assertions** (Anthropic disclaims temperature-0 determinism). Stubs remain correct for rate-limited vendors and for deterministic unit/integration tiers.
 4. **OAuth/auth** — a verified provider test mode where one exists (Clerk Testing Tokens, `+clerk_test`, code 424242); otherwise the formalized field pattern: **one-time human auth, persisted session** (gitignored storage state, hygiene per the reference) — an honest, first-class answer. Auth moments and CAPTCHAs always escalate to the human.
 
-Anything here that requires a human in a dashboard (account creation, credential retrieval, catcher provisioning) becomes `{phase}-USER-SETUP.md` material via the `user_setup` PLAN frontmatter — see `templates/user-setup.md`.
+A capability the project does not have is recorded as `N/A — no {email|LLM|auth|data} surface (revisit when one appears)` — a first-class row value, never left blank and never a policy invented for a surface that does not exist. Anything here that requires a human in a dashboard (account creation, credential retrieval, catcher provisioning) becomes `{phase}-USER-SETUP.md` material via the `user_setup` PLAN frontmatter — see `@$HOME/.claude/gsd-core/templates/user-setup.md`.
 
 ## Step 6: Coverage / mutation / TDD stance
 
@@ -127,14 +127,14 @@ Anything here that requires a human in a dashboard (account creation, credential
 
 ## Step 6.5: Born fast + the suite-health baseline
 
-Suites are **born fast by configuration**, not rescued later. Apply the born-fast defaults (`references/test-strategy.md § Suite health` — class-based, explicitly non-exhaustive, current APIs): Testcontainers **reuse is local-only** ("not suited for CI usage" — their own docs; CI levers are singleton containers + image/layer caching); Vitest 4 top-level `maxWorkers`/`isolate` (`poolOptions` is removed); cargo nextest; pytest-xdist. **No invented per-test budgets** — none exist in primary sources; the trigger thresholds are GSD's own heuristics and say so.
+Suites are **born fast by configuration**, not rescued later. Apply the born-fast defaults (`@$HOME/.claude/gsd-core/references/test-strategy.md` `§ Suite health` — class-based, explicitly non-exhaustive, current APIs): Testcontainers **reuse is local-only** ("not suited for CI usage" — their own docs; CI levers are singleton containers + image/layer caching); Vitest 4 top-level `maxWorkers`/`isolate` (`poolOptions` is removed); cargo nextest; pytest-xdist. **No invented per-test budgets** — none exist in primary sources; the trigger thresholds are GSD's own heuristics and say so.
 
 Seed the `## Suite health` baseline — this is the table's **first row**, and Step 6.5 is the one writer allowed to create it (every later row is appended by the tune-up flow's fourth pass): if a test command exists, run it **once, timed**, and record `{test_count, wall_clock (integer seconds), containers_started}` with today's date (`containers_started` from Testcontainers/docker output where visible, else `—`; `ms/test` is derived at compare time, never recorded). This timed run is **the** measurement `/gsd:cicd-strategy`'s C1-a trigger reads — record it once here, never re-measure it there. Greenfield (no suite yet): record `unmeasured — baseline at the first milestone with a real suite`. The four triggers (T1–T4, reference table) govern re-evaluation: **T1** (dev-loop tier >~90 s local; PR gate >10 min = cicd's C1-a) fires **immediately**; T2/T3/T4 are compared at **milestone close** and schedule a tune-up there. Flat ms/test + rising total = volume, not regression → the remedy is tiering/sharding (C1), not tuning.
 
-This baseline is read by machinery, not by hand: the executor records `suite-metrics:` into SUMMARY frontmatter each time it runs the whole suite (`execute-phase/steps/post-merge-gate.md` Step C), `transition`'s `suite_health_compare` step evaluates the newest measurement against this row, and whichever trigger fires attaches the tune-up flow (`/gsd:testing-strategy --tune-up` → `testing-strategy/steps/suite-tune-up.md`), which appends the next row. Re-baselining is **append-only** — the history is the trend the triggers compare against.
+This baseline is read by machinery, not by hand: the executor records `suite-metrics:` into SUMMARY frontmatter each time it runs the whole suite (`@$HOME/.claude/gsd-core/workflows/execute-phase/steps/post-merge-gate.md` Step C), `transition`'s `suite_health_compare` step evaluates the newest measurement against this row, and whichever trigger fires attaches the tune-up flow (`/gsd:testing-strategy --tune-up` → the suite-tune-up step above), which appends the next row. Re-baselining is **append-only** — the history is the trend the triggers compare against.
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `@$HOME/.claude/gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 7: Write TEST-STRATEGY.md
@@ -156,7 +156,9 @@ Write to `.planning/TEST-STRATEGY.md`.
 ```bash
 gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md
+  # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
+  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG
 else
   echo "TEST-STRATEGY.md written but not committed (commit_docs is false)."
 fi
@@ -198,7 +200,7 @@ Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strat
 </critical_rules>
 
 <success_criteria>
-- ADR/SKELETON + DOMAIN-MODEL loaded; shape derived FROM the architecture (not picked)
+- ADR/SKELETON + DOMAIN-MODEL loaded (or their absence recorded and the PROJECT.md fallback used); shape derived FROM the architecture (not picked)
 - Per-subdomain level emphasis recorded with the justifying rung
 - Gnarly bits to unit-test identified; what-not-to-test stated; no duplicate coverage
 - Persistent e2e smoke list set (with its maintenance mechanism); transient e2e distinguished

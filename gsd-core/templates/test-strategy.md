@@ -25,7 +25,7 @@ The shape is an *output* of the architecture, not a chosen target. Sociable test
 
 ## Integration tests
 
-- Against **real** dependencies (DB / external services) — see the `test-containers` and `db-test-isolation` skills. Sociable; mock only at architectural boundaries.
+- Against **real** dependencies (DB / external services) — see the `test-containers` and `db-test-isolation` references. Sociable; mock only at architectural boundaries.
 
 ## End-to-end
 
@@ -38,8 +38,9 @@ The shape is an *output* of the architecture, not a chosen target. Sociable test
 The gate above is a regression check; certification validates the app in real conditions (see `certification.md`). Never a CI gate.
 
 - **Tier:** [CERT-0 | CERT-1 (limited) | CERT-1 | CERT-2 — from the probe, never from tool presence]
-- **Probe results:** [driver → goto / snapshot / click round-trip / screenshot per-operation verdicts, dated — record the failures too]
+- **Probe results:** [driver → goto / snapshot / fill / click round-trip / screenshot per-operation verdicts, dated — record the failures too]
 - **Mechanism:** [dedicated certifier app + handed-over brief | building runtime drives the browser | inspection-grade flows only | human UAT (CERT-0)]
+- **Launch conditions:** [the trust gate's instrumentation-audit result for each third-party driver — "clean audit YYYY-MM-DD" or "instrumentation found (what it wrote, which agent CLIs) — permanently sandboxed under isolated HOME"; this is what lets verify-work re-launch the driver without re-auditing]
 - **Brief source:** UAT items + the capsule's `## What Done Looks Like` — certifier-agnostic; [starter script emitted: yes/no — accelerant, never canonical]
 - **Deferred:** [capability not available — the observable fact that promotes it, e.g. "full click-through — re-probe on a visible display session"]
 
@@ -50,10 +51,10 @@ The gate above is a regression check; certification validates the app in real co
 
 | Policy | Decision |
 |---|---|
-| Seed test accounts | [idempotent seed script · role-tagged accounts · credentials in the env/secret store — never in the repo, never real user data] |
-| Email safety | [sandbox catcher (Mailpit-class) | verified provider test mode — see the vendor honesty table | real recipients ONLY because deliverability IS the feature] |
-| LLM integrations | [real calls: spend-capped test key + pinned model + shape-not-content assertions | stubs: which tiers and why] |
-| OAuth / auth | [verified provider test mode | one-time human auth + persisted session (gitignored storage state)] |
+| Seed test accounts | [idempotent seed script · role-tagged accounts · credentials in the env/secret store — never in the repo, never real user data | N/A — no accounts/data surface] |
+| Email safety | [sandbox catcher (Mailpit-class) | verified provider test mode — see the vendor honesty table | real recipients ONLY because deliverability IS the feature | N/A — no email surface (revisit when one appears)] |
+| LLM integrations | [real calls: spend-capped test key + pinned model + shape-not-content assertions | stubs: which tiers and why | N/A — no LLM integration (revisit when one appears)] |
+| OAuth / auth | [verified provider test mode | one-time human auth + persisted session (gitignored storage state) | N/A — no auth surface (revisit when one appears)] |
 
 ## Coverage & mutation
 
@@ -83,6 +84,7 @@ Baseline at strategy time — **Step 6.5 writes the first row**; thereafter only
 | [DATE] | [N \| unmeasured] | [seconds \| unmeasured] | [—] | [— (none yet)] |
 
 - **Born-fast defaults applied:** [container singleton (reuse local-only) · framework config at current APIs — see the reference checklist]
+- **T1 budget note (optional):** [only when the PR-gate tier budget differs from the default 10 min — state the budget and why; `transition`'s T1 reads this line]
 
 ## Coverage debt
 

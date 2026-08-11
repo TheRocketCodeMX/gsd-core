@@ -220,12 +220,12 @@ None - no external service configuration required.
 | Field | Contract |
 |---|---|
 | `test_count` | The count the runner itself reported. Never a grep, never a guess. |
-| `wall_clock` | Integer **seconds**, measured around the run. Never estimated, never a budget — and never minutes-and-seconds formatting, which rounds a healthy sub-minute suite to `0:00` and breaks the trigger arithmetic. |
+| `wall_clock` | Integer **seconds**, ceiling-rounded from a millisecond bracket with a **floor of 1** — a run that executed the suite records at least `1`, never `0` (a `0` row poisons the compare's derived-ms/test baseline). Never estimated, never a budget — and never minutes-and-seconds formatting. |
 | `containers_started` | From Testcontainers/docker output where visible, else `—`. `—` is an honest answer; `0` is a claim. |
 
 **ms/test is deliberately NOT a field here.** It is derived at compare time (`wall_clock ÷ test_count`) so one number can never disagree with itself. Recording a derived value invites drift, and the trigger table reads the derived one.
 
-**Omit, never zero.** If this run did not execute the suite — no runner detected, the gate timed out, the plan only ran a subset — **omit the `suite-metrics:` block entirely**. An absent block means "not measured here" and the compare skips silently. A `0` (or an invented row) is a measurement claim, and it moves a trigger.
+**Omit, never zero — and the two rules never collide.** If this run did not execute the suite — no runner detected, the gate timed out, the plan only ran a subset — **omit the `suite-metrics:` block entirely**. An absent block means "not measured here" and the compare skips silently. A `0` (or an invented row) is a measurement claim, and it moves a trigger. The tie-break with "record exactly as measured": a run that DID execute the suite records the floored value (minimum `1`), so a genuinely measured value is never `0` — omission is only ever about runs that measured nothing.
 </suite_metrics_guidance>
 
 <one_liner_rules>
