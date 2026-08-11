@@ -304,6 +304,16 @@
       ]
     },
     {
+      "path": "bin/install.js",
+      "feature": "fidelity",
+      "mode": "markers",
+      "markers": 3,
+      "anchors": [
+        "isVerbatimVendorReference",
+        " Desktop\\|-\\)"
+      ]
+    },
+    {
       "path": "bin/lib/ui-safety-gate.cjs",
       "feature": "fidelity",
       "mode": "markers",
