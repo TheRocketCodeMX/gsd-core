@@ -1061,9 +1061,9 @@ describe('suite-metrics capture — the executor records what it actually ran', 
 
   test('the post-merge test gate measures wall clock around the run it already performs', () => {
     const text = read(POST_MERGE_GATE);
-    assert.match(text, /SUITE_START_EPOCH=\$\(date \+%s\)/, 'a start epoch is taken before the suite runs');
-    assert.match(text, /SUITE_WALL_CLOCK_SEC=/, 'and the elapsed seconds are derived from it');
-    const startIdx = at(text, /SUITE_START_EPOCH=/);
+    assert.match(text, /SUITE_START_MS=/, 'a millisecond start mark is taken before the suite runs');
+    assert.match(text, /SUITE_WALL_CLOCK_SEC=/, 'and the floored seconds are derived from it');
+    const startIdx = at(text, /SUITE_START_MS=/);
     const runIdx = at(text, /TEST_EXIT=\$\?/);
     assert.ok(startIdx !== -1 && runIdx !== -1 && startIdx < runIdx, 'the clock starts BEFORE the suite runs');
   });
@@ -1740,5 +1740,188 @@ describe('combined fix wave — spec honesty (review T2)', () => {
     const spec = read('docs/superpowers/specs/2026-08-10-testing-certification-design.md');
     assert.doesNotMatch(spec, /capability-gated section/,
       'the wave deliberately rejected the section wrapper; the canonical spec must not still specify it');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2.4.1 e2e fix wave — pins for the 20 installed-artifact e2e findings
+// (.superpowers/sdd/e2e-{1,2,3}-report.md). Structural anchors, not prose.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PM_GATE = 'gsd-core/workflows/execute-phase/steps/post-merge-gate.md';
+
+describe('e2e fix wave — measurement floor and unit coherence (e2e-3 F-1/F-2)', () => {
+  test('the gate brackets the suite in milliseconds and floors the recorded seconds at 1', () => {
+    const g = read(PM_GATE);
+    assert.match(g, /SUITE_START_MS=\$\(node -e/, 'ms bracket via node (portable, not GNU-date-only)');
+    assert.match(g, /SUITE_ELAPSED_MS/, 'elapsed milliseconds computed');
+    assert.match(g, /\[ "\$SUITE_WALL_CLOCK_SEC" -lt 1 \] && SUITE_WALL_CLOCK_SEC=1/,
+      'floor of 1 — a run that executed can never record 0');
+    assert.doesNotMatch(g, /SUITE_START_EPOCH=\$\(date \+%s\)/,
+      'the 1-second-resolution epoch bracket is gone (it recorded 0 for healthy sub-second suites)');
+  });
+
+  test('the SUMMARY schema states the floor and the omit-vs-measured tie-break', () => {
+    const s = read(SUMMARY_TPL);
+    const guidance = s.slice(s.indexOf('<suite_metrics_guidance>'), s.indexOf('</suite_metrics_guidance>'));
+    assert.match(guidance, /floor of 1/i, 'wall_clock floor stated in the schema');
+    assert.match(guidance, /never `?0`?\b/i, 'a measured run can never record 0');
+    assert.match(guidance, /tie-break/i, 'the omit-rule vs record-exactly collision is resolved explicitly');
+  });
+
+  test('the compare skips a 0 wall_clock on either side (legacy pre-floor rows)', () => {
+    const t = read(TRANSITION);
+    const step = t.slice(t.indexOf('suite_health_compare'));
+    assert.match(step, /wall_clock` is `0`/, 'zero guard in the skip list');
+    assert.match(step, /never become a divisor|never a real reading/i,
+      'the guard names the divide-by-zero it prevents');
+  });
+});
+
+describe('e2e fix wave — transition compare robustness (e2e-3 F-3/F-4/F-6)', () => {
+  test('todo filenames use the local calendar date — the same clock as add-todo', () => {
+    const t = read(TRANSITION);
+    const step = t.slice(t.indexOf('suite_health_compare'));
+    assert.match(step, /TODAY=\$\(date \+%Y-%m-%d\)/, 'local date, not UTC');
+    assert.doesNotMatch(step, /date -u \+%Y-%m-%d/, 'the UTC form is gone');
+    assert.match(read('gsd-core/workflows/add-todo.md'), /same clock/i,
+      'add-todo states the shared-clock contract from its side');
+  });
+
+  test('the newest-SUMMARY expansion is NUL-delimited, not naked word-splitting', () => {
+    const t = read(TRANSITION);
+    assert.match(t, /tr '\\n' '\\0' \| xargs -0 ls -t/, 'quote-safe newline handling');
+    assert.doesNotMatch(t, /ls -t \$M \| head/, 'the unquoted expansion is gone');
+  });
+
+  test('T1 override points at a slot the template actually ships', () => {
+    assert.match(read(TRANSITION), /T1 budget note/, 'transition names the note line');
+    assert.match(read(TEMPLATE), /\*\*T1 budget note \(optional\):\*\*/, 'the template ships it');
+  });
+});
+
+describe('e2e fix wave — tune-up routing (e2e-3 F-5)', () => {
+  test('Pass 1 has a rule when no bucket reaches 80%', () => {
+    assert.match(read(TUNE_UP), /No bucket at 80\s?%\? The dominant bucket\s+wins/i,
+      'dominant-bucket tie-break stated');
+  });
+});
+
+describe('e2e fix wave — certification step (e2e-2 F1/F2/F4/F5)', () => {
+  test('the outcome line has a closed, spelled-out note set including the sandbox note', () => {
+    const c = read(CERT_STEP);
+    assert.match(c, /closed set/i, 'the note list is closed, not open-ended');
+    assert.match(c, /probe\s+exceeded recorded tier/, 'note 1 spelled');
+    assert.match(c, /driver permanently sandboxed\s+\(instrumentation found at first launch\)/,
+      'note 2 spelled — the instrumentation branch has a sanctioned outcome append');
+    // §3 references the sanctioned spelling instead of a free-form instruction
+    assert.doesNotMatch(c, /name the finding in the outcome\./,
+      'the free-form "name the finding" instruction is replaced by the sanctioned note');
+  });
+
+  test('the source: agentic UAT template carries coverage_id (traceability parity)', () => {
+    const c = read(CERT_STEP);
+    assert.match(c, /coverage_id: \[D-id[\s\S]{0,160}capsule-added[\s\S]{0,60}\]/,
+      'coverage_id line present, with the capsule-added exemption stated');
+  });
+
+  test('the re-probe names its throwaway substrate (data: URL + local echo server)', () => {
+    const c = read(CERT_STEP);
+    assert.match(c, /`data:`\s*\n?\s*URL/, 'data: URL leg named in the step');
+    assert.match(c, /echo server/i, 'local echo server leg named in the step');
+    const ref = read(CERT_REF);
+    assert.match(ref, /throwaway substrate is self-served/i, 'the reference owns the recipe');
+    assert.match(ref, /echo server/i, 'reference names the effect-assertion server');
+  });
+
+  test('the certifier input boundary defines "environment"', () => {
+    const c = read(CERT_STEP);
+    assert.match(c, /The environment is\*?\*?:/, 'environment defined, not left open');
+    assert.match(c, /named in the brief, never smuggled/i,
+      'assertion targets must come from the brief, not the dispatch prompt');
+  });
+});
+
+describe('e2e fix wave — verify-work seam (e2e-2 F3/F6)', () => {
+  test('cold-start pattern matching is defined (basename for files, segment for dirs)', () => {
+    const v = read(VERIFY_WORK);
+    assert.match(v, /matching is on the path'?s basename/i, 'basename rule stated');
+    assert.match(v, /fixture-app\.js[^\n]*does NOT match/i, 'the disambiguating example shipped');
+  });
+
+  test('the init call site warns the phase argument is positional', () => {
+    assert.match(read(VERIFY_WORK), /phase arg is POSITIONAL/i);
+  });
+});
+
+describe('e2e fix wave — strategy chain (e2e-1 F1/F2/F3/F4/F5/F6/F8)', () => {
+  const CHAIN = [
+    ['gsd-core/workflows/testing-strategy.md', 'TEST-STRATEGY'],
+    ['gsd-core/workflows/cicd-strategy.md', 'CICD-STRATEGY'],
+    ['gsd-core/workflows/discover-product.md', 'PRODUCT-BRIEF'],
+    ['gsd-core/workflows/frontend-architecture.md', 'FRONTEND-ARCHITECTURE'],
+    ['gsd-core/workflows/infrastructure-strategy.md', 'INFRA-STRATEGY'],
+    ['gsd-core/workflows/legacy-inventory.md', 'LEGACY-INVENTORY'],
+    ['gsd-core/workflows/model-domain.md', 'DOMAIN-MODEL'],
+    ['gsd-core/workflows/recommend-architecture.md', 'adr/NNNN-architecture'],
+    ['gsd-core/workflows/security-strategy.md', 'SECURITY-STRATEGY'],
+  ];
+  for (const [wf] of CHAIN) {
+    test(`${wf.split('/').pop()} commits the discussion log when it exists (F1)`, () => {
+      const w = read(wf);
+      assert.match(w, /DLOG=\$\(\[ -f \.planning\/PROJECT-DISCUSSION-LOG\.md \]/,
+        'conditional DLOG expansion (a missing log must not abort the fail-closed commit)');
+      assert.match(w, /--files [^\n]*\$DLOG/, 'the commit line includes $DLOG');
+    });
+  }
+
+  test('new-project extends its FORK:context block with the commit inclusion (F1)', () => {
+    const w = read('gsd-core/workflows/new-project.md');
+    const block = w.slice(w.indexOf('<!-- FORK:context BEGIN -->'), w.indexOf('<!-- FORK:context END -->'));
+    assert.match(block, /include `\.planning\/PROJECT-DISCUSSION-LOG\.md` in the PROJECT\.md docs commit/,
+      'the upstream-shared file carries the instruction inside its existing marked block');
+  });
+
+  test('the template ships a Launch conditions slot for the instrumentation audit (F2)', () => {
+    assert.match(read(TEMPLATE), /\*\*Launch conditions:\*\*/,
+      'the trust-gate audit result has a recorded home');
+  });
+
+  test('Step 4 states its fallback when DOMAIN-MODEL/REQUIREMENTS are absent (F3)', () => {
+    const w = read(WORKFLOW);
+    assert.match(w, /both optional; when either is absent, derive from PROJECT\.md/i);
+    assert.match(w, /or their absence recorded/i, 'success criterion admits the absence path');
+  });
+
+  test('every substrate row admits an honest N/A (F4)', () => {
+    const t = read(TEMPLATE);
+    const table = t.slice(t.indexOf('## Certification substrate'), t.indexOf('## Coverage'));
+    const rows = table.split('\n').filter((l) => l.startsWith('| ') && !l.startsWith('| Policy') && !l.startsWith('|---'));
+    assert.ok(rows.length >= 4, 'four policy rows');
+    for (const row of rows) assert.match(row, /N\/A — no /i, `row admits N/A: ${row.slice(0, 40)}`);
+    assert.match(read(WORKFLOW), /first-class row value/i, 'the workflow states N/A is recorded, never invented');
+  });
+
+  test('test-containers and db-test-isolation are called references, not skills (F5)', () => {
+    assert.doesNotMatch(read(TEMPLATE), /`db-test-isolation` skills/, 'the mislabel is gone');
+    assert.match(read(TEMPLATE), /`db-test-isolation` references/);
+  });
+
+  test('no bare relative artifact refs remain in the workflow (F6)', () => {
+    const w = read(WORKFLOW);
+    assert.doesNotMatch(w, /execute `gsd-core\//, 'read-and-execute targets are absolute');
+    assert.doesNotMatch(w, /\(`references\/test-strategy\.md/, 'reference pointers are absolute');
+    assert.doesNotMatch(w, /see `templates\/user-setup\.md`/, 'template pointers are absolute');
+  });
+
+  test('the ladder covers apps with no browser surface (F8)', () => {
+    const ref = read(CERT_REF);
+    assert.match(ref, /\*\*No browser surface\?\*\*/, 'the non-browser note exists');
+    assert.match(ref, /real dependencies/i, 'API/CLI certification shape named');
+    assert.match(ref, /first browser surface/i, 'the deferred-trigger phrasing shipped');
+  });
+
+  test('the probe hint in the template includes fill (5-op coherence)', () => {
+    assert.match(read(TEMPLATE), /goto \/ snapshot \/ fill \/ click round-trip \/ screenshot/);
   });
 });

@@ -107,7 +107,9 @@ Once approved, render `@~/.claude/gsd-core/templates/frontend-architecture.md` a
 ```bash
 gsd_run project strategy-done frontend-architecture 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: record frontend architecture" --files .planning/FRONTEND-ARCHITECTURE.md .planning/PROJECT.md
+  # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
+  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: record frontend architecture" --files .planning/FRONTEND-ARCHITECTURE.md .planning/PROJECT.md $DLOG
 else
   echo "FRONTEND-ARCHITECTURE.md written but not committed (commit_docs is false)."
 fi

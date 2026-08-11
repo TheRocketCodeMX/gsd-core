@@ -226,7 +226,7 @@ If "Keep exploring" — ask what they want to add, or identify gaps and probe na
 Loop until "Create PROJECT.md" selected.
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled). When the log exists at commit time, include `.planning/PROJECT-DISCUSSION-LOG.md` in the PROJECT.md docs commit below — the log is the durable record of the reasoning and must not be left untracked.
 <!-- FORK:context END -->
 
 ## 4. Write PROJECT.md

@@ -89,7 +89,9 @@ reorder this gate behind the capability check to save a step.
 self-granted trust entries, anything beyond the tool's own state directory — do
 not grant the real environment. Keep the tool **permanently sandboxed**: run the
 certification itself from inside the isolated HOME (the app under test and the
-seeded accounts are reachable from there), and name the finding in the outcome.
+seeded accounts are reachable from there), and append §8's sanctioned note
+` · driver permanently sandboxed (instrumentation found at first launch)` to the
+outcome line.
 A tool that instruments without consent never graduates; this is the branch the
 audit exists to take, not a failure of the run.
 
@@ -113,6 +115,10 @@ Re-check the specific driver the mechanism names before relying on it:
 - Are the operations the tier depends on still capable? Re-run the reference's
   live probe against a **throwaway page** — never the real app — and verify a
   click by its *effect* (did the state change land), never by its return value.
+  The throwaway substrate is self-served (the reference's probe recipe): a `data:`
+  URL page covers the goto/snapshot legs, and a ~15-line local HTTP echo server
+  that logs POSTs hosts the fill/click/effect leg — the click must land on a
+  server **you** observe, which is why a remote page can never be the probe target.
 - Did the environment change in a way the recorded rows call out (no display,
   WSL/headless, API-key auth)?
 
@@ -180,7 +186,7 @@ depends on the mechanism, and the step must say which one it used:
 | Tier | How separation is achieved |
 |---|---|
 | **CERT-2** | Structural. The brief is handed to a dedicated certifier application (possibly on another machine); the building session hands over and stops. |
-| **CERT-1** | The accepted weakest case — same runtime, same model family. Achieve it by dispatching a **fresh subagent** that receives ONLY the brief and the environment: no plan, no diff, no build transcript. A certifier that has read the implementation is not certifying, it is confirming. |
+| **CERT-1** | The accepted weakest case — same runtime, same model family. Achieve it by dispatching a **fresh subagent** that receives ONLY the brief and the environment: no plan, no diff, no build transcript. **The environment is**: the substrate section's facts (URLs, ports, seeded accounts), driver-invocation mechanics (binary path, sandbox HOME, flag forms), and the evidence interfaces the brief itself names as acceptance signals — anything the certifier must *assert on* must be named in the brief, never smuggled in via the dispatch prompt. A certifier that has read the implementation is not certifying, it is confirming. |
 | **CERT-1 (limited)** | Same as CERT-1 — a fresh brief-only subagent. The limited tier narrows *what* can be certified (inspection-grade scope), not *who* certifies it. |
 | **CERT-0** | The human is the certifier — separation is total. |
 
@@ -202,6 +208,7 @@ no parallel artifact):
 expected: [observable expected outcome from the brief]
 result: pass
 source: agentic
+coverage_id: [D-id — certified checkpoints come from present[], which always carries one; omit ONLY for capsule-added checkpoints, which have none]
 evidence: [transcript ref · screenshots/console/network captures where the driver was probed capable]
 ```
 
@@ -235,11 +242,16 @@ Exactly one line, always, handed to `create_uat_file` with the entries above:
 
 | Situation | Recorded line |
 |---|---|
-| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated` — append ` · probe exceeded recorded tier` when §4's re-check recorded that note |
+| Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated`, plus zero or more ` · `-separated notes from the **closed set** below |
 | No capable driver | `certification: human (CERT-0)` |
 | No user-facing surface | `certification: N/A — no user-facing change` |
 | Declined under `offer` | `certification: skipped (declined)` |
 | Posture is `off` | `certification: off (posture)` |
+
+**Sanctioned notes** (the only appends the line admits; each spelled exactly): ` · probe
+exceeded recorded tier` (from §4's re-check) and ` · driver permanently sandboxed
+(instrumentation found at first launch)` (from §3's instrumentation branch). Anything
+else a run wants to say belongs in the UAT entries or the brief, not this line.
 
 The counting unit is the **checkpoint** (what UAT counts), never the brief's flows —
 a flow can cover zero or several checkpoints. The tier token is always the ladder's
