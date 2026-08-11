@@ -1218,7 +1218,10 @@
         "verify-work/steps/agentic-certification\\.md",
         "<step name=\"coverage_gap_capture\">",
         "##\\s*Coverage debt",
-        "source: agentic"
+        "source: agentic",
+        "Certification re-entry — before the pending scan",
+        "CERTIFICATION-RESULT\\.md",
+        "This step never overwrites"
       ]
     },
     {
@@ -1435,6 +1438,39 @@
       "mode": "anchors-only",
       "anchors": [
         "execute-phase/steps/post-wave-tracking-update\\.md"
+      ]
+    },
+    {
+      "path": "src/uat.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-",
+        "\\[\\\\w-\\]\\+"
+      ]
+    },
+    {
+      "path": "src/uat-predicate.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-"
+      ]
+    },
+    {
+      "path": "src/phase.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-"
+      ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates\\.confirm_milestone_scope"
       ]
     }
   ]

@@ -532,7 +532,7 @@ function scanUatGaps(planDir: string): UatGapItem[] {
       continue;
     }
 
-    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md'))) {
+    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md') && !f.includes('-UAT-superseded-'))) {
       const filePath = path.join(phaseDir, file);
 
       let safeFilePath: string;

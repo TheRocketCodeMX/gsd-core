@@ -66,7 +66,7 @@ The number that decides the pipeline's shape is the **suite wall clock** — and
 
 **MEASURE — run the command, don't ask:**
 
-- **Suite wall clock** *(the C1 trigger)* — read the newest dated row of TEST-STRATEGY.md's `## Suite health` table and use it; run `time <test command>` **only when** no measured row exists (no TEST-STRATEGY.md, the row reads `unmeasured`, or the table is absent) — never re-time a number the strategy already recorded, and never produce a second independently-dated value for one fact. If the repo has no code yet (greenfield at strategy time), record `unmeasured — assume under budget; re-measure at the first milestone with a real suite` and **default to C0**.
+- **Suite wall clock** *(the C1 trigger)* — read the newest dated row of TEST-STRATEGY.md's `## Suite health` table and use it (the `wall_clock` column is **integer milliseconds**; a legacy row headed `wall_clock (s)` — or a bare small integer from a pre-ms file — is seconds: multiply by 1000 before comparing to the 10-minute budget, exactly as `transition.md`'s compare does); run `time <test command>` **only when** no measured row exists (no TEST-STRATEGY.md, the row reads `unmeasured`, or the table is absent) — never re-time a number the strategy already recorded, and never produce a second independently-dated value for one fact. If the repo has no code yet (greenfield at strategy time), record `unmeasured — assume under budget; re-measure at the first milestone with a real suite` and **default to C0**.
 - **Merges/week** *(the C3 trigger)* — `MERGES_90D` ÷ 13. **Contributors** *(the trunk-based 15-vs-16 threshold)* — `CONTRIBUTORS_90D`.
 - **Existing CI surface** *(brownfield input)* — the `.github/workflows` listing plus the `schedule:` / `matrix:` greps from Step 2; each one found needs a forcing fact or a rung-down card.
 - **Flake evidence** *(the C2-a trigger)* — ask the CI platform, not the user: `gh run list --status failure --limit 50` re-run patterns, or an existing quarantine/skip list in the test config.
@@ -186,7 +186,7 @@ Run this in **both directions** — it is a first-class gate, not a formality. A
 
 | Capability | The concrete requirement forcing it | Where that fact is observable |
 |---|---|---|
-| A second pipeline stage | suite > 10 min · fork-secret/device/deployed-URL impossibility · included-minutes breach | the measured suite time; the tier that can't run on a PR |
+| A second pipeline stage | suite > 10 min · fork-secret/device/deployed-URL impossibility · included-minutes breach — never TEST-STRATEGY's "Not a pipeline tier" line (certification is not a tier; C1 cannot claim it) | the measured suite time; the tier that can't run on a PR |
 | Any `schedule:` job | one of C2-a/b/c/d **plus a named owner and a triage SLA** | the flake/quarantine evidence; the post-merge wall clock; `dependabot.yml` absence; the vendor integration |
 | A matrix leg | a supported-platform promise | the publish target / README support policy |
 | A merge queue | ~tens of merges/day; stale-base failures routine | `MERGES_90D` ÷ 13 |

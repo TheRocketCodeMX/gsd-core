@@ -244,7 +244,7 @@ function evaluateUatPassed(
   }
 
   // Filter UAT and VERIFICATION files using the same filter as cmdPhaseComplete
-  const uatFileNames = dirEntries.filter(f => f.includes('-UAT') && f.endsWith('.md'));
+  const uatFileNames = dirEntries.filter(f => f.includes('-UAT') && f.endsWith('.md') && !f.includes('-UAT-superseded-'));
   const verFileNames = dirEntries.filter(f => f.includes('-VERIFICATION') && f.endsWith('.md'));
 
   // ── Process UAT files ──────────────────────────────────────────────────────
