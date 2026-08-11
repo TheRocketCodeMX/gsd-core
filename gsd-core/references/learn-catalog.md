@@ -60,8 +60,8 @@ Source skills: `test-strategy.md`, `test-doubles.md`, `tdd.md`, `ai-test-quality
 | `test-shape-follows-arch` | Pyramid/diamond/trophy as outputs of architecture, not picks | `test-strategy.md § Shape follows architecture` | `test-levels`, `arch-when-to-use` | diagram |
 | `test-what-to-unit-test` | The gnarly bits worth unit-testing — and what NOT to test | `test-strategy.md § When unit tests pay off` + `§ What NOT to test` | `test-levels` | — |
 | `test-coverage-mutation` | Coverage as a floor; mutation testing; green ≠ correct | `test-strategy.md § Core principles` (#3) + `ai-test-quality.md § E. Mutation gate` | `test-levels` | — |
-| `test-tdd` | Red-green-refactor; when it pays vs when to skip | `tdd.md § When to Use TDD` + `§ Red-Green-Refactor Cycle` | `test-behavior-over-impl` | code |
-| `test-ai-quality` | AI-written test quality — independence, the falsifiability gate, change-detector tests | `ai-test-quality.md § A–F` | `test-behavior-over-impl`, `test-coverage-mutation` | — |
+| `test-tdd` | Red-green-refactor; when it pays vs when to skip | `tdd.md § When TDD Improves Quality` + `§ Red-Green-Refactor Cycle` | `test-behavior-over-impl` | code |
+| `test-ai-quality` | AI-written test quality — independence, the falsifiability gate, change-detector tests | `ai-test-quality.md § AI-Written Tests` (sections A–F) | `test-behavior-over-impl`, `test-coverage-mutation` | — |
 | `test-containers` | Real DBs/services via Testcontainers — singleton, pinned tags, Ryuk | `test-containers.md` | `test-levels` | — |
 | `test-db-isolation` | Parallel-safe DB isolation — txn rollback / schema-per-worker / template DB | `db-test-isolation.md` | `test-containers` | — |
 | `test-contract` | Consumer-driven contracts + provider verification (HOME node; linked from Seam) | `contract-testing.md` | `test-mockable-seam` | — |

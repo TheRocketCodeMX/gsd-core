@@ -6,7 +6,17 @@ activation itself (`ui_phase_active`) is already resolved at init time — this
 section is only reached when that fact is `true` (see the `state:ui-phase-active`
 gate above), so re-deriving it here would be redundant.
 
+`PHASE_DIR` is resolved in a DIFFERENT fenced block (`verify-work.md`'s init block),
+which is a different process (#381). Unset, `ls "${PHASE_DIR}"/*-UI-SPEC.md` degrades to
+`ls /*-UI-SPEC.md` → empty → this step concludes "no UI spec" **on a phase that has
+one** (e2e-4 F8). Absence of a variable is not evidence about the phase, so the step
+stops instead of answering:
+
 ```bash
+if [ -z "${PHASE_DIR:-}" ]; then
+  echo "✗ automated-ui-verification: PHASE_DIR is unset in this shell (fenced blocks are separate processes). This step did NOT run — it is NOT a 'no UI spec' result. Re-read phase_dir from the init bundle (gsd_run query init.verify-work {phase}) and re-run this step." >&2
+  exit 1
+fi
 UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
 ```
 

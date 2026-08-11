@@ -1826,13 +1826,20 @@ describe('e2e fix wave — certification step (e2e-2 F1/F2/F4/F5)', () => {
       'coverage_id line present, with the capsule-added exemption stated');
   });
 
-  test('the re-probe names its throwaway substrate (data: URL + local echo server)', () => {
+  // Round-2 Wave B (e2e-4 F11): the `data:` URL leg was RETIRED as a prescription —
+  // onorca 1.4.178's `goto` rejects the scheme the reference named as today's
+  // lowest-friction driver, and a first-time prober reads that as a demotion. One
+  // local HTTP server now serves the page AND logs the POSTs, so all five legs run
+  // against http://127.0.0.1. The pin follows the design, not the retired wording.
+  test('the re-probe names its throwaway substrate (one locally served page + POST log)', () => {
     const c = read(CERT_STEP);
-    assert.match(c, /`data:`\s*\n?\s*URL/, 'data: URL leg named in the step');
-    assert.match(c, /echo server/i, 'local echo server leg named in the step');
+    assert.match(c, /local HTTP server/i, 'the served-page + POST-log substrate is named in the step');
+    assert.match(c, /127\.0\.0\.1/, 'the step points the probe at a locally served page');
+    assert.doesNotMatch(c, /a `data:`\s*\n?\s*URL page covers/,
+      'the step must not prescribe a page source its own named driver rejects');
     const ref = read(CERT_REF);
     assert.match(ref, /throwaway substrate is self-served/i, 'the reference owns the recipe');
-    assert.match(ref, /echo server/i, 'reference names the effect-assertion server');
+    assert.match(ref, /logs the POST bodies it receives/i, 'reference names the effect-assertion server');
   });
 
   test('the certifier input boundary defines "environment"', () => {
@@ -2128,4 +2135,148 @@ describe('millisecond suite metrics (e2e-4 F12, e2e-7 F5)', () => {
     assert.doesNotMatch(read(TEST_REF), /`wall_clock` in integer seconds/,
       'the authority table no longer pins the seconds unit');
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Round-2 Wave B — mechanical seam repairs (e2e-4 F5/F7/F8/F10/F11,
+// e2e-5 F7, e2e-7 F6). These are doc contracts: the deployed .md text IS what
+// the agent executes, so the pinned structures are the fix.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('round-2 Wave B — verify-work completion seams (e2e-4 F5/F7)', () => {
+  const VW = 'gsd-core/workflows/verify-work.md';
+
+  test('e2e-4 F5 — the human_needed → passed stamp is conditional on nothing being unproven', () => {
+    const src = read(VW);
+    const guard = /if \[ "\$VERIFICATION_STATUS_VALUE" = "human_needed" \] && \[ "\$BEHAVIOR_UNVERIFIED" -eq 0 \] && \[ "\$CERT_UNPROVEN" -eq 0 \]/;
+    assert.match(src, guard, 'the stamp must require zero unverified behaviours AND zero unproven checkpoints');
+    // The two inputs must actually be read from the two artifacts allowed to say so.
+    assert.match(src, /BEHAVIOR_UNVERIFIED=.*frontmatter\.get .*behavior_unverified/,
+      'behavior_unverified comes from VERIFICATION.md');
+    assert.match(src, /CERT_UNPROVEN=.*pending-certifier.*could-not-prove/,
+      'unproven certification checkpoints come from the UAT file');
+  });
+
+  test('e2e-4 F5 — a withheld stamp is announced, not silent', () => {
+    const src = read(VW);
+    assert.match(src, /If the stamp was withheld/i, 'the withheld branch is documented');
+    assert.match(src, /still unproven/i, 'the user is told what is unproven');
+  });
+
+  test('e2e-4 F7 — coverage_gap_capture has a record-only entry that does not need a UAT issue', () => {
+    const src = read(VW);
+    const stepStart = src.indexOf('<step name="coverage_gap_capture">');
+    assert.notStrictEqual(stepStart, -1);
+    const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
+    assert.match(step, /record-only/, 'the second entry exists');
+    assert.match(step, /behavior_unverified_items/, 'verifier-named gaps are a trigger');
+    assert.match(step, /could-not-prove|pending-certifier/, 'certifier-escalated gaps are a trigger');
+    assert.match(step, /never.*invent a `## Gaps` id|never\*\* invent a `## Gaps` id/i,
+      'record-only must not fabricate a gap id the human never reported');
+  });
+
+  test('e2e-4 F7 — the record-only route does not fall into plan_gap_closure', () => {
+    const src = read(VW);
+    const stepStart = src.indexOf('<step name="coverage_gap_capture">');
+    const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
+    assert.match(step, /\*\*Record-only entry:\*\* return to `complete_session`/,
+      'record-only returns to complete_session instead of planning fixes');
+  });
+});
+
+describe('round-2 Wave B — unsubstituted placeholders fail loud (e2e-4 F8)', () => {
+  test('transition.md guards XX-current before the compare can silently no-op', () => {
+    const src = read('gsd-core/workflows/transition.md');
+    assert.match(src, /_GSD_PLACEHOLDER="XX""-current"/,
+      'the sentinel must be assembled from two literals so a blind substitution cannot rewrite the guard');
+    assert.match(src, /did NOT run — it is not a 'no metrics recorded' result/,
+      'the message must distinguish "could not run" from the documented silent-skip branch');
+  });
+
+  test('automated-ui-verification.md guards an unset PHASE_DIR', () => {
+    const src = read('gsd-core/workflows/verify-work/steps/automated-ui-verification.md');
+    assert.match(src, /if \[ -z "\$\{PHASE_DIR:-\}" \]; then/, 'the step must check PHASE_DIR before globbing');
+    assert.match(src, /NOT a 'no UI spec' result/,
+      'an unset variable must never be reported as a fact about the phase');
+  });
+});
+
+describe('round-2 Wave B — consumers read fields that exist (e2e-4 F10)', () => {
+  test('complete-milestone no longer checks progress_percent', () => {
+    const src = read('gsd-core/workflows/complete-milestone.md');
+    assert.doesNotMatch(src, /`progress_percent` should be 100%/,
+      'init.manager has never emitted progress_percent');
+    assert.match(src, /`all_complete` should be `true`/, 'the rollup key that DOES exist is named');
+    assert.match(src, /`phase_count` includes backlog/,
+      'the counted-vs-gated asymmetry must be stated so the pair is not misread as a gate');
+  });
+});
+
+describe('round-2 Wave B — the probe recipe is driver-agnostic about the page source (e2e-4 F11)', () => {
+  const CERT_REF_B = 'gsd-core/references/certification.md';
+  const CERT_STEP_B = 'gsd-core/workflows/verify-work/steps/agentic-certification.md';
+
+  test('the reference no longer prescribes a data: URL for the goto leg', () => {
+    const src = read(CERT_REF_B);
+    assert.doesNotMatch(src, /a `data:` URL page covers goto\/snapshot/,
+      'the prescription that fails on the reference\'s own named driver is gone');
+    assert.match(src, /serves a throwaway page/i, 'the echo server also serves the page');
+    assert.match(src, /http:\/\/127\.0\.0\.1/, 'all five legs run against a locally served page');
+  });
+
+  test('both surfaces name the driver rejection as a URL fact, never a capability demotion', () => {
+    for (const f of [CERT_REF_B, CERT_STEP_B]) {
+      const src = read(f);
+      assert.match(src, /Unsupported browser URL/, `${f}: the live receipt is cited`);
+      assert.match(src, /not a capability (verdict|demotion)|never\*\* a capability demotion/i,
+        `${f}: the reading a first-time prober must not take is named`);
+    }
+  });
+});
+
+describe('round-2 Wave B — UAT template documents the certification line (e2e-5 F7)', () => {
+  const UAT_TEMPLATE = 'gsd-core/templates/UAT.md';
+
+  test('the file template carries the certification slot at the top of ## Tests', () => {
+    const src = read(UAT_TEMPLATE);
+    const testsIdx = src.indexOf('## Tests');
+    assert.notStrictEqual(testsIdx, -1);
+    const after = src.slice(testsIdx, testsIdx + 300);
+    assert.match(after, /^\s*## Tests\s*\n\s*\ncertification: /,
+      'the outcome line is the first line of ## Tests, at column 0 (ship.md greps for it there)');
+  });
+
+  test('the section rules enumerate the closed outcome set the workflow writes', () => {
+    const src = read(UAT_TEMPLATE);
+    for (const form of [
+      'certification: agentic (CERT-1)',
+      'certification: pending (CERT-2',
+      'certification: human (CERT-0)',
+      'certification: N/A — no user-facing change',
+      'certification: skipped (declined —',
+      'certification: off (posture)',
+    ]) {
+      assert.ok(src.includes(form), `templates/UAT.md must document the \`${form}\` form`);
+    }
+  });
+
+  test('the section rules document [pending-certifier], which present_test never selects', () => {
+    const src = read(UAT_TEMPLATE);
+    assert.match(src, /\[pending-certifier\]/);
+    assert.match(src, /NEVER presented/i);
+  });
+});
+
+describe('round-2 Wave B — testing-strategy process section routes --tune-up (e2e-7 F6)', () => {
+  for (const f of ['skills/gsd-testing-strategy/SKILL.md', 'commands/gsd/testing-strategy.md']) {
+    test(`${f} names --tune-up and its step file in <process>`, () => {
+      const src = read(f);
+      const start = src.indexOf('<process>');
+      assert.notStrictEqual(start, -1, 'no <process> section');
+      const proc = src.slice(start, src.indexOf('</process>', start));
+      assert.match(proc, /--tune-up/, 'the process section must name the flag it routes on');
+      assert.match(proc, /suite-tune-up\.md/, 'and the step file it dispatches to');
+      assert.match(proc, /does NOT author a strategy/,
+        'the priming risk is that an agent skimming <process> authors on a tune-up run');
+    });
+  }
 });

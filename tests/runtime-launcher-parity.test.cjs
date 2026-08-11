@@ -187,8 +187,25 @@ describe('runtime-launcher-parity (#373)', () => {
     );
   });
 
-  // ─── (B) Exactly ONE canonical preamble per using file ───────────────────
-  test('(B) each workflow .md using gsd_run contains exactly ONE canonical preamble, before the first gsd_run call', () => {
+  // ─── (B) Canonical preamble placement, per BLOCK ─────────────────────────
+  //
+  // Historical rule: exactly ONE preamble per file, in the first gsd_run block
+  // ("define once per file, use across blocks — original footprint"). That rule
+  // is what e2e-4 F1 broke on: fenced blocks run in SEPARATE processes (#381,
+  // stated by bin/gsd_run:3-8 itself), so a later block's `gsd_run` is
+  // `command not found` unless CLAUDE_ENV_FILE happens to be set — which it is
+  // not on a `--claude --local` install. post-merge-gate.md's Step B reported a
+  // green 12/12 suite as `✗ Post-merge test gate failed (exit code 127)`.
+  //
+  // Current rule, enforced here and implemented by scripts/sync-runtime-launcher.cjs:
+  //   • at least one preamble per file that uses gsd_run,
+  //   • the FIRST gsd_run-bearing block always carries one,
+  //   • no block carries more than one,
+  //   • wherever a block carries one, it precedes that block's first gsd_run call.
+  // A later block MAY carry its own copy (that is the fix for a gate whose
+  // resolver failure would otherwise be mis-attributed to the user's app); the
+  // sync script preserves such copies instead of stripping them.
+  test('(B) each workflow .md using gsd_run carries the canonical preamble in its first gsd_run block, at most once per block, before that block\'s first call', () => {
     const preamble = expectedPreamble();
     const preambleStr = preamble.join('\n');
     const files = collectWorkflowFiles();
@@ -204,57 +221,97 @@ describe('runtime-launcher-parity (#373)', () => {
       if (delegatesToResolverReference(content)) continue;
       const blocks = extractShellBlocks(content);
 
-      // Collect all block lines in document order for flat analysis
-      const allBlockLines = [];
-      for (const blk of blocks) {
-        allBlockLines.push(...blk.lines);
-      }
-
       // Does this file use gsd_run at all?
-      const fileHasGsdRun = allBlockLines.some((l) => /\bgsd_run\b/.test(l));
+      const fileHasGsdRun = blocks.some((b) => b.lines.some((l) => /\bgsd_run\b/.test(l)));
       if (!fileHasGsdRun) continue;
 
-      // Count preamble occurrences across all shell content of this file
-      // Flatten all block lines with a separator so multi-block boundary doesn't create false match
-      const allContent = allBlockLines.join('\n');
-      let preambleCount = 0;
-      let searchPos = 0;
-      while (true) {
-        const idx = allContent.indexOf(preambleStr, searchPos);
-        if (idx === -1) break;
-        preambleCount++;
-        searchPos = idx + preambleStr.length;
+      let firstGsdRunBlockSeen = false;
+      let totalPreambles = 0;
+
+      for (const blk of blocks) {
+        const blockContent = blk.lines.join('\n');
+        const blockHasGsdRun = /\bgsd_run\b/.test(blockContent);
+
+        let count = 0;
+        let searchPos = 0;
+        while (true) {
+          const idx = blockContent.indexOf(preambleStr, searchPos);
+          if (idx === -1) break;
+          count++;
+          searchPos = idx + preambleStr.length;
+        }
+        totalPreambles += count;
+
+        if (count > 1) {
+          violations.push(
+            `${rel} block ${blk.index}: ${count} canonical preambles in ONE block — one is enough. ` +
+              `Run \`node scripts/sync-runtime-launcher.cjs\` to fix.`,
+          );
+          continue;
+        }
+
+        if (count === 1) {
+          // Where it exists, it must precede that block's first gsd_run reference.
+          const preamblePos = blockContent.indexOf(preambleStr);
+          const firstGsdRunPos = blockContent.search(/\bgsd_run\b/);
+          if (preamblePos > firstGsdRunPos) {
+            violations.push(
+              `${rel} block ${blk.index}: preamble appears AFTER the block's first gsd_run reference.`,
+            );
+          }
+        }
+
+        if (blockHasGsdRun && !firstGsdRunBlockSeen) {
+          firstGsdRunBlockSeen = true;
+          if (count !== 1) {
+            violations.push(
+              `${rel} block ${blk.index}: the FIRST block that calls gsd_run must carry the canonical ` +
+                `preamble (found ${count}). Run \`node scripts/sync-runtime-launcher.cjs\` to fix.`,
+            );
+          }
+        }
       }
 
-      if (preambleCount !== 1) {
-        violations.push(
-          `${rel}: expected exactly 1 canonical preamble occurrence in bash blocks, found ${preambleCount}. ` +
-            `Run \`node scripts/sync-runtime-launcher.cjs\` to fix.`,
-        );
-        continue;
-      }
-
-      // Verify preamble appears BEFORE the first gsd_run call (in document order)
-      // Find the line index of the preamble start vs the first gsd_run call in the flat content
-      const preamblePos = allContent.indexOf(preambleStr);
-      const firstGsdRunPos = allContent.search(/\bgsd_run\b/);
-
-      // The first gsd_run WITHIN the preamble itself (the function definition) is fine.
-      // We need to verify that no gsd_run CALL (i.e. gsd_run used as a command, not in a
-      // function definition body) appears before the preamble starts.
-      // Simple check: preamble starts at or before the first gsd_run occurrence
-      if (preamblePos > firstGsdRunPos) {
-        violations.push(
-          `${rel}: preamble appears AFTER the first gsd_run reference — it must precede all gsd_run calls.`,
-        );
+      if (totalPreambles === 0) {
+        violations.push(`${rel}: uses gsd_run but carries no canonical preamble at all.`);
       }
     }
 
     assert.deepStrictEqual(
       violations,
       [],
-      'Files with gsd_run calls have wrong preamble count or ordering:\n' +
-        violations.join('\n---\n'),
+      'Files with gsd_run calls have wrong preamble placement:\n' + violations.join('\n---\n'),
+    );
+  });
+
+  // ─── (B3) e2e-4 F1 — the post-merge test gate resolves gsd_run itself ─────
+  test('(B3) post-merge-gate.md Step B (test gate) carries its own preamble and a loud unresolved-launcher guard', () => {
+    const preambleStr = expectedPreamble().join('\n');
+    const gate = path.join(WORKFLOWS_DIR, 'execute-phase', 'steps', 'post-merge-gate.md');
+    const content = fs.readFileSync(gate, 'utf8');
+    const blocks = extractShellBlocks(content);
+
+    const testGateBlock = blocks.find((b) => b.lines.some((l) => /^TEST_EXIT=/.test(l.trim())));
+    assert.ok(testGateBlock, 'could not locate the test-gate bash block (no TEST_EXIT= line)');
+
+    const blockContent = testGateBlock.lines.join('\n');
+    assert.ok(
+      blockContent.includes(preambleStr),
+      'e2e-4 F1: the test gate runs in its own process. Without the launcher preamble in ITS OWN ' +
+        'block, gsd_run is `command not found` (127) and a green suite is reported as a failing ' +
+        'test gate — pointing the user at their app.',
+    );
+
+    // …and the failure class must be named, never swallowed into a test-failure exit code.
+    assert.match(
+      blockContent,
+      /command -v gsd_run/,
+      'the block must assert gsd_run resolved before running the suite',
+    );
+    assert.match(
+      blockContent,
+      /suite was NOT run/i,
+      'the guard must say the suite did not run, so 127 is never read as a test failure',
     );
   });
 

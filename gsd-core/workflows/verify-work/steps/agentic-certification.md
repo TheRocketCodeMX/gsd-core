@@ -160,10 +160,13 @@ Re-check the specific driver the mechanism names before relying on it:
 - Are the operations the tier depends on still capable? Re-run the reference's
   live probe against a **throwaway page** — never the real app — and verify a
   click by its *effect* (did the state change land), never by its return value.
-  The throwaway substrate is self-served (the reference's probe recipe): a `data:`
-  URL page covers the goto/snapshot legs, and a ~15-line local HTTP echo server
-  that logs POSTs hosts the fill/click/effect leg — the click must land on a
-  server **you** observe, which is why a remote page can never be the probe target.
+  The throwaway substrate is self-served (the reference's probe recipe): **one**
+  ~15-line local HTTP server on `127.0.0.1` both serves the throwaway page and logs
+  the POSTs, so all five legs run against `http://127.0.0.1:<port>/` — the click must
+  land on a server **you** observe, which is why a remote page can never be the probe
+  target. Do not reach for a `data:` URL: several drivers reject non-`http(s)` schemes
+  on `goto` (onorca 1.4.178: `invalid_argument: Unsupported browser URL`), and that is
+  a fact about the driver's URL handling, **never** a capability demotion.
 - Did the environment change in a way the recorded rows call out (no display,
   WSL/headless, API-key auth)?
 

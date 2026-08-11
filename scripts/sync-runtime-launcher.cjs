@@ -8,10 +8,28 @@
  *      GSD_SDK=, the if/elif/else/fi resolver, _GSD_SHIM_NAME=, and any
  *      previously-inserted gsd_run preamble).
  *   2. Replace $GSD_SDK tokens with gsd_run (idempotent).
- *   3. Insert the canonical preamble at the TOP of ONLY the FIRST bash block
- *      (document order) that contains a gsd_run call. All other bash blocks
- *      keep their gsd_run calls with NO preamble. (Define once per file,
- *      use across blocks — original footprint.)
+ *   3. Insert the canonical preamble at the TOP of the FIRST bash block
+ *      (document order) that contains a gsd_run call, AND re-insert it into any
+ *      later block that already carried one before the strip pass.
+ *
+ * ## Why later blocks may keep their own copy (e2e-4 F1)
+ *
+ * The original footprint was "define once per file, use across blocks". That is
+ * only true when the blocks share a process — and they do not: each fenced block
+ * runs in its own shell (#381, stated by `bin/gsd_run:3-8`), so a function defined
+ * in block 1 is undefined in block 2. The two documented mitigations (the npm `bin`
+ * field; the `CLAUDE_ENV_FILE` PATH export the preamble writes) both miss on a
+ * `--claude --local` install in a runtime that leaves `CLAUDE_ENV_FILE` unset.
+ *
+ * Blanket per-block insertion is not the answer either — the preamble is ~2.9 KB and
+ * 83 of the 114 gsd_run-using workflow files are multi-block, which would add
+ * hundreds of kilobytes to the shipped payload and blow the workflow size budgets.
+ * So this stays OPT-IN per block: an author adds the preamble to a block that must
+ * resolve independently (a gate whose 127 would otherwise be mis-read as a failing
+ * test suite), and this script PRESERVES it instead of stripping it back out.
+ * `tests/runtime-launcher-parity.test.cjs` (B) enforces the resulting invariant:
+ * at most one preamble per block, always in the first gsd_run block, always before
+ * that block's first call.
  *
  * Run: node scripts/sync-runtime-launcher.cjs
  */
@@ -328,9 +346,15 @@ function transformFile(content, preamble) {
   let changed = false;
   let firstGsdRunBlockIdx = -1; // index into shellBlockRanges of the first gsd_run block (after strip)
 
-  // First: strip + replace in all blocks, find first gsd_run block
+  // First: strip + replace in all blocks, find first gsd_run block.
+  // `carriedPreamble` records which blocks had a canonical preamble BEFORE the
+  // strip pass, so an author's deliberate per-block copy survives (see the
+  // opt-in rationale in this file's header).
+  const preambleStr = preamble.join('\n');
+  const carriedPreamble = [];
   const strippedBlocks = shellBlockRanges.map((range) => {
     const blockLines = outputLines.slice(range.contentStart, range.contentEnd);
+    carriedPreamble.push(blockLines.join('\n').includes(preambleStr));
     const stripped = stripAndReplace(blockLines, preamble);
     return stripped;
   });
@@ -348,7 +372,12 @@ function transformFile(content, preamble) {
   // the stripped blocks (any inline preamble removed) but never get one inserted.
   const delegates = delegatesToResolverReference(content);
   const finalBlocks = strippedBlocks.map((stripped, bi) => {
-    if (!delegates && bi === firstGsdRunBlockIdx) {
+    if (delegates) return stripped;
+    if (bi === firstGsdRunBlockIdx) return insertPreamble(stripped, preamble);
+    // A later block that already carried its own preamble keeps it — but only
+    // when it actually calls gsd_run; a preamble in a block with no call is dead
+    // weight and is dropped by the strip pass above.
+    if (carriedPreamble[bi] && stripped.some((l) => /\bgsd_run\b/.test(l))) {
       return insertPreamble(stripped, preamble);
     }
     return stripped;

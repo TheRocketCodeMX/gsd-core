@@ -1,7 +1,7 @@
 {
   "version": 1,
   "paths": {
-    "transition.md": "Round-2 Wave A (e2e-4 F12, e2e-7 F5), atop the Wave-3 growth: the compare reads wall_clock_ms (legacy seconds ×1000), derives ms/test from milliseconds, T1 compares in ms, and T2 gains the 250 ms noise floor. Cumulative +593 bytes vs next.",
+    "transition.md": "Round-2 Wave A (e2e-4 F12, e2e-7 F5), atop the Wave-3 growth: the compare reads wall_clock_ms (legacy seconds ×1000), derives ms/test from milliseconds, T1 compares in ms, and T2 gains the 250 ms noise floor. Cumulative +593 bytes vs next. Round-2 Wave B (e2e-4 F8): the suite_health_compare block gained a fail-loud guard for an unsubstituted `XX-current` placeholder — unsubstituted, the glob matched nothing and the step no-opped at exit 0, INDISTINGUISHABLE from the documented silent-skip branch. The sentinel is assembled from two string literals so a blind textual substitution cannot rewrite the guard into a false positive.",
     "ship.md": "Round-2 Wave A (e2e-6 F3), atop the Wave-3 growth: the milestone sweep gains the pending row (handed-over-awaiting-result, ⚠ with the re-entry instruction, distinct from not-run) and the declined row documents the reason-suffix prefix-match grammar. Cumulative +404 bytes vs next."
   }
 }
