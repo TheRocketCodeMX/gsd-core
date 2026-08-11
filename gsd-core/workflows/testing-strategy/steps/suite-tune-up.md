@@ -108,7 +108,7 @@ Re-measure the whole suite once, timed, exactly as Pass 1 did, and **append a ne
 row** to `.planning/TEST-STRATEGY.md`'s `## Suite health` table:
 
 ```markdown
-| YYYY-MM-DD | {test_count} | {wall_clock_ms} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …)} |
+| YYYY-MM-DD | {test_count} | {wall_clock_ms} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …) \| none (volume/mix — routed to C1)} |
 ```
 
 `wall_clock` is **integer milliseconds, minimum 1**, from a real clock bracket — the
@@ -133,6 +133,14 @@ trend the T2/T4 triggers compare against — a table with one row can only ever 
 - **`mixed (dominant: config-drift | test-debt)`** — both passes contributed materially.
   Record the dominant contributor; a 90 %-config win filed as pure test-debt mis-teaches
   the trend this column exists to teach.
+- **`none (volume/mix — routed to C1)`** — the honest no-fix outcome. All four passes ran,
+  Pass 2 found no lever that paid, Pass 3 found nothing the strategy does not already ask
+  for, and the correct conclusion was "it was volume all along — tiering, not tuning; route
+  to the CI ladder's C1". This is a **real recorded outcome**, not `—`: a tune-up *did* run
+  and correctly concluded there is nothing to tune. Recording `config-drift` or `test-debt`
+  here would fabricate a failure mode the run disproved; recording `—` (no class) reverts
+  the T4 backstop's baseline to the previous tune-up and re-fires it forever (e2e-10 F1/F2).
+  `transition`'s compare treats this as a tune-up-happened row for T4.
 
 Recording it is the point: over several milestones the column tells the project which
 failure mode it actually has, which is the only way the *next* tune-up starts in the
@@ -152,8 +160,9 @@ Suite tune-up complete — {trigger} cleared.
 ```
 
 If the trigger did **not** clear, say so plainly and append the row anyway with the real
-numbers — an honest unmoved baseline is data; a row that flatters the run is not. Then
-name what is left (commonly: it was volume all along → the remedy is tiering/sharding via
-`/gsd:cicd-strategy`'s C1, not tuning).
+numbers — an honest unmoved baseline is data; a row that flatters the run is not. Record its
+fix-class as **`none (volume/mix — routed to C1)`** (never `—`, which jams the T4 backstop —
+e2e-10 F2), and name what is left (commonly: it was volume all along → the remedy is
+tiering/sharding via `/gsd:cicd-strategy`'s C1, not tuning).
 
 </process>
