@@ -1,6 +1,6 @@
 {
   "version": 1,
   "paths": {
-    "testing-strategy.md": "Round-2 Wave A (e2e-5 F2/F2b/F2c/F8, e2e-7 F3/F4/F5), atop the Wave-1 growth: Step 7 Update mode is a section-merge with the full preservation contract (Notes, gnarly bits, CI-map rows, Suite health history, Coverage debt absent-is-valid, Certification never silently downgraded); Step 6 writes reference defaults to TESTING-STANDARDS.md, never into existing Notes; Step 6.5 states the millisecond bracket rule. Cumulative +2311 bytes vs next. | Round-3: grew +2006B (e2e-11: browser/cli/api/library surface types in Step 5.5 + ladder; sandbox-aware discovery greenfield F5)"
+    "testing-strategy.md": "Round-2 Wave A (e2e-5 F2/F2b/F2c/F8, e2e-7 F3/F4/F5), atop the Wave-1 growth: Step 7 Update mode is a section-merge with the full preservation contract (Notes, gnarly bits, CI-map rows, Suite health history, Coverage debt absent-is-valid, Certification never silently downgraded); Step 6 writes reference defaults to TESTING-STANDARDS.md, never into existing Notes; Step 6.5 states the millisecond bracket rule. Cumulative +2311 bytes vs next. | Round-3: grew +2006B (e2e-11: browser/cli/api/library surface types in Step 5.5 + ladder; sandbox-aware discovery greenfield F5) | Greenfield-chain: grew +185B (greenfield F3: reconciliation block guarded on ROADMAP.md existence)"
   }
 }

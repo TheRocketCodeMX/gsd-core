@@ -127,6 +127,15 @@ SUITE_ELAPSED_MS=$(( $(node -e 'process.stdout.write(String(Date.now()))') - SUI
 # through to "post-merge tests failed (exit )", leaving a green wave's plans
 # in-progress. Record the result at a deterministic path so that step re-derives it
 # rather than reading absence as failure. The step consumes and deletes this file.
+# Ensure GSD's ephemeral scratch is git-ignored BEFORE the file is written, so a
+# crash between here and the consume-and-delete in post-wave-tracking-update.md
+# cannot orphan an untracked `.planning/.gsd-*` file that trips ship's clean-tree
+# preflight (greenfield F9). Idempotent; harmless when `.planning/` is itself
+# gitignored (commit_docs=No). `.gsd-*` scopes it to GSD's own scratch, never a
+# user artifact.
+if [ -d .planning ] && ! grep -qxF '.gsd-*' .planning/.gitignore 2>/dev/null; then
+  printf '.gsd-*\n' >> .planning/.gitignore 2>/dev/null || true
+fi
 printf '{"test_exit":%s,"suite_elapsed_ms":%s,"recorded_at":"%s"}\n' \
   "$TEST_EXIT" "$SUITE_ELAPSED_MS" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   > .planning/.gsd-post-merge-gate.json 2>/dev/null || true
