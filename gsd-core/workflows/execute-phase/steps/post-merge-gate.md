@@ -165,6 +165,14 @@ the single writer for post-merge artifacts — step 5.7). Schema and contract:
 **ms/test is not recorded here** — `transition`'s `suite_health_compare` derives it from
 these two numbers so one value can never disagree with itself.
 
+**This reading is a `cold` run — the first execution of the newly-landed files.** A tune-up's
+Pass-4 re-measure, by contrast, always runs warm, so a gate reading compared against a warm
+baseline carries a cold-vs-warm penalty (measured at +73 % on an unchanged 0.5–2 s suite — both
+T2 legs, on zero code change). The gate does not double the suite to warm it up (that cost is
+real on a 10-minute suite); instead `transition`'s compare tolerates it — a first-fire T2 under
+~2 s is re-measured warm before a tune-up is scheduled (see `transition.md`'s cold-vs-warm rule).
+The number recorded here is honest as the cold reading it is.
+
 **When the gate did not actually measure a suite, record nothing.** No runner was
 detected (`TEST_CMD` fell through to `true`), or `TEST_EXIT` is `124` (the run timed out,
 so the bracket measures the budget rather than the suite) → **omit the block

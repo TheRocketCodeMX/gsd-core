@@ -48,7 +48,9 @@ AGENT_SKILLS_PLANNER=$(gsd_run query agent-skills gsd-planner)
 AGENT_SKILLS_CHECKER=$(gsd_run query agent-skills gsd-plan-checker)
 ```
 
-Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`, `certification_mode`.
+Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`, `state_path`, `roadmap_path`, `response_language`, `certification_mode`, and **`phase_completion`** (an object with `uat_passed`, `uat_blockers` — the runtime's authoritative list of UAT states that forbid completion, e.g. `test N (missing)`, `test N (pending-certifier)` — and `ready_to_transition`).
+
+**The runtime owns "is this UAT complete?", not this workflow.** `uat-predicate.cjs` already classifies every non-passing entry — a truncated `### N.` with no `result:` line, a `[pending-certifier]` handover, a `blocked`/`skipped` item — as a blocker. `complete_session` below defers to `phase_completion.uat_blockers` rather than re-deriving a narrower rule; wherever the two could disagree, the runtime wins.
 
 **If `response_language` is set:** All user-facing questions, prompts, and explanations in this workflow MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
@@ -217,18 +219,19 @@ Examples:
 
 Skip internal/non-observable items (refactors, type changes, etc.).
 
-**Cold-start smoke test injection:**
+**Cold-start smoke test injection (surface-aware):**
 
-After extracting tests from SUMMARYs, scan the SUMMARY files for modified/created file paths. If ANY path matches these patterns — **matching is on the path's basename** (glob against the final path segment: `app/fixture-app.js` has basename `fixture-app.js` and does NOT match `app.js`), except the `dir/*` patterns, which match any path containing that directory segment:
+After extracting tests from SUMMARYs, scan the SUMMARY files for modified/created file paths. **Matching is on the path's basename** (glob against the final path segment: `app/fixture-app.js` has basename `fixture-app.js` and does NOT match `app.js`), except the `dir/*` patterns, which match any path containing that directory segment. The cold-start surface differs by shape — a library has none, and injecting a "server boots" test for a library or a CLI is a false positive:
 
-`server.ts`, `server.js`, `app.ts`, `app.js`, `index.ts`, `index.js`, `main.ts`, `main.js`, `database/*`, `db/*`, `seed/*`, `seeds/*`, `migrations/*`, `startup*`, `docker-compose*`, `Dockerfile*`
+- **Server/service patterns** → prepend the **server** smoke test: `server.ts`, `server.js`, `app.ts`, `app.js`, `main.ts`, `main.js`, `database/*`, `db/*`, `seed/*`, `seeds/*`, `migrations/*`, `startup*`, `docker-compose*`, `Dockerfile*`.
+  - name: "Cold Start Smoke Test (service)"
+  - expected: "Kill any running server/service. Clear ephemeral state (temp DBs, caches, lock files). Start the application from scratch. Server boots without errors, any seed/migration completes, and a primary query (health check, homepage load, or basic API call) returns live data."
+- **CLI patterns** → prepend the **CLI** smoke test: `cli.ts`, `cli.js`, `cmd.ts`, `cmd.js`, `bin/*`, and any file the SUMMARY/`package.json` marks as a `bin` entrypoint.
+  - name: "Cold Start Smoke Test (CLI)"
+  - expected: "From a clean checkout with no warm state, run the CLI's primary command(s) as a user would (`--help`, then a real subcommand). It resolves its entrypoint, parses args, exits 0 on success / non-zero on error, and produces the expected stdout and side-effects — no missing-file or uninitialized-state crash on first run."
+- **`index.*` is ambiguous** — it is a service entrypoint only when the phase's surface type (`## Certification` → Surface type) is `browser`/`api`. For a `library` surface, `index.ts`/`index.js` is the package export barrel and matches **nothing** here — a library has no cold-start surface; do not inject either test.
 
-Then **prepend** this test to the test list:
-
-- name: "Cold Start Smoke Test"
-- expected: "Kill any running server/service. Clear ephemeral state (temp DBs, caches, lock files). Start the application from scratch. Server boots without errors, any seed/migration completes, and a primary query (health check, homepage load, or basic API call) returns live data."
-
-This catches bugs that only manifest on fresh start — race conditions in startup sequences, silent seed failures, missing environment setup — which pass against warm state but break in production.
+This catches bugs that only manifest on fresh start — startup race conditions, silent seed failures, missing environment setup, a CLI that crashes before parsing args — which pass against warm state but break in production.
 </step>
 
 **Agentic certification (unconditional).** Read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md`.
@@ -515,21 +518,29 @@ Proceed to `present_test`.
 <step name="complete_session">
 **Complete testing and commit:**
 
-**Determine final status:**
+**Determine final status — the runtime is the authority.**
 
-Count results:
-- `pending_count`: tests with `result: [pending]`
-- `blocked_count`: tests with `result: blocked`
-- `skipped_no_reason`: tests with `result: skipped` and no `reason` field
+Re-read the completion signal from the runtime, which parses the UAT file with the same predicate `transition` gates on (never trust a narrower hand count of `result:` lines — a crash-truncated entry has no `result:` line at all, and `[pending-certifier]` is a distinct token a `[pending]` scan misses):
+
+```bash
+DONE=$(gsd_run query init.verify-work "${phase_number}" ${GSD_WS})
+if [[ "$DONE" == @file:* ]]; then DONE=$(cat "${DONE#@file:}"); fi
+UAT_BLOCKERS=$(printf '%s' "$DONE" | jq -r '.phase_completion.uat_blockers[]? | select(startswith("'"${uat_path##*/}"'") or contains("-UAT.md"))' 2>/dev/null)
+```
 
 ```
-if pending_count > 0 OR blocked_count > 0 OR skipped_no_reason > 0:
+if UAT_BLOCKERS is non-empty (any blocker names this phase's UAT file — missing/pending-certifier/blocked/malformed):
   status: partial
-  # Session ended but not all tests resolved
+  # A crash-truncated entry, a still-out CERT-2 handover, or an unresolved item remains.
+  # Name the blockers in the session note; do NOT mark complete.
+else if pending_count > 0 OR blocked_count > 0 OR skipped_no_reason > 0:
+  status: partial
 else:
   status: complete
-  # All tests have a definitive result (pass, issue, or skipped-with-reason)
+  # Every entry has a definitive passing/closed result AND the runtime agrees.
 ```
+
+where `pending_count` / `blocked_count` / `skipped_no_reason` are the local `result: [pending]` / `result: blocked` / `result: skipped`-without-`reason` counts (a secondary check; the runtime blocker list above is the primary gate). A `### N.` heading with no terminal `result:` line, or a `result: [pending-certifier]`, is a blocker even though it matches none of those three counters — which is exactly why the runtime query is consulted first.
 
 Update frontmatter:
 - status: {computed status}

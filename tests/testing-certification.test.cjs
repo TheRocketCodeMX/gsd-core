@@ -202,7 +202,9 @@ describe('the probe (reference + workflow)', () => {
 
   test('the workflow runs observable checks before any question', () => {
     const wf = read(WORKFLOW);
-    assert.match(wf, /command -v (codex|orca)/, 'binary detection is a shell command, not an interview');
+    assert.match(wf, /command -v ("?\$tool"?|codex|orca)/, 'binary detection is a shell command, not an interview');
+    assert.match(wf, /gsd-cert-sandbox/, 'discovery also looks in the trust-doctrine sandbox HOME, not only PATH (greenfield F5)');
+    assert.match(wf, /missing[^.\n]{0,40}not[^.\n]{0,20}absent/i, 'a sandbox/off-machine certifier is not CERT-0 just because PATH misses it');
     assert.match(wf, /playwright\.config/, 'playwright config presence is an observable check');
     assert.match(wf, /mcp__playwright__/, 'MCP browser tools are an observable runtime fact');
     assert.match(wf, /wsl/i, 'WSL/headless detection gates the display-bound drivers');
@@ -213,8 +215,15 @@ describe('the probe (reference + workflow)', () => {
     assert.match(wf, /5-command|five-command/i, 'the live probe is named in the workflow');
     assert.doesNotMatch(wf, /4-command|four-command/i, 'the probe is 5 commands now — fill is load-bearing (validation A F3)');
     assert.match(wf, /per-operation|per-op/i, 'per-operation verdicts recorded in TEST-STRATEGY');
-    assert.match(wf, /binary[^.\n]{0,80}(lead|not a capability)/i,
-      'the binary-is-a-lead doctrine reaches the workflow');
+    assert.match(wf, /lead is not a capability|binary[^.\n]{0,80}(lead|not a capability)/i,
+      'the lead-is-not-a-capability doctrine reaches the workflow');
+    // Surface-typed probe (non-web design extension, e2e-11): the probe branches by surface.
+    assert.match(wf, /surface type/i, 'surface type is recorded before the probe');
+    for (const surface of [/\bcli\b/i, /\bapi\b/i, /\blibrary\b/i]) {
+      assert.match(wf, surface, `the probe names the ${surface} non-browser surface`);
+    }
+    assert.match(wf, /runnable cli\/api surface is CERT-1|cli\/api[^.\n]{0,40}CERT-1/i,
+      'a runnable CLI/API surface is CERT-1, not CERT-0 (e2e-11 F2)');
   });
 });
 
@@ -1184,6 +1193,149 @@ describe('the transition compare — baseline vs latest, evaluated against T1–
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Round 3 (e2e-8 F4, e2e-9 F1–F5, e2e-10 F1–F5, greenfield F7). The suite-health
+// compare and its two writers must be robust to every hostile / degenerate row a
+// real crash or a hand-edit can produce, and the trend logic must be accurate.
+// These are markdown-doctrine pins (the compare is prose an agent executes; there
+// is no parser in bin/), so they assert the RULE is written down where the agent
+// reads it — an unruled hostile value is an unbounded LLM guess, which is the bug.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('the transition compare — hostile and degenerate rows (round 3)', () => {
+  const step = () => stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+
+  // e2e-9 F1 / e2e-8 F4 (same bug, two operators): the zero-guard was on the
+  // DIVIDEND (wall_clock_ms). The real divisor is test_count and it was unguarded,
+  // so test_count: 0 → ms/test = Infinity → T2 fires on an unmeasured suite.
+  test('test_count is guarded as the divisor — 0 / absent / non-positive is unmeasured, never Infinity', () => {
+    const s = step();
+    assert.match(s, /test_count/, 'the guard must name test_count');
+    assert.match(s, /divisor/i, 'and say test_count is the divisor');
+    assert.match(s, /positive finite integer/i, 'the well-formed condition is a positive finite integer');
+    assert.match(s, /Infinity|NaN/, 'names the fail-open failure it prevents');
+  });
+
+  // e2e-9 F2: a MALFORMED baseline (negative / non-numeric / short row) must be
+  // reported, not silently skipped — a silent skip in the fail-open direction
+  // suppresses T2 forever with garbage in the "no trigger" line.
+  test('a malformed baseline row is REPORTED, not silently skipped (fail-open is the danger)', () => {
+    const s = step();
+    assert.match(s, /baseline row malformed/i, 'the exact operator-facing message');
+    assert.match(s, /re-baseline/i, 'and tells them how to recover');
+    assert.match(s, /negative|non-numeric/i, 'negative / non-numeric are named as malformed');
+  });
+
+  // e2e-9 F3: scientific notation and non-integers are not integer milliseconds.
+  test('scientific notation and non-integers are rejected as malformed, not accepted as ms', () => {
+    const s = step();
+    assert.match(s, /scientific notation|non-integer|6\.02e23|47\.06/i);
+  });
+
+  // e2e-9 F4: the legacy ×1000 conversion had no plausibility bound and guessed
+  // the unit; a ms table mis-headed `(s)` inflates 1000× and blinds T2 forever.
+  test('the legacy x1000 rule reads the unit from the header and has a plausibility ceiling', () => {
+    const s = step();
+    assert.match(s, /header/i, 'the unit is read from the column header, not guessed');
+    assert.match(s, /plausibilit|ceiling|11\.6 days|999999|hours/i, 'a plausibility bound on the converted value');
+  });
+});
+
+describe('the honest no-fix tune-up outcome (round 3 — e2e-10 F1/F2)', () => {
+  // F1: the closed fix-class vocabulary had no value for "it was volume, tiering
+  // not tuning" — the outcome suite-tune-up.md:154 documents. Recording `—` for it
+  // triggers F2 (T4 baseline reversion).
+  test('suite-tune-up has a closed fix-class value for the volume/no-fix outcome', () => {
+    const text = read(TUNE_UP);
+    const pass = text.slice(at(text, /##\s*Pass 4/));
+    assert.match(pass, /volume|no[- ]fix/i, 'the "it was volume, route to C1" outcome is a named class');
+    // it belongs in the row template's closed set (the 5th cell)
+    const rowTemplate = pass.split('\n').find((l) => /^\|\s*YYYY-MM-DD/.test(l));
+    assert.ok(rowTemplate, 'the Pass 4 row template line exists');
+    assert.match(rowTemplate, /volume|no[- ]fix/i, 'the no-fix/volume class is in the closed cell vocabulary');
+  });
+
+  // F2: an honest no-fix row reverted T4's baseline to the PREVIOUS tune-up row
+  // and re-fired forever. The no-fix/volume class must count as a real recorded
+  // tune-up for T4's backstop.
+  test('T4 baseline selection tolerates the honest no-fix row without jamming', () => {
+    const s = stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+    assert.match(s, /volume|no[- ]fix/i, 'the no-fix outcome is named in the T4 baseline rule');
+    assert.match(s, /counts as a[^\n]*tune-up|a tune-up (did )?(run|ran)|does not re-?fire|no longer re-?fire/i,
+      'a correctly-concluded volume run is a tune-up-happened row, so T4 does not re-fire off an older baseline');
+  });
+});
+
+describe('the volume-vs-regression discriminator gains its third case (round 3 — e2e-10 F3)', () => {
+  test('transition names the mix-shift-into-new-tiers case as volume, not tuning', () => {
+    const s = stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+    assert.match(s, /mix shift|concentrated in[^\n]*new|newly-added (tiers|files)|added this phase/i,
+      'a strategy-prescribed mix shift into new tiers/files is volume, not a regression');
+  });
+  test('the reference states the third mix-shift case as a GSD heuristic', () => {
+    const s = section(read(TEST_REF), 'Suite health');
+    assert.match(s, /mix shift|concentrated in[^\n]*new|newly-added (tiers|files)|added this phase/i);
+    assert.match(s, /GSD|heuristic/i, "labelled as GSD's own heuristic, not a sourced number");
+  });
+});
+
+describe('baseline row selection is unified across cicd and transition (round 3 — e2e-10 F4)', () => {
+  test('transition states the last-row-in-file tie-break once', () => {
+    const t = stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+    assert.match(t, /last[- ]in[- ]file|last row in file order|file order/i,
+      'append-only means last-in-file is the newest reading');
+    assert.match(t, /same date|share (a |the )?date|tie[- ]break/i, 'the same-date tie-break is stated');
+  });
+  test('cicd picks the last row and cites transition\'s one selection rule', () => {
+    const cicd = read('gsd-core/workflows/cicd-strategy.md');
+    assert.match(cicd, /last row/i, 'cicd picks the last row, not the ambiguous "newest dated" row');
+    assert.doesNotMatch(cicd, /newest dated row/i, 'the ambiguous "newest dated row" phrasing is gone');
+    assert.match(cicd, /transition\.md/, 'and cites transition.md as the one selection rule');
+  });
+});
+
+describe('cold-vs-warm capture (round 3 — e2e-10 F5)', () => {
+  test('the post-merge gate records that its reading is the cold first-after-change run', () => {
+    const gate = read(POST_MERGE_GATE);
+    assert.match(gate, /cold/i, 'the gate marks its reading cold (the first run after the change lands)');
+  });
+  test('the compare tolerates a cold reading rather than firing a false T2 on run asymmetry', () => {
+    const s = stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+    assert.match(s, /cold/i, 'the compare knows the gate reading is cold');
+    assert.match(s, /re-?measure|warm/i, 'a first-fire cold T2 on a small suite is re-measured warm before a tune-up is scheduled');
+  });
+});
+
+describe('greenfield unmeasured baseline seeds on the first real capture (round 3 — greenfield F7)', () => {
+  const step = () => stepBody(read(TRANSITION), '<step name="suite_health_compare">');
+  // F7: `unmeasured` (greenfield seed) + skip-forever = a closed loop; the promised
+  // "re-measure at the first milestone" was never implemented, so the baseline stays
+  // `unmeasured` forever and cicd's C1-a pins C0 forever.
+  test('an unmeasured baseline is not skip-forever — the first real capture SEEDS the baseline row', () => {
+    const s = step();
+    assert.match(s, /unmeasured/);
+    assert.match(s, /seed/i, 'the compare seeds the first real row instead of skipping forever');
+    assert.match(s, /first real (measurement|capture|suite)/i, 'the seed fires on the first real suite-metrics capture');
+  });
+  test('the seed is the one carve-out to "never write a row" and stays append-only', () => {
+    const s = step();
+    assert.match(s, /never write a `## Suite health` row|do not write[^\n]*row/i,
+      'the never-write rule still stands for the trend case');
+    assert.match(s, /append/i, 'the seed is appended — history preserved');
+    assert.match(s, /`0`|zero/, 'a `0`/legacy placeholder is the same dead-end and gets the same seed remedy');
+  });
+});
+
+describe('execute-plan writes wall_clock_ms in milliseconds (round 3 — e2e-9 F5)', () => {
+  test('the create_summary suite-metrics guidance is milliseconds, no seconds straggler', () => {
+    const text = read(EXECUTE_PLAN);
+    const para = text.slice(at(text, /\*\*Suite metrics \(suite health\)\.\*\*/));
+    const block = para.slice(0, para.indexOf('\n\n') === -1 ? para.length : para.indexOf('\n\n'));
+    assert.match(block, /wall_clock_ms/, 'the executor writes wall_clock_ms, matching template/gate/compare');
+    assert.doesNotMatch(block, /integer seconds/i, 'the pre-millisecond seconds straggler is gone');
+    assert.match(block, /millisecond/i, 'the unit is stated as milliseconds');
+  });
+});
+
 describe('the suite tune-up flow (§8.4) — four ordered passes, order is doctrine', () => {
   test('the flow file exists as a fork-owned step of the testing machinery', () => {
     assert.ok(fs.existsSync(path.join(ROOT, TUNE_UP)), `${TUNE_UP} must exist`);
@@ -1367,7 +1519,11 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
   test('a phase with no recorded outcome is FLAGGED, not omitted', () => {
     const sweep = shipSweep();
     assert.match(sweep, /flag/i);
-    assert.match(sweep, /no certification (outcome )?(line )?recorded|never recorded|no `certification:` line/i);
+    // Round-3 (Wave C, e2e-9 F6 / e2e-10 F6): the sweep now names the no-outcome
+    // case as the **not-run** row ("flag it") and splits it from not-verified /
+    // pre-adoption. The contract — a no-outcome phase is flagged, never omitted —
+    // is unchanged; the wording moved from "no certification line recorded".
+    assert.match(sweep, /not-run|no `?:?FIRST:?`? ?`?certification:`? line|no certification (outcome )?(line )?recorded|never recorded/i);
   });
 
   test('it is advisory — it never blocks, and it is never silent', () => {
@@ -1770,10 +1926,15 @@ describe('e2e fix wave — measurement floor and unit coherence (e2e-3 F-1/F-2)'
     assert.match(guidance, /tie-break/i, 'the omit-rule vs record-exactly collision is resolved explicitly');
   });
 
-  test('the compare skips a 0 wall_clock on either side (legacy pre-floor rows)', () => {
+  test('the compare treats a 0 wall_clock on either side as unmeasured (legacy pre-floor rows)', () => {
     const t = read(TRANSITION);
     const step = t.slice(t.indexOf('suite_health_compare'));
-    assert.match(step, /wall clock is `0`/, 'zero guard in the skip list');
+    // Round 3 (e2e-9 F1 / e2e-8 F4) generalized the round-2 zero-guard: a `0` wall clock is
+    // one case of "not a positive finite integer", now handled alongside the real divisor
+    // guard on test_count (the round-2 guard named only the dividend). The 0-handling intent
+    // is preserved and broadened, not dropped.
+    assert.match(step, /a `0` wall clock is included|wall clock is `0`|positive finite integer/,
+      'a 0 wall clock is unmeasured, never reaches the arithmetic');
     assert.match(step, /never become a divisor|never a real reading/i,
       'the guard names the divide-by-zero it prevents');
   });
@@ -1922,15 +2083,28 @@ describe('e2e fix wave — strategy chain (e2e-1 F1/F2/F3/F4/F5/F6/F8)', () => {
     assert.doesNotMatch(w, /see `templates\/user-setup\.md`/, 'template pointers are absolute');
   });
 
-  test('the ladder covers apps with no browser surface (F8)', () => {
+  test('the ladder covers apps with no browser surface (F8 / e2e-11 non-web extension)', () => {
     const ref = read(CERT_REF);
-    assert.match(ref, /\*\*No browser surface\?\*\*/, 'the non-browser note exists');
+    assert.match(ref, /^##[^\n]*Surface type/im, 'a first-class surface-type section exists');
     assert.match(ref, /real dependencies/i, 'API/CLI certification shape named');
     assert.match(ref, /first browser surface/i, 'the deferred-trigger phrasing shipped');
+    // e2e-11: the four surfaces are named and given honest tiers/exercises.
+    for (const surface of [/\bbrowser\b/i, /\bcli\b/i, /\bapi\b/i, /\blibrary\b/i]) {
+      assert.match(ref, surface, `surface type ${surface} is named`);
+    }
+    assert.match(ref, /CERT-0 means[^.\n]{0,60}not[^.\n]{0,20}browser|not[^.\n]{0,20}"?no browser"?/i,
+      'CERT-0 means "cannot exercise the real surface", not "no browser" (e2e-11 F2)');
+    // e2e-11 F6: the two distinct N/A forms — a library with a public API is "no user-facing surface".
+    assert.match(ref, /no user-facing surface/i, 'the library / no-surface form exists');
+    // e2e-11 F5: a non-browser (seeded-token) auth branch, distinct from login/storage-state.
+    assert.match(ref, /seeded (test )?token|Bearer/i, 'API/CLI auth is a seeded token, not a browser login');
   });
 
-  test('the probe hint in the template includes fill (5-op coherence)', () => {
-    assert.match(read(TEMPLATE), /goto \/ snapshot \/ fill \/ click round-trip \/ screenshot/);
+  test('the probe hint in the template is surface-typed (e2e-11 F4)', () => {
+    const t = read(TEMPLATE);
+    assert.match(t, /Surface type:/i, 'the template records a surface type');
+    assert.match(t, /goto \/ snapshot \/ fill \/ click round-trip \/ screenshot/, 'browser probe ops retained');
+    assert.match(t, /stdout \/ exit|status \/ shape/i, 'cli/api exercise fields exist, not only browser ops');
   });
 });
 

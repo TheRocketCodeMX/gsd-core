@@ -88,25 +88,37 @@ If existing code already violates a standard you are recording (e.g. money store
 
 ## Step 5.5: Certification capability detection (probe, don't survey)
 
-**Read `@~/.claude/gsd-core/references/certification.md` now** — it defines the CERT-0/1/1-limited/2 ladder, the probe procedure, the trust doctrine, the brief, and the substrate honesty tables.
+**Read `@~/.claude/gsd-core/references/certification.md` now** — it defines the CERT-0/1/1-limited/2 ladder, the **surface types** (browser / cli / api / library), the probe procedure, the trust doctrine, the brief, and the substrate honesty tables.
 
-Observable checks first — run them, don't ask:
+**Surface type first — it decides which probe even applies.** From ARCHITECTURE and this milestone's deliverables, record the surface users touch: **browser** (running app in a browser), **cli** (a binary run from a shell), **api** (endpoints hit by a client), or **library** (no user-facing runtime surface). The browser probe below runs **only** for a browser surface. For a **library**, there is nothing to drive — record `no user-facing surface` and skip the probe. For **cli/api**, the probe is a *real-surface exercise*, not a browser probe (below).
+
+Observable checks first — run them, don't ask. Discovery must look **where the trust doctrine puts a certifier**, not only on PATH — the doctrine installs third-party tools into an isolated sandbox HOME (`$HOME/.gsd-cert-sandbox`), never onto the real PATH, so a bare `command -v` alone would record CERT-0 for the *most* doctrine-compliant user while a probe inside the sandbox passes:
 
 ```bash
-command -v codex >/dev/null 2>&1 && echo "codex:present" || echo "codex:missing"
-command -v orca  >/dev/null 2>&1 && echo "orca:present"  || echo "orca:missing"
+CERT_SANDBOX="${GSD_CERT_SANDBOX_HOME:-$HOME/.gsd-cert-sandbox}"
+for tool in codex orca; do
+  if command -v "$tool" >/dev/null 2>&1; then echo "$tool:present:path"
+  elif [ -x "$CERT_SANDBOX/.local/bin/$tool" ] || ls "$CERT_SANDBOX"/**/"$tool" >/dev/null 2>&1; then echo "$tool:present:sandbox"
+  else echo "$tool:missing"; fi
+done
 ls playwright.config.* >/dev/null 2>&1 && echo "playwright-config:present" || echo "playwright-config:missing"
 grep -qi microsoft /proc/version 2>/dev/null && echo "env:wsl" || echo "env:not-wsl"
 [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && echo "display:present" || echo "display:headless"
 ```
 
-Plus the in-session facts: MCP browser tools available (`mcp__playwright__*` responding), `claude` Chrome integration (not under WSL; disabled under API-key auth).
+`missing` on PATH is **not** `absent` — a certifier that lives in the sandbox by design, or on another machine, is discovered by the sandbox check and by the one question, never by PATH alone. Plus the in-session facts: MCP browser tools available (`mcp__playwright__*` responding), `claude` Chrome integration (not under WSL; disabled under API-key auth).
 
-**Trust gate before any launch (sandbox-first).** The first launch of any third-party certifier **in this environment** — including the probe itself, including a bare `--version` — happens under an **isolated HOME** with an **instrumentation audit** (*what did it write? which agent CLIs did it touch?*) before the tool touches the real environment (the reference carries the receipts). "Installed" is not "launched" — `command -v` finding a binary says nothing about what its first run will do to this HOME.
+**Trust gate before any launch (sandbox-first).** The first launch of any third-party certifier **in this environment** — including the probe itself, including a bare `--version` — happens under an **isolated HOME** (`$HOME/.gsd-cert-sandbox`, never `/tmp`) with an **instrumentation audit** (*what did it write? which agent CLIs did it touch?*) before the tool touches the real environment (the reference carries the receipts). "Installed" is not "launched" — `command -v` finding a binary says nothing about what its first run will do to this HOME.
 
-**A binary is a lead, not a capability.** For any driver found, run the reference's **5-command live probe** against a throwaway page — goto → snapshot → fill → click round-trip (verify the click by its *effect*, never its return value; the fill precedes the click because click-after-fill is the failure that defines the limited tier) → screenshot — and record the **per-operation** verdicts. Then ask the **one question** nothing observable answers (header "Certify"): "Do you have Codex desktop, Claude Desktop, or onorca available for certification — on this machine or another?" (capability is a project fact, not a machine fact).
+**A lead is not a capability.** Probe by surface type:
+- **browser:** run the reference's **5-command live probe** against a throwaway page — goto → snapshot → fill → click round-trip (verify the click by its *effect*, never its return value; the fill precedes the click because click-after-fill is the failure that defines the limited tier) → screenshot — and record the **per-operation** verdicts.
+- **cli:** run the binary for real with representative args and assert stdout + exit code + side-effects; a fresh agent driving the real binary is CERT-1 (CERT-2 when a separate certifier runs it).
+- **api:** issue the real requests a client would, with a seeded token (§5.7 auth), asserting status/shape/auth-enforcement/persisted-effect against a real dependency; the live service driven for real is CERT-1 (CERT-2 handed off).
+- **library:** no probe — `no user-facing surface`.
 
-Map results → tier (CERT-0 / CERT-1 (limited) / CERT-1 / CERT-2) and record tier + probe rows + mechanism in `## Certification`. Never present CERT-0 apologetically — human UAT plus the scripted gate is the honest floor; record the deferred capability with the observable fact that would promote it (e.g. "full click-through — re-probe on a visible display session").
+Then ask the **one question** nothing observable answers (header "Certify"): "Do you have Codex desktop, Claude Desktop, or onorca available for certification — on this machine or another?" (capability is a project fact, not a machine fact).
+
+Map results → tier (CERT-0 / CERT-1 (limited) / CERT-1 / CERT-2) and record surface type + tier + probe rows + mechanism in `## Certification`. **A runnable cli/api surface is CERT-1, never CERT-0** — CERT-0 means the real surface cannot be exercised here, not "no browser". Never present CERT-0 apologetically — human UAT plus the scripted gate is the honest floor; record the deferred capability with the observable fact that would promote it (e.g. "full click-through — re-probe on a visible display session").
 
 ## Step 5.7: Certification substrate (four policies)
 

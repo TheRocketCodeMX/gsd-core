@@ -2678,21 +2678,28 @@ function convertClaudeCommandToCursorSkill(content, skillName) {
   const converted = convertClaudeToCursorMarkdown(content);
   const { frontmatter, body } = extractFrontmatterAndBody(converted);
   let description = `Run GSD workflow ${skillName}.`;
+  let argumentHint = '';
   if (frontmatter) {
     const maybeDescription = extractFrontmatterField(frontmatter, 'description');
     if (maybeDescription) {
       description = maybeDescription;
     }
+    // #e2e-12 F3: carry argument-hint to the invocation surface (parity with
+    // copilot/qwen) so modifiers like --tune-up stay discoverable from the
+    // skill signature, not just the body.
+    const maybeArgHint = extractFrontmatterField(frontmatter, 'argument-hint');
+    if (maybeArgHint) argumentHint = maybeArgHint;
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  const argHintLine = argumentHint ? `argument-hint: ${yamlQuote(toSingleLine(argumentHint))}\n` : '';
   const adapter = getCursorSkillAdapterHeader(skillName);
 
   // Cursor skills are both slash-invocable and model-invocable. Do not emit the
   // unsupported `user-invocable` field: it is ignored by Cursor and previously
   // hid the real cause of duplicate entries, the parallel commands/ surface
   // retired in #2644.
-  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n${argHintLine}---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 /**
@@ -4024,17 +4031,24 @@ function convertClaudeCommandToCodexSkill(content, skillName) {
   const converted = convertClaudeToCodexMarkdown(content);
   const { frontmatter, body } = extractFrontmatterAndBody(converted);
   let description = `Run GSD workflow ${skillName}.`;
+  let argumentHint = '';
   if (frontmatter) {
     const maybeDescription = extractFrontmatterField(frontmatter, 'description');
     if (maybeDescription) {
       description = maybeDescription;
     }
+    // #e2e-12 F3: carry argument-hint to the invocation surface (parity with
+    // copilot/qwen) so modifiers like --tune-up stay discoverable from the
+    // skill signature, not just the body.
+    const maybeArgHint = extractFrontmatterField(frontmatter, 'argument-hint');
+    if (maybeArgHint) argumentHint = maybeArgHint;
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  const argHintLine = argumentHint ? `argument-hint: ${yamlQuote(toSingleLine(argumentHint))}\n` : '';
   const adapter = getCodexSkillAdapterHeader(skillName);
 
-  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\nmetadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\n${argHintLine}metadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 /**
@@ -7113,7 +7127,17 @@ function neutralizeAgentReferences(content, instructionFile) {
   let c = content;
   // Replace standalone "Claude" (the agent) but preserve product/model names.
   // Negative lookahead avoids: Claude Code, Claude Opus/Sonnet/Haiku, Claude native, Claude-based
-  c = c.replace(/\bClaude(?! Code| Opus| Sonnet| Haiku| native| based|-)\b(?!\.md)/g, 'the agent');
+  // FORK:fidelity BEGIN
+  // Vendor-fact fidelity of emitted prose (e2e-12 F2).
+  // Two gaps corrupted vendor facts on codex/copilot: ` Desktop` was missing
+  // from the allow-list (so "Claude Desktop" -> "the agent Desktop", mangling
+  // the one user-facing certification question), and `\bClaude` matched inside
+  // the `non-Claude` compound (a `-` is a word boundary), so "non-Claude
+  // runtimes" -> "non-the agent runtimes", inverting the sentence's meaning in
+  // exactly the runtimes it describes. The `(?<!-)` lookbehind keeps hyphenated
+  // compounds (non-Claude) intact; ` Desktop` joins the proper-noun allow-list.
+  c = c.replace(/(?<!-)\bClaude(?! Code| Opus| Sonnet| Haiku| native| based| Desktop|-)\b(?!\.md)/g, 'the agent');
+  // FORK:fidelity END
   // Replace CLAUDE.md with runtime-appropriate instruction file
   if (instructionFile) {
     c = c.replace(/CLAUDE\.md/g, instructionFile);
@@ -7742,6 +7766,24 @@ const RUNTIME_CONTENT_DISPATCH = {
  * @param {boolean} isCommand - Whether the source is a command directory
  * @param {boolean} isGlobal - Whether the install is global
  */
+// FORK:fidelity BEGIN
+// Vendor-fact reference verbatim emit (e2e-12 F1).
+// gsd-core/references/certification.md records third-party vendor capability
+// facts (Claude Code `--chrome`, Claude Desktop, and the dated onorca security
+// receipt). The per-runtime brand swap (neutralizeAgentReferences /
+// applyClaudeCodeBrandSwap) rewrites those into fabricated claims about the
+// TARGET runtime — inventing a `<Brand> --chrome` driver, promoting it to the
+// CERT-1 exemplar, and re-attributing onorca's forensic receipt to the
+// runtime's own settings.json. Brand-neutralizing a vendor-fact document is
+// category-incorrect: it must reach every runtime verbatim. This exemption is
+// keyed on the source path so the whole class generalizes to future
+// vendor-fact references placed under gsd-core/references/.
+function isVerbatimVendorReference(srcPath) {
+  const norm = String(srcPath).replace(/\\/g, '/');
+  return /(?:^|\/)gsd-core\/references\/certification\.md$/.test(norm);
+}
+// FORK:fidelity END
+
 function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand = false, isGlobal = false, confinementRoot) {
   const dirName = getDirName(runtime);
 
@@ -7780,6 +7822,25 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
     if (entry.isDirectory()) {
       copyWithPathReplacement(srcPath, destPath, pathPrefix, runtime, isCommand, isGlobal, confinementRoot);
     } else if (entry.name.endsWith('.md')) {
+      // FORK:fidelity BEGIN
+      // Vendor-fact reference verbatim emit (e2e-12 F1).
+      // Short-circuit BEFORE any transform so the vendor facts reach every
+      // runtime byte-identical (no brand swap, no path/command rewrite that
+      // could re-touch a vendor claim). See isVerbatimVendorReference above.
+      if (isVerbatimVendorReference(srcPath)) {
+        // Vendor facts (Claude Desktop, onorca, the dated onorca receipt) reach
+        // every runtime UNBRANDED — no neutralizeAgentReferences, no path
+        // rewrite that could re-touch a vendor claim (e2e-12 F1/F2). The ONE
+        // transform that still applies is the command-namespace normalization
+        // `/gsd:` -> `/gsd-`: that is a runtime-invocation contract (#3683 —
+        // staged bodies must never echo the retired colon form the model then
+        // repeats), NOT a vendor fact. Applying only it keeps the vendor facts
+        // byte-identical while satisfying the colon-namespace leak guard.
+        const verbatim = fs.readFileSync(srcPath, 'utf8').replace(/\/gsd:/g, '/gsd-');
+        fs.writeFileSync(destPath, verbatim);
+        continue;
+      }
+      // FORK:fidelity END
       const dispatch = RUNTIME_CONTENT_DISPATCH[runtime] || {};
       const ctx = { isCommand, isGlobal, dirName, pathPrefix, entryName: entry.name, runtime };
 

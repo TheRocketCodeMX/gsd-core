@@ -304,6 +304,24 @@
       ]
     },
     {
+      "path": "bin/install.js",
+      "feature": "fidelity",
+      "mode": "markers",
+      "markers": 3,
+      "anchors": [
+        "isVerbatimVendorReference",
+        " Desktop\\|-\\)"
+      ]
+    },
+    {
+      "path": "bin/install.js",
+      "feature": "skill-argument-hint",
+      "mode": "anchors-only",
+      "anchors": [
+        "argument-hint to the invocation surface"
+      ]
+    },
+    {
       "path": "bin/lib/ui-safety-gate.cjs",
       "feature": "fidelity",
       "mode": "markers",
@@ -1190,6 +1208,14 @@
       "mode": "anchors-only",
       "anchors": [
         "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
+      ]
+    },
+    {
+      "path": "src/milestone.cts",
+      "feature": "milestone-render",
+      "mode": "anchors-only",
+      "anchors": [
+        "const nameSuffix = options.name && options.name !== version"
       ]
     },
     {

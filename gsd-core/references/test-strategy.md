@@ -79,7 +79,7 @@ Measured per milestone against the `## Suite health` baseline table in TEST-STRA
 | **T3 — container churn** | containers-started growing faster than suite count | Tune-up scheduled at milestone close |
 | **T4 — backstop** | suite grew >~40 % since the last tune-up and none happened | Tune-up scheduled at milestone close |
 
-**Volume vs regression — the distinction that picks the remedy:** flat ms/test with a rising total is **volume, not a regression** — the suite is healthy and simply bigger, and the remedy is tiering/sharding (the CI ladder's C1), not tuning. Rising ms/test is structural and is what the tune-up exists for.
+**Volume vs regression — the distinction that picks the remedy:** flat ms/test with a rising total is **volume, not a regression** — the suite is healthy and simply bigger, and the remedy is tiering/sharding (the CI ladder's C1), not tuning. A **mix shift concentrated in newly-added tiers or files** (a new, heavier tier the strategy prescribes, with nothing pre-existing decayed) is **also volume, not tuning** — GSD's own heuristic: attribute the rise to the files added this phase before scheduling a tune-up. Only a rise in files that already existed is the structural regression the tune-up exists for.
 
 ### The tune-up flow (four ordered passes — order is doctrine)
 
@@ -88,7 +88,7 @@ Measured per milestone against the `## Suite health` baseline table in TEST-STRA
 1. **Profile** — slowest files, setup-vs-test split, container lifecycle map. Evidence first; no change without a measurement.
 2. **Config/cache pass** — the born-fast checklist above, at current APIs (the predictable half of most slowdowns).
 3. **Suite audit against the strategy** — implementation-detail tests (a strategy violation first, a perf cost second), duplicated coverage across tiers (push down the pyramid where the strategy permits), obsolete tests, over-broad shared fixtures, accidental serialization and unconditional waits (fixed sleeps standing in for condition polling — poll, never sleep, per `flaky-test-checklist.md`). Every deletion or demotion justified by the strategy doc, never by the stopwatch alone.
-4. **Re-baseline** — re-measure, **append** a new dated Suite-health row (never rewrite or overwrite the previous one: the history *is* the trend T2/T4 compare against), and **record the fix-class** (config-drift vs test-debt) so the strategy learns which failure mode this project actually has.
+4. **Re-baseline** — re-measure, **append** a new dated Suite-health row (never rewrite or overwrite the previous one: the history *is* the trend T2/T4 compare against), and **record the fix-class** — `config-drift`, `test-debt`, `mixed`, or the honest `none (volume/mix — routed to C1)` when all passes ran and the correct answer was "tiering, not tuning" (never `—`, which reverts the T4 baseline and re-fires the backstop) — so the strategy learns which failure mode this project actually has.
 
 The flow itself lives in `testing-strategy/steps/suite-tune-up.md`, reachable three ways: the T1 todo `transition` writes immediately, the milestone-close todo it writes for T2–T4, and `/gsd:testing-strategy --tune-up` by hand. Its capture side is the `suite-metrics:` block in SUMMARY frontmatter (`test_count`, `wall_clock_ms` in integer milliseconds, `containers_started` — `ms/test` is derived at compare time, never recorded twice).
 
