@@ -1,6 +1,6 @@
 ---
 type: Fixed
-pr: 0
+pr: 55
 ---
 
 **The suite-health clock can no longer poison its own baseline, and nineteen seams found by driving the shipped release end to end are closed.** The post-merge gate's wall-clock bracket had 1-second resolution, so a suite fast enough to be healthy could honestly measure `0` — and a `0` baseline row made the next milestone's trend compare divide by zero; the bracket is now milliseconds (portably, via node) recorded as seconds with a floor of 1, the SUMMARY schema states the floor and the omit-vs-measured tie-break, and the transition compare treats any remaining `0` as `unmeasured`. Around it, the seams a live end-to-end run of every new surface exposed: the certification outcome line gains a closed, spelled-out note set (so the trust gate's permanently-sandboxed branch has a sanctioned voice), certified UAT entries keep their `coverage_id` traceability, the re-probe's throwaway substrate is self-served (a `data:` URL page plus a local echo server — the click must land on a server you observe), the brief-only certifier's "environment" boundary is defined, cold-start pattern matching is basename-exact, the discussion log is committed with the strategy docs it explains across the whole chain, the substrate table admits honest `N/A — no such surface` rows, the tune-up's Pass-1 routing names a dominant-bucket tie-break, suite-health and add-todo date filenames from the same clock, and the certification ladder says what real-conditions certification means for an app with no browser surface.
