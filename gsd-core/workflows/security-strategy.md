@@ -99,7 +99,7 @@ Next: /gsd:frontend-architecture (if the project has a frontend) → /gsd:testin
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=security-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** scan ROADMAP.md — if a phase assumes a security control this posture mandates (or now requires an authz/secrets phase), SAY SO and offer `/gsd:phase --edit`. Never leave a known contradiction unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** scan ROADMAP.md — if a phase assumes a security control this posture mandates (or now requires an authz/secrets phase), SAY SO and offer `/gsd:phase --edit`. Never leave a known contradiction unspoken.
 
 </process>
 

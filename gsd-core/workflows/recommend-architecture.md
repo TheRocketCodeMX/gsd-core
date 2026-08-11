@@ -169,7 +169,7 @@ Next: /gsd:security-strategy   (app-wide security posture — thin/scale-to-zero
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=recommend-architecture` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
 
 </process>
 

@@ -246,10 +246,10 @@ CICD-STRATEGY.md written — right-sized to the measured facts.
   Supply chain: [8/8 free floor items]
   Deferred: [nightly, matrix, merge queue, staging, canary, preview envs — N triggers recorded]
 
-Next: /gsd:plan-phase   (CI/deploy phases will plan against this strategy)
+Next: /gsd:roadmap   (regen the roadmap; the build loop plans against this strategy)
 ```
 
-**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=cicd-strategy` — in `--auto` it dispatches the build loop (`/gsd:discuss-phase 1`) since cicd is the last strategy step; interactive runs use the `Next:` pointer above.
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=cicd-strategy` — in `--auto` it runs the terminal transition `/gsd:roadmap` → `/gsd:discuss-phase 1` (advance.md: roadmap, not plan-phase); interactive uses the `Next:` pointer above.
 
 **Strategy-chain completion (this is the chain's last link — close the loop):**
 1. **Synthesis table** — if other strategy artifacts exist (`PRODUCT-BRIEF`, `DOMAIN-MODEL`, `adr/*`, `TEST-STRATEGY`, `INFRA-STRATEGY`), display a one-line-per-artifact decision summary so the user sees the whole strategized picture in one place.
@@ -283,5 +283,5 @@ Next: /gsd:plan-phase   (CI/deploy phases will plan against this strategy)
 - The free-six supply-chain table stakes recommended plus explicit artifact retention and `concurrency: cancel-in-progress`; SLSA/cosign/SBOM ceremony deferred with triggers
 - Meta-tell check passed in both directions (every ON capability has a forcing fact; no ignored requirement; no CI theatre)
 - CICD-STRATEGY.md written and committed (when commit_docs is true)
-- User directed to /gsd:plan-phase
+- User directed to /gsd:roadmap
 </success_criteria>

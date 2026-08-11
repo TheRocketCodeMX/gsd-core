@@ -188,7 +188,7 @@ Next: /gsd:recommend-architecture   (uses the subdomain complexity) → security
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=model-domain` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
 
 </process>
 
