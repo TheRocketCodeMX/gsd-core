@@ -30,7 +30,20 @@ Recorded in TEST-STRATEGY.md `## Certification` — the tier, the probe results 
 
 Never present CERT-0 apologetically: the invariant is "certification happens," not "an agent does it." On CERT-0 the human IS the certifier and the brief below is written for them.
 
-**No browser surface?** The ladder still applies — certification is real-conditions exercise of the surface users actually touch: a CLI driven end to end as a user would run it, an API exercised with real dependencies (real DB, real auth, never the test suite's mocks). Record the mechanism the same way (tier + mechanism + brief), and when the *environment* earns a browser tier the *app* cannot yet use, record the browser capability as deferred with its trigger (`first browser surface — re-probe then`) rather than letting the tier imply a mechanism that has nothing to drive.
+## Surface type — the ladder is general, not browser-only
+
+Certification is real-conditions exercise of **the surface users actually touch**. That surface is not always a browser, and the tier language above ("drives a browser", the goto/click/screenshot probe) is the *browser instance* of a general idea — not the whole of it. Record the surface type first (it comes from ARCHITECTURE / the phase's deliverables, not from a probe):
+
+| Surface | What "real-conditions exercise" is | The probe (the non-browser analog of goto→click→screenshot) | Honest tier |
+|---|---|---|---|
+| **browser** | a person clicking through the running app | the 5-command live probe below | CERT-2 / 1 / 1-limited / 0 as below |
+| **cli** | the tool run from a real shell with real args | run it end to end for real: invoke each subcommand/flag a user would, assert **stdout + exit code + side effects** (files written, records changed) against what the brief says should happen | a fresh agent driving the real binary = **CERT-1** (or CERT-2 when a separate certifier runs it); no way to run it here = CERT-0 |
+| **api** | the endpoints hit with real dependencies (real DB, real auth, never the suite's mocks) | issue the real requests a client would — status codes, response shape, auth enforcement, persisted effect — with a **seeded token/service credential** (§ auth substrate's non-login branch), not a browser login | driving the live service = **CERT-1** (CERT-2 when handed to a separate certifier); no runnable instance here = CERT-0 |
+| **library** | there is **no user-facing runtime surface** | none — a library ships behavior to *other code*, and its correctness is the automated-test tier's job, not certification's | record `certification: N/A — no user-facing surface` (distinct from `N/A — no user-facing change`, which is for a refactor that shipped nothing new; a phase that ships a public API records the *no-surface* form, honestly, not the *no-change* form) |
+
+**A CLI a shell drives perfectly is CERT-1, not CERT-0.** CERT-0 means "no way to exercise the real surface in this environment" — a locked-down box, a browser app with no driver — **not** "no browser". Reading CERT-0 onto a runnable CLI or API is the same category error as reading it onto a working browser: the mechanism exists, so name the tier the mechanism earns. When the *environment* later earns a browser tier the *app* cannot yet use, record the browser capability as deferred with its trigger (`first browser surface — re-probe then`) rather than letting the tier imply a mechanism that has nothing to drive.
+
+The trust doctrine, the brief, the substrate, and the always-escalate set below apply to every surface. Only the **probe** and the **ladder examples** are browser-specific; everything else generalizes verbatim.
 
 ## Third-party certifier trust doctrine (mandatory — read before any launch)
 
@@ -74,7 +87,9 @@ The three-way fork: a vendor with a real testing story → use it; a vendor that
 | **Firebase** | Auth **Emulator** covers local/CI flows but issues **unsigned tokens rejected by production services** — useless for certifying a real environment |
 | **Supabase** | Seeding via `supabase/seed.sql` (runs on `db reset`); a test OTP map exists for phone auth; the `service_role` key bypasses RLS — **never in a browser**, never in URLs or query params |
 
-**One-time human auth, persisted session** — the formalized field pattern where no verified test mode exists: the human authenticates once; the storage state is persisted (e.g. `playwright/.auth/`), **gitignored**, and regenerated on expiry. Playwright's own warning ships with the pattern: the state file "may contain sensitive cookies and headers that could be used to **impersonate** you or your test account." Playwright's auth docs are silent on third-party OAuth/IdP flows — any recipe there is the project's own invention and must be labelled as such. "Ask the user to auth once" is an honest, first-class answer; OAuth moments and CAPTCHAs always escalate to the human.
+**One-time human auth, persisted session** — the formalized field pattern for a **browser** surface where no verified test mode exists: the human authenticates once; the storage state is persisted (e.g. `playwright/.auth/`), **gitignored**, and regenerated on expiry. Playwright's own warning ships with the pattern: the state file "may contain sensitive cookies and headers that could be used to **impersonate** you or your test account." Playwright's auth docs are silent on third-party OAuth/IdP flows — any recipe there is the project's own invention and must be labelled as such. "Ask the user to auth once" is an honest, first-class answer; OAuth moments and CAPTCHAs always escalate to the human.
+
+**Non-browser auth (CLI / API surface): a seeded token, not a login.** An HTTP API or a CLI does not log in through a form — it presents a credential. The certification credential is a **seeded test token / service credential** minted for a seeded test account (§ seed accounts), scoped to the test workspace, held in the env/secret store, **never in the repo, never in a URL or query param**. The certifier presents it (`Authorization: Bearer …`, an API-key header, a service-role key used server-side only) and asserts the real service enforces it — a valid token succeeds, a missing/expired one is rejected. This is the branch `test-strategy.md`'s `auth-in-tests.md` reference covers and the one the certification chain must cite for CLI/API phases; the login/storage-state pattern above is browser-only and does not apply.
 
 ## Email safety
 
