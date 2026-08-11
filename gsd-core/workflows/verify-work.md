@@ -604,7 +604,7 @@ If an active secure-phase step hook exists AND `SECURITY_FILE` exists: check fro
 
 If no active secure-phase step hook exists OR (`SECURITY_FILE` exists AND `threats_open` is `0`):
 
-If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate:
+If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate — **conditionally**:
 
 ```bash
 PHASE_DIR=$(printf '%s' "$INIT" | jq -r '.phase_dir // empty')
@@ -612,9 +612,52 @@ VERIFICATION_FILE=$(ls "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1)
 VERIFICATION_STATUS=$(gsd_run query verification.status "$PHASE_DIR" 2>/dev/null)
 VERIFICATION_STATUS_VALUE=$(printf '%s' "$VERIFICATION_STATUS" | jq -r '.status // empty' 2>/dev/null || echo "")
 PHASE_VERIFICATION_STATUS="$VERIFICATION_STATUS_VALUE"
-if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ]; then
+# What is still unproven, from the two artifacts that are allowed to say so.
+UAT_FILE=$(ls "${PHASE_DIR}"/*-UAT.md 2>/dev/null | head -1)
+BEHAVIOR_UNVERIFIED=$(gsd_run query frontmatter.get "$VERIFICATION_FILE" --field behavior_unverified 2>/dev/null | jq -r '.behavior_unverified // 0' 2>/dev/null || echo 0)
+case "$BEHAVIOR_UNVERIFIED" in ''|*[!0-9]*) BEHAVIOR_UNVERIFIED=0 ;; esac
+CERT_UNPROVEN=$(grep -cE '^result: (\[pending-certifier\]|could-not-prove)' "$UAT_FILE" 2>/dev/null || echo 0)
+case "$CERT_UNPROVEN" in ''|*[!0-9]*) CERT_UNPROVEN=0 ;; esac
+if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ] && [ "$BEHAVIOR_UNVERIFIED" -eq 0 ] && [ "$CERT_UNPROVEN" -eq 0 ]; then
   gsd_run query frontmatter.set "$VERIFICATION_FILE" --field status --value passed
+  PHASE_VERIFICATION_STATUS="passed"
 fi
+```
+
+**Why the stamp is conditional (e2e-4 F5).** `human_needed` means *a human still has to
+look at something*. A UAT session with zero issues answers only the part the human was
+asked about; it says nothing about a truth the verifier recorded as
+`PRESENT_BEHAVIOR_UNVERIFIED`, or a checkpoint the certifier escalated as
+`could-not-prove`. Stamping unconditionally produced a file that contradicted itself —
+
+```yaml
+status: passed
+behavior_unverified: 1
+behavior_unverified_items:
+  - truth: "Invalid email or weak password returns 400 naming the problem"
+```
+
+— and `phase uat-passed --require-verification` then returned `passed: true` on it, with
+three artifacts in one phase and two of them saying the behaviour was unproven. A
+`behavior_unverified` item never flips to `passed` silently. This is the same
+deterministic-auto-pass philosophy the coverage classifier already applies: auto-pass what
+the evidence covers, present what it does not.
+
+**If the stamp was withheld** (`PHASE_VERIFICATION_STATUS` is still `human_needed` while
+`BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` is non-zero), first run `coverage_gap_capture` in
+**record-only mode** (below — the gap was found by escalation, not by a UAT issue), then
+stop before phase advancement and present:
+
+```
+All UAT tests passed, but {BEHAVIOR_UNVERIFIED} behaviour(s) and {CERT_UNPROVEN} checkpoint(s) are still unproven — verification stays `human_needed`.
+
+Unproven:
+{behavior_unverified_items[].truth from VERIFICATION.md}
+{checkpoints in UAT.md whose result is [pending-certifier] or could-not-prove}
+
+- `/gsd:add-tests {phase}` — write the fast test that would prove it (the coverage-debt row is already recorded)
+- `/gsd:execute-phase {phase}` — implement/repair, then re-verify
+- `/gsd:verify-work {phase}` — resume once the item is proven
 ```
 
 If `PHASE_VERIFICATION_STATUS` is `stale`, stop before phase advancement and present:
@@ -719,6 +762,26 @@ Diagnosis runs automatically - no user prompt. Parallel agents investigate simul
 <step name="coverage_gap_capture">
 **Ask what the pyramid missed, and make the answer durable:**
 
+**Two entries, one question (e2e-4 F7).** This step used to be reachable only through
+`diagnose_issues`, i.e. only when `issues > 0`. That gated the *only* writer of
+`## Coverage debt` behind the one event that most often does not happen: a gap the
+**verifier** recorded (`behavior_unverified_items`) or the **certifier** escalated
+(`could-not-prove`, `[pending-certifier]`, an escalated checkpoint in the outcome line)
+produced no row at all, because the human reported no issue. The doctrine is
+"certification catches it once; the pyramid catches it forever" — so the trigger is a
+**named gap**, whatever named it.
+
+| Entry | Gap set | Routing |
+|---|---|---|
+| **diagnosed** — from `diagnose_issues` (`issues > 0`) | the `## Gaps` entries, with root causes in hand | append rows → `plan_gap_closure` |
+| **record-only** — from `complete_session` with `issues == 0` but `BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` non-zero | one gap per `behavior_unverified_items[].truth` in VERIFICATION.md, plus each UAT checkpoint whose `result` is `[pending-certifier]` or `could-not-prove` | append rows, then **return to `complete_session`** — no diagnosis, no `plan_gap_closure`, and **never** invent a `## Gaps` id for something the human did not report |
+
+Record-only has no root-cause diagnosis to lean on; answer the question from the
+artifact that named the gap (the verifier's truth statement, the certifier's evidence
+note). `{gap_id}` for a record-only row is the naming artifact plus its item — e.g.
+`VERIFICATION/truth-3` or `CERT/C1` — so a later diagnosed row for the same behaviour
+is visibly the same behaviour and not a duplicate id.
+
 Certification catches it once; the pyramid catches it forever. Every diagnosed gap
 above is a behavior that reached UAT/certification unproven — so before planning the
 fix, answer one question per gap, using the root cause diagnosis already in hand:
@@ -758,7 +821,10 @@ predict, so the next strategy Update pass can see the project's real failure mod
 If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
 create a strategy document from a gap.
 
-Proceed to `plan_gap_closure`.
+**Diagnosed entry:** proceed to `plan_gap_closure`.
+**Record-only entry:** return to `complete_session` and present the withheld-stamp
+message there — the rows are recorded; nothing is planned from a gap the human never
+reported.
 </step>
 
 <step name="plan_gap_closure">

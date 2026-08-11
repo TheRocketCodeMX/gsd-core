@@ -192,8 +192,22 @@ authority; do not re-derive thresholds here.
 phase directory — substitute it, as every other step in this file does, before running):
 
 ```bash
+# FAIL LOUD on an unsubstituted placeholder (e2e-4 F8). `.planning/phases/XX-current/`
+# matches nothing, so the glob returns empty and this whole step no-ops at exit 0 —
+# INDISTINGUISHABLE from the documented "skip silently" branch below. A step that
+# cannot run must say so; it must never look like a step that had nothing to compare.
+# The sentinel is assembled from two literals on purpose: a blind textual substitution
+# of the placeholder rewrites the path but cannot rewrite this guard into a false hit.
+PHASE_DIR_REL=".planning/phases/XX-current"
+_GSD_PLACEHOLDER="XX""-current"
+case "$PHASE_DIR_REL" in
+  *"$_GSD_PLACEHOLDER"*)
+    echo "✗ suite_health_compare: the XX-current placeholder was never substituted, so no SUMMARY can be found. This step did NOT run — it is not a 'no metrics recorded' result. Substitute the current phase directory (e.g. .planning/phases/01-signup) and re-run." >&2
+    exit 1
+    ;;
+esac
 ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_STRATEGY" || echo "NO_STRATEGY"
-M=$(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true)
+M=$(grep -l '^suite-metrics:' "$PHASE_DIR_REL"/*-SUMMARY.md 2>/dev/null || true)
 [ -n "$M" ] && printf '%s' "$M" | tr '\n' '\0' | xargs -0 ls -t | head -1
 # Local calendar date — the same clock gsd-tools' init.todos hands add-todo, so every
 # writer of .planning/todos/pending/ dates filenames identically.

@@ -97,8 +97,13 @@ if [[ "$INIT_MANAGER" == @file:* ]]; then INIT_MANAGER=$(cat "${INIT_MANAGER#@fi
 
 This returns all phases with implementation and verification projection. Use this to verify:
 - Which phases belong to this milestone?
-- `all_phases_verified`: all milestone phases have `phase_complete === true` and `verification_status === 'passed'`.
-- `progress_percent` should be 100%.
+- `all_phases_verified`: all milestone phases have `phase_complete === true` and `verification_status === 'passed'` — computed by the `jq` below, not a bundle field.
+- `all_complete` should be `true` — that is `init.manager`'s implementation rollup
+  (`completed_count` over the non-backlog phases). Report progress as
+  `completed_count` / `phase_count`; **`phase_count` includes backlog (`999.*`) rows and
+  `completed_count` does not**, so the pair is a headline, never the gate.
+  (e2e-4 F10: `progress_percent` has never been a field of this bundle — its rollup keys
+  are `all_complete`, `completed_count`, `in_progress_count`, `phase_count`.)
 
 Compute readiness from `INIT_MANAGER`, not from roadmap counts:
 

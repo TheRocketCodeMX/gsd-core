@@ -193,7 +193,7 @@
       "anchors": [
         "engineering-standards\\.md",
         "brownfield-adaptation\\.md",
-        "Ship Fast \u2260 skip structure"
+        "Ship Fast ≠ skip structure"
       ]
     },
     {
@@ -352,7 +352,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "kind\u2208unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
       ]
     },
     {
@@ -1138,7 +1138,7 @@
       "anchors": [
         "Ported from the fork",
         "cicd-strategy\\.md",
-        "raised 844 \u2192 880 for the v1\\.9\\.0 realignment"
+        "raised 844 → 880 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1164,7 +1164,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "raised 32000 \u2192 34400 for the v1\\.9\\.0 realignment"
+        "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1205,7 +1205,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "coverage classify \u2014 agentic_certification evidence",
+        "coverage classify — agentic_certification evidence",
         "agentic_certification"
       ]
     },
@@ -1236,7 +1236,7 @@
       "mode": "anchors-only",
       "anchors": [
         "SUITE_START_MS=\\$\\(node -e",
-        "Step C \u2014 Suite-metrics capture"
+        "Step C — Suite-metrics capture"
       ]
     },
     {
@@ -1341,6 +1341,91 @@
       "mode": "anchors-only",
       "anchors": [
         "gates/safety are registered config sections"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"✗ Post-merge test gate",
+        "\\.gsd-post-merge-gate\\.json"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "\\.gsd-post-merge-gate\\.json",
+        "gate result is unavailable"
+      ]
+    },
+    {
+      "path": "scripts/sync-runtime-launcher.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "carriedPreamble"
+      ]
+    },
+    {
+      "path": "tests/runtime-launcher-parity.test.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "\\(B3\\) post-merge-gate\\.md Step B"
+      ]
+    },
+    {
+      "path": "tests/execute-phase-wave.test.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "post-merge gate result crosses the block boundary"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "BEHAVIOR_UNVERIFIED",
+        "CERT_UNPROVEN",
+        "record-only"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work/steps/automated-ui-verification.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "PHASE_DIR is unset in this shell"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/transition.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "_GSD_PLACEHOLDER"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/complete-milestone.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "`phase_count` includes backlog"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/UAT.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification: \\[one outcome line",
+        "pending-certifier"
       ]
     }
   ]

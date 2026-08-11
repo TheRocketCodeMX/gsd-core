@@ -984,7 +984,20 @@ increases monotonically across waves. `{status}` is `complete` (success),
    ```bash
    # Guard: only update tracking if post-merge tests passed
    # Timeout (124) is treated as inconclusive — do NOT mark plans complete
-   if [ "${TEST_EXIT}" -eq 0 ]; then
+   #
+   # ${TEST_EXIT} is set by post-merge-gate.md's Step B — a different fenced block
+   # in a different file, therefore a DIFFERENT SHELL (#381). It does not survive
+   # the hand-off, and an unset value used to fall through to the else branch as
+   # "post-merge tests failed (exit )", leaving a green wave's plans in-progress
+   # (e2e-4 F2). Re-derive it from the record the gate writes; if neither the
+   # variable nor the record exists, SAY SO — absence is not a test verdict.
+   if [ -z "${TEST_EXIT:-}" ] && [ -f .planning/.gsd-post-merge-gate.json ]; then
+     TEST_EXIT=$(jq -r '.test_exit // empty' .planning/.gsd-post-merge-gate.json 2>/dev/null || true)
+   fi
+   rm -f .planning/.gsd-post-merge-gate.json 2>/dev/null || true
+   if [ -z "${TEST_EXIT:-}" ]; then
+     echo "⚠ Skipping tracking update — the post-merge gate result is unavailable (no TEST_EXIT in this shell and no recorded gate result). This is NOT a test failure: re-run the post-merge gate, then this step."
+   elif [ "${TEST_EXIT}" -eq 0 ]; then
      # Update ROADMAP plan progress for each completed plan in this wave
      for plan_id in {completed_plan_ids}; do
        gsd_run query roadmap.update-plan-progress "${PHASE_NUMBER}" "${plan_id}" "complete"
