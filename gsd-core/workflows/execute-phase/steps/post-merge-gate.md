@@ -100,10 +100,14 @@ fi
 TEST_CMD=$(gsd_run query normalize-test-command "$TEST_CMD" --cwd . 2>/dev/null || echo "$TEST_CMD")
 TEST_GATE_TIMEOUT=$(gsd_run query config-get workflow.test_gate_timeout 2>/dev/null || echo "600")
 TEST_EXIT=0
-SUITE_START_EPOCH=$(date +%s)
+# Millisecond bracket via node (portable — `date +%s%3N` is GNU-only), floored to 1 s:
+# a healthy sub-second suite must never record 0, which would poison the compare's
+# derived-ms/test baseline (division by zero at the NEXT milestone's T2).
+SUITE_START_MS=$(node -e 'process.stdout.write(String(Date.now()))')
 gsd_run run-with-timeout "$TEST_GATE_TIMEOUT" -- bash -c "$TEST_CMD" 2>&1
 TEST_EXIT=$?
-SUITE_WALL_CLOCK_SEC=$(( $(date +%s) - SUITE_START_EPOCH ))
+SUITE_ELAPSED_MS=$(( $(node -e 'process.stdout.write(String(Date.now()))') - SUITE_START_MS ))
+SUITE_WALL_CLOCK_SEC=$(( (SUITE_ELAPSED_MS + 999) / 1000 )); [ "$SUITE_WALL_CLOCK_SEC" -lt 1 ] && SUITE_WALL_CLOCK_SEC=1
 if [ "${TEST_EXIT}" -eq 0 ]; then
   echo "✓ Post-merge test gate passed — no cross-plan conflicts"
 elif [ "${TEST_EXIT}" -eq 124 ]; then
@@ -133,7 +137,7 @@ the single writer for post-merge artifacts — step 5.7). Schema and contract:
 | Field | Where it comes from |
 |---|---|
 | `test_count` | The count the runner itself printed in the output above (e.g. `# tests`, `N passed`, `ok N`). Read it; never grep the repo for test files. |
-| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, recorded as integer **seconds** exactly as measured. Never reformatted into minutes-and-seconds — the clock started before the runner did, and the seconds value is what the compare divides. |
+| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, integer **seconds**, ceiling-rounded from the millisecond bracket with a floor of **1** — a run that executed the suite can never record `0` (a `0` baseline would break the compare's derived-ms/test math). Never reformatted into minutes-and-seconds. |
 | `containers_started` | Testcontainers/docker lines in the same output (`Creating container`, `Container … started`) where visible, **else `—`**. `—` is an honest answer; `0` is a claim. |
 
 **ms/test is not recorded here** — `transition`'s `suite_health_compare` derives it from

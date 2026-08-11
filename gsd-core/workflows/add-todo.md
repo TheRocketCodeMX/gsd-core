@@ -114,6 +114,11 @@ If overlapping, use AskUserQuestion:
 
 <step name="create_file">
 Use values from init context: `timestamp` and `date` are already available.
+<!-- FORK:strategy BEGIN -->
+(`date` is the **local** calendar date — the same clock `transition`'s suite-health
+todos use for their filenames, so every writer of `.planning/todos/pending/` dates
+files identically.)
+<!-- FORK:strategy END -->
 
 Generate slug for the title:
 ```bash

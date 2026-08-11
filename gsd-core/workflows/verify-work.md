@@ -42,7 +42,7 @@ GSD_WS=""
 echo "$ARGUMENTS" | grep -qE -- '--ws[[:space:]]+[A-Za-z0-9._-]+' && GSD_WS=$(echo "$ARGUMENTS" | grep -oE -- '--ws[[:space:]]+[A-Za-z0-9._-]+')
 PHASE_ARG=$(echo "$ARGUMENTS" | sed -E 's/--ws[[:space:]]+[A-Za-z0-9._-]+//g' | xargs)
 
-INIT=$(gsd_run query init.verify-work "${PHASE_ARG}" ${GSD_WS})
+INIT=$(gsd_run query init.verify-work "${PHASE_ARG}" ${GSD_WS})  # phase arg is POSITIONAL — a --phase flag is silently ignored (phase_found:false, exit 0)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 AGENT_SKILLS_PLANNER=$(gsd_run query agent-skills gsd-planner)
 AGENT_SKILLS_CHECKER=$(gsd_run query agent-skills gsd-plan-checker)
@@ -208,7 +208,7 @@ Skip internal/non-observable items (refactors, type changes, etc.).
 
 **Cold-start smoke test injection:**
 
-After extracting tests from SUMMARYs, scan the SUMMARY files for modified/created file paths. If ANY path matches these patterns:
+After extracting tests from SUMMARYs, scan the SUMMARY files for modified/created file paths. If ANY path matches these patterns — **matching is on the path's basename** (glob against the final path segment: `app/fixture-app.js` has basename `fixture-app.js` and does NOT match `app.js`), except the `dir/*` patterns, which match any path containing that directory segment:
 
 `server.ts`, `server.js`, `app.ts`, `app.js`, `index.ts`, `index.js`, `main.ts`, `main.js`, `database/*`, `db/*`, `seed/*`, `seeds/*`, `migrations/*`, `startup*`, `docker-compose*`, `Dockerfile*`
 

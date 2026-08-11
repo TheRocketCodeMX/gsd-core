@@ -1215,7 +1215,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "SUITE_START_EPOCH=\\$\\(date \\+%s\\)",
+        "SUITE_START_MS=\\$\\(node -e",
         "Step C — Suite-metrics capture"
       ]
     },
@@ -1244,6 +1244,16 @@
       "mode": "anchors-only",
       "anchors": [
         "'agentic_certification'"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/add-todo.md",
+      "feature": "strategy",
+      "mode": "markers",
+      "markers": 1,
+      "anchors": [
+        "same clock `transition`",
+        "suite-health"
       ]
     }
   ]

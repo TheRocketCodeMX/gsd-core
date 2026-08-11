@@ -114,7 +114,9 @@ Write to `.planning/INFRA-STRATEGY.md`.
 ```bash
 gsd_run project strategy-done infrastructure-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
-  gsd_run query commit "docs: add infrastructure strategy (serverless-container default)" --files .planning/INFRA-STRATEGY.md .planning/PROJECT.md
+  # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
+  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: add infrastructure strategy (serverless-container default)" --files .planning/INFRA-STRATEGY.md .planning/PROJECT.md $DLOG
 else
   echo "INFRA-STRATEGY.md written but not committed (commit_docs is false)."
 fi

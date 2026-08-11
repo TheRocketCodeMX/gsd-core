@@ -45,9 +45,12 @@ to audit the suite *against*, and this flow degenerates into a stopwatch. Stop a
    fixed-duration waits (`sleep`, `setTimeout`-style delays) as a profile artifact. A
    suite that is 80 % setup has a config problem (Pass 2); 80 % assertions is a volume
    problem (tiering/sharding, not tuning); 80 % waits inside bodies is a serialization
-   problem (Pass 3's serialization/waits class). They have different remedies, and picking
-   the wrong one wastes the tune-up — the most common wall-clock sink in async suites is
-   the third bucket, which a two-way split misroutes to sharding.
+   problem (Pass 3's serialization/waits class). **No bucket at 80 %? The dominant bucket
+   wins** — run its pass first, re-profile, and route again; mixed profiles clear in two
+   rounds, and re-profiling after each pass is what keeps the second round honest. They
+   have different remedies, and picking the wrong one wastes the tune-up — the most common
+   wall-clock sink in async suites is the third bucket, which a two-way split misroutes to
+   sharding.
 3. **The container lifecycle map.** How many containers start, when, and per what — per
    run, per suite, per file, or (the pathology) per test. Compare against
    `containers_started` in the latest SUMMARY's `suite-metrics:` block.
