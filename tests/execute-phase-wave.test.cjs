@@ -891,20 +891,36 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
   const GATE_PATH = path.join(
     __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-merge-gate.md',
   );
+  // The 5.7 guard was extracted to its own fragment: execute-phase.md sits 7 bytes
+  // under the frozen ADR-857 Phase-6 ceiling, so ANY addition to the host body has
+  // to be an extraction. The host now reads this fragment (see the read-and-execute
+  // line asserted below).
+  const TRACKING_PATH = path.join(
+    __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-wave-tracking-update.md',
+  );
   const RECORD = '.planning/.gsd-post-merge-gate.json';
 
   const workflowSrc = fs.readFileSync(WORKFLOW_PATH, 'utf-8');
   const gateSrc = fs.readFileSync(GATE_PATH, 'utf-8');
+  const trackingSrc = fs.readFileSync(TRACKING_PATH, 'utf-8');
 
-  /** The 5.7 tracking-update bash block, verbatim from the workflow. */
+  /** The 5.7 tracking-update bash block, verbatim from the fragment. */
   function trackingBlock() {
-    const marker = '# Guard: only update tracking if post-merge tests passed';
-    const start = workflowSrc.indexOf(marker);
-    assert.notStrictEqual(start, -1, 'tracking-update guard block not found in execute-phase.md');
-    const end = workflowSrc.indexOf('```', start);
+    const marker = '# Cross-shell hand-off (#381)';
+    const start = trackingSrc.indexOf(marker);
+    assert.notStrictEqual(start, -1, 'tracking-update guard block not found in the fragment');
+    const end = trackingSrc.indexOf('```', start);
     assert.notStrictEqual(end, -1, 'unterminated tracking-update block');
-    return workflowSrc.slice(start, end);
+    return trackingSrc.slice(start, end);
   }
+
+  test('execute-phase.md step 5.7 delegates to the tracking-update fragment', () => {
+    assert.match(
+      workflowSrc,
+      /execute-phase\/steps\/post-wave-tracking-update\.md/,
+      'the host body must read the fragment it extracted',
+    );
+  });
 
   test('the gate RECORDS its exit code at a deterministic path', () => {
     assert.ok(
