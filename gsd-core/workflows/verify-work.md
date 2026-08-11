@@ -130,7 +130,9 @@ Wait for user response.
 **If active sessions exist AND $ARGUMENTS provided:**
 
 Check if session exists for that phase. If yes, offer to resume or restart.
-If no, continue to `create_uat_file`.
+If no, it is genuinely new: continue through `find_summaries` → `extract_tests` → the
+certification dispatch → `create_uat_file` — same rule as the reply branch above; never
+jump straight to `create_uat_file`.
 
 **Restart is defined, and it never destroys a record.** Restart means: archive the
 existing file to `{phase_dir}/{phase_num}-UAT-superseded-{ISO date}.md` — certified
