@@ -193,7 +193,7 @@
       "anchors": [
         "engineering-standards\\.md",
         "brownfield-adaptation\\.md",
-        "Ship Fast ≠ skip structure"
+        "Ship Fast \u2260 skip structure"
       ]
     },
     {
@@ -370,7 +370,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+        "kind\u2208unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
       ]
     },
     {
@@ -520,10 +520,11 @@
       "path": "gsd-core/workflows/add-tests.md",
       "feature": "fidelity",
       "mode": "markers",
-      "markers": 2,
+      "markers": 3,
       "anchors": [
         "ai-test-quality\\.md",
-        "falsifiability gate"
+        "falsifiability gate",
+        "Coverage debt"
       ]
     },
     {
@@ -1156,7 +1157,7 @@
       "anchors": [
         "Ported from the fork",
         "cicd-strategy\\.md",
-        "raised 844 → 880 for the v1\\.9\\.0 realignment"
+        "raised 844 \u2192 880 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1182,7 +1183,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
+        "raised 32000 \u2192 34400 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1231,7 +1232,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "coverage classify — agentic_certification evidence",
+        "coverage classify \u2014 agentic_certification evidence",
         "agentic_certification"
       ]
     },
@@ -1245,7 +1246,7 @@
         "<step name=\"coverage_gap_capture\">",
         "##\\s*Coverage debt",
         "source: agentic",
-        "Certification re-entry — before the pending scan",
+        "Certification re-entry \u2014 before the pending scan",
         "CERTIFICATION-RESULT\\.md",
         "This step never overwrites"
       ]
@@ -1265,7 +1266,7 @@
       "mode": "anchors-only",
       "anchors": [
         "SUITE_START_MS=\\$\\(node -e",
-        "Step C — Suite-metrics capture"
+        "Step C \u2014 Suite-metrics capture"
       ]
     },
     {
@@ -1377,7 +1378,7 @@
       "feature": "gate-handoff",
       "mode": "anchors-only",
       "anchors": [
-        "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"✗ Post-merge test gate",
+        "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"\u2717 Post-merge test gate",
         "\\.gsd-post-merge-gate\\.json"
       ]
     },

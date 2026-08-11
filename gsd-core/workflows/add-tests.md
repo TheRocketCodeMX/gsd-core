@@ -78,6 +78,8 @@ Extract the list of files modified by the phase from SUMMARY.md ("Files Changed"
 
 <!-- FORK:fidelity BEGIN -->
 **If `.planning/TEST-STRATEGY.md` exists, read it first and let it drive classification** — map each changed file to its subdomain and use the strategy's per-subdomain test level (unit → TDD; integration → TDD-style but exercised against real dependencies; e2e → E2E) plus its gnarly-bits and what-not-to-test lists, instead of the generic heuristics below. When the strategy prescribes integration/e2e for a file, pull the test-infra references it links (`@~/.claude/gsd-core/references/test-containers.md`, `db-test-isolation.md`, `auth-in-tests.md`, `realistic-test-data.md`, `flaky-test-checklist.md`) into the generated test's setup. Use the heuristics below only for files the strategy doesn't cover.
+
+**Read the coverage-debt ledger — these are your first-class inputs, not re-derived.** If TEST-STRATEGY.md carries a `## Coverage debt` section, read every row whose Status is `open` and whose phase column matches `${PHASE_ARG}`. Each such row is a behavior that ESCAPED verification and a `verify-work` certification/UAT run already named the specific missing fast test and the level it belongs at (the row's fourth column). Add those named tests to the plan **first**, at the level the row prescribes — do not re-derive them from changed-file heuristics, and do not drop them because the changed-file scan didn't surface them (a gap escaped precisely because the mechanical scan missed it). The changed-file classification below is additive: it covers what the ledger doesn't name. Carry each consumed row's `{phase}/{gap_id}` so `summary_and_commit` can close it.
 <!-- FORK:fidelity END -->
 
 For each file, classify into one of three categories:
@@ -310,6 +312,18 @@ Create a test coverage report and present to user:
 ## Bugs Discovered
 {any assertion failures that indicate implementation bugs}
 ```
+
+<!-- FORK:fidelity BEGIN -->
+**Close the coverage-debt rows you resolved.** For each `## Coverage debt` row consumed
+in `analyze_implementation` whose named test was generated and now passes, transition
+that row `open → closed` in TEST-STRATEGY.md and record the closing test path in place of
+the bare status (`closed → tests/path/to/spec#name`). This is the one writer that resolves
+a debt row — a row stays `open` only while its escaped behavior still has no fast test.
+Edit only the Status cell of the matched rows; never rewrite, reorder, or re-render any
+other row or section (the same append-only-except-status discipline `verify-work` and
+`/gsd:testing-strategy` follow). A row whose test could not be written (genuinely
+judgment- or environment-bound) stays `open` with a one-line note — never silently closed.
+<!-- FORK:fidelity END -->
 
 Record test generation in project state:
 ```bash
