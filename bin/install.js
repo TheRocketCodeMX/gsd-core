@@ -7828,7 +7828,16 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
       // runtime byte-identical (no brand swap, no path/command rewrite that
       // could re-touch a vendor claim). See isVerbatimVendorReference above.
       if (isVerbatimVendorReference(srcPath)) {
-        fs.copyFileSync(srcPath, destPath);
+        // Vendor facts (Claude Desktop, onorca, the dated onorca receipt) reach
+        // every runtime UNBRANDED — no neutralizeAgentReferences, no path
+        // rewrite that could re-touch a vendor claim (e2e-12 F1/F2). The ONE
+        // transform that still applies is the command-namespace normalization
+        // `/gsd:` -> `/gsd-`: that is a runtime-invocation contract (#3683 —
+        // staged bodies must never echo the retired colon form the model then
+        // repeats), NOT a vendor fact. Applying only it keeps the vendor facts
+        // byte-identical while satisfying the colon-namespace leak guard.
+        const verbatim = fs.readFileSync(srcPath, 'utf8').replace(/\/gsd:/g, '/gsd-');
+        fs.writeFileSync(destPath, verbatim);
         continue;
       }
       // FORK:fidelity END

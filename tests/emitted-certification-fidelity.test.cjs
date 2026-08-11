@@ -87,15 +87,25 @@ function emitCertification(runtime) {
   return emitted;
 }
 
-describe('emitted certification.md is byte-identical to source on every runtime', () => {
+describe('emitted certification.md preserves source verbatim EXCEPT the command-namespace normalization', () => {
   for (const runtime of RUNTIMES) {
-    test(`${runtime}: emit === source (no brand corruption of vendor facts)`, () => {
+    // The vendor-fact exemption skips the brand swap and path rewrites, but the
+    // `/gsd:` -> `/gsd-` command normalization is a runtime-invocation contract
+    // (#3683: staged bodies must not echo the retired colon form), NOT a vendor
+    // fact — it still applies. So the emit equals the source with exactly that
+    // one substitution, and nothing else (no brand corruption).
+    test(`${runtime}: emit === source with only /gsd: -> /gsd- normalized`, () => {
       const emitted = emitCertification(runtime);
       assert.equal(
         emitted,
-        SOURCE,
-        `certification.md must emit byte-identical to source on ${runtime}; ` +
-          `the brand-substitution transform corrupts its vendor facts.`,
+        SOURCE.replace(/\/gsd:/g, '/gsd-'),
+        `certification.md must emit source-identical on ${runtime} apart from the ` +
+          `/gsd: -> /gsd- command normalization; any other diff is brand corruption of vendor facts.`,
+      );
+      // And it must carry NO retired colon command ref (the #3683 guard).
+      assert.ok(
+        !/\/gsd:[a-z]/.test(emitted),
+        `${runtime}: emitted certification.md still contains a /gsd: colon command ref.`,
       );
     });
   }
