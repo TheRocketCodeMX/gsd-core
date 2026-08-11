@@ -1373,6 +1373,65 @@ describe('commit command', () => {
     assert.ok(gitLog.includes(output.hash), 'git log should contain the returned hash');
   });
 
+  // ─── e2e-4 F3 — a quoted glob in --files was silently dropped ──────────────
+  // verify-work.md's complete_session passes
+  //   ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*"
+  // because the extension is driver-dependent. The staging loop tested each entry
+  // with fs.existsSync(), which a glob string can never satisfy, so the canonical
+  // certification artifact was never committed — silently, on every run.
+  test('stages a glob pathspec in --files (e2e-4 F3)', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-signup');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-CERTIFICATION-SCRIPT.sh'), '#!/bin/sh\necho probe\n');
+
+    const result = runGsdTools(
+      ['commit', 'test(01): certification artifacts', '--files',
+        '.planning/phases/01-signup/01-CERTIFICATION-SCRIPT.*'],
+      tmpDir,
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.committed, true, 'glob-matched file should have been committed');
+
+    const tracked = gitOrThrow(['ls-files', '.planning/phases/01-signup'], { cwd: tmpDir });
+    assert.ok(
+      tracked.includes('01-CERTIFICATION-SCRIPT.sh'),
+      `expected the glob-matched script to be tracked, got: ${tracked}`,
+    );
+  });
+
+  test('a glob matching nothing is a silent skip, not a staging failure (e2e-4 F3)', () => {
+    // The workflow passes the certification glob unconditionally — a run that
+    // produced no starter script must still commit the rest of its scope.
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-signup');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-UAT.md'), '# UAT\n');
+
+    const result = runGsdTools(
+      ['commit', 'test(01): uat only', '--files',
+        '.planning/phases/01-signup/01-UAT.md',
+        '.planning/phases/01-signup/01-CERTIFICATION-SCRIPT.*'],
+      tmpDir,
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.committed, true, 'the present file should still commit');
+    const tracked = gitOrThrow(['ls-files', '.planning/phases/01-signup'], { cwd: tmpDir });
+    assert.ok(tracked.includes('01-UAT.md'));
+  });
+
+  test('a literal path containing no glob metacharacter is unaffected (e2e-4 F3)', () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'literal.md'), '# Literal\n');
+    const result = runGsdTools(
+      ['commit', 'docs: literal path', '--files', '.planning/literal.md'],
+      tmpDir,
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    assert.strictEqual(JSON.parse(result.output).committed, true);
+  });
+
   test('amend mode works without crashing', () => {
     // Create a file and commit it first
     fs.writeFileSync(path.join(tmpDir, '.planning', 'amend-file.md'), '# Initial\n');

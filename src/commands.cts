@@ -790,6 +790,72 @@ function detectPhaseNumberFromFiles(files: string[] | undefined): string | null 
   return null;
 }
 
+/**
+ * Expand a `--files` entry that carries shell glob metacharacters into the paths
+ * it actually matches (e2e-4 F3).
+ *
+ * Why this exists: workflows legitimately pass patterns whose extension is not
+ * knowable at authoring time — `verify-work.md`'s complete_session commits
+ * `…/{phase_num}-CERTIFICATION-SCRIPT.*` because the starter script's extension
+ * depends on the driver that emitted it. The staging loop below gates every entry
+ * on `fs.existsSync`, which a pattern string can never satisfy, so such an entry
+ * was skipped **silently** on every run and the canonical certification artifact
+ * was never committed — while `git add` on the same pathspec would have staged it.
+ *
+ * Deliberate scope: only the BASENAME may carry metacharacters, and only `*` and
+ * `?` (plus a `[…]` class) are honoured. A pattern whose DIRECTORY part is itself
+ * globbed is left untouched and falls through to the existing existsSync skip —
+ * expanding directory globs would mean walking arbitrary trees from a caller-
+ * supplied pattern, which is not what any shipped workflow asks for.
+ *
+ * Returns the matched relative paths (sorted, so a commit's pathspec is
+ * deterministic), or an empty array when nothing matched. An empty result is a
+ * SKIP, exactly like a missing literal file: the workflow passes the certification
+ * glob unconditionally, and a run that produced no script must still commit the
+ * rest of its scope rather than fail closed.
+ */
+function expandFilePattern(cwd: string, pattern: string): string[] {
+  const norm = pattern.replace(/\\/g, '/');
+  const slash = norm.lastIndexOf('/');
+  const dirPart = slash === -1 ? '' : norm.slice(0, slash);
+  const basePart = slash === -1 ? norm : norm.slice(slash + 1);
+
+  // Directory part must be literal — see the scope note above.
+  if (/[*?[\]]/.test(dirPart)) return [];
+
+  const re = new RegExp(
+    '^' +
+      basePart.replace(/[.+^${}()|\\]/g, '\\$&')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\?/g, '[^/]') +
+      '$',
+  );
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(path.resolve(cwd, dirPart || '.'));
+  } catch {
+    return [];
+  }
+
+  return entries
+    .filter((name) => re.test(name))
+    .filter((name) => {
+      try {
+        return fs.statSync(path.resolve(cwd, dirPart, name)).isFile();
+      } catch {
+        return false;
+      }
+    })
+    .sort()
+    .map((name) => (dirPart ? `${dirPart}/${name}` : name));
+}
+
+/** True when a `--files` entry is a glob pattern rather than a literal path. */
+function isGlobPattern(file: string): boolean {
+  return /[*?]|\[[^/]*\]/.test(file);
+}
+
 function cmdCommit(cwd: string, message: string | undefined, files: string[] | undefined, raw: boolean, amend: boolean, noVerify: boolean): void {
   if (!message && !amend) {
     error('commit message required');
@@ -897,7 +963,14 @@ function cmdCommit(cwd: string, message: string | undefined, files: string[] | u
 
   // Stage files
   const explicitFiles = files && files.length > 0;
-  const filesToStage = explicitFiles ? files : ['.planning/'];
+  // e2e-4 F3: expand glob entries BEFORE the existence gate below. A pattern is
+  // never a filesystem path, so an unexpanded one was always skipped silently.
+  // Non-glob entries pass through byte-identically; a glob that matches nothing
+  // collapses to zero entries, which is the same silent skip a missing literal
+  // file already gets (see the `explicitFiles` branch in the loop).
+  const filesToStage = explicitFiles
+    ? files.flatMap((f) => (isGlobPattern(f) ? expandFilePattern(cwd, f) : [f]))
+    : ['.planning/'];
   const stagedPaths: string[] = [];
   // #2608: a `git add` that fails must abort the commit, not be skipped.
   // #2523 stopped a failed path entering the commit pathspec, but skipping it

@@ -193,7 +193,7 @@
       "anchors": [
         "engineering-standards\\.md",
         "brownfield-adaptation\\.md",
-        "Ship Fast ≠ skip structure"
+        "Ship Fast \u2260 skip structure"
       ]
     },
     {
@@ -352,7 +352,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+        "kind\u2208unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
       ]
     },
     {
@@ -860,6 +860,26 @@
       ]
     },
     {
+      "path": "src/artifacts.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "'TEST-STRATEGY\\.md'",
+        "'SECURITY-STRATEGY\\.md'",
+        "'DOMAIN-MODEL\\.md'",
+        "'PRODUCT-BRIEF\\.md'",
+        "'CICD-STRATEGY\\.md'"
+      ]
+    },
+    {
+      "path": "src/artifacts.cts",
+      "feature": "context",
+      "mode": "anchors-only",
+      "anchors": [
+        "'MASTER-CONTEXT\\.md'"
+      ]
+    },
+    {
       "path": "src/broken-windows.cts",
       "feature": "windows-ledger",
       "mode": "anchors-only",
@@ -1118,7 +1138,7 @@
       "anchors": [
         "Ported from the fork",
         "cicd-strategy\\.md",
-        "raised 844 → 880 for the v1\\.9\\.0 realignment"
+        "raised 844 \u2192 880 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1144,7 +1164,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
+        "raised 32000 \u2192 34400 for the v1\\.9\\.0 realignment"
       ]
     },
     {
@@ -1185,7 +1205,7 @@
       "feature": "strategy",
       "mode": "anchors-only",
       "anchors": [
-        "coverage classify — agentic_certification evidence",
+        "coverage classify \u2014 agentic_certification evidence",
         "agentic_certification"
       ]
     },
@@ -1216,7 +1236,7 @@
       "mode": "anchors-only",
       "anchors": [
         "SUITE_START_MS=\\$\\(node -e",
-        "Step C — Suite-metrics capture"
+        "Step C \u2014 Suite-metrics capture"
       ]
     },
     {
@@ -1254,6 +1274,73 @@
       "anchors": [
         "same clock `transition`",
         "suite-health"
+      ]
+    },
+    {
+      "path": "src/commands.cts",
+      "feature": "commit-pathspec",
+      "mode": "anchors-only",
+      "anchors": [
+        "expandFilePattern",
+        "isGlobPattern"
+      ]
+    },
+    {
+      "path": "tests/commands.test.cjs",
+      "feature": "commit-pathspec",
+      "mode": "anchors-only",
+      "anchors": [
+        "stages a glob pathspec in --files"
+      ]
+    },
+    {
+      "path": "src/audit.cts",
+      "feature": "todo-render",
+      "mode": "anchors-only",
+      "anchors": [
+        "item\\.severity \\|\\| item\\.priority",
+        "severity: sanitizeForDisplay"
+      ]
+    },
+    {
+      "path": "tests/audit-command-cutover.test.cjs",
+      "feature": "todo-render",
+      "mode": "anchors-only",
+      "anchors": [
+        "renders the todo shape add-todo actually writes"
+      ]
+    },
+    {
+      "path": "src/init.cts",
+      "feature": "verify-work-bundle",
+      "mode": "anchors-only",
+      "anchors": [
+        "const uatFile = existingUat \\|\\| \\(paddedPhase"
+      ]
+    },
+    {
+      "path": "tests/init.test.cjs",
+      "feature": "verify-work-bundle",
+      "mode": "anchors-only",
+      "anchors": [
+        "emits the canonical uat_path BEFORE the file exists"
+      ]
+    },
+    {
+      "path": "gsd-core/bin/shared/config-schema.manifest.json",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates\\.confirm_transition",
+        "safety\\.always_confirm_destructive"
+      ]
+    },
+    {
+      "path": "tests/config-loader.test.cjs",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates/safety are registered config sections"
       ]
     }
   ]
