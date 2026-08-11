@@ -1379,7 +1379,8 @@
       "mode": "anchors-only",
       "anchors": [
         "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"\u2717 Post-merge test gate",
-        "\\.gsd-post-merge-gate\\.json"
+        "\\.gsd-post-merge-gate\\.json",
+        "\\.planning/\\.gitignore"
       ]
     },
     {

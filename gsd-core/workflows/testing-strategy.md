@@ -220,7 +220,7 @@ Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strat
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=testing-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
 
 </process>
 
