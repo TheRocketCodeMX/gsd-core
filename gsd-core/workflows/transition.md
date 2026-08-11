@@ -217,24 +217,68 @@ TODAY=$(date +%Y-%m-%d)
 Read the `suite-metrics:` frontmatter block (`test_count`, `wall_clock_ms` in integer
 milliseconds, `containers_started`) from the newest SUMMARY **that carries one** — a
 doc-only last wave must not shadow an earlier wave's clean measurement. **Legacy
-inputs:** a block or a baseline row recorded in seconds (the pre-millisecond field
-`wall_clock`, or a table column headed `wall_clock (s)`) reads as `× 1000` — a
-second-resolution measurement, honest but coarse; note that sub-second deltas are
-invisible against such a baseline until a millisecond row replaces it. From TEST-STRATEGY.md's
+inputs — read the unit from the column header, never guess it:** a block or a baseline row
+recorded in seconds (the pre-millisecond field `wall_clock`, or a table column whose header
+literally reads `wall_clock (s)`) reads as `× 1000` — a second-resolution measurement, honest
+but coarse; sub-second deltas are invisible against such a baseline until a millisecond row
+replaces it. Two guards, because the conversion is 1000× in either direction: a **plausibility
+ceiling** — a converted value beyond a few hours of wall clock (e.g. `999999 s` = 11.6 days) is
+not a real suite runtime; treat that row as malformed (report and skip, never fire T1 on it) —
+and **apply `× 1000` only when the header/field actually says seconds**: a table already in
+milliseconds whose header still wrongly reads `(s)` would be inflated 1000× and make every run
+look 1000× faster, so T2 could never fire again. When the header unit and the magnitude
+disagree, trust neither — report the row as malformed. From TEST-STRATEGY.md's
 `## Suite health` table read **two** rows, which may be the same row:
 
-- the **last** row — the T2 baseline;
-- the last row whose **fix-class is a real class** (`config-drift` / `test-debt` /
-  `mixed …`) — the row of the last tune-up, the T4 baseline. `—` and `— (none yet)`
-  are not fix-classes: a table with no real fix-class row anywhere means no tune-up
-  has ever run, so **T4 is unevaluable** — never auto-fired off a strategy-time baseline.
+- the **last row in file order** — the T2 baseline. The table is append-only, so the last row
+  is always the newest reading; when several rows **share the same date** (a strategy baseline
+  and two tune-ups can all land in one day), file order is the only ordinal, so **last-in-file
+  wins**. This is the single baseline-row selection rule; `cicd-strategy.md`'s C1 references it
+  rather than restating it.
+- the last row whose **fix-class is a real class** — the row of the last tune-up, the T4
+  baseline. A real class is `config-drift` / `test-debt` / `mixed …` **and also the honest
+  no-fix outcome** (`none (volume/mix — routed to C1)`): a tune-up that correctly concluded
+  "it was volume, tiering not tuning" *did run*, so its row **counts as a tune-up-happened row
+  for T4** — treating it as not-a-class reverts T4's baseline to an older row and makes the
+  backstop re-fire forever (e2e-10 F2). Only `—` and `— (none yet)` are non-classes: a table
+  with no real fix-class row anywhere means no tune-up has ever run, so **T4 is unevaluable** —
+  never auto-fired off a strategy-time baseline.
 
 **Skip silently** — print nothing, block nothing — when `NO_STRATEGY`, when there is no
 `## Suite health` section, when no SUMMARY in this phase carries a `suite-metrics:` block,
-when the baseline row reads `unmeasured`, **or when either side's wall clock is `0`**
-(a pre-floor measurement artifact — treat it exactly like `unmeasured`; the measurement
-minimum is 1 ms, so a `0` is never a real reading and must never become a divisor). A
+or when the **current** (measured) row is unmeasured (see the validation rule below). A
 phase is never held up for a measurement nobody took.
+
+**Validate both numbers before dividing — the divisor is `test_count`, not the wall clock.**
+`ms/test = wall_clock_ms ÷ test_count`. `test_count` must never become a divisor while `0`,
+absent, or non-positive — a `0` there yields `Infinity`/`NaN`, and every comparison
+against those reads *false*, a fail-**open** trigger that silently never fires (or fires on
+garbage). A side is **well-formed** only when both its `wall_clock_ms` and its `test_count`
+are a **positive finite integer**; anything else — `0`, absent, negative, non-numeric
+(`fast`), a non-integer or scientific notation (`47.06`, `6.02e23`), or a short/truncated
+row — is `unmeasured` for this compare and must never reach the arithmetic (a `0` wall clock
+is included: the measurement minimum is 1 ms, so a `0` is a pre-floor artifact, never a real
+reading). Then:
+
+- if the **current** (measured) row is not well-formed → **skip silently** (the "nobody took
+  a real measurement" case above).
+- if a **baseline** row is not well-formed → this is **not** a silent skip. A table row that
+  should hold a real reading and does not is corruption, not absence: print
+  `[suite-health: baseline row malformed — skipped, re-baseline needed]`, drop that row as a
+  baseline (fall back to the previous well-formed row, or treat the baseline as absent if none
+  remains), and never let its value reach the division. A malformed baseline is never silently
+  allowed to suppress a trigger.
+
+**Greenfield / `unmeasured` baseline — seed, don't skip forever.** A baseline that reads
+`unmeasured` (the greenfield strategy-time seed) or is a bare `0`/legacy placeholder means
+*no real baseline exists yet*, not "skip this suite forever". The **first** phase whose
+`suite-metrics:` capture is well-formed **seeds** the baseline: append that measurement as the
+initial `## Suite health` row (a one-time bootstrap — see the write rule at the end of this
+step), print `[suite health: baseline seeded — {ms/test} ms/test, first real measurement]`,
+and fire no trigger this once (there is nothing to compare against yet). Every subsequent
+capture then compares against it normally. Without this, `unmeasured` is a closed loop — no
+trigger, no tune-up, no row ever written, and cicd's C1-a reads `unmeasured` and pins C0
+forever (greenfield F7).
 
 **The check.** Derive `ms/test = wall_clock_ms ÷ test_count` here, for both sides
 (it is deliberately not recorded anywhere, so the numbers can never disagree), then:
@@ -248,6 +292,23 @@ phase is never held up for a measurement nobody took.
 
 **Flat ms/test with a rising `test_count` is volume, not a regression** — do not fire T2.
 Say so, and point at tiering/sharding (the CI ladder's C1) rather than at tuning.
+
+**A mix shift concentrated in newly-added tiers or files is also volume, not tuning** (GSD's
+own heuristic): if the ms/test rise is attributable to test files **added this phase** — a
+new, legitimately heavier tier the strategy prescribes (e.g. a CLI/E2E file spawning real
+processes) — and **no pre-existing file regressed**, the suite's *mix* moved toward a more
+expensive level by design. Accept it (tiering/sharding, the CI ladder's C1); do not schedule a
+tune-up that can only conclude "nothing to fix" (e2e-10 F3). Only a rise in files that already
+existed is the structural decay T2 exists to catch. The cheap attribution: if the delta lives
+in files that are new this phase, it is mix, not decay.
+
+**Cold-vs-warm — a first-fire T2 on a small suite is re-measured warm before it schedules.**
+The post-merge gate's reading is a **cold** run (the first execution after the wave's code
+lands; the gate records it as such). Cold-vs-warm asymmetry alone can be +70 % on a 0.5–2 s
+suite — both T2 legs — on zero code change. So when T2 would fire for the **first** time and
+the measured wall clock is under ~2 s, re-measure the suite **warm** (a second timed run) and
+use that number; fire only if the warm run still clears both legs. Above ~2 s the asymmetry is
+a small fraction and the 250 ms noise floor already covers it (e2e-10 F5).
 
 **Before either write, check for an existing open todo** — the triggers are properties of
 the suite, not of the transition, so once one fires it keeps firing until a tune-up lands:
@@ -275,9 +336,14 @@ visible now, not discovered later: `[suite health: T{n} fired — tune-up schedu
 
 **Nothing fired:** print exactly one line — `[suite health: {ms/test} ms/test vs {baseline} — no trigger]`.
 
-**Never write a `## Suite health` row from this step.** Re-baselining is the tune-up
-flow's fourth pass, and it appends a dated row rather than rewriting one; a compare that
-also re-baselines would erase the trend it exists to read.
+**Never write a `## Suite health` row from this step — with exactly one exception: the
+greenfield seed above.** Re-baselining is the tune-up flow's fourth pass, and it appends a
+dated row rather than rewriting one; a compare that also re-baselines would erase the trend it
+exists to read. The seed is not a re-baseline: it fires **only** when no real baseline exists
+yet (the baseline reads `unmeasured` or is a `0`/legacy placeholder), it **appends** the first
+real measurement rather than rewriting anything (history preserved, append-only), and it can
+happen at most once — the moment a real row exists, this step is back to write-nothing and the
+tune-up flow owns every later row.
 
 </step>
 <!-- FORK:strategy END -->

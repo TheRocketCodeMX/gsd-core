@@ -510,6 +510,11 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
   const phasesDir = planningPaths(cwd).phases;
   const today = realClock.localToday();
   const milestoneName = options.name || version;
+  // e2e-10 F7: the human-read headers below interpolate `${version} ${milestoneName}`.
+  // When no --name is passed, milestoneName defaults to the version, which
+  // rendered "## v0.2 v0.2" / "# Requirements Archive: v0.2 v0.2". Only append a
+  // name suffix when a distinct name was actually supplied.
+  const nameSuffix = options.name && options.name !== version ? ` ${options.name}` : '';
 
   // Ensure archive directory exists (skipped in dry-run — no mutations)
   if (!options.dryRun) {
@@ -741,7 +746,7 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
     // Normalize to POSIX separators so the header is cross-platform (Windows
     // path.relative yields backslashes; the original literal was forward-slash).
     const reqDisplay = path.relative(cwd, reqPath).split(path.sep).join('/');
-    const archiveHeader = `# Requirements Archive: ${version} ${milestoneName}\n\n**Archived:** ${today}\n**Status:** SHIPPED\n\nFor current requirements, see \`${reqDisplay}\`.\n\n---\n\n`;
+    const archiveHeader = `# Requirements Archive: ${version}${nameSuffix}\n\n**Archived:** ${today}\n**Status:** SHIPPED\n\nFor current requirements, see \`${reqDisplay}\`.\n\n---\n\n`;
     platformWriteSync(path.join(archiveDir, `${version}-REQUIREMENTS.md`), archiveHeader + reqContent);
   }
 
@@ -753,7 +758,7 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
 
   // Create/append MILESTONES.md entry
   const accomplishmentsList = accomplishments.map((a) => `- ${a}`).join('\n');
-  const milestoneEntry = `## ${version} ${milestoneName} (Shipped: ${today})\n\n**Phases completed:** ${phaseCount} phases, ${totalPlans} plans, ${totalTasks} tasks\n\n**Key accomplishments:**\n${accomplishmentsList || '- (none recorded)'}\n\n---\n\n`;
+  const milestoneEntry = `## ${version}${nameSuffix} (Shipped: ${today})\n\n**Phases completed:** ${phaseCount} phases, ${totalPlans} plans, ${totalTasks} tasks\n\n**Key accomplishments:**\n${accomplishmentsList || '- (none recorded)'}\n\n---\n\n`;
 
   if (fs.existsSync(milestonesPath)) {
     const existing = fs.readFileSync(milestonesPath, 'utf-8');

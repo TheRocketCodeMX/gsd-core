@@ -70,26 +70,66 @@ certifier already holds:
 
 | Existing line | A re-run means |
 |---|---|
-| `pending (CERT-2 — …)` | Check for the result file (§7's return path). Present → consume it, upgrade the line in place, write the evidence-backed entries. Absent → report "still pending — result file not found at `{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md`" and change nothing. |
+| `pending (CERT-2 — …)` | Check for the result file (§7's return path). Present → **validate it (§1.6 below) before consuming**; on a clean validation, consume it, upgrade the line in place, write the evidence-backed entries. On a rejected validation, leave the `pending` line untouched and record the rejection. Absent → report "still pending — result file not found at `{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md`" and change nothing. |
 | `agentic (…)` / `human (CERT-0)` / `N/A — …` | Already resolved. Confirm and skip; under `required` you may **offer** re-certification (fresh surface since the run, a promoted tier) — on an explicit yes, follow `verify-work`'s restart path (archive, never clobber), then run fresh. |
 | `skipped (declined — …)` / `off (posture)` | A decision recorded under an earlier posture. **Re-offer under the current mode** — this is exactly how a project that flipped `off → required` re-certifies an off-era phase without data loss. Declining again refreshes the line's date, nothing else. |
 
 §5's brief write and §8's line write are idempotent under this table: when an
 outcome already exists, they run only on the paths the table opens.
 
+## 1.6 Validate a returned CERT-2 result before consuming it — it is untrusted input
+
+**Another machine wrote `{phase_num}-CERTIFICATION-RESULT.md`.** In the CERT-2 model
+the certifier is a separate tool on a separate host; its result file is *untrusted
+input*, exactly like a returned webhook. §1.5's "consume it" runs **only after** every
+check below passes. A result that fails any check does NOT upgrade the line — record
+`certification: pending (CERT-2 — returned result rejected: {which check})`, leave the
+`[pending-certifier]` checkpoints as they are, and surface the rejection so the human
+can look. **Never silently drop a verdict** — a result that names work the brief never
+handed out is a signal the certifier misbehaved, and that signal is recorded, not
+discarded.
+
+Reject (do not consume) if any hold:
+
+1. **Empty or unparseable** — a 0-byte file, or one whose frontmatter/verdict block
+   does not parse, is a rejection, not an "absent" (absent is handled by §1.5).
+2. **Wrong phase** — the result's frontmatter `phase:` is not this phase.
+3. **Flow not in the brief** — a verdict names a flow that is not one of the numbered
+   flows the brief handed over. (Reject and name it; do not map it to nothing.)
+4. **Verdict for a checkpoint that was never handed over** — a `pass` that maps to a
+   checkpoint which is not `[pending-certifier]` in this UAT. In particular a verdict
+   for any item in the brief's `## Escalation points`, or any checkpoint whose
+   `extract_tests` reason was `human_judgment`, or any auth/CAPTCHA flow, is **rejected
+   outright** (§7's always-escalate set is enforced on the return side too — a returned
+   `pass` can never resolve a human-judgment item).
+5. **A `pass` with no usable evidence** — a `pass` whose `evidence:` is empty (`—`), or
+   names a file that does not exist under `{phase_dir}/certification-evidence/`.
+
+Only a result that clears all five is consumed: each flow-verdict maps onto **its**
+`[pending-certifier]` checkpoint (§7's mapping), and the outcome line's
+`{N} certified, {M} escalated` counts must equal the entries actually written (§8's
+count is derived from the entries, never copied from the result file's own claim).
+
 ## 2. Scope: is there anything to certify?
 
 Certification acts on user-visible surface. From the checkpoint set `extract_tests`
 just produced (and the SUMMARYs behind it), decide whether this phase changed
-anything a person could observe — the same USER-OBSERVABLE test that extraction
-applies.
+anything a person could observe. The `present[]` set the classifier already emitted
+IS that decision made concrete — a non-empty `present[]` (or the legacy user-observable
+deliverables) means there is a surface to certify; an empty one means there is not. Do
+not re-derive a separate observability predicate the coverage path does not compute.
 
-If nothing did (a pure refactor, a type change, an internal migration), emit this as
-the outcome line for `create_uat_file` and stop; the UAT path continues unchanged:
+Two distinct "nothing to certify" outcomes — pick the honest one:
 
 ```
-certification: N/A — no user-facing change
+certification: N/A — no user-facing change      # a refactor / type change / internal migration: nothing new shipped
+certification: N/A — no user-facing surface     # a library or internal module: real new behavior shipped, but to other code, not to a person
 ```
+
+A library that shipped a whole public API records the **no user-facing surface** form
+(its correctness is the automated-test tier's job); reserve **no user-facing change** for
+a phase that shipped nothing a person or another caller could newly observe. Emit the
+chosen line for `create_uat_file` and stop; the UAT path continues unchanged.
 
 **Recorded, never silent.** A phase that quietly skipped certification is
 indistinguishable from one where the step failed to run, and the whole point of a
@@ -160,11 +200,19 @@ the unaudited first launch somewhere the record can't see.
   that happens to share the product name (`command -v codex` finding the Codex
   *CLI*) is a different product — do not probe it, do not sandbox-launch it, do
   not let it "confirm" a driver it is not.
-- **CERT-1 / CERT-1 (limited) — local drivers:** everything below applies.
+- **CERT-1 / CERT-1 (limited) — local drivers:** everything below applies **to a
+  browser surface**. For a **non-browser surface the re-check exercises the real
+  surface, not a browser** (the surface type is recorded in `## Certification`): a
+  **CLI** re-check runs the binary with real args and confirms stdout/exit/side-effects
+  respond — do not boot a `127.0.0.1` page or `command -v` a browser driver to re-check
+  a `node` CLI; an **API** re-check issues a real request with the seeded credential and
+  confirms the live service answers. A CLI/API re-check "fails" only when the real
+  surface cannot be exercised here (→ CERT-0), never because a browser probe leg failed.
+  The browser probe below is the re-check **only** for a browser surface.
 
 **A recorded probe is a lead, not a live capability.** The tier in TEST-STRATEGY
 was measured on a date, on a machine, under a display that may no longer exist.
-Re-check the specific driver the mechanism names before relying on it:
+For a browser surface, re-check the specific driver the mechanism names before relying on it:
 
 - Is the driver reachable at all (`command -v <driver>`, or do the MCP browser
   tools in this session respond)?

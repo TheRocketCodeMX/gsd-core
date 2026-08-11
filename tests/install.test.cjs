@@ -644,7 +644,17 @@ for (const runtime of ['hermes', 'qwen']) {
       const rtDir = path.join(tmpDir, getDirName(runtime));
       const allFiles = walk(rtDir).filter(f =>
         (f.endsWith('.md') || f.endsWith('.cjs') || f.endsWith('.js')) &&
-        path.basename(f) !== 'CHANGELOG.md'
+        path.basename(f) !== 'CHANGELOG.md' &&
+        // certification.md is a VENDOR-FACT reference: it names real certifier
+        // products — "Claude Desktop (Cowork)", "Claude Code `--chrome`" —
+        // alongside Codex desktop and onorca as cross-vendor options a user on
+        // ANY runtime might own. It is emitted BYTE-IDENTICAL on every runtime
+        // (emitted-certification-fidelity.test.cjs pins this; e2e-12 F1/F2:
+        // brand-swapping vendor facts fabricates capabilities), so its "Claude"
+        // mentions are informational vendor content, not a host self-reference
+        // the install should rebrand — the same category as the
+        // `<runtime_compatibility>` exemption above.
+        path.basename(f) !== 'certification.md'
       );
       const leaks = allFiles.filter(f => {
         // #2284(b): exempt `<runtime_compatibility>` comparison-table content
