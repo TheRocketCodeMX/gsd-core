@@ -273,7 +273,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/templates/summary.md` | context | anchors-only | `deviations:` frontmatter field + guidance (structured mirror of `## Deviations from Plan`, inside fenced template body) |
 | `gsd-core/templates/user-setup.md` | strategy | anchors-only | certification-substrate example (seed accounts, mail catcher, one-time auth session — inside fenced template body) |
 | `gsd-core/templates/verification-report.md` | fidelity | anchors-only | Mode & Source Fidelity verdict table (inside fenced template body) |
-| `gsd-core/workflows/add-tests.md` | fidelity | markers | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors) |
+| `gsd-core/workflows/add-tests.md` | fidelity | markers (3) | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors); + round-4 (r4-b): reads the `
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
 | `gsd-core/workflows/complete-milestone.md` | context | markers | acknowledge step routes each deferral into `.planning/milestones/next/<label>-CAPSULE.md` (create from template if absent), in addition to the STATE.md Deferred Items entry (1 marker pair) |

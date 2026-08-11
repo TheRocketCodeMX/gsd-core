@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "paths": {
+    "add-tests.md": "grew +1727B (round-4 r4-b): add-tests now reads the `## Coverage debt` ledger as first-class prioritized inputs (the consumption end of the coverage-gap loop) and transitions resolved rows `open -> closed` with the closing test ref (the Status-column lifecycle). Two new FORK:fidelity blocks."
+  }
+}

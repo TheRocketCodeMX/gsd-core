@@ -7776,8 +7776,11 @@ const RUNTIME_CONTENT_DISPATCH = {
 // CERT-1 exemplar, and re-attributing onorca's forensic receipt to the
 // runtime's own settings.json. Brand-neutralizing a vendor-fact document is
 // category-incorrect: it must reach every runtime verbatim. This exemption is
-// keyed on the source path so the whole class generalizes to future
-// vendor-fact references placed under gsd-core/references/.
+// keyed on the EXACT path `gsd-core/references/certification.md` and no other —
+// it does NOT auto-generalize. A future vendor-fact reference needing the same
+// treatment must be added to the regex explicitly; a forgotten one falls through
+// to the brand swap (fail-safe: the default is to transform, so the omission is a
+// visible corruption caught by tests/emitted-certification-fidelity.test.cjs).
 function isVerbatimVendorReference(srcPath) {
   const norm = String(srcPath).replace(/\\/g, '/');
   return /(?:^|\/)gsd-core\/references\/certification\.md$/.test(norm);
