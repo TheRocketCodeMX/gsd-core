@@ -88,6 +88,12 @@ const ALLOWLIST = new Set([
 // belong in ALLOWLIST). Only add files that are large but otherwise clean.
 const SIZE_ONLY_WORKFLOWS = new Set([
   'gsd-core/workflows/docs-update.md',  // ~51K after fix-loop truncation guard (#571)
+  // ~51.8K after the certification re-entry wiring (#58). The file sat at ~49.6K;
+  // the round-2 gate fixes (resume-path dispatch, archive-never-clobber, outcome-line
+  // grammar) pushed it over. Size-only: still fully injection scanned. The real fix is
+  // splitting per the progressive-disclosure pattern (steps/ already exists) — worth
+  // its own change, not a squeeze that compresses safety doctrine.
+  'gsd-core/workflows/verify-work.md',
   // ~50.7K after the per-reviewer effort wiring (#2481). This file sat at 49,971
   // chars — 29 below the 50K prompt-stuffing threshold — so it was going to trip
   // on whatever was added to it next. Size-only: the file is still fully injection
