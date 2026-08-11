@@ -2678,21 +2678,28 @@ function convertClaudeCommandToCursorSkill(content, skillName) {
   const converted = convertClaudeToCursorMarkdown(content);
   const { frontmatter, body } = extractFrontmatterAndBody(converted);
   let description = `Run GSD workflow ${skillName}.`;
+  let argumentHint = '';
   if (frontmatter) {
     const maybeDescription = extractFrontmatterField(frontmatter, 'description');
     if (maybeDescription) {
       description = maybeDescription;
     }
+    // #e2e-12 F3: carry argument-hint to the invocation surface (parity with
+    // copilot/qwen) so modifiers like --tune-up stay discoverable from the
+    // skill signature, not just the body.
+    const maybeArgHint = extractFrontmatterField(frontmatter, 'argument-hint');
+    if (maybeArgHint) argumentHint = maybeArgHint;
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  const argHintLine = argumentHint ? `argument-hint: ${yamlQuote(toSingleLine(argumentHint))}\n` : '';
   const adapter = getCursorSkillAdapterHeader(skillName);
 
   // Cursor skills are both slash-invocable and model-invocable. Do not emit the
   // unsupported `user-invocable` field: it is ignored by Cursor and previously
   // hid the real cause of duplicate entries, the parallel commands/ surface
   // retired in #2644.
-  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n${argHintLine}---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 /**
@@ -4024,17 +4031,24 @@ function convertClaudeCommandToCodexSkill(content, skillName) {
   const converted = convertClaudeToCodexMarkdown(content);
   const { frontmatter, body } = extractFrontmatterAndBody(converted);
   let description = `Run GSD workflow ${skillName}.`;
+  let argumentHint = '';
   if (frontmatter) {
     const maybeDescription = extractFrontmatterField(frontmatter, 'description');
     if (maybeDescription) {
       description = maybeDescription;
     }
+    // #e2e-12 F3: carry argument-hint to the invocation surface (parity with
+    // copilot/qwen) so modifiers like --tune-up stay discoverable from the
+    // skill signature, not just the body.
+    const maybeArgHint = extractFrontmatterField(frontmatter, 'argument-hint');
+    if (maybeArgHint) argumentHint = maybeArgHint;
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  const argHintLine = argumentHint ? `argument-hint: ${yamlQuote(toSingleLine(argumentHint))}\n` : '';
   const adapter = getCodexSkillAdapterHeader(skillName);
 
-  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\nmetadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\n${argHintLine}metadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 /**

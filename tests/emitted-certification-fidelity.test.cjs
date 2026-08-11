@@ -40,6 +40,7 @@ const os = require('os');
 const path = require('path');
 
 const install = require('../bin/install.js');
+const { cleanup } = require('./helpers.cjs');
 
 const CERT_SRC = path.join(__dirname, '..', 'gsd-core', 'references', 'certification.md');
 const SOURCE = fs.readFileSync(CERT_SRC, 'utf8');
@@ -82,7 +83,7 @@ function emitCertification(runtime) {
     /* confinementRoot */ tmp,
   );
   const emitted = fs.readFileSync(path.join(destDir, 'certification.md'), 'utf8');
-  fs.rmSync(tmp, { recursive: true, force: true });
+  cleanup(tmp);
   return emitted;
 }
 
