@@ -139,7 +139,7 @@ Next: /gsd:cicd-strategy   (pipelines + deploy targets will follow this strategy
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=infrastructure-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** ROADMAP.md predates this strategy. Scan it against the compute rungs and data layer — if a phase assumes compute, a data store, or an environment this strategy invalidates or reshapes (e.g. a phase planning a self-managed cluster now dropped to serverless containers, or one missing the IaC/observability floor this strategy mandates), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this strategy. Scan it against the compute rungs and data layer — if a phase assumes compute, a data store, or an environment this strategy invalidates or reshapes (e.g. a phase planning a self-managed cluster now dropped to serverless containers, or one missing the IaC/observability floor this strategy mandates), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
 
 </process>
 

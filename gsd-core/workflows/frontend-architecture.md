@@ -131,7 +131,7 @@ Next: /gsd:testing-strategy   (test shape follows architecture) → plan-phase
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=frontend-architecture` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation:** scan ROADMAP.md against the FE architecture — if a phase assumes a FE structure/state/rendering this decision reshapes, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh). Never leave a known contradiction unspoken.
+**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** scan ROADMAP.md against the FE architecture — if a phase assumes a FE structure/state/rendering this decision reshapes, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh). Never leave a known contradiction unspoken.
 
 </process>
 
