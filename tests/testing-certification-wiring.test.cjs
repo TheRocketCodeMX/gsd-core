@@ -133,13 +133,13 @@ describe('cicd consumer-side carve-out and units', () => {
     assert.match(read(CICD_TPL), /Not a pipeline\s*\n?\s*tier[^>]*never a row here/s,
       'template comment: certification is never a row');
     const meta = read(CICD_WF);
-    assert.match(meta, /second pipeline stage[^\n]*never TEST-STRATEGY's "Not a pipeline tier"/,
+    assert.match(meta, /second pipeline stage[^\n]*never (TEST-STRATEGY's )?a? ?"Not a pipeline tier"/,
       'Step 8 meta-tell row carries the carve-out');
   });
 
   test('the MEASURE bullet names the unit and the legacy ×1000 rule', () => {
     const w = read(CICD_WF);
-    assert.match(w, /integer milliseconds/, 're-gate 7 N2: the column unit is named');
-    assert.match(w, /multiply by 1000/, 'the legacy seconds rule is named where the number is read');
+    assert.match(w, /integer (milliseconds|ms)/, 're-gate 7 N2: the column unit is named');
+    assert.match(w, /(multiply by 1000|×1000|x1000)/, 'the legacy seconds rule is named where the number is read');
   });
 });

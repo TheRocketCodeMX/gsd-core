@@ -25,6 +25,7 @@
 // this list fails at build time instead of months later in a user's health report.
 export const CANONICAL_EXACT: ReadonlySet<string> = new Set([
   'PROJECT.md',
+  'TESTING-STANDARDS.md',
   'ROADMAP.md',
   'STATE.md',
   'REQUIREMENTS.md',
