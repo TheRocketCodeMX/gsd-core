@@ -1,6 +1,6 @@
 {
   "version": 1,
   "paths": {
-    "cicd-strategy.md": "[object Object] 2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit — the discussion log ships with the strategy doc it explains. +228 bytes."
+    "cicd-strategy.md": "Round-2 Wave A (e2e-7 F1/F2), atop the align-110 HEAD-revarg fix: C1-a now reads the recorded ## Suite health measurement and re-times only when no measured row exists; the C1-b trigger and the post-merge-stage line carry the certification carve-out (a Not-a-pipeline-tier line can never be claimed by any C1 trigger). Cumulative +679 bytes vs next."
   }
 }

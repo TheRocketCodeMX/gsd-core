@@ -125,12 +125,23 @@ Reply with a number to resume, or provide a phase number to start new.
 Wait for user response.
 
 - If user replies with number (1, 2) → Load that file, go to `resume_from_file`
-- If user replies with phase number → Treat as new session, go to `create_uat_file`
+- If user replies with phase number → **exists-check first**: if `{phase_num}-UAT.md` already exists for that phase, treat exactly as the `$ARGUMENTS`-provided branch below (offer resume or restart — never overwrite). Otherwise it is genuinely new: continue through `find_summaries` → `extract_tests` → the certification dispatch → `create_uat_file` — never jump straight to `create_uat_file`; a session created without the extraction chain has no checkpoint set and no certification outcome.
 
 **If active sessions exist AND $ARGUMENTS provided:**
 
 Check if session exists for that phase. If yes, offer to resume or restart.
-If no, continue to `create_uat_file`.
+If no, it is genuinely new: continue through `find_summaries` → `extract_tests` → the
+certification dispatch → `create_uat_file` — same rule as the reply branch above; never
+jump straight to `create_uat_file`.
+
+**Restart is defined, and it never destroys a record.** Restart means: archive the
+existing file to `{phase_dir}/{phase_num}-UAT-superseded-{ISO date}.md` — certified
+entries, the certification outcome line, `## Gaps`, everything, byte-intact — then
+continue to `find_summaries` → `extract_tests` → the certification dispatch →
+`create_uat_file` as a fresh session. Name what will be archived when offering the
+choice ("restart archives the current file, including {N} resolved tests and {M}
+gaps"). A restart that silently clobbers an evidence-backed certification outcome
+is the one state the "recorded, never silent" contract exists to prevent.
 
 **If no active sessions AND no $ARGUMENTS:**
 
@@ -142,7 +153,7 @@ Provide a phase number to start testing (e.g., /gsd:verify-work 4)
 
 **If no active sessions AND $ARGUMENTS provided:**
 
-Continue to `create_uat_file`.
+Continue through `find_summaries` → `extract_tests` → the certification dispatch → `create_uat_file` (the normal new-session chain below).
 </step>
 
 <!-- gsd:section id="automated-ui-verification" when="state:ui-phase-active" -->
@@ -227,6 +238,8 @@ It runs HERE — after `extract_tests` computed the checkpoint set, before any c
 <step name="create_uat_file">
 **Create UAT file with all tests:**
 
+**This step never overwrites.** If `{phase_num}-UAT.md` already exists, stop and go to `resume_from_file` — restart (which archives first, `check_active_session`'s rule) is the only path that may replace an existing file. An exists-check here is the last line of defense for evidence-backed certified entries, the outcome line, and `## Gaps`.
+
 ```bash
 mkdir -p "$PHASE_DIR"
 ```
@@ -289,7 +302,14 @@ source: agentic
 evidence: [transcript ref · captures]
 ```
 
-Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
+**CERT-2 handover entries.** When the certification step handed checkpoints to an
+off-machine certifier, write those as `result: [pending-certifier]` — visible in the
+test list, **never presented** (`present_test` selects only `result: [pending]`
+checkpoints; a `[pending-certifier]` entry is the certifier's to answer via the
+result file, and it reverts to `[pending]` only when the returned verdict is `fail`
+or `could-not-prove`).
+
+Then record the step's single outcome line (`certification: agentic (…)` / `certification: pending (CERT-2 — …)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined — …)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
 
 ## Summary
 
@@ -474,6 +494,8 @@ Resolved gaps are NOT re-diagnosed and do NOT spawn new gap plans. If the user l
 
 Read the full UAT file.
 
+**Certification re-entry — before the pending scan.** If the file carries a `certification:` line, or `{phase_num}-CERTIFICATION-RESULT.md` exists in the phase directory: read and execute `gsd-core/workflows/verify-work/steps/agentic-certification.md` **§1.5** (the re-entry table) now. It is the only consumer of a returned CERT-2 result (upgrading a `pending` line in place and writing the evidence-backed entries), the only reporter of a still-pending handover, and the only path that re-offers after a posture flip (`off → required`) — every rule in that table is dead prose unless resume consults it, because resume is the branch every re-entry actually takes. It never duplicates a line or an entry; on a resolved outcome it confirms and returns immediately. Then continue below — the scan picks up any checkpoints §1.5 reverted to `[pending]`.
+
 Find first test with `result: [pending]`.
 If no `[pending]` test found → go to `complete_session`.
 
@@ -522,7 +544,7 @@ Clear Current Test section:
 
 Commit the UAT file:
 ```bash
-gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/certification-evidence/"
+gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files ".planning/phases/XX-name/{phase_num}-UAT.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-RESULT.md" ".planning/phases/XX-name/certification-evidence/"
 ```
 
 Include the certification artifacts only when the run produced them — the brief is the
@@ -588,7 +610,7 @@ If an active secure-phase step hook exists AND `SECURITY_FILE` exists: check fro
 
 If no active secure-phase step hook exists OR (`SECURITY_FILE` exists AND `threats_open` is `0`):
 
-If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate:
+If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate — **conditionally**:
 
 ```bash
 PHASE_DIR=$(printf '%s' "$INIT" | jq -r '.phase_dir // empty')
@@ -596,9 +618,52 @@ VERIFICATION_FILE=$(ls "${PHASE_DIR}"/*-VERIFICATION.md 2>/dev/null | head -1)
 VERIFICATION_STATUS=$(gsd_run query verification.status "$PHASE_DIR" 2>/dev/null)
 VERIFICATION_STATUS_VALUE=$(printf '%s' "$VERIFICATION_STATUS" | jq -r '.status // empty' 2>/dev/null || echo "")
 PHASE_VERIFICATION_STATUS="$VERIFICATION_STATUS_VALUE"
-if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ]; then
+# What is still unproven, from the two artifacts that are allowed to say so.
+UAT_FILE=$(ls "${PHASE_DIR}"/*-UAT.md 2>/dev/null | head -1)
+BEHAVIOR_UNVERIFIED=$(gsd_run query frontmatter.get "$VERIFICATION_FILE" --field behavior_unverified 2>/dev/null | jq -r '.behavior_unverified // 0' 2>/dev/null || echo 0)
+case "$BEHAVIOR_UNVERIFIED" in ''|*[!0-9]*) BEHAVIOR_UNVERIFIED=0 ;; esac
+CERT_UNPROVEN=$(grep -cE '^result: (\[pending-certifier\]|could-not-prove)' "$UAT_FILE" 2>/dev/null || echo 0)
+case "$CERT_UNPROVEN" in ''|*[!0-9]*) CERT_UNPROVEN=0 ;; esac
+if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ] && [ "$BEHAVIOR_UNVERIFIED" -eq 0 ] && [ "$CERT_UNPROVEN" -eq 0 ]; then
   gsd_run query frontmatter.set "$VERIFICATION_FILE" --field status --value passed
+  PHASE_VERIFICATION_STATUS="passed"
 fi
+```
+
+**Why the stamp is conditional (e2e-4 F5).** `human_needed` means *a human still has to
+look at something*. A UAT session with zero issues answers only the part the human was
+asked about; it says nothing about a truth the verifier recorded as
+`PRESENT_BEHAVIOR_UNVERIFIED`, or a checkpoint the certifier escalated as
+`could-not-prove`. Stamping unconditionally produced a file that contradicted itself —
+
+```yaml
+status: passed
+behavior_unverified: 1
+behavior_unverified_items:
+  - truth: "Invalid email or weak password returns 400 naming the problem"
+```
+
+— and `phase uat-passed --require-verification` then returned `passed: true` on it, with
+three artifacts in one phase and two of them saying the behaviour was unproven. A
+`behavior_unverified` item never flips to `passed` silently. This is the same
+deterministic-auto-pass philosophy the coverage classifier already applies: auto-pass what
+the evidence covers, present what it does not.
+
+**If the stamp was withheld** (`PHASE_VERIFICATION_STATUS` is still `human_needed` while
+`BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` is non-zero), first run `coverage_gap_capture` in
+**record-only mode** (below — the gap was found by escalation, not by a UAT issue), then
+stop before phase advancement and present:
+
+```
+All UAT tests passed, but {BEHAVIOR_UNVERIFIED} behaviour(s) and {CERT_UNPROVEN} checkpoint(s) are still unproven — verification stays `human_needed`.
+
+Unproven:
+{behavior_unverified_items[].truth from VERIFICATION.md}
+{checkpoints in UAT.md whose result is [pending-certifier] or could-not-prove}
+
+- `/gsd:add-tests {phase}` — write the fast test that would prove it (the coverage-debt row is already recorded)
+- `/gsd:execute-phase {phase}` — implement/repair, then re-verify
+- `/gsd:verify-work {phase}` — resume once the item is proven
 ```
 
 If `PHASE_VERIFICATION_STATUS` is `stale`, stop before phase advancement and present:
@@ -703,6 +768,26 @@ Diagnosis runs automatically - no user prompt. Parallel agents investigate simul
 <step name="coverage_gap_capture">
 **Ask what the pyramid missed, and make the answer durable:**
 
+**Two entries, one question (e2e-4 F7).** This step used to be reachable only through
+`diagnose_issues`, i.e. only when `issues > 0`. That gated the *only* writer of
+`## Coverage debt` behind the one event that most often does not happen: a gap the
+**verifier** recorded (`behavior_unverified_items`) or the **certifier** escalated
+(`could-not-prove`, `[pending-certifier]`, an escalated checkpoint in the outcome line)
+produced no row at all, because the human reported no issue. The doctrine is
+"certification catches it once; the pyramid catches it forever" — so the trigger is a
+**named gap**, whatever named it.
+
+| Entry | Gap set | Routing |
+|---|---|---|
+| **diagnosed** — from `diagnose_issues` (`issues > 0`) | the `## Gaps` entries, with root causes in hand | append rows → `plan_gap_closure` |
+| **record-only** — from `complete_session` with `issues == 0` but `BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` non-zero | one gap per `behavior_unverified_items[].truth` in VERIFICATION.md, plus each UAT checkpoint whose `result` is `[pending-certifier]` or `could-not-prove` | append rows, then **return to `complete_session`** — no diagnosis, no `plan_gap_closure`, and **never** invent a `## Gaps` id for something the human did not report |
+
+Record-only has no root-cause diagnosis to lean on; answer the question from the
+artifact that named the gap (the verifier's truth statement, the certifier's evidence
+note). `{gap_id}` for a record-only row is the naming artifact plus its item — e.g.
+`VERIFICATION/truth-3` or `CERT/C1` — so a later diagnosed row for the same behaviour
+is visibly the same behaviour and not a duplicate id.
+
 Certification catches it once; the pyramid catches it forever. Every diagnosed gap
 above is a behavior that reached UAT/certification unproven — so before planning the
 fix, answer one question per gap, using the root cause diagnosis already in hand:
@@ -728,7 +813,8 @@ inventing a test.
 
 Append one row per answered gap to `.planning/TEST-STRATEGY.md` under its
 `## Coverage debt` section. Create the section (heading + table header) if the file
-predates it.
+predates it — inserted after the last existing `## ` content section and **before
+any trailing footer** (a closing `---` or end-of-file), never appended past it.
 
 ```
 | {date} | {phase}/{gap_id} | {the behavior that escaped} | {the fast test that was missing, and at which level} | open |
@@ -742,7 +828,10 @@ predict, so the next strategy Update pass can see the project's real failure mod
 If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
 create a strategy document from a gap.
 
-Proceed to `plan_gap_closure`.
+**Diagnosed entry:** proceed to `plan_gap_closure`.
+**Record-only entry:** return to `complete_session` and present the withheld-stamp
+message there — the rows are recorded; nothing is planned from a gap the human never
+reported.
 </step>
 
 <step name="plan_gap_closure">

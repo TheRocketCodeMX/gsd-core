@@ -1920,7 +1920,7 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
   try {
     const phaseFiles = fs.readdirSync(phaseFullDir);
 
-    for (const file of phaseFiles.filter((f) => f.includes('-UAT') && f.endsWith('.md'))) {
+    for (const file of phaseFiles.filter((f) => f.includes('-UAT') && f.endsWith('.md') && !f.includes('-UAT-superseded-'))) {
       const content = fs.readFileSync(path.join(phaseFullDir, file), 'utf-8');
       if (/result: pending/.test(content)) warnings.push(`${file}: has pending tests`);
       if (/result: blocked/.test(content)) warnings.push(`${file}: has blocked tests`);

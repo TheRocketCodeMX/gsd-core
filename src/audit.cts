@@ -54,7 +54,16 @@ interface ThreadItem {
 
 interface TodoItem {
   filename: string;
+  /**
+   * e2e-4 F9: `priority` is read for backward compatibility only — NO shipped
+   * workflow or template has ever written it. `add-todo.md` and `transition.md`
+   * both prescribe `created` / `title` / `area` / `severity`, so `severity` is
+   * the field that actually carries the todo's urgency and `title` is the field
+   * that makes it readable.
+   */
   priority: string;
+  severity: string;
+  title: string;
   area: string;
   summary: string;
   scan_error?: boolean;
@@ -380,7 +389,7 @@ function scanTodos(planDir: string): TodoItem[] {
   try {
     files = fs.readdirSync(pendingDir, { withFileTypes: true });
   } catch {
-    return [{ scan_error: true, filename: '', priority: '', area: '', summary: '' }];
+    return [{ scan_error: true, filename: '', priority: '', severity: '', title: '', area: '', summary: '' }];
   }
 
   const mdFiles = files.filter(e => e.isFile() && e.name.endsWith('.md'));
@@ -410,13 +419,18 @@ function scanTodos(planDir: string): TodoItem[] {
     results.push({
       filename: sanitizeForDisplay(entry.name),
       priority: sanitizeForDisplay(fm.priority || ''),
+      severity: sanitizeForDisplay(fm.severity || ''),
+      // Quote-stripped: `add-todo.md` writes `title: [title]` but a title
+      // containing `:` is legally quoted by the writer, and the quotes are not
+      // part of the human-readable string.
+      title: sanitizeForDisplay(fm.title || '').replace(/^["']|["']$/g, '').slice(0, 200),
       area: sanitizeForDisplay(fm.area || ''),
       summary,
     });
   }
 
   if (mdFiles.length > 5) {
-    results.push({ _remainder_count: mdFiles.length - 5, filename: '', priority: '', area: '', summary: '' });
+    results.push({ _remainder_count: mdFiles.length - 5, filename: '', priority: '', severity: '', title: '', area: '', summary: '' });
   }
 
   return results;
@@ -518,7 +532,7 @@ function scanUatGaps(planDir: string): UatGapItem[] {
       continue;
     }
 
-    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md'))) {
+    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md') && !f.includes('-UAT-superseded-'))) {
       const filePath = path.join(phaseDir, file);
 
       let safeFilePath: string;
@@ -798,7 +812,7 @@ function auditOpenArtifacts(cwd: string): AuditResult {
   })();
 
   const todos = (() => {
-    try { return scanTodos(planDir); } catch { return [{ scan_error: true, filename: '', priority: '', area: '', summary: '' }]; }
+    try { return scanTodos(planDir); } catch { return [{ scan_error: true, filename: '', priority: '', severity: '', title: '', area: '', summary: '' }]; }
   })();
 
   const seeds = (() => {
@@ -928,9 +942,16 @@ function formatAuditReport(auditResult: AuditResult): string {
     lines.push(`🟡 Pending Todos (${counts.todos} pending)`);
     for (const item of realTodos) {
       const area = item.area ? ` [${item.area}]` : '';
-      const pri = item.priority ? ` (${item.priority})` : '';
+      // e2e-4 F9: `severity` is what every writer emits; `priority` is the legacy
+      // field kept only so a hand-written pre-2.4 todo still renders its urgency.
+      const urgency = item.severity || item.priority;
+      const pri = urgency ? ` (${urgency})` : '';
       lines.push(`   • ${item.filename}${area}${pri}`);
-      if (item.summary) lines.push(`     ${item.summary}`);
+      // The title is the human-readable line the writers author. `summary` (the
+      // first body line) is literally `## Problem` for both prescribed shapes, so
+      // it is only a fallback for a todo that carries no title at all.
+      const detail = item.title || item.summary;
+      if (detail) lines.push(`     ${detail}`);
     }
     if (remainder) {
       lines.push(`   ... and ${remainder._remainder_count} more`);

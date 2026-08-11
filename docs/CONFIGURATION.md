@@ -919,6 +919,7 @@ Control confirmation prompts during workflows.
 | `gates.execute_next_plan` | boolean | `true` | Confirm before executing next plan |
 | `gates.issues_review` | boolean | `true` | Review issues before creating fix plans |
 | `gates.confirm_transition` | boolean | `true` | Confirm phase transition |
+| `gates.confirm_milestone_scope` | boolean | `true` | Confirm milestone scope at close (`complete-milestone`). Read by the workflow but not shipped in `templates/config.json` — set it explicitly under `mode: custom` |
 
 ---
 

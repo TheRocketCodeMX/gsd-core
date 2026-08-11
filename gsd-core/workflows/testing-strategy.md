@@ -32,7 +32,7 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 
 **If `EXISTS` and not `--auto`:** ask Update / View / Skip (header "Strategy"). On Skip: exit ("Existing TEST-STRATEGY.md preserved."). On View: show then Update/Skip.
 
-**On Update (and on `--auto` over an existing file):** read the existing file's `## Coverage debt` table before re-deriving anything. Those rows are the only record of where this project's pyramid actually leaks — each one is a behavior that reached UAT or certification unproven. Where they cluster (a subdomain, a level, a kind of behavior), raise that area's level emphasis in Step 3 and add it to Step 4's gnarly-bits list, and say in the wrap-up which rows drove a change. An empty table is the healthy state and needs no comment. Carry the existing rows forward verbatim — this section is append-only and `verify-work` is its writer, not this skill.
+**On Update (and on `--auto` over an existing file):** read the existing file's `## Coverage debt` table before re-deriving anything. Those rows are the only record of where this project's pyramid actually leaks — each one is a behavior that reached UAT or certification unproven. Where they cluster (a subdomain, a level, a kind of behavior), raise that area's level emphasis in Step 3 and add it to Step 4's gnarly-bits list, and say in the wrap-up which rows drove a change. An empty table is the healthy state and needs no comment; an **absent** section is equally valid (every pre-certification-era file — the section is created only when `verify-work` writes its first row, never pre-created empty by an Update). Carry existing rows forward verbatim — this section is append-only and `verify-work` is its writer, not this skill. **Update mode also governs Step 7:** on an existing file, Step 7 is a section-merge, never a fresh render — the full preservation contract is stated there.
 
 ## Step 2: Load context
 
@@ -123,13 +123,13 @@ A capability the project does not have is recorded as `N/A — no {email|LLM|aut
 
 - **Coverage = floor, not a target.** Record that. If the user demands a coverage *target* (e.g. 100%), reframe it as a floor and warn that an excessively high floor forces low-value tests of trivial glue — the real quality signal is **mutation score** on the gnarly bits. **Mutation testing (Stryker)** applies to the critical modules (the gnarly bits from Step 4 + the core domain logic).
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
-- **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them. **If it's absent (greenfield):** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline, write them into TEST-STRATEGY.md's Notes as the initial standards, and offer to generate `TESTING-STANDARDS.md` from them.
+- **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them — by **appending**; existing Notes content is user-extendable and is never overwritten. **If it's absent:** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline and **write them to `TESTING-STANDARDS.md` (create it)** — the standards file is their home; TEST-STRATEGY's Notes just points at it. Reference defaults are never written into an existing Notes section: on an Update that path clobbers the project's own recorded invariants with boilerplate.
 
 ## Step 6.5: Born fast + the suite-health baseline
 
 Suites are **born fast by configuration**, not rescued later. Apply the born-fast defaults (`@$HOME/.claude/gsd-core/references/test-strategy.md` `§ Suite health` — class-based, explicitly non-exhaustive, current APIs): Testcontainers **reuse is local-only** ("not suited for CI usage" — their own docs; CI levers are singleton containers + image/layer caching); Vitest 4 top-level `maxWorkers`/`isolate` (`poolOptions` is removed); cargo nextest; pytest-xdist. **No invented per-test budgets** — none exist in primary sources; the trigger thresholds are GSD's own heuristics and say so.
 
-Seed the `## Suite health` baseline — this is the table's **first row**, and Step 6.5 is the one writer allowed to create it (every later row is appended by the tune-up flow's fourth pass): if a test command exists, run it **once, timed**, and record `{test_count, wall_clock (integer seconds), containers_started}` with today's date (`containers_started` from Testcontainers/docker output where visible, else `—`; `ms/test` is derived at compare time, never recorded). This timed run is **the** measurement `/gsd:cicd-strategy`'s C1-a trigger reads — record it once here, never re-measure it there. Greenfield (no suite yet): record `unmeasured — baseline at the first milestone with a real suite`. The four triggers (T1–T4, reference table) govern re-evaluation: **T1** (dev-loop tier >~90 s local; PR gate >10 min = cicd's C1-a) fires **immediately**; T2/T3/T4 are compared at **milestone close** and schedule a tune-up there. Flat ms/test + rising total = volume, not regression → the remedy is tiering/sharding (C1), not tuning.
+Seed the `## Suite health` baseline — this is the table's **first row**, and Step 6.5 is the one writer allowed to create it (every later row is appended by the tune-up flow's fourth pass): if a test command exists, run it **once, timed with a real millisecond bracket** (`node -e 'Date.now()'` before/after, or the runner's own reported duration — never a plain `date +%s`, whose 1-second resolution renders every sub-second suite identical), and record `{test_count, wall_clock (integer milliseconds, minimum 1), containers_started}` with today's date (`containers_started` from Testcontainers/docker output where visible, else `—`; `ms/test` is derived at compare time, never recorded). This timed run is **the** measurement `/gsd:cicd-strategy`'s C1-a trigger reads — record it once here, never re-measure it there. Greenfield (no suite yet): record `unmeasured — baseline at the first milestone with a real suite`. The four triggers (T1–T4, reference table) govern re-evaluation: **T1** (dev-loop tier >~90 s local; PR gate >10 min = cicd's C1-a) fires **immediately**; T2/T3/T4 are compared at **milestone close** and schedule a tune-up there. Flat ms/test + rising total = volume, not regression → the remedy is tiering/sharding (C1), not tuning.
 
 This baseline is read by machinery, not by hand: the executor records `suite-metrics:` into SUMMARY frontmatter each time it runs the whole suite (`@$HOME/.claude/gsd-core/workflows/execute-phase/steps/post-merge-gate.md` Step C), `transition`'s `suite_health_compare` step evaluates the newest measurement against this row, and whichever trigger fires attaches the tune-up flow (`/gsd:testing-strategy --tune-up` → the suite-tune-up step above), which appends the next row. Re-baselining is **append-only** — the history is the trend the triggers compare against.
 
@@ -138,6 +138,30 @@ After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md`
 <!-- FORK:context END -->
 
 ## Step 7: Write TEST-STRATEGY.md
+
+**Two modes, decided by Step 1.** Fresh render (no existing file): render the template
+and fill as below. **Update (file exists): Step 7 is a section-merge, never a fresh
+render** — the template supplies missing sections; existing content wins:
+
+- **Preserved byte-intact** unless this run explicitly revisited them with the user:
+  `## Notes`, every gnarly-bits entry, what-not-to-test entries, level-table
+  rationale, the recorded CI execution map rows — including any `Merge to main` /
+  `Nightly` stage rows an earlier run recorded (the do-not-pre-assert comment
+  governs *first* renders; deleting a recorded stage silently reverts a recorded
+  user decision), `## Suite health` (all rows — the history is the trend), and
+  `## Coverage debt` (whole section; absent is a valid pre-certification state —
+  never create it empty). New sections the template has and the file lacks are
+  **added**, not swapped in via a re-render — inserted **after the last existing
+  `## ` content section and before any trailing footer** (a closing `---` or
+  end-of-file), in the template's own section order; never appended past the
+  footer.
+- **`## Certification` is the project fact.** The re-probe *informs* it: append a
+  dated re-probe note; retain the prior dated rows and the `Launch conditions` row
+  (that clean-audit receipt is what spares `verify-work` a re-audit). **Never
+  silently downgrade the tier** — when today's probe supports a *lower* tier than
+  recorded (this machine may simply not be the certifying machine — capability is
+  a project fact, not a machine fact), present both and change the tier only with
+  the user's explicit confirmation. Upgrades are offered, not forced.
 
 Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`, `[ADR-NNNN]`). Fill:
 - the per-subdomain level table, the gnarly-bits list, what-not-to-test, and the integration note;
@@ -158,7 +182,9 @@ gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the S
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
   DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG
+  # A run that created TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
+  TSTD=$([ -f .planning/TESTING-STANDARDS.md ] && echo ".planning/TESTING-STANDARDS.md")
+  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG $TSTD
 else
   echo "TEST-STRATEGY.md written but not committed (commit_docs is false)."
 fi

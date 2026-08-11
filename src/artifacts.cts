@@ -11,9 +11,21 @@
  * Add entries here whenever a new workflow produces a .planning/ root file.
  */
 
-// Exact-match canonical file names at .planning/ root
+// Exact-match canonical file names at .planning/ root.
+//
+// COMPLETENESS IS LOAD-BEARING. W019's remediation text says "Move … or delete if
+// stale", so a root artifact missing from this list is the product advising a user to
+// delete a file the product itself depends on (e2e-5 F1: 17 of the 23 real root
+// artifacts were missing, TEST-STRATEGY.md among them — read back by
+// verify-work's certification step and by transition's suite-health compare).
+//
+// `tests/artifacts.test.cjs` derives the truth mechanically: every `.planning/<NAME>.md`
+// literal named anywhere in the shipped corpus (workflows, templates, references,
+// commands, skills, agents, capabilities) must resolve here. A new writer that forgets
+// this list fails at build time instead of months later in a user's health report.
 export const CANONICAL_EXACT: ReadonlySet<string> = new Set([
   'PROJECT.md',
+  'TESTING-STANDARDS.md',
   'ROADMAP.md',
   'STATE.md',
   'REQUIREMENTS.md',
@@ -24,6 +36,27 @@ export const CANONICAL_EXACT: ReadonlySet<string> = new Set([
   'config.json',
   'CLAUDE.md',
   'RETROSPECTIVE.md',
+  // Upstream workflows that write a root artifact.
+  'WINDOWS.md',              // progress / broken-windows ledger
+  'INGEST-CONFLICTS.md',     // ingest-docs
+  'INBOX-TRIAGE.md',         // inbox
+  'METHODOLOGY.md',          // discuss-phase-assumptions
+  'MEMORY.md',               // progress forensic-audit
+  'DECISIONS-INDEX.md',      // discuss-phase
+  // Fork-owned surfaces — the strategy chain (Waves 0–5) and the context capability.
+  // These names are the fork's; an upstream merge that resets this file drops them
+  // and W019 starts advising users to delete their strategy documents.
+  'PRODUCT-BRIEF.md',           // discover-product
+  'DOMAIN-MODEL.md',            // model-domain
+  'SECURITY-STRATEGY.md',       // security-strategy
+  'FRONTEND-ARCHITECTURE.md',   // frontend-architecture
+  'TEST-STRATEGY.md',           // testing-strategy
+  'INFRA-STRATEGY.md',          // infrastructure-strategy
+  'CICD-STRATEGY.md',           // cicd-strategy
+  'LEGACY-INVENTORY.md',        // legacy-inventory
+  'DESIGN-INVENTORY.md',        // design ingestion
+  'PROJECT-DISCUSSION-LOG.md',  // strategy-chain discussion log
+  'MASTER-CONTEXT.md',          // context capability (capsule index)
 ]);
 
 // Pattern-match canonical file names (regex tests on the basename)

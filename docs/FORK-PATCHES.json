@@ -860,6 +860,26 @@
       ]
     },
     {
+      "path": "src/artifacts.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "'TEST-STRATEGY\\.md'",
+        "'SECURITY-STRATEGY\\.md'",
+        "'DOMAIN-MODEL\\.md'",
+        "'PRODUCT-BRIEF\\.md'",
+        "'CICD-STRATEGY\\.md'"
+      ]
+    },
+    {
+      "path": "src/artifacts.cts",
+      "feature": "context",
+      "mode": "anchors-only",
+      "anchors": [
+        "'MASTER-CONTEXT\\.md'"
+      ]
+    },
+    {
       "path": "src/broken-windows.cts",
       "feature": "windows-ledger",
       "mode": "anchors-only",
@@ -1198,7 +1218,10 @@
         "verify-work/steps/agentic-certification\\.md",
         "<step name=\"coverage_gap_capture\">",
         "##\\s*Coverage debt",
-        "source: agentic"
+        "source: agentic",
+        "Certification re-entry — before the pending scan",
+        "CERTIFICATION-RESULT\\.md",
+        "This step never overwrites"
       ]
     },
     {
@@ -1254,6 +1277,200 @@
       "anchors": [
         "same clock `transition`",
         "suite-health"
+      ]
+    },
+    {
+      "path": "src/commands.cts",
+      "feature": "commit-pathspec",
+      "mode": "anchors-only",
+      "anchors": [
+        "expandFilePattern",
+        "isGlobPattern"
+      ]
+    },
+    {
+      "path": "tests/commands.test.cjs",
+      "feature": "commit-pathspec",
+      "mode": "anchors-only",
+      "anchors": [
+        "stages a glob pathspec in --files"
+      ]
+    },
+    {
+      "path": "src/audit.cts",
+      "feature": "todo-render",
+      "mode": "anchors-only",
+      "anchors": [
+        "item\\.severity \\|\\| item\\.priority",
+        "severity: sanitizeForDisplay"
+      ]
+    },
+    {
+      "path": "tests/audit-command-cutover.test.cjs",
+      "feature": "todo-render",
+      "mode": "anchors-only",
+      "anchors": [
+        "renders the todo shape add-todo actually writes"
+      ]
+    },
+    {
+      "path": "src/init.cts",
+      "feature": "verify-work-bundle",
+      "mode": "anchors-only",
+      "anchors": [
+        "const uatFile = existingUat \\|\\| \\(paddedPhase"
+      ]
+    },
+    {
+      "path": "tests/init.test.cjs",
+      "feature": "verify-work-bundle",
+      "mode": "anchors-only",
+      "anchors": [
+        "emits the canonical uat_path BEFORE the file exists"
+      ]
+    },
+    {
+      "path": "gsd-core/bin/shared/config-schema.manifest.json",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates\\.confirm_transition",
+        "safety\\.always_confirm_destructive"
+      ]
+    },
+    {
+      "path": "tests/config-loader.test.cjs",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates/safety are registered config sections"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"✗ Post-merge test gate",
+        "\\.gsd-post-merge-gate\\.json"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "\\.gsd-post-merge-gate\\.json",
+        "gate result is unavailable",
+        "Absence\\s*\\n?of a result is not a test verdict"
+      ]
+    },
+    {
+      "path": "scripts/sync-runtime-launcher.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "carriedPreamble"
+      ]
+    },
+    {
+      "path": "tests/runtime-launcher-parity.test.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "\\(B3\\) post-merge-gate\\.md Step B"
+      ]
+    },
+    {
+      "path": "tests/execute-phase-wave.test.cjs",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "post-merge gate result crosses the block boundary"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "BEHAVIOR_UNVERIFIED",
+        "CERT_UNPROVEN",
+        "record-only"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/verify-work/steps/automated-ui-verification.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "PHASE_DIR is unset in this shell"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/transition.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "_GSD_PLACEHOLDER"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/complete-milestone.md",
+      "feature": "unproven-stamp",
+      "mode": "anchors-only",
+      "anchors": [
+        "`phase_count` includes backlog"
+      ]
+    },
+    {
+      "path": "gsd-core/templates/UAT.md",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "certification: \\[one outcome line",
+        "pending-certifier"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "execute-phase/steps/post-wave-tracking-update\\.md"
+      ]
+    },
+    {
+      "path": "src/uat.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-",
+        "\\[\\\\w-\\]\\+"
+      ]
+    },
+    {
+      "path": "src/uat-predicate.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-"
+      ]
+    },
+    {
+      "path": "src/phase.cts",
+      "feature": "strategy",
+      "mode": "anchors-only",
+      "anchors": [
+        "-UAT-superseded-"
+      ]
+    },
+    {
+      "path": "src/config.cts",
+      "feature": "config-gates-safety",
+      "mode": "anchors-only",
+      "anchors": [
+        "gates\\.confirm_milestone_scope"
       ]
     }
   ]

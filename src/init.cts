@@ -1584,11 +1584,46 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     : null;
   const uiPhaseActive = detectUiPhaseActive(cwd, phaseInfo);
 
+  // e2e-4 F4 / e2e-6 F10: `verify-work.md` is told to parse `uat_path` from this
+  // bundle (:51) and then consumes it (`uat.render-checkpoint --file "$uat_path"`,
+  // :314). The field was never emitted, so the shipped command errored with
+  // `UAT file required` and the loop could not proceed without a hand-supplied path.
+  //
+  // Unlike the sibling builders (init.plan-phase / init.phase-op), this one cannot
+  // emit-only-when-present: verify-work's `create_uat_file` step WRITES the UAT
+  // during the same run that already parsed this bundle, so on a first pass the
+  // file legitimately does not exist yet. The path is prescribed by the workflow
+  // (`.planning/phases/XX-name/{phase_num}-UAT.md`), so resolve the existing file
+  // when there is one and fall back to that canonical target otherwise — the value
+  // is the same string either way once the file lands.
+  const paddedPhase = phaseInfo?.['phase_number']
+    ? normalizePhaseName(phaseInfo['phase_number'])
+    : null;
+  let uatPath: string | null = null;
+  if (phaseDir) {
+    const phaseDirFull = path.join(cwd, phaseDir);
+    let existingUat: string | undefined;
+    try {
+      existingUat = fs
+        .readdirSync(phaseDirFull)
+        .find((f) => f.endsWith('-UAT.md') || f === 'UAT.md');
+    } catch {
+      existingUat = undefined;
+    }
+    const uatFile = existingUat || (paddedPhase ? `${paddedPhase}-UAT.md` : null);
+    if (uatFile) uatPath = toPosixPath(path.join(phaseDirFull, uatFile));
+  }
+
   const result: Record<string, unknown> = {
     planner_model: resolveModelInternal(cwd, 'gsd-planner'),
     checker_model: resolveModelInternal(cwd, 'gsd-plan-checker'),
 
     commit_docs: config.commit_docs,
+    // e2e-4 F4: `verify-work.md:329` reads `text_mode` "from init JSON"; the sibling
+    // `init.plan-phase` bundle already carries it. `response_language` (also listed
+    // at :51) is injected by `withProjectRoot` below when configured.
+    text_mode: config.text_mode,
+    uat_path: uatPath,
 
     phase_found: !!phaseInfo,
     // #2376: absolute — see comment on phase_dir in cmdInitExecutePhase. phaseDir
