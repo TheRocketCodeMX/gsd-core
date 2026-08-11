@@ -15,8 +15,9 @@ resolved in §1's table below, and it records its posture and dispatches nothing
 There is no silent path: an absent outcome is always a bug, never a default.
 
 **Where this sits.** `extract_tests` has already run, so the checkpoint set exists;
-`create_uat_file` has NOT, so `{phase_num}-UAT.md` does not exist yet. This step
-therefore *produces* three things and **writes only the brief itself** (§5, plus its
+on a first run `create_uat_file` has NOT, so `{phase_num}-UAT.md` does not exist yet
+(a re-run over an existing file is §1.5's business — read it before anything else).
+This step *produces* three things and **writes only the brief itself** (§5, plus its
 derived script and evidence bundle): the brief file, the set of certified
 (pre-resolved) checkpoint entries, and the one outcome line. `create_uat_file` writes
 the latter two into UAT.md — the single UAT sink, no parallel artifact. Nothing is
@@ -45,13 +46,36 @@ Resolve the mode first:
 | `workflow.certification` | Behavior |
 |---|---|
 | `required` | Run this step. Its outcome is recorded on every phase. |
-| `offer` | Ask once whether to certify this phase. Declining records `certification: skipped (declined)` with the reason — a decline is a decision, not an absence. |
+| `offer` | Ask once whether to certify this phase. Declining records `certification: skipped (declined — {short reason})` (§8's grammar — the reason rides the line itself) — a decline is a decision, not an absence. |
 | `off` | Dispatch nothing, prompt nothing — but the posture is itself a decision, so it is recorded: emit `certification: off (posture)` as the outcome line and stop. One inert line is what keeps an `off`-era phase distinguishable from a failed run forever (the ship sweep reads it as a decision, never a gap). |
 
 **No `## Certification` section** (the project never ran `/gsd:testing-strategy`, or
 ran it before certification existed) → treat as **CERT-0** and note that
 `/gsd:testing-strategy` would record a tier. Never block a phase on a missing
 strategy section.
+
+**No `## Certification substrate` section** (same pre-certification vintage — the
+common path is upgrade → `verify-work` on the in-flight phase before any strategy
+re-run) → treat all four policies as `N/A — revisit when a surface appears`, state
+exactly that in the brief's preconditions (inferred from the app's observable
+reality, labelled as inferred — never invented silently), and note that
+`/gsd:testing-strategy` would record them. Never block on the missing section.
+
+## 1.5 Re-entry — read the existing outcome before doing anything
+
+A re-run over a phase whose `{phase_num}-UAT.md` already carries a
+`certification:` line is not a fresh run. Dispatch on the **existing outcome**,
+under the **current** mode — never duplicate the line, never regenerate a brief a
+certifier already holds:
+
+| Existing line | A re-run means |
+|---|---|
+| `pending (CERT-2 — …)` | Check for the result file (§7's return path). Present → consume it, upgrade the line in place, write the evidence-backed entries. Absent → report "still pending — result file not found at `{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md`" and change nothing. |
+| `agentic (…)` / `human (CERT-0)` / `N/A — …` | Already resolved. Confirm and skip; under `required` you may **offer** re-certification (fresh surface since the run, a promoted tier) — on an explicit yes, follow `verify-work`'s restart path (archive, never clobber), then run fresh. |
+| `skipped (declined — …)` / `off (posture)` | A decision recorded under an earlier posture. **Re-offer under the current mode** — this is exactly how a project that flipped `off → required` re-certifies an off-era phase without data loss. Declining again refreshes the line's date, nothing else. |
+
+§5's brief write and §8's line write are idempotent under this table: when an
+outcome already exists, they run only on the paths the table opens.
 
 ## 2. Scope: is there anything to certify?
 
@@ -100,11 +124,43 @@ a clean audit, since the recorded probe date — does not repeat the gate. A pri
 *sandbox* launch never satisfies it, least of all one whose audit found
 instrumentation.
 
+**Where the isolated HOME lives:** a sibling directory under the real `$HOME`
+(e.g. `$HOME/.gsd-cert-sandbox`), never under `/tmp`. Two live receipts from two
+different CLIs argue the same rule from opposite directions: codex-cli 0.142.5
+refused a `/tmp` HOME outright (0 files written, explicit "refusing to create
+helper binaries under temporary dir") — a HOME that suppresses the writes defeats
+the very audit this gate exists to run — while onorca wrote its full state (332
+files, agent-CLI instrumentation included) under a `/tmp` HOME without complaint,
+proving the audit works anywhere the tool will write. The `$HOME` sibling is the
+location both behaviors tolerate and the audit can always read.
+
+**On CERT-2 the gate travels with the brief.** Nothing launches in this
+environment, so nothing is audited here — but the certifier's first launch on the
+**receiving machine** is exactly as untrusted. §5's brief MUST carry the
+sandbox-first instruction (isolated `$HOME`-sibling HOME + instrumentation audit)
+as a precondition for the receiving machine; a handover that skips it just moves
+the unaudited first launch somewhere the record can't see.
+
 ## 4. Re-check the recorded capability
 
-**On CERT-0, skip this section** — the mechanism names no driver, so there is no
-subject to re-check, and `command -v`-ing for one anyway is the sniff §1 bans. A
-binary on PATH that the mechanism does not name is not a certifier.
+**The re-check's subject depends on the tier — it is per-tier, not one procedure:**
+
+- **CERT-0:** skip this section — the mechanism names no driver, so there is no
+  subject to re-check, and `command -v`-ing for one anyway is the sniff §1 bans. A
+  binary on PATH that the mechanism does not name is not a certifier.
+- **CERT-2 (off-machine certifier):** the driver is on another machine **by
+  construction** — no local probe can confirm or refute it, so a local re-check
+  must never demote it. The re-check subject is the **handover channel and
+  preconditions**: the brief path is writable, the substrate preconditions (app
+  reachable, seeded accounts, catcher) are live for the receiving side, and — when
+  the recorded answer is stale — the one question is re-asked ("is Codex desktop /
+  the certifier app still available on that machine?"). A "no" is a *mechanism*
+  change routed to the strategy, not a local demotion. **A same-named local binary
+  is not the recorded driver**: the mechanism names a desktop application; a CLI
+  that happens to share the product name (`command -v codex` finding the Codex
+  *CLI*) is a different product — do not probe it, do not sandbox-launch it, do
+  not let it "confirm" a driver it is not.
+- **CERT-1 / CERT-1 (limited) — local drivers:** everything below applies.
 
 **A recorded probe is a lead, not a live capability.** The tier in TEST-STRATEGY
 was measured on a date, on a machine, under a display that may no longer exist.
@@ -115,14 +171,19 @@ Re-check the specific driver the mechanism names before relying on it:
 - Are the operations the tier depends on still capable? Re-run the reference's
   live probe against a **throwaway page** — never the real app — and verify a
   click by its *effect* (did the state change land), never by its return value.
-  The throwaway substrate is self-served (the reference's probe recipe): a `data:`
-  URL page covers the goto/snapshot legs, and a ~15-line local HTTP echo server
-  that logs POSTs hosts the fill/click/effect leg — the click must land on a
-  server **you** observe, which is why a remote page can never be the probe target.
+  The throwaway substrate is self-served (the reference's probe recipe): **one**
+  ~15-line local HTTP server on `127.0.0.1` both serves the throwaway page and logs
+  the POSTs, so all five legs run against `http://127.0.0.1:<port>/` — the click must
+  land on a server **you** observe, which is why a remote page can never be the probe
+  target. Do not reach for a `data:` URL: several drivers reject non-`http(s)` schemes
+  on `goto` (onorca 1.4.178: `invalid_argument: Unsupported browser URL`), and that is
+  a fact about the driver's URL handling, **never** a capability demotion.
 - Did the environment change in a way the recorded rows call out (no display,
   WSL/headless, API-key auth)?
 
-Record what you found. **The re-check demotes; it never promotes the record.**
+Record what you found. **For local tiers the re-check demotes; it never promotes
+the record** (CERT-2 is exempt — see the per-tier rule above: an off-machine
+driver is confirmed as a project fact, never demoted by a local probe).
 A re-check that fails is a demotion: fall to the highest tier the live result
 supports (commonly CERT-1 (limited), inspection-grade only, or CERT-0) and say
 so in the outcome line. Never certify with a capability the re-check did not
@@ -159,9 +220,15 @@ Sources, both already computed by this workflow or already shipped with the phas
    CERT-0 "silently dropped" is exactly what would otherwise happen.
 
 Shape (per `certification.md § The certification brief`): preconditions from the
-substrate (seeded account, environment, mail catcher running) → numbered flows,
-each with an *observable* expected outcome → the evidence to capture → the
-escalation points. Write it to `{phase_dir}/{phase_num}-CERTIFICATION-BRIEF.md`.
+substrate (seeded account, environment, mail catcher running — and, on CERT-2, the
+receiving machine's sandbox-first trust gate from §3) → numbered flows, each with
+an *observable* expected outcome → the evidence to capture → the escalation points
+→ **`## How to report back`** (required on every brief; on a handover it is the
+whole return protocol): per-flow verdicts `pass / fail / could-not-prove` with the
+evidence filename that justifies each, the escalation list, written to
+`{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md` with the evidence bundle in
+`{phase_dir}/certification-evidence/`. Write the brief to
+`{phase_dir}/{phase_num}-CERTIFICATION-BRIEF.md`.
 The run's evidence goes to `{phase_dir}/certification-evidence/` (snapshots,
 console/network captures, and the driver command/output log that serves as the
 transcript in a non-interactive runtime); the starter script, when emitted, to
@@ -198,7 +265,30 @@ claiming a certification the arrangement cannot support.
 
 ## 7. Run, and write results back into UAT.md
 
-Run the brief's flows. For each checkpoint the driver **proved** — an observable
+**CERT-2 — hand over, record pending, stop.** The building session does not run
+the flows; the certifier app does, on its own machine. The handover:
+
+1. Hand the driver-provable checkpoints to `create_uat_file` as
+   `result: [pending-certifier]` entries — visible in UAT.md, **never presented to
+   the human** (`present_test` asks only `[pending]`), never stranded (the outcome
+   line and the ship sweep both point at the re-entry). Judgment, auth, and
+   CAPTCHA items are **not handed over** — they stay ordinary `[pending]`
+   checkpoints and the human answers them now, because they were always the
+   human's (§ escalation rules below).
+2. Record the outcome line `certification: pending (CERT-2 — brief handed over
+   {YYYY-MM-DD})` (§8's table) and stop.
+3. **The return path:** the certifier writes
+   `{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md` in the shape the brief's
+   `## How to report back` prescribes. On the next `verify-work` run, §1.5 finds
+   the pending line, finds the result file, and **consumes it here**: each
+   flow-verdict maps onto its `[pending-certifier]` checkpoints — `pass` becomes
+   the pre-resolved entry below (evidence ref required), `fail` and
+   `could-not-prove` revert the checkpoint to ordinary `[pending]` for the human
+   (a failed flow is an issue — the escalation rules below apply unchanged) — and
+   the pending line is **upgraded in place** to the real
+   `certification: agentic (CERT-2) — {N} checkpoints certified, {M} escalated`.
+
+For each checkpoint the driver **proved** — an observable
 expected outcome from the brief actually occurred — hand `create_uat_file` a
 pre-resolved entry (it writes them into `{phase_num}-UAT.md`, the single UAT sink;
 no parallel artifact):
@@ -243,9 +333,10 @@ Exactly one line, always, handed to `create_uat_file` with the entries above:
 | Situation | Recorded line |
 |---|---|
 | Certified by a driver | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — {N} checkpoints certified, {M} escalated`, plus zero or more ` · `-separated notes from the **closed set** below |
+| Brief handed over, result not yet returned (CERT-2) | `certification: pending (CERT-2 — brief handed over {YYYY-MM-DD})` — upgraded in place by §7's return path, never left as the final state of a shipped phase without the sweep flagging it |
 | No capable driver | `certification: human (CERT-0)` |
 | No user-facing surface | `certification: N/A — no user-facing change` |
-| Declined under `offer` | `certification: skipped (declined)` |
+| Declined under `offer` | `certification: skipped (declined — {short reason})` — the reason is part of the line's grammar (consumers match the `certification: skipped (declined` prefix); omit the ` — {reason}` clause only when the user gave none |
 | Posture is `off` | `certification: off (posture)` |
 
 **Sanctioned notes** (the only appends the line admits; each spelled exactly): ` · probe

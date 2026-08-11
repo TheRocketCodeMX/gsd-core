@@ -554,15 +554,15 @@ describe('the template materializes rows from decisions', () => {
     assert.equal(rows.length, 1, 'exactly one baseline row — milestones append, the template never pre-asserts history');
   });
 
-  test('wall_clock is integer seconds everywhere — m:ss cannot express a healthy suite (validation B F1)', () => {
-    // A 0.3 s suite rendered m:ss reads 0:00, and the next compare derives a
-    // zero baseline to divide by. The healthier the suite, the more broken the
-    // trigger — so the recorded unit is seconds, integer, in every artifact.
+  test('wall_clock is integer milliseconds everywhere — no m:ss, no second-resolution shadow (round 2)', () => {
+    // Floored seconds fixed the 0:00 divide-by-zero but blinded T2 below one
+    // second (267 ms and 604 ms both read 1 s). The recorded unit is now the
+    // true millisecond bracket, in every artifact.
     for (const f of [TEMPLATE, SUMMARY_TEMPLATE, TUNE_UP, POST_MERGE_GATE, EXECUTE_PLAN, TRANSITION]) {
       assert.doesNotMatch(read(f), /m:ss/, `${f} still records wall_clock as m:ss`);
     }
-    assert.match(suiteMetricsBlock(read(SUMMARY_TEMPLATE)), /wall_clock:[^\n]*second/i,
-      'the SUMMARY schema names seconds as the unit');
+    assert.match(suiteMetricsBlock(read(SUMMARY_TEMPLATE)), /wall_clock_ms:[^\n]*millisecond/i,
+      'the SUMMARY schema names milliseconds as the unit');
   });
 
   test('the CI execution map survives unchanged in shape (cicd reads it)', () => {
@@ -1024,7 +1024,7 @@ describe('suite-metrics capture — the executor records what it actually ran', 
   test('the SUMMARY template declares a suite-metrics block with the three measured fields', () => {
     const block = suiteMetricsBlock(read(SUMMARY_TEMPLATE));
     assert.match(block, /^\s+test_count:/m, 'test_count is recorded');
-    assert.match(block, /^\s+wall_clock:/m, 'wall_clock is recorded');
+    assert.match(block, /^\s+wall_clock_ms:/m, 'wall_clock_ms is recorded');
     assert.match(block, /^\s+containers_started:/m, 'containers_started is recorded');
   });
 
@@ -1062,7 +1062,7 @@ describe('suite-metrics capture — the executor records what it actually ran', 
   test('the post-merge test gate measures wall clock around the run it already performs', () => {
     const text = read(POST_MERGE_GATE);
     assert.match(text, /SUITE_START_MS=/, 'a millisecond start mark is taken before the suite runs');
-    assert.match(text, /SUITE_WALL_CLOCK_SEC=/, 'and the floored seconds are derived from it');
+    assert.match(text, /SUITE_ELAPSED_MS/, 'and the elapsed milliseconds are recorded from it');
     const startIdx = at(text, /SUITE_START_MS=/);
     const runIdx = at(text, /TEST_EXIT=\$\?/);
     assert.ok(startIdx !== -1 && runIdx !== -1 && startIdx < runIdx, 'the clock starts BEFORE the suite runs');
@@ -1751,12 +1751,13 @@ describe('combined fix wave — spec honesty (review T2)', () => {
 const PM_GATE = 'gsd-core/workflows/execute-phase/steps/post-merge-gate.md';
 
 describe('e2e fix wave — measurement floor and unit coherence (e2e-3 F-1/F-2)', () => {
-  test('the gate brackets the suite in milliseconds and floors the recorded seconds at 1', () => {
+  test('the gate brackets the suite in milliseconds with a minimum of 1 ms', () => {
     const g = read(PM_GATE);
     assert.match(g, /SUITE_START_MS=\$\(node -e/, 'ms bracket via node (portable, not GNU-date-only)');
-    assert.match(g, /SUITE_ELAPSED_MS/, 'elapsed milliseconds computed');
-    assert.match(g, /\[ "\$SUITE_WALL_CLOCK_SEC" -lt 1 \] && SUITE_WALL_CLOCK_SEC=1/,
-      'floor of 1 — a run that executed can never record 0');
+    assert.match(g, /\[ "\$SUITE_ELAPSED_MS" -lt 1 \] && SUITE_ELAPSED_MS=1/,
+      'minimum of 1 — a run that executed can never record 0');
+    assert.doesNotMatch(g, /SUITE_WALL_CLOCK_SEC/,
+      'the floored-seconds shadow is gone (it blinded T2 below one second)');
     assert.doesNotMatch(g, /SUITE_START_EPOCH=\$\(date \+%s\)/,
       'the 1-second-resolution epoch bracket is gone (it recorded 0 for healthy sub-second suites)');
   });
@@ -1764,7 +1765,7 @@ describe('e2e fix wave — measurement floor and unit coherence (e2e-3 F-1/F-2)'
   test('the SUMMARY schema states the floor and the omit-vs-measured tie-break', () => {
     const s = read(SUMMARY_TPL);
     const guidance = s.slice(s.indexOf('<suite_metrics_guidance>'), s.indexOf('</suite_metrics_guidance>'));
-    assert.match(guidance, /floor of 1/i, 'wall_clock floor stated in the schema');
+    assert.match(guidance, /minimum \*\*1\*\*|minimum of `?1`? ?ms/i, 'wall_clock_ms minimum stated in the schema');
     assert.match(guidance, /never `?0`?\b/i, 'a measured run can never record 0');
     assert.match(guidance, /tie-break/i, 'the omit-rule vs record-exactly collision is resolved explicitly');
   });
@@ -1772,7 +1773,7 @@ describe('e2e fix wave — measurement floor and unit coherence (e2e-3 F-1/F-2)'
   test('the compare skips a 0 wall_clock on either side (legacy pre-floor rows)', () => {
     const t = read(TRANSITION);
     const step = t.slice(t.indexOf('suite_health_compare'));
-    assert.match(step, /wall_clock` is `0`/, 'zero guard in the skip list');
+    assert.match(step, /wall clock is `0`/, 'zero guard in the skip list');
     assert.match(step, /never become a divisor|never a real reading/i,
       'the guard names the divide-by-zero it prevents');
   });
@@ -1825,13 +1826,20 @@ describe('e2e fix wave — certification step (e2e-2 F1/F2/F4/F5)', () => {
       'coverage_id line present, with the capsule-added exemption stated');
   });
 
-  test('the re-probe names its throwaway substrate (data: URL + local echo server)', () => {
+  // Round-2 Wave B (e2e-4 F11): the `data:` URL leg was RETIRED as a prescription —
+  // onorca 1.4.178's `goto` rejects the scheme the reference named as today's
+  // lowest-friction driver, and a first-time prober reads that as a demotion. One
+  // local HTTP server now serves the page AND logs the POSTs, so all five legs run
+  // against http://127.0.0.1. The pin follows the design, not the retired wording.
+  test('the re-probe names its throwaway substrate (one locally served page + POST log)', () => {
     const c = read(CERT_STEP);
-    assert.match(c, /`data:`\s*\n?\s*URL/, 'data: URL leg named in the step');
-    assert.match(c, /echo server/i, 'local echo server leg named in the step');
+    assert.match(c, /local HTTP server/i, 'the served-page + POST-log substrate is named in the step');
+    assert.match(c, /127\.0\.0\.1/, 'the step points the probe at a locally served page');
+    assert.doesNotMatch(c, /a `data:`\s*\n?\s*URL page covers/,
+      'the step must not prescribe a page source its own named driver rejects');
     const ref = read(CERT_REF);
     assert.match(ref, /throwaway substrate is self-served/i, 'the reference owns the recipe');
-    assert.match(ref, /echo server/i, 'reference names the effect-assertion server');
+    assert.match(ref, /logs the POST bodies it receives/i, 'reference names the effect-assertion server');
   });
 
   test('the certifier input boundary defines "environment"', () => {
@@ -1924,4 +1932,351 @@ describe('e2e fix wave — strategy chain (e2e-1 F1/F2/F3/F4/F5/F6/F8)', () => {
   test('the probe hint in the template includes fill (5-op coherence)', () => {
     assert.match(read(TEMPLATE), /goto \/ snapshot \/ fill \/ click round-trip \/ screenshot/);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Round-2 fix wave, Wave A — design fixes from the installed-2.4.1 e2e runs
+// (e2e-4/5/6/7 reports). Four designs: the CERT-2 handover protocol, strategy
+// Update merge semantics, cicd's single-measurement + C1-b guard, and the
+// millisecond suite-metrics redesign. Structural anchors, not prose pins.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CICD_WORKFLOW = 'gsd-core/workflows/cicd-strategy.md';
+
+describe('CERT-2 handover protocol (e2e-6 F2/F3/F4/F5/F1/F6)', () => {
+  const step = () => read(CERT_STEP);
+
+  test('F2 — §4 re-check has per-tier semantics: CERT-2 is confirmed as a project fact, never probed locally', () => {
+    const s = step();
+    assert.match(s, /CERT-2[^\n]*(off|other)-machine|off-machine[^\n]*CERT-2/i,
+      'the off-machine nature of CERT-2 is named in the re-check');
+    assert.match(s, /(handover|hand-over|handoff)[^.]{0,160}(channel|preconditions)/i,
+      'the CERT-2 re-check subject is the handover channel + preconditions, not a local binary');
+    assert.match(s, /demotes[^.]*never promotes/i, 'demote-only survives for local tiers');
+  });
+
+  test('F6 — a same-named local binary is not the recorded desktop driver', () => {
+    assert.match(step(), /desktop[^.\n]{0,120}(CLI|command-line)|CLI[^.\n]{0,120}desktop/i,
+      'the desktop-app vs CLI product distinction is stated');
+  });
+
+  test('F3 — a pending outcome line exists in the closed set', () => {
+    assert.match(step(), /certification: pending \(CERT-2/,
+      'the handed-over state has its own sanctioned line');
+  });
+
+  test('F3 — the return path is a named result file whose shape the brief states', () => {
+    const s = step();
+    assert.match(s, /CERTIFICATION-RESULT\.md/, 'the result file has a prescribed name');
+    assert.match(s, /report back|How to report/i, 'the brief carries the report-back contract');
+  });
+
+  test('F3 — re-entry consumes a present result and upgrades pending', () => {
+    assert.match(step(), /pending[^.]{0,200}(result|RESULT)[^.]{0,200}(consume|ingest|upgrade|write)/is,
+      're-running with a result present is a defined path');
+  });
+
+  test('F4 — handed-over checkpoints are pending-certifier, not asked of the human now', () => {
+    const s = step();
+    assert.match(s, /pending-certifier/, 'the handed-over UAT state exists');
+    const vw = read(VERIFY_WORK);
+    assert.match(vw, /pending-certifier/, 'create_uat_file/present_test know the state');
+  });
+
+  test('F5 — the brief carries the trust gate for the receiving machine', () => {
+    assert.match(step(), /brief[^.]{0,250}(sandbox-first|isolated HOME|trust gate)/is,
+      'the remote first launch is gated via the brief');
+  });
+
+  test('e2e-5 F3 — the isolated HOME has a stated location that is not /tmp', () => {
+    for (const f of [CERT_STEP, CERT_REF]) {
+      assert.match(read(f), /(sibling|under)[^.\n]{0,80}\$HOME|\$HOME[^.\n]{0,80}sibling/i,
+        `${f}: the sandbox HOME lives under $HOME`);
+      assert.match(read(f), /(never|not)[^.\n]{0,60}\/tmp|\/tmp[^.\n]{0,90}(refus|suppress|defeat)/i,
+        `${f}: the /tmp trap is named`);
+    }
+  });
+
+  test('F1 — the decline line carries its reason in sanctioned grammar', () => {
+    assert.match(step(), /certification: skipped \(declined( — \{[^}]*reason[^}]*\})?\)/i,
+      'the reason slot is part of the line grammar');
+    assert.match(read(SHIP), /skipped \(declined/, 'the sweep matches the declined prefix');
+  });
+
+  test('F7/F9 — the step has a re-run dispatch table keyed on the existing outcome', () => {
+    const s = step();
+    assert.match(s, /re-run|already carries|existing outcome/i, 're-run semantics exist');
+    assert.match(s, /pending[^|]*→|pending[^.\n]{0,120}(check|look)[^.\n]{0,40}result/i,
+      'pending → check for the result');
+    assert.match(s, /Re-offer under the current mode/i,
+      'declined/off-era outcomes are re-offered under the current mode');
+  });
+
+  test('F8 — restart is defined and never destroys evidence-backed entries', () => {
+    const vw = read(VERIFY_WORK);
+    assert.match(vw, /restart[^.]{0,400}(archiv|supersed)/is,
+      'restart archives the existing UAT file rather than clobbering it');
+  });
+
+  test('ship sweep classifies pending as its own row, distinct from not-run', () => {
+    const sweep = read(SHIP);
+    assert.match(sweep, /\| \*{0,2}pending\*{0,2} \|/, 'a pending row exists in the sweep table');
+    assert.match(sweep, /pending \(CERT-2/, 'it matches the pending line grammar');
+  });
+
+  test('registry off-description matches the recorded posture', () => {
+    const cap = read(STRATEGY_CAP);
+    assert.doesNotMatch(cap, /behaves exactly as it did before certification existed/,
+      'the off description no longer promises an unrecorded skip');
+    assert.match(cap, /off \(posture\)/, 'the off description names the recorded line');
+  });
+});
+
+describe('strategy Update merge semantics (e2e-5 F2/F2b/F2c/F8, e2e-7 F3/F4)', () => {
+  const wf = () => read(WORKFLOW);
+
+  test('Step 7 has an Update branch that merges sections instead of re-rendering', () => {
+    const s = wf();
+    assert.match(s, /section-merge/i, 'the Update path is a section-merge');
+    const start = s.indexOf('Two modes, decided by Step 1');
+    assert.ok(start !== -1, 'the two-mode framing exists in Step 7');
+    const block = s.slice(start, s.indexOf('Render `@', start));
+    assert.match(block, /byte-intact/i, 'the preservation contract is stated');
+    for (const sect of ['## Notes', 'gnarly', 'CI execution map', '## Suite health', '## Coverage debt', '## Certification']) {
+      assert.ok(block.includes(sect), `preservation names: ${sect}`);
+    }
+  });
+
+  test('e2e-7 F3 — Certification is never silently downgraded by a re-probe', () => {
+    assert.match(wf(), /never\s+silently\s+(downgrade|overwrite|demote)/i,
+      'a downward tier change requires the user');
+  });
+
+  test('e2e-5 F8 — an absent Coverage debt section is a stated, valid pre-2.4 state', () => {
+    assert.match(wf(), /absent[^.]{0,200}(Coverage debt|section)|Coverage debt[^.]{0,220}absent/is,
+      'absent (not just empty) is handled');
+  });
+
+  test('e2e-5 F2b — reference defaults go to TESTING-STANDARDS.md, never into existing Notes', () => {
+    assert.match(wf(), /TESTING-STANDARDS\.md[^.]{0,300}(create|generate|write)/i,
+      'the standards file is the destination');
+    assert.match(wf(), /(never|not)[^.\n]{0,120}(overwrite|clobber)[^.\n]{0,60}Notes|Notes[^.\n]{0,90}(preserved|never overwritten)/i,
+      'existing Notes are protected');
+  });
+
+  test('e2e-5 F2c — the template CI-map comment protects recorded stages on update', () => {
+    assert.match(read(TEMPLATE), /(keep|preserve)[^.]{0,200}(existing|recorded)[^.]{0,60}(stage|row)/i,
+      'the do-not-pre-assert rule is scoped to first renders');
+  });
+});
+
+describe('cicd single-measurement + C1-b guard (e2e-7 F1/F2)', () => {
+  const cicd = () => read(CICD_WORKFLOW);
+
+  test('F1 — the false "nothing upstream captures it" claim is gone', () => {
+    assert.doesNotMatch(cicd(), /nothing upstream in the chain captures it/);
+  });
+
+  test('F1 — C1-a reads the recorded Suite-health measurement before re-timing', () => {
+    const s = cicd();
+    assert.match(s, /## Suite health/,
+      'the recorded table is named in cicd');
+    assert.match(s, /(read|reads|use)[^.]{0,200}Suite health[^.]{0,300}(only|unless|when)[^.]{0,120}(absent|unmeasured|no measured|missing)/is,
+      're-measure is conditional on no recorded row');
+  });
+
+  test('F1 — the INFER list includes the suite wall clock from TEST-STRATEGY', () => {
+    assert.match(cicd(), /INFER[^]*?suite wall clock[^]*?TEST-STRATEGY/i);
+  });
+
+  test('F2 — C1-b carries the certification carve-out', () => {
+    assert.match(cicd(), /(C1-b|cannot run on a PR)[^]{0,600}?certification/i,
+      'certification is named near the C1-b trigger');
+    assert.match(cicd(), /Not a pipeline tier/,
+      'the guard line names the template row it honors');
+  });
+});
+
+describe('millisecond suite metrics (e2e-4 F12, e2e-7 F5)', () => {
+  test('SUMMARY schema records wall_clock_ms', () => {
+    const s = read(SUMMARY_TPL);
+    assert.match(s, /wall_clock_ms/, 'the ms field exists');
+    assert.match(s, /legacy[^.]{0,200}wall_clock|wall_clock[^.]{0,250}legacy/is,
+      'legacy seconds blocks have a stated reading');
+  });
+
+  test('post-merge gate Step C records the true millisecond bracket', () => {
+    const g = read(POST_MERGE_GATE);
+    assert.match(g, /wall_clock_ms/, 'Step C writes wall_clock_ms');
+    assert.match(g, /SUITE_ELAPSED_MS/, 'from the real bracket, not a derived floor');
+  });
+
+  test('transition compare derives ms/test from milliseconds with a legacy fallback', () => {
+    const t = read(TRANSITION);
+    assert.match(t, /wall_clock_ms/, 'the compare reads the ms field');
+    assert.match(t, /(×|\*|x)\s?1000|1000\s?(×|\*|x)|second-resolution|legacy/i,
+      'seconds-only rows/blocks are converted, not rejected');
+  });
+
+  test('e2e-7 F5 — both table writers state the millisecond rule', () => {
+    for (const f of [WORKFLOW, TUNE_UP]) {
+      assert.match(read(f), /millisecond|_ms|\(ms\)/i, `${f} states the ms unit`);
+    }
+    assert.match(read(TEMPLATE), /wall_clock \(ms\)/, 'the table column is ms');
+  });
+
+  test('e2e-4 F12 — T2 has a stated noise floor so sub-second suites neither flap nor go blind', () => {
+    for (const f of [TRANSITION, TEST_REF]) {
+      assert.match(read(f), /250\s?ms|noise floor/i, `${f}: the T2 noise floor is stated`);
+    }
+  });
+
+  test('the reference trigger table speaks milliseconds, not integer seconds', () => {
+    assert.doesNotMatch(read(TEST_REF), /`wall_clock` in integer seconds/,
+      'the authority table no longer pins the seconds unit');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Round-2 Wave B — mechanical seam repairs (e2e-4 F5/F7/F8/F10/F11,
+// e2e-5 F7, e2e-7 F6). These are doc contracts: the deployed .md text IS what
+// the agent executes, so the pinned structures are the fix.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('round-2 Wave B — verify-work completion seams (e2e-4 F5/F7)', () => {
+  const VW = 'gsd-core/workflows/verify-work.md';
+
+  test('e2e-4 F5 — the human_needed → passed stamp is conditional on nothing being unproven', () => {
+    const src = read(VW);
+    const guard = /if \[ "\$VERIFICATION_STATUS_VALUE" = "human_needed" \] && \[ "\$BEHAVIOR_UNVERIFIED" -eq 0 \] && \[ "\$CERT_UNPROVEN" -eq 0 \]/;
+    assert.match(src, guard, 'the stamp must require zero unverified behaviours AND zero unproven checkpoints');
+    // The two inputs must actually be read from the two artifacts allowed to say so.
+    assert.match(src, /BEHAVIOR_UNVERIFIED=.*frontmatter\.get .*behavior_unverified/,
+      'behavior_unverified comes from VERIFICATION.md');
+    assert.match(src, /CERT_UNPROVEN=.*pending-certifier.*could-not-prove/,
+      'unproven certification checkpoints come from the UAT file');
+  });
+
+  test('e2e-4 F5 — a withheld stamp is announced, not silent', () => {
+    const src = read(VW);
+    assert.match(src, /If the stamp was withheld/i, 'the withheld branch is documented');
+    assert.match(src, /still unproven/i, 'the user is told what is unproven');
+  });
+
+  test('e2e-4 F7 — coverage_gap_capture has a record-only entry that does not need a UAT issue', () => {
+    const src = read(VW);
+    const stepStart = src.indexOf('<step name="coverage_gap_capture">');
+    assert.notStrictEqual(stepStart, -1);
+    const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
+    assert.match(step, /record-only/, 'the second entry exists');
+    assert.match(step, /behavior_unverified_items/, 'verifier-named gaps are a trigger');
+    assert.match(step, /could-not-prove|pending-certifier/, 'certifier-escalated gaps are a trigger');
+    assert.match(step, /never.*invent a `## Gaps` id|never\*\* invent a `## Gaps` id/i,
+      'record-only must not fabricate a gap id the human never reported');
+  });
+
+  test('e2e-4 F7 — the record-only route does not fall into plan_gap_closure', () => {
+    const src = read(VW);
+    const stepStart = src.indexOf('<step name="coverage_gap_capture">');
+    const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
+    assert.match(step, /\*\*Record-only entry:\*\* return to `complete_session`/,
+      'record-only returns to complete_session instead of planning fixes');
+  });
+});
+
+describe('round-2 Wave B — unsubstituted placeholders fail loud (e2e-4 F8)', () => {
+  test('transition.md guards XX-current before the compare can silently no-op', () => {
+    const src = read('gsd-core/workflows/transition.md');
+    assert.match(src, /_GSD_PLACEHOLDER="XX""-current"/,
+      'the sentinel must be assembled from two literals so a blind substitution cannot rewrite the guard');
+    assert.match(src, /did NOT run — it is not a 'no metrics recorded' result/,
+      'the message must distinguish "could not run" from the documented silent-skip branch');
+  });
+
+  test('automated-ui-verification.md guards an unset PHASE_DIR', () => {
+    const src = read('gsd-core/workflows/verify-work/steps/automated-ui-verification.md');
+    assert.match(src, /if \[ -z "\$\{PHASE_DIR:-\}" \]; then/, 'the step must check PHASE_DIR before globbing');
+    assert.match(src, /NOT a 'no UI spec' result/,
+      'an unset variable must never be reported as a fact about the phase');
+  });
+});
+
+describe('round-2 Wave B — consumers read fields that exist (e2e-4 F10)', () => {
+  test('complete-milestone no longer checks progress_percent', () => {
+    const src = read('gsd-core/workflows/complete-milestone.md');
+    assert.doesNotMatch(src, /`progress_percent` should be 100%/,
+      'init.manager has never emitted progress_percent');
+    assert.match(src, /`all_complete` should be `true`/, 'the rollup key that DOES exist is named');
+    assert.match(src, /`phase_count` includes backlog/,
+      'the counted-vs-gated asymmetry must be stated so the pair is not misread as a gate');
+  });
+});
+
+describe('round-2 Wave B — the probe recipe is driver-agnostic about the page source (e2e-4 F11)', () => {
+  const CERT_REF_B = 'gsd-core/references/certification.md';
+  const CERT_STEP_B = 'gsd-core/workflows/verify-work/steps/agentic-certification.md';
+
+  test('the reference no longer prescribes a data: URL for the goto leg', () => {
+    const src = read(CERT_REF_B);
+    assert.doesNotMatch(src, /a `data:` URL page covers goto\/snapshot/,
+      'the prescription that fails on the reference\'s own named driver is gone');
+    assert.match(src, /serves a throwaway page/i, 'the echo server also serves the page');
+    assert.match(src, /http:\/\/127\.0\.0\.1/, 'all five legs run against a locally served page');
+  });
+
+  test('both surfaces name the driver rejection as a URL fact, never a capability demotion', () => {
+    for (const f of [CERT_REF_B, CERT_STEP_B]) {
+      const src = read(f);
+      assert.match(src, /Unsupported browser URL/, `${f}: the live receipt is cited`);
+      assert.match(src, /not a capability (verdict|demotion)|never\*\* a capability demotion/i,
+        `${f}: the reading a first-time prober must not take is named`);
+    }
+  });
+});
+
+describe('round-2 Wave B — UAT template documents the certification line (e2e-5 F7)', () => {
+  const UAT_TEMPLATE = 'gsd-core/templates/UAT.md';
+
+  test('the file template carries the certification slot at the top of ## Tests', () => {
+    const src = read(UAT_TEMPLATE);
+    const testsIdx = src.indexOf('## Tests');
+    assert.notStrictEqual(testsIdx, -1);
+    const after = src.slice(testsIdx, testsIdx + 300);
+    assert.match(after, /^\s*## Tests\s*\n\s*\ncertification: /,
+      'the outcome line is the first line of ## Tests, at column 0 (ship.md greps for it there)');
+  });
+
+  test('the section rules enumerate the closed outcome set the workflow writes', () => {
+    const src = read(UAT_TEMPLATE);
+    for (const form of [
+      'certification: agentic (CERT-1)',
+      'certification: pending (CERT-2',
+      'certification: human (CERT-0)',
+      'certification: N/A — no user-facing change',
+      'certification: skipped (declined —',
+      'certification: off (posture)',
+    ]) {
+      assert.ok(src.includes(form), `templates/UAT.md must document the \`${form}\` form`);
+    }
+  });
+
+  test('the section rules document [pending-certifier], which present_test never selects', () => {
+    const src = read(UAT_TEMPLATE);
+    assert.match(src, /\[pending-certifier\]/);
+    assert.match(src, /NEVER presented/i);
+  });
+});
+
+describe('round-2 Wave B — testing-strategy process section routes --tune-up (e2e-7 F6)', () => {
+  for (const f of ['skills/gsd-testing-strategy/SKILL.md', 'commands/gsd/testing-strategy.md']) {
+    test(`${f} names --tune-up and its step file in <process>`, () => {
+      const src = read(f);
+      const start = src.indexOf('<process>');
+      assert.notStrictEqual(start, -1, 'no <process> section');
+      const proc = src.slice(start, src.indexOf('</process>', start));
+      assert.match(proc, /--tune-up/, 'the process section must name the flag it routes on');
+      assert.match(proc, /suite-tune-up\.md/, 'and the step file it dispatches to');
+      assert.match(proc, /does NOT author a strategy/,
+        'the priming risk is that an agent skimming <process> authors on a tune-up run');
+    });
+  }
 });

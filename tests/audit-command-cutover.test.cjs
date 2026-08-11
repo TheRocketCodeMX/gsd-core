@@ -188,6 +188,80 @@ describe('audit cutover: dispatch path (default-case → capability registry)', 
   });
 });
 
+// ─── e2e-4 F9 — audit-open read a todo shape nobody writes ───────────────────
+// `add-todo.md:130-137` and `transition.md`'s suite-health todos both write
+// `created` / `title` / `area` / `severity`. scanTodos read `fm.priority` (never
+// written by any workflow or template) and dropped `title` entirely, so a
+// milestone-close audit rendered the filename plus the literal first body line
+// `## Problem`. The one field written to make the item readable was the one
+// field dropped.
+describe('audit-open: renders the todo shape add-todo actually writes (e2e-4 F9)', () => {
+  const fsMod = require('node:fs');
+  const pathMod = require('node:path');
+  let tmpDir;
+
+  const TODO = [
+    '---',
+    'created: 2026-08-10',
+    'title: "Suite tune-up (milestone close): T2 fired"',
+    'area: testing',
+    'severity: minor',
+    '---',
+    '',
+    '## Problem',
+    '',
+    'ms/test rose 31% against the recorded baseline.',
+    '',
+  ].join('\n');
+
+  beforeEach(() => {
+    tmpDir = createTempProject('gsd-audit-todo-shape-');
+    const pending = pathMod.join(tmpDir, '.planning', 'todos', 'pending');
+    fsMod.mkdirSync(pending, { recursive: true });
+    fsMod.writeFileSync(
+      pathMod.join(pending, '2026-08-10-suite-tune-up-milestone-close.md'),
+      TODO,
+    );
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('--json carries title and severity', () => {
+    const result = runGsdTools(['audit-open', '--json'], tmpDir);
+    assert.ok(result.success, `audit-open --json must succeed. stderr: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    const todo = (parsed.items && parsed.items.todos || []).find(
+      (t) => t.filename === '2026-08-10-suite-tune-up-milestone-close.md',
+    );
+    assert.ok(todo, `todo not surfaced at all: ${JSON.stringify(parsed.items)}`);
+    assert.strictEqual(
+      todo.title,
+      'Suite tune-up (milestone close): T2 fired',
+      'scanTodos must carry the `title:` every writer prescribes',
+    );
+    assert.strictEqual(
+      todo.severity,
+      'minor',
+      'scanTodos must carry the `severity:` every writer prescribes',
+    );
+  });
+
+  test('text report shows the title and severity, not just the filename', () => {
+    const result = runGsdTools(['audit-open'], tmpDir);
+    assert.ok(result.success, `audit-open must succeed. stderr: ${result.error}`);
+    assert.ok(
+      result.output.includes('Suite tune-up (milestone close): T2 fired'),
+      `the rendered report must name the todo's title. Got:\n${result.output}`,
+    );
+    assert.ok(
+      result.output.includes('minor'),
+      `the rendered report must show the todo's severity. Got:\n${result.output}`,
+    );
+  });
+});
+
 // ─── 3. BEHAVIOR — subprocess output shape (equivalence to old inline cases) ──
 
 describe('audit cutover: output shape equivalence', () => {

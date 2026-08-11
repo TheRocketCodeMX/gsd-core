@@ -192,17 +192,35 @@ authority; do not re-derive thresholds here.
 phase directory — substitute it, as every other step in this file does, before running):
 
 ```bash
+# FAIL LOUD on an unsubstituted placeholder (e2e-4 F8). `.planning/phases/XX-current/`
+# matches nothing, so the glob returns empty and this whole step no-ops at exit 0 —
+# INDISTINGUISHABLE from the documented "skip silently" branch below. A step that
+# cannot run must say so; it must never look like a step that had nothing to compare.
+# The sentinel is assembled from two literals on purpose: a blind textual substitution
+# of the placeholder rewrites the path but cannot rewrite this guard into a false hit.
+PHASE_DIR_REL=".planning/phases/XX-current"
+_GSD_PLACEHOLDER="XX""-current"
+case "$PHASE_DIR_REL" in
+  *"$_GSD_PLACEHOLDER"*)
+    echo "✗ suite_health_compare: the XX-current placeholder was never substituted, so no SUMMARY can be found. This step did NOT run — it is not a 'no metrics recorded' result. Substitute the current phase directory (e.g. .planning/phases/01-signup) and re-run." >&2
+    exit 1
+    ;;
+esac
 ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_STRATEGY" || echo "NO_STRATEGY"
-M=$(grep -l '^suite-metrics:' .planning/phases/XX-current/*-SUMMARY.md 2>/dev/null || true)
+M=$(grep -l '^suite-metrics:' "$PHASE_DIR_REL"/*-SUMMARY.md 2>/dev/null || true)
 [ -n "$M" ] && printf '%s' "$M" | tr '\n' '\0' | xargs -0 ls -t | head -1
 # Local calendar date — the same clock gsd-tools' init.todos hands add-todo, so every
 # writer of .planning/todos/pending/ dates filenames identically.
 TODAY=$(date +%Y-%m-%d)
 ```
 
-Read the `suite-metrics:` frontmatter block (`test_count`, `wall_clock` in integer
-seconds, `containers_started`) from the newest SUMMARY **that carries one** — a doc-only
-last wave must not shadow an earlier wave's clean measurement. From TEST-STRATEGY.md's
+Read the `suite-metrics:` frontmatter block (`test_count`, `wall_clock_ms` in integer
+milliseconds, `containers_started`) from the newest SUMMARY **that carries one** — a
+doc-only last wave must not shadow an earlier wave's clean measurement. **Legacy
+inputs:** a block or a baseline row recorded in seconds (the pre-millisecond field
+`wall_clock`, or a table column headed `wall_clock (s)`) reads as `× 1000` — a
+second-resolution measurement, honest but coarse; note that sub-second deltas are
+invisible against such a baseline until a millisecond row replaces it. From TEST-STRATEGY.md's
 `## Suite health` table read **two** rows, which may be the same row:
 
 - the **last** row — the T2 baseline;
@@ -213,18 +231,18 @@ last wave must not shadow an earlier wave's clean measurement. From TEST-STRATEG
 
 **Skip silently** — print nothing, block nothing — when `NO_STRATEGY`, when there is no
 `## Suite health` section, when no SUMMARY in this phase carries a `suite-metrics:` block,
-when the baseline row reads `unmeasured`, **or when either side's `wall_clock` is `0`**
+when the baseline row reads `unmeasured`, **or when either side's wall clock is `0`**
 (a pre-floor measurement artifact — treat it exactly like `unmeasured`; the measurement
-floor is 1 s, so a `0` is never a real reading and must never become a divisor). A phase
-is never held up for a measurement nobody took.
+minimum is 1 ms, so a `0` is never a real reading and must never become a divisor). A
+phase is never held up for a measurement nobody took.
 
-**The check.** Derive `ms/test = (wall_clock × 1000) ÷ test_count` here, for both sides
+**The check.** Derive `ms/test = wall_clock_ms ÷ test_count` here, for both sides
 (it is deliberately not recorded anywhere, so the numbers can never disagree), then:
 
 | Trigger | Fires when | Route |
 |---|---|---|
-| **T1 — tier budget breach** | the measured `wall_clock` exceeds its tier budget. The post-merge gate runs the project's **whole** suite, so this number is the **PR-gate tier** (10 min = cicd's C1-a) unless the strategy's `## Suite health` section carries a **T1 budget note** line overriding it (the template ships the optional line); the ~90 s dev-loop budget is checked at strategy time (Step 6.5), not here | **immediately, now** |
-| **T2 — ms/test trend** | derived ms/test is >~25 % above the last row's derived ms/test | milestone close |
+| **T1 — tier budget breach** | the measured wall clock exceeds its tier budget (compare in ms — the default PR-gate budget is 10 min = 600 000 ms). The post-merge gate runs the project's **whole** suite, so this number is the **PR-gate tier** (10 min = cicd's C1-a) unless the strategy's `## Suite health` section carries a **T1 budget note** line overriding it (the template ships the optional line); the ~90 s dev-loop budget is checked at strategy time (Step 6.5), not here | **immediately, now** |
+| **T2 — ms/test trend** | derived ms/test is >~25 % above the last row's derived ms/test **and** the absolute wall-clock delta is ≥ 250 ms (the noise floor: a suite slower by under a quarter second is jitter, not a trend — without it, millisecond precision makes tiny suites flap) | milestone close |
 | **T3 — container churn** | `containers_started` grew faster than `test_count` — **unevaluable when either side records `—`** (not fired; evaluate the others) | milestone close |
 | **T4 — backstop** | `test_count` is >~40 % above the last tune-up row (found by fix-class, above) and no tune-up has run since | milestone close |
 

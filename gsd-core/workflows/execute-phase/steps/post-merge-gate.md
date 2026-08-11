@@ -62,7 +62,20 @@ fi
 
 **Step B — Test gate:**
 
+This block carries its **own** launcher preamble on purpose. Fenced blocks run in
+separate processes (#381 — `bin/gsd_run:3-8` states the premise), so Step A's
+`gsd_run` function does not exist here, and the two documented mitigations (the npm
+`bin` field, the `CLAUDE_ENV_FILE` PATH export) both miss on a `--claude --local`
+install in a runtime that leaves `CLAUDE_ENV_FILE` unset. Without it every call
+below returns 127 and a **green suite is reported as a failing test gate**, pointing
+the user at their own app (e2e-4 F1).
+
 ```bash
+_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+# A launcher that did not resolve is NEVER a test result. Say so and stop: the
+# `2>/dev/null || <fallback>` guards below exist for missing CONFIG KEYS, and they
+# would otherwise swallow this failure class into a silent wrong answer.
+command -v gsd_run >/dev/null 2>&1 || { echo "✗ Post-merge test gate: gsd_run did not resolve — the suite was NOT run. This is an install/launcher failure, not a test failure. Fix the install (npx -y @therocketcode/gsd-core@latest --claude --local), then re-run the gate." >&2; exit 1; }
 # Resolve test command: project config > Xcode > Makefile > language sniff
 TEST_CMD=$(gsd_run query config-get workflow.test_command --default "" --raw 2>/dev/null || true)
 if [ -z "$TEST_CMD" ]; then
@@ -100,14 +113,23 @@ fi
 TEST_CMD=$(gsd_run query normalize-test-command "$TEST_CMD" --cwd . 2>/dev/null || echo "$TEST_CMD")
 TEST_GATE_TIMEOUT=$(gsd_run query config-get workflow.test_gate_timeout 2>/dev/null || echo "600")
 TEST_EXIT=0
-# Millisecond bracket via node (portable — `date +%s%3N` is GNU-only), floored to 1 s:
-# a healthy sub-second suite must never record 0, which would poison the compare's
-# derived-ms/test baseline (division by zero at the NEXT milestone's T2).
+# Millisecond bracket via node (portable — `date +%s%3N` is GNU-only; a plain `date +%s`
+# has 1-second resolution, which renders every sub-second suite identical and blinds T2).
+# Minimum 1 ms: a run that executed the suite never records 0.
 SUITE_START_MS=$(node -e 'process.stdout.write(String(Date.now()))')
 gsd_run run-with-timeout "$TEST_GATE_TIMEOUT" -- bash -c "$TEST_CMD" 2>&1
 TEST_EXIT=$?
 SUITE_ELAPSED_MS=$(( $(node -e 'process.stdout.write(String(Date.now()))') - SUITE_START_MS ))
-SUITE_WALL_CLOCK_SEC=$(( (SUITE_ELAPSED_MS + 999) / 1000 )); [ "$SUITE_WALL_CLOCK_SEC" -lt 1 ] && SUITE_WALL_CLOCK_SEC=1
+[ "$SUITE_ELAPSED_MS" -lt 1 ] && SUITE_ELAPSED_MS=1
+# Cross-process handoff (#381, e2e-4 F2). `execute-phase.md`'s tracking-update step
+# (5.7) consumes ${TEST_EXIT} from a different fenced block in a different file — a
+# different SHELL. The variable does not survive, and an empty value used to fall
+# through to "post-merge tests failed (exit )", leaving a green wave's plans
+# in-progress. Record the result at a deterministic path so that step re-derives it
+# rather than reading absence as failure. The step consumes and deletes this file.
+printf '{"test_exit":%s,"suite_elapsed_ms":%s,"recorded_at":"%s"}\n' \
+  "$TEST_EXIT" "$SUITE_ELAPSED_MS" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > .planning/.gsd-post-merge-gate.json 2>/dev/null || true
 if [ "${TEST_EXIT}" -eq 0 ]; then
   echo "✓ Post-merge test gate passed — no cross-plan conflicts"
 elif [ "${TEST_EXIT}" -eq 124 ]; then
@@ -137,7 +159,7 @@ the single writer for post-merge artifacts — step 5.7). Schema and contract:
 | Field | Where it comes from |
 |---|---|
 | `test_count` | The count the runner itself printed in the output above (e.g. `# tests`, `N passed`, `ok N`). Read it; never grep the repo for test files. |
-| `wall_clock` | `SUITE_WALL_CLOCK_SEC`, integer **seconds**, ceiling-rounded from the millisecond bracket with a floor of **1** — a run that executed the suite can never record `0` (a `0` baseline would break the compare's derived-ms/test math). Never reformatted into minutes-and-seconds. |
+| `wall_clock_ms` | `SUITE_ELAPSED_MS`, integer **milliseconds** from the real clock bracket, minimum **1** — a run that executed the suite never records `0`, and second-resolution rounding is exactly the blindness this field exists to avoid (two runs of one sub-second suite must be distinguishable). Never reformatted. |
 | `containers_started` | Testcontainers/docker lines in the same output (`Creating container`, `Container … started`) where visible, **else `—`**. `—` is an honest answer; `0` is a claim. |
 
 **ms/test is not recorded here** — `transition`'s `suite_health_compare` derives it from
@@ -145,7 +167,7 @@ these two numbers so one value can never disagree with itself.
 
 **When the gate did not actually measure a suite, record nothing.** No runner was
 detected (`TEST_CMD` fell through to `true`), or `TEST_EXIT` is `124` (the run timed out,
-so `SUITE_WALL_CLOCK_SEC` is the budget rather than the suite) → **omit the block
+so the bracket measures the budget rather than the suite) → **omit the block
 entirely**. An absent block means "not measured here" and the compare skips silently; an
 invented row silently moves a T1–T4 trigger. A failing suite (`TEST_EXIT` non-zero) still
 ran and still gets its metrics — a red suite has a wall clock like any other.

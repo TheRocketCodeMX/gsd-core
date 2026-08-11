@@ -875,3 +875,126 @@ describe('bug #3096: ai-integration-phase sequential ordering and Edit-only disc
 });
   });
 }
+
+// ─── e2e-4 F2 — the TEST_EXIT hand-off crosses a process boundary ────────────
+// post-merge-gate.md's Step B sets TEST_EXIT; execute-phase.md's 5.7 tracking
+// update consumes it from a DIFFERENT fenced block in a DIFFERENT file, i.e. a
+// different shell (#381). Run verbatim with TEST_EXIT unset the old block printed
+//   [: : integer expression expected  (x2)
+//   ⚠ Skipping tracking update — post-merge tests failed (exit ).
+// so a green wave left its plans in-progress and blamed the user's tests.
+describe('execute-phase 5.7: post-merge gate result crosses the block boundary (e2e-4 F2)', () => {
+  const os = require('node:os');
+  const { beforeEach, afterEach } = require('node:test');
+  const { execFileSync } = require('node:child_process');
+
+  const GATE_PATH = path.join(
+    __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-merge-gate.md',
+  );
+  // The 5.7 guard was extracted to its own fragment: execute-phase.md sits 7 bytes
+  // under the frozen ADR-857 Phase-6 ceiling, so ANY addition to the host body has
+  // to be an extraction. The host now reads this fragment (see the read-and-execute
+  // line asserted below).
+  const TRACKING_PATH = path.join(
+    __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-wave-tracking-update.md',
+  );
+  const RECORD = '.planning/.gsd-post-merge-gate.json';
+
+  const workflowSrc = fs.readFileSync(WORKFLOW_PATH, 'utf-8');
+  const gateSrc = fs.readFileSync(GATE_PATH, 'utf-8');
+  const trackingSrc = fs.readFileSync(TRACKING_PATH, 'utf-8');
+
+  /** The 5.7 tracking-update bash block, verbatim from the fragment. */
+  function trackingBlock() {
+    const marker = '# Cross-shell hand-off (#381)';
+    const start = trackingSrc.indexOf(marker);
+    assert.notStrictEqual(start, -1, 'tracking-update guard block not found in the fragment');
+    const end = trackingSrc.indexOf('```', start);
+    assert.notStrictEqual(end, -1, 'unterminated tracking-update block');
+    return trackingSrc.slice(start, end);
+  }
+
+  test('execute-phase.md step 5.7 delegates to the tracking-update fragment', () => {
+    assert.match(
+      workflowSrc,
+      /execute-phase\/steps\/post-wave-tracking-update\.md/,
+      'the host body must read the fragment it extracted',
+    );
+  });
+
+  test('the gate RECORDS its exit code at a deterministic path', () => {
+    assert.ok(
+      gateSrc.includes(RECORD),
+      `post-merge-gate.md must record the gate result at ${RECORD} — the shell variable does not survive`,
+    );
+    assert.match(
+      gateSrc,
+      /"test_exit":%s/,
+      'the record must carry the gate exit code, not just timing',
+    );
+  });
+
+  test('the tracking step re-derives TEST_EXIT from the record, then consumes it', () => {
+    const block = trackingBlock();
+    assert.ok(block.includes(RECORD), 'the tracking step must read the recorded gate result');
+    assert.match(block, /rm -f\s+\.planning\/\.gsd-post-merge-gate\.json/, 'the record must be consumed');
+  });
+
+  // Behavioral: run the real block in a fresh shell, exactly as the runtime does.
+  // gsd_run is stubbed (this test is about the guard, not about the tools it calls);
+  // everything else is the shipped text.
+  function runTracking(tmp, { testExit, record }) {
+    if (record !== undefined) {
+      fs.writeFileSync(path.join(tmp, RECORD), JSON.stringify({ test_exit: record }));
+    }
+    const script =
+      'set +e\ngsd_run() { echo "STUB gsd_run $*"; }\n' +
+      (testExit === undefined ? '' : `TEST_EXIT=${testExit}\n`) +
+      trackingBlock();
+    const scriptPath = path.join(tmp, 'tracking.sh');
+    fs.writeFileSync(scriptPath, script);
+    return execFileSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+  }
+
+  let tmp;
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-e2e4-f2-'));
+    fs.mkdirSync(path.join(tmp, '.planning'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '.planning', 'ROADMAP.md'), '# Roadmap\n');
+    fs.writeFileSync(path.join(tmp, '.planning', 'STATE.md'), '# State\n');
+  });
+  afterEach(() => { cleanup(tmp); });
+
+  test('TEST_EXIT unset + recorded pass → tracking IS updated (was: "tests failed (exit )")', () => {
+    const out = runTracking(tmp, { record: 0 });
+    assert.ok(
+      out.includes('STUB gsd_run'),
+      `a green recorded gate must reach the tracking update. Got:\n${out}`,
+    );
+    assert.ok(!/tests failed/.test(out), `must not claim a test failure. Got:\n${out}`);
+  });
+
+  test('TEST_EXIT unset + recorded failure → tracking skipped and named as a test failure', () => {
+    const out = runTracking(tmp, { record: 1 });
+    assert.match(out, /post-merge tests failed \(exit 1\)/);
+  });
+
+  test('TEST_EXIT unset + NO record → says the result is unavailable, never "tests failed"', () => {
+    const out = runTracking(tmp, {});
+    assert.match(out, /gate result is unavailable/);
+    assert.ok(
+      !/tests failed/.test(out),
+      `absence of a result is not a test verdict. Got:\n${out}`,
+    );
+  });
+
+  test('an in-shell TEST_EXIT still wins (no behavior change for the same-process case)', () => {
+    const out = runTracking(tmp, { testExit: 0, record: 1 });
+    assert.ok(out.includes('STUB gsd_run'), `Got:\n${out}`);
+  });
+
+  test('the record is consumed so it cannot leak into the next wave', () => {
+    runTracking(tmp, { record: 0 });
+    assert.ok(!fs.existsSync(path.join(tmp, RECORD)), 'the gate record must be removed after use');
+  });
+});

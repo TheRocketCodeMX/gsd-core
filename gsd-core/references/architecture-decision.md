@@ -89,6 +89,8 @@ The evidence (agent-reliability studies) shifts *where the floor sits*, not whet
 
 Net: raise the floor (seams + independent tests earlier), keep the ceiling calibrated (Domain Model / full hexagonal / CQRS / ES still require their concrete signals — the originators themselves reserve them for the complex core).
 
+### The meta-tell
+
 **The meta-tell (use this to settle every rung *above the floor*; the floor itself is always-on and exempt — it is the baseline, not a rung):** if you cannot point to a **current, concrete** requirement — a real second adapter or delivery mechanism, a real divergent-scaling component, a real second team, a real audit mandate, a real tenant-isolation mandate, a genuinely pure core isolated for test speed — that justifies a rung, you are **over-engineering**. If such a requirement exists and you ignored it, you are **under-engineering**.
 
 ## Default baseline (when in doubt)

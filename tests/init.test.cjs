@@ -2618,6 +2618,69 @@ describe('#2376 — init.* path fields resolve when process cwd differs from --c
     }
   });
 
+  // ─── e2e-4 F4 / e2e-6 F10 — the bundle lacked fields the workflow parses ───
+  // verify-work.md:51 lists uat_path / response_language among the fields to parse,
+  // :314 consumes "$uat_path" in `uat.render-checkpoint --file "$uat_path"`, and
+  // :329 reads text_mode "from init JSON". None of the three was emitted, so the
+  // shipped command errored `UAT file required` and the loop needed a hand-supplied
+  // path to proceed. Sibling builders (init.plan-phase, init.phase-op) emit uat_path.
+  test('init verify-work emits uat_path for an existing UAT file (e2e-4 F4)', () => {
+    seedPhase(projectDir, '03-api', {
+      '03-01-PLAN.md': '# Plan',
+      '03-01-SUMMARY.md': '# Summary',
+      '03-UAT.md': '# UAT\n',
+    });
+
+    const result = runGsdTools(['init', 'verify-work', '03', '--cwd', projectDir], decoyDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.ok('uat_path' in output, 'cmdInitVerifyWork must emit uat_path (e2e-4 F4)');
+    assert.ok(path.isAbsolute(output.uat_path), `uat_path must be absolute, got "${output.uat_path}"`);
+    assert.ok(fs.existsSync(output.uat_path), `uat_path must resolve to the real file: "${output.uat_path}"`);
+    assert.ok(output.uat_path.endsWith('03-UAT.md'));
+  });
+
+  test('init verify-work emits the canonical uat_path BEFORE the file exists (e2e-4 F4)', () => {
+    // create_uat_file writes the UAT during the same run that already parsed the
+    // bundle, so an emit-only-if-present field would still leave present_test with
+    // an empty --file on the very first pass. The path is prescribed, not discovered.
+    seedPhase(projectDir, '04-billing', {
+      '04-01-PLAN.md': '# Plan',
+      '04-01-SUMMARY.md': '# Summary',
+    });
+
+    const result = runGsdTools(['init', 'verify-work', '04', '--cwd', projectDir], decoyDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.uat_path, 'uat_path must be present even with no UAT file yet');
+    assert.ok(path.isAbsolute(output.uat_path), `uat_path must be absolute, got "${output.uat_path}"`);
+    assert.ok(
+      output.uat_path.endsWith('04-UAT.md'),
+      `uat_path must be the canonical {padded_phase}-UAT.md target, got "${output.uat_path}"`,
+    );
+  });
+
+  test('init verify-work emits text_mode and response_language from config (e2e-4 F4)', () => {
+    seedPhase(projectDir, '03-api', {
+      '03-01-PLAN.md': '# Plan',
+      '03-01-SUMMARY.md': '# Summary',
+    });
+    fs.writeFileSync(
+      path.join(projectDir, '.planning', 'config.json'),
+      JSON.stringify({ commit_docs: true, text_mode: true, response_language: 'es' }),
+    );
+
+    const result = runGsdTools(['init', 'verify-work', '03', '--cwd', projectDir], decoyDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.ok('text_mode' in output, 'cmdInitVerifyWork must emit text_mode (e2e-4 F4)');
+    assert.strictEqual(output.text_mode, true);
+    assert.strictEqual(output.response_language, 'es');
+  });
+
   test('init phase-op emits absolute path fields that resolve from a different process cwd', () => {
     seedPhase(projectDir, '03-api', {
       '03-CONTEXT.md': '# Phase Context',

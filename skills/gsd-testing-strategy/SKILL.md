@@ -53,7 +53,9 @@ Context files are resolved in-workflow during initialization.
 <process>
 Execute end-to-end.
 
-**MANDATORY:** Read the workflow file BEFORE taking any action. It contains the full process: deriving the shape FROM the architecture (not picking a pyramid/diamond), the behavior-over-implementation + sociable-by-default rules, test-once-at-cheapest-level, the gnarly-bits list, persistent-vs-transient e2e, coverage-as-floor + mutation, and TDD stance. Do not improvise from the objective summary above. The shape is an OUTPUT of the architecture, never a target you pick; default to sociable tests and mock only at architectural boundaries; keep all existing TESTING-STANDARDS.md standards.
+**MANDATORY:** Read the workflow file BEFORE taking any action. It contains the full process: deriving the shape FROM the architecture (not picking a pyramid/diamond), the behavior-over-implementation + sociable-by-default rules, test-once-at-cheapest-level, the gnarly-bits list, persistent-vs-transient e2e, the certification ladder + substrate, the suite-health baseline, coverage-as-floor + mutation, and TDD stance. Do not improvise from the objective summary above. The shape is an OUTPUT of the architecture, never a target you pick; default to sociable tests and mock only at architectural boundaries; keep all existing TESTING-STANDARDS.md standards.
+
+**This command has TWO modes, and the workflow routes between them at its first step.** With `--tune-up` the run does NOT author a strategy: it executes `steps/suite-tune-up.md` (profile → config/cache → suite audit against the recorded strategy → re-baseline, appending a dated `## Suite health` row and its fix-class) against an existing TEST-STRATEGY.md. Authoring on a `--tune-up` run is the failure mode — read the flag before priming yourself for authoring.
 </process>
 
 <success_criteria>

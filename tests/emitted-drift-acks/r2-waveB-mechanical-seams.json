@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "paths": {
+    "complete-milestone.md": "Round-2 Wave B (e2e-4 F10): verify_readiness told the orchestrator to check `progress_percent` against `init.manager`, a field that bundle has never emitted (its rollup keys are all_complete / completed_count / in_progress_count / phase_count). Growth is the corrected reading plus the counted-vs-gated caveat — phase_count includes backlog (999.*) rows and completed_count does not, so the pair is a headline and the adjacent jq stays the gate."
+  }
+}

@@ -32,7 +32,7 @@ actuals:
 # test suite. OMIT the whole block otherwise; see <suite_metrics_guidance> below.
 suite-metrics:
   test_count: [tests the runner itself reported]
-  wall_clock: [integer seconds — measured, never estimated]
+  wall_clock_ms: [integer milliseconds from the real clock bracket — measured, never estimated]
   containers_started: [N from Testcontainers/docker output where visible, else —]
 
 # Tech tracking
@@ -220,12 +220,14 @@ None - no external service configuration required.
 | Field | Contract |
 |---|---|
 | `test_count` | The count the runner itself reported. Never a grep, never a guess. |
-| `wall_clock` | Integer **seconds**, ceiling-rounded from a millisecond bracket with a **floor of 1** — a run that executed the suite records at least `1`, never `0` (a `0` row poisons the compare's derived-ms/test baseline). Never estimated, never a budget — and never minutes-and-seconds formatting. |
+| `wall_clock_ms` | Integer **milliseconds** from the real clock bracket, minimum **1** — the true elapsed time, not a rounded shadow of it. Second-resolution recording made every sub-second suite read identically (a 267 ms and a 604 ms run both floored to `1 s` — a 126 % regression T2 could not see). Never estimated, never a budget, never reformatted. |
 | `containers_started` | From Testcontainers/docker output where visible, else `—`. `—` is an honest answer; `0` is a claim. |
 
-**ms/test is deliberately NOT a field here.** It is derived at compare time (`wall_clock ÷ test_count`) so one number can never disagree with itself. Recording a derived value invites drift, and the trigger table reads the derived one.
+**ms/test is deliberately NOT a field here.** It is derived at compare time (`wall_clock_ms ÷ test_count`) so one number can never disagree with itself. Recording a derived value invites drift, and the trigger table reads the derived one.
 
-**Omit, never zero — and the two rules never collide.** If this run did not execute the suite — no runner detected, the gate timed out, the plan only ran a subset — **omit the `suite-metrics:` block entirely**. An absent block means "not measured here" and the compare skips silently. A `0` (or an invented row) is a measurement claim, and it moves a trigger. The tie-break with "record exactly as measured": a run that DID execute the suite records the floored value (minimum `1`), so a genuinely measured value is never `0` — omission is only ever about runs that measured nothing.
+**Legacy blocks:** a block recorded before the millisecond field carries `wall_clock` in integer seconds — consumers read it as `wall_clock × 1000` (a second-resolution measurement: honest, just coarse). New writers record `wall_clock_ms` only.
+
+**Omit, never zero — and the two rules never collide.** If this run did not execute the suite — no runner detected, the gate timed out, the plan only ran a subset — **omit the `suite-metrics:` block entirely**. An absent block means "not measured here" and the compare skips silently. A `0` (or an invented row) is a measurement claim, and it moves a trigger. The tie-break with "record exactly as measured": a run that DID execute the suite records the bracket's value with a minimum of `1` ms, so a genuinely measured value is never `0` — omission is only ever about runs that measured nothing.
 </suite_metrics_guidance>
 
 <one_liner_rules>

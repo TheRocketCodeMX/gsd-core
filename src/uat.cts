@@ -139,7 +139,7 @@ function cmdAuditUat(cwd: string, raw: boolean): void {
     const files = fs.readdirSync(phaseDir);
 
     // Process UAT files
-    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md'))) {
+    for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md') && !f.includes('-UAT-superseded-'))) {
       const uatFilePath = path.join(phaseDir, file);
       const content = fs.readFileSync(uatFilePath, 'utf-8');
       const items = parseUatItems(content);
@@ -599,7 +599,7 @@ function parseUatItems(content: string): UatItem[] {
   const items: UatItem[] = [];
   // Match test blocks: ### N. Name\nexpected: ...\nresult: ...\n
   // Accept both bare (result: pending) and bracketed (result: [pending]) formats (#2273)
-  const testPattern = /###\s*(\d+)\.\s*([^\n]+)\nexpected:\s*([^\n]+)\nresult:\s*\[?(\w+)\]?(?:\n(?:reported|reason|blocked_by):\s*[^\n]*)?/g;
+  const testPattern = /###\s*(\d+)\.\s*([^\n]+)\nexpected:\s*([^\n]+)\nresult:\s*\[?([\w-]+)\]?(?:\n(?:reported|reason|blocked_by):\s*[^\n]*)?/g;
   let match: RegExpExecArray | null;
   while ((match = testPattern.exec(content)) !== null) {
     const [, num, name, expected, result] = match;

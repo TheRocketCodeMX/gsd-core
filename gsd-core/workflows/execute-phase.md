@@ -977,31 +977,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
 
    When **any** executor agent in this wave ran with `isolation="worktree"`, that agent skipped STATE.md and ROADMAP.md updates to avoid last-merge-wins overwrites. The orchestrator is the single writer for these files. After worktrees are merged back, update shared artifacts once for every completed plan in the wave (worktree-mode plans **and** sequential plans that ran on the main tree but deferred to the orchestrator for tracking writes).
 
-   **Only update tracking when tests passed (TEST_EXIT=0).**
-   If tests failed or timed out, skip the tracking update — plans should
-   not be marked as complete when integration tests are failing or inconclusive.
-
-   ```bash
-   # Guard: only update tracking if post-merge tests passed
-   # Timeout (124) is treated as inconclusive — do NOT mark plans complete
-   if [ "${TEST_EXIT}" -eq 0 ]; then
-     # Update ROADMAP plan progress for each completed plan in this wave
-     for plan_id in {completed_plan_ids}; do
-       gsd_run query roadmap.update-plan-progress "${PHASE_NUMBER}" "${plan_id}" "complete"
-     done
-
-     # Only commit tracking files if they actually changed
-     if ! git diff --quiet .planning/ROADMAP.md .planning/STATE.md 2>/dev/null; then
-       gsd_run query commit "docs(phase-${PHASE_NUMBER}): update tracking after wave ${N}" --files .planning/ROADMAP.md .planning/STATE.md
-     fi
-   elif [ "${TEST_EXIT}" -eq 124 ]; then
-     echo "⚠ Skipping tracking update — test suite timed out. Plans remain in-progress. Run tests manually to confirm."
-   else
-     echo "⚠ Skipping tracking update — post-merge tests failed (exit ${TEST_EXIT}). Plans remain in-progress until tests pass."
-   fi
-   ```
-
-   Where `WAVE_PLAN_IDS` is the space-separated list of plan IDs that completed in this wave.
+   Read and execute `gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md`. It guards the write on the post-merge gate result — re-derived from the gate's own record, because Step B ran in a different shell (#381) — runs `roadmap update-plan-progress` for each completed plan, and commits ROADMAP.md/STATE.md only when they changed.
 
    **If no plan in this wave used worktrees** (project-level `USE_WORKTREES=false` OR `WAVE_WORKTREE_PLANS` is empty): sequential agents already updated STATE.md and ROADMAP.md themselves — skip this step.
 

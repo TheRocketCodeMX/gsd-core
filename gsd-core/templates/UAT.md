@@ -26,6 +26,8 @@ awaiting: user response
 
 ## Tests
 
+certification: [one outcome line, column 0, ALWAYS present — see `agentic-certification.md` §8]
+
 ### 1. [Test Name]
 expected: [observable behavior - what user should see]
 result: [pending]
@@ -93,8 +95,25 @@ blocked: [N]
 - On completion: "[testing complete]"
 
 **Tests:**
+- FIRST LINE of the section is the `certification:` outcome line, at column 0 —
+  written by `verify-work.md`'s `agentic-certification` step, one per file, ALWAYS
+  present. It is inert to every UAT consumer (the renderer only tokenizes `### N.`
+  headings) and it exists so an off-era or not-run phase is never mistaken for a
+  failed certification. `ship.md`'s milestone sweep greps for it at column 0.
+  Closed set (`agentic-certification.md` §8):
+  `certification: agentic (CERT-1) — {summary}` ·
+  `certification: pending (CERT-2 — brief handed over {date})` ·
+  `certification: human (CERT-0)` ·
+  `certification: N/A — no user-facing change` ·
+  `certification: skipped (declined — {short reason})` ·
+  `certification: off (posture)`
 - Each test: OVERWRITE result field when user responds
-- `result` values: [pending], pass, issue, skipped, blocked
+- `result` values: [pending], pass, issue, skipped, blocked, [pending-certifier]
+- `[pending-certifier]` — handed to an off-machine certifier (CERT-2). Visible in the
+  list, NEVER presented to the human; reverts to `[pending]` only when the returned
+  verdict is `fail` or `could-not-prove`.
+- A pre-resolved entry may carry `source: automated` + `coverage_id`, or
+  `source: agentic` + `evidence` — those are not presented either.
 - If issue: add `reported` (verbatim) and `severity` (inferred)
 - If skipped: add `reason` if provided
 - If blocked: add `blocked_by` (tag) and `reason` (if provided)
@@ -212,6 +231,8 @@ updated: 2025-01-15T10:45:00Z
 [testing complete]
 
 ## Tests
+
+certification: human (CERT-0)
 
 ### 1. View Comments on Post
 expected: Comments section expands, shows count and comment list

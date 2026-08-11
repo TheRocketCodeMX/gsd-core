@@ -91,6 +91,7 @@ const SCHEMA_DEFAULTS: Record<string, unknown> = {
   'planner.stall_detect_interval_minutes': 5,
   'planner.stall_threshold_minutes': 10,
   'git.create_tag': true,
+  'gates.confirm_milestone_scope': true,
   // Derived from the defaults manifest rather than restated, so the manifest
   // stays the single source of truth for the smart-zone budget (#2630).
   'workflow.smart_zone_tokens': CONFIG_DEFAULTS.smart_zone_tokens,
