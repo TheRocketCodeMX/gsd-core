@@ -132,6 +132,15 @@ Wait for user response.
 Check if session exists for that phase. If yes, offer to resume or restart.
 If no, continue to `create_uat_file`.
 
+**Restart is defined, and it never destroys a record.** Restart means: archive the
+existing file to `{phase_dir}/{phase_num}-UAT-superseded-{ISO date}.md` — certified
+entries, the certification outcome line, `## Gaps`, everything, byte-intact — then
+continue to `find_summaries` → `extract_tests` → the certification dispatch →
+`create_uat_file` as a fresh session. Name what will be archived when offering the
+choice ("restart archives the current file, including {N} resolved tests and {M}
+gaps"). A restart that silently clobbers an evidence-backed certification outcome
+is the one state the "recorded, never silent" contract exists to prevent.
+
 **If no active sessions AND no $ARGUMENTS:**
 
 ```
@@ -289,7 +298,14 @@ source: agentic
 evidence: [transcript ref · captures]
 ```
 
-Then record the step's single outcome line (`certification: agentic (…)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
+**CERT-2 handover entries.** When the certification step handed checkpoints to an
+off-machine certifier, write those as `result: [pending-certifier]` — visible in the
+test list, **never presented** (`present_test` selects only `result: [pending]`
+checkpoints; a `[pending-certifier]` entry is the certifier's to answer via the
+result file, and it reverts to `[pending]` only when the returned verdict is `fail`
+or `could-not-prove`).
+
+Then record the step's single outcome line (`certification: agentic (…)` / `certification: pending (CERT-2 — …)` / `certification: human (CERT-0)` / `certification: N/A — no user-facing change` / `certification: skipped (declined — …)` / `certification: off (posture)`) at the top of `## Tests`. The line is always present — under `workflow.certification: off` it reads `certification: off (posture)` and everything else about the file is byte-identical to before certification existed (the line is inert to every UAT consumer; it exists so an off-era phase is never mistaken for a failed run).
 
 ## Summary
 

@@ -3437,7 +3437,7 @@ const capabilities = {
           "off"
         ],
         "default": "required",
-        "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': skip the step entirely; verify-work behaves exactly as it did before certification existed. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them."
+        "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': dispatch nothing — the posture itself is recorded as 'certification: off (posture)' so an off-era phase is never mistaken for a failed run; everything else about verify-work is unchanged. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them."
       }
     },
     "commands": [
@@ -5041,7 +5041,7 @@ const configSchema = {
     "owner": "strategy",
     "type": "enum",
     "default": "required",
-    "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': skip the step entirely; verify-work behaves exactly as it did before certification existed. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them.",
+    "description": "Certification posture for verify-work's pre-UAT certification step (gsd-core/references/certification.md). 'required' (default): every phase resolves a certification outcome before UAT — certified by the probed driver, 'certification: human (CERT-0)' when no driver is capable (the human UAT that already runs satisfies it), or a recorded 'certification: N/A — no user-facing change'. A skip is always recorded, never silent. 'offer': ask before certifying. 'off': dispatch nothing — the posture itself is recorded as 'certification: off (posture)' so an off-era phase is never mistaken for a failed run; everything else about verify-work is unchanged. The tier, probe results, and mechanism come from .planning/TEST-STRATEGY.md '## Certification' — this key controls only whether the loop acts on them.",
     "values": [
       "required",
       "offer",

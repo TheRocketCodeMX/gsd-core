@@ -189,9 +189,10 @@ Verify the work is ready to ship:
    | Outcome | Recorded line | Reading |
    |---|---|---|
    | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — …` | a driver proved the flows |
+   | **pending** | `certification: pending (CERT-2 — brief handed over …)` | handed to an off-machine certifier, result not yet returned — **⚠ name it** ("awaiting the certifier's result — re-run `/gsd:verify-work {phase}` once `{phase_num}-CERTIFICATION-RESULT.md` lands"), distinct from not-run: something was decided, it just hasn't come back |
    | human | `certification: human (CERT-0)` | satisfied by the human UAT that ran — not a gap |
    | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
-   | declined | `certification: skipped (declined)` | a decision, recorded |
+   | declined | `certification: skipped (declined` prefix — the line may carry ` — {reason})` | a decision, recorded |
    | off | `certification: off (posture)` | certification was configured off when this phase shipped — a decision, not a gap |
    | pre-adoption | *no line, and the phase precedes the earliest phase with a recorded `certification:` line (phase order — or `git log -1 --format=%at -- <uat>` where history exists; file mtime only as a last-resort convenience, since a fresh checkout gives every file one mtime)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
    | **not-run** | *no `certification:` line, and not pre-adoption* | **flag it** |
