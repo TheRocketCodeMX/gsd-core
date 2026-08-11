@@ -1353,12 +1353,13 @@
       ]
     },
     {
-      "path": "gsd-core/workflows/execute-phase.md",
+      "path": "gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md",
       "feature": "gate-handoff",
       "mode": "anchors-only",
       "anchors": [
         "\\.gsd-post-merge-gate\\.json",
-        "gate result is unavailable"
+        "gate result is unavailable",
+        "Absence\\s*\\n?of a result is not a test verdict"
       ]
     },
     {
@@ -1426,6 +1427,14 @@
       "anchors": [
         "certification: \\[one outcome line",
         "pending-certifier"
+      ]
+    },
+    {
+      "path": "gsd-core/workflows/execute-phase.md",
+      "feature": "gate-handoff",
+      "mode": "anchors-only",
+      "anchors": [
+        "execute-phase/steps/post-wave-tracking-update\\.md"
       ]
     }
   ]
