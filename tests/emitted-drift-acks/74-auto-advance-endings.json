@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "paths": {
+    "roadmap.md": "#74: AUTO_MODE derivation now ORs in the consolidated auto-mode record (chain flag OR workflow.auto_advance) so an unflagged invocation on a yolo/auto_advance project self-chains instead of stalling at a human handoff no one is there to read (+478B).",
+    "autonomous.md": "#74: FORK:provenance marker block in required_reading pointing at references/tool-provenance.md \u2014 planning artifacts come from gsd-tools commands, never hand-made (+478B)."
+  }
+}

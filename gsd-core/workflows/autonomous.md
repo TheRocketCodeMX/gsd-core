@@ -8,6 +8,10 @@ Drive milestone phases autonomously — all remaining phases, a range via `--fro
 
 Read all files referenced by the invoking prompt's execution_context before starting.
 
+<!-- FORK:provenance BEGIN -->
+**Tool provenance (fork law):** every planning artifact — phase directories, state files, completion markers — is created and mutated through `gsd-tools` commands, never hand-made. Before any write under `.planning/`, read `@~/.claude/gsd-core/references/tool-provenance.md`: the tool's formula is canonical, and the gates and ledgers only fire through the command — a hand-made artifact silently disarms them.
+<!-- FORK:provenance END -->
+
 </required_reading>
 
 <process>
