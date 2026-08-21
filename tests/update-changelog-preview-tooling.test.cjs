@@ -120,18 +120,22 @@ describe('update workflow changelog preview tooling (changeset cli)', () => {
     // block and its hard-failure verification are still present.
     const installSrc = fs.readFileSync(path.join(ROOT, 'bin', 'install.js'), 'utf8');
     assert.ok(
+      // allow-test-rule: asserts the install-copy call/verification exists in installer source — a regression pin on source text unreachable through require() without a full install (see #935)
       /path\.join\(src, 'scripts', 'changeset'\)/.test(installSrc),
       'bin/install.js must copy scripts/changeset/ into the runtime config dir'
     );
     assert.ok(
+      // allow-test-rule: asserts the install-copy call/verification exists in installer source — a regression pin on source text unreachable through require() without a full install (see #935)
       /path\.join\(src, 'scripts', 'lib'\)/.test(installSrc),
       "bin/install.js must copy scripts/lib/ (cli.cjs requires '../lib/cli-exit.cjs')"
     );
     assert.ok(
+      // allow-test-rule: asserts the install-copy call/verification exists in installer source — a regression pin on source text unreachable through require() without a full install (see #935)
       installSrc.includes("'scripts/changeset/cli.cjs'"),
       'bin/install.js must verify scripts/changeset/cli.cjs landed (hard failure, not silent degrade)'
     );
     assert.ok(
+      // allow-test-rule: asserts the install-copy call/verification exists in installer source — a regression pin on source text unreachable through require() without a full install (see #935)
       installSrc.includes("'scripts/lib/cli-exit.cjs'"),
       'bin/install.js must verify scripts/lib/cli-exit.cjs landed (hard failure, not silent degrade)'
     );

@@ -210,10 +210,15 @@ function cmdGroundingPlan(projectDir: string, args: string[], raw: boolean): voi
 function listPlanFiles(phaseDir: string): { planFiles: string[]; nearMisses: string[] } {
   if (!phaseDir || !fs.existsSync(phaseDir)) return { planFiles: [], nearMisses: [] };
   try {
+    // Single-owner plan filtering (upstream plan-count-drift lint): the plan set
+    // comes from scanPhasePlans, never a re-derived -PLAN.md regex. Near-misses
+    // are md files that LOOK plan-like but are not in the owner's plan set.
+    const scanned = planScanMod.scanPhasePlans(phaseDir);
+    const planSet = new Set<string>(scanned.allPlanFiles);
     const entries = fs.readdirSync(phaseDir);
     return {
-      planFiles: entries.filter((entry) => /-PLAN\.md$/.test(entry)),
-      nearMisses: entries.filter((entry) => !/-PLAN\.md$/.test(entry) && /\.md$/i.test(entry) && /PLAN/i.test(entry)),
+      planFiles: (scanned.allPlanFiles).slice(),
+      nearMisses: entries.filter((entry) => !planSet.has(entry) && /\.md$/i.test(entry) && /PLAN/i.test(entry)),
     };
   } catch {
     return { planFiles: [], nearMisses: [] };

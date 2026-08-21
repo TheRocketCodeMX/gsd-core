@@ -645,7 +645,7 @@ Display banner:
 ◆ Spawning pattern mapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
 ```
 
-Use the active `pattern-mapper` hook's `fragment.inline` as the prompt template and substitute the phase fields below before spawning its declared `ref.agent`. Before spawning, append step 8's **Canonical References mandate bullet** to the fragment's `<files_to_read>` — the mapper must ground in the strategy artifacts too.
+Use the active `pattern-mapper` hook's `fragment.inline` as the prompt template and substitute the phase fields below before spawning its declared `ref.agent`. Before spawning, append step 8's **Canonical References mandate bullet** to the fragment's `<required_reading>` — the mapper must ground in the strategy artifacts too.
 
 ```markdown
 {pattern_mapper_hook.fragment.inline}

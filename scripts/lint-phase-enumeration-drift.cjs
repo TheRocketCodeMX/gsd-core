@@ -280,6 +280,11 @@ const OWNER_FILES = new Set([
 // `lint-milestone-window-drift.cjs`'s FUNCTION_SCOPED_EXEMPTIONS mechanism.
 // See the header comment for the full written reason behind each entry.
 const FUNCTION_SCOPED_EXEMPTIONS = new Map([
+  // FORK:context — the context capability's capsule resolvers enumerate ALL
+  // phase dirs by design (capsules span milestones; routing through
+  // listMilestonePhaseDirs would silently add window/sentinel filtering —
+  // the same behavior-change reason as audit.cts's listAuditPhaseTargets).
+  [path.join('src', 'context-command-router.cts'), new Set(['resolvePhaseCapsules', 'resolveMilestoneFiles'])],
   [path.join('src', 'roadmap.cts'), new Set(['cmdRoadmapAnalyze'])],
   [path.join('src', 'verify.cts'), new Set(['cmdValidateHealth', 'cmdVerifySchemaDrift'])],
   [path.join('src', 'init.cts'), new Set(['detectHasPriorPhases', 'detectUiPhaseActive', 'cmdInitMilestoneOp'])],

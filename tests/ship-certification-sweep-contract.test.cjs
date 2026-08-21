@@ -46,7 +46,7 @@ function extractSweepScript() {
   const after = shipDoctrine.slice(anchor);
   // The fence sits under a numbered-list item, so both the opening ```bash and
   // the closing ``` are indented 3 spaces; match an optionally-indented close.
-  const m = after.match(/```bash\r?\n([\s\S]*?)\r?\n[ ]*```/);
+  const m = after.match(/```bash\r?\n([\s\S]{0,20000}?)\r?\n[ ]*```/);
   assert.ok(m, 'the sweep step must carry a ```bash block');
   // Strip the 3-space list indentation the fenced block sits under.
   return m[1].replace(/^ {3}/gm, '');

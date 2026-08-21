@@ -409,7 +409,6 @@
   "gsd-core/workflows/onboard.md",
   "gsd-core/workflows/pause-work.md",
   "gsd-core/workflows/plan-phase.md",
-  "gsd-core/workflows/plan-phase/modes/prd-express.md",
   "gsd-core/workflows/plan-phase/modes/strategy-elaboration.md",
   "gsd-core/workflows/plan-phase/steps/adr-ingest-express-path.md",
   "gsd-core/workflows/plan-phase/steps/chunked-planning-mode.md",

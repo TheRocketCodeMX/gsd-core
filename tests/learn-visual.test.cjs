@@ -21,7 +21,7 @@ describe('learn visual companion (vendored, zero-install)', () => {
 
   test('server.cjs requires ONLY Node built-ins (zero third-party dependencies)', () => {
     const src = fs.readFileSync(SERVER, 'utf8');
-    const requires = [...src.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]);
+    const requires = [...src.matchAll(/require\(\s{0,5}['"]([^'"]{1,300})['"]\s{0,5}\)/g)].map((m) => m[1]);
     assert.ok(requires.length > 0, 'expected some require() calls');
     for (const mod of requires) {
       // Relative requires are vendored siblings; everything else must be a Node built-in.

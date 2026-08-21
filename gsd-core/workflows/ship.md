@@ -134,12 +134,16 @@ Verify the work is ready to ship:
        Resolve each entry before shipping, or explicitly waive with a recorded reason:
          gsd_run windows fixed <id>      # defect resolved
          gsd_run windows waive <id> "<reason>"   # justified deferral (reason required)
+         gsd_run windows amend <id> --description "..."   # re-word an entry (any status)
        Then re-run /gsd:ship.
        ```
      - **`WINDOWS_OPEN_COUNT` is `"?"`, empty, or non-numeric** → **fail closed** with `block: true` and `WINDOWS_SHIP_GATE_READ_FAILED` (the gate is strict equality to `0`; never ship on an unreadable ledger):
        ```
        ⚠ Broken-windows ship gate: could not read open_count from .planning/WINDOWS.md.
-       Inspect the file or run `gsd_run windows status --raw` to diagnose. The ledger
+       Inspect the file or run `gsd_run windows status --raw` to diagnose. If the diagnostic
+       says the counts disagree with the entries (the shape a hand edit leaves behind), repair
+       it with `gsd_run windows reconcile`, which re-derives the frontmatter counts from the
+       authoritative entries. The ledger
        may be malformed; fix it before shipping (an unparseable ledger is a broken window).
        ```
 

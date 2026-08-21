@@ -235,7 +235,7 @@ describe('removed-but-needed lint: main() end-to-end wiring', () => {
 describe('removed-but-needed lint: classifyTestReference (pure, #3565)', () => {
   test('a negated includes carrying the basename is asserts-absence', () => {
     assert.equal(
-      classifyTestReference("assert.ok(!content.includes('discovery-phase.md'))", 'discovery-phase.md'),
+      classifyTestReference("assert.ok(!content.includes('some-retired-workflow.md'))", 'some-retired-workflow.md'),
       'asserts-absence',
     );
   });
@@ -291,7 +291,7 @@ describe('removed-but-needed lint: findSurvivingTestReferences (pure, #3565)', (
       content: [
         "test('workflow is gone', () => {",
         "  const content = fs.readFileSync(INVENTORY, 'utf8');",
-        "  assert.ok(!content.includes('discovery-phase.md'));",
+        "  assert.ok(!content.includes('some-retired-workflow.md'));",
         '});',
         '',
       ].join('\n'),
@@ -300,7 +300,7 @@ describe('removed-but-needed lint: findSurvivingTestReferences (pure, #3565)', (
       file: 'tests/pin.test.cjs',
       content: [
         "test('workflow ships', () => {",
-        "  assert.ok(fs.existsSync(path.join(WF, 'discovery-phase.md')));",
+        "  assert.ok(fs.existsSync(path.join(WF, 'some-retired-workflow.md')));",
         '});',
         '',
       ].join('\n'),
@@ -309,8 +309,8 @@ describe('removed-but-needed lint: findSurvivingTestReferences (pure, #3565)', (
       file: 'tests/both.test.cjs',
       content: [
         "test('both', () => {",
-        "  assert.ok(!content.includes('discovery-phase.md'));",
-        "  assert.ok(fs.existsSync(path.join(WF, 'discovery-phase.md')));",
+        "  assert.ok(!content.includes('some-retired-workflow.md'));",
+        "  assert.ok(fs.existsSync(path.join(WF, 'some-retired-workflow.md')));",
         '});',
         '',
       ].join('\n'),
@@ -319,7 +319,7 @@ describe('removed-but-needed lint: findSurvivingTestReferences (pure, #3565)', (
 
   test('an absence assertion alone is NOT a violation — the case that reverted the naive #3560 widening', () => {
     const vs = findSurvivingTestReferences(
-      ['gsd-core/workflows/discovery-phase.md'],
+      ['gsd-core/workflows/some-retired-workflow.md'],
       [CORPUS[0]],
     );
     assert.deepEqual(vs, []);
@@ -327,18 +327,18 @@ describe('removed-but-needed lint: findSurvivingTestReferences (pure, #3565)', (
 
   test('an existence pin on the deleted file IS a violation — the #3560 red-runner case', () => {
     const vs = findSurvivingTestReferences(
-      ['gsd-core/workflows/discovery-phase.md'],
+      ['gsd-core/workflows/some-retired-workflow.md'],
       [CORPUS[1]],
     );
     assert.equal(vs.length, 1);
-    assert.equal(vs[0].deletedFile, 'gsd-core/workflows/discovery-phase.md');
+    assert.equal(vs[0].deletedFile, 'gsd-core/workflows/some-retired-workflow.md');
     assert.equal(vs[0].referencedIn, 'tests/pin.test.cjs');
     assert.match(vs[0].reason, /pins-existence/);
   });
 
   test('a file with BOTH shapes reports the pin only, per-reference', () => {
     const vs = findSurvivingTestReferences(
-      ['gsd-core/workflows/discovery-phase.md'],
+      ['gsd-core/workflows/some-retired-workflow.md'],
       [CORPUS[2]],
     );
     assert.equal(vs.length, 1);

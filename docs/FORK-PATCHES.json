@@ -1092,15 +1092,6 @@
    ]
   },
   {
-   "path": "tests/issue-607-legacy-cleanup.test.cjs",
-   "feature": "identity",
-   "mode": "markers",
-   "markers": 4,
-   "anchors": [
-    "empty-legacy-runtime-dir"
-   ]
-  },
-  {
    "path": "tests/mcp-server-catalog.test.cjs",
    "feature": "strategy",
    "mode": "anchors-only",
@@ -1509,6 +1500,14 @@
    "anchors": [
     "FORK:provenance BEGIN",
     "tool-provenance\\.md"
+   ]
+  },
+  {
+   "path": "scripts/lint-phase-enumeration-drift.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "context-command-router\\.cts'\\), new Set\\(\\['resolvePhaseCapsules"
    ]
   }
  ]

@@ -1057,3 +1057,4 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
     assert.ok(!fs.existsSync(path.join(tmp, RECORD)), 'the gate record must be removed after use');
   });
 });
+});

@@ -1,4 +1,5 @@
 {
-  "maxSites": 10,
-  "grace": 2
+  "maxSites": 15,
+  "grace": 2,
+  "note": "align-1.11.0: +5 sites \u2014 upstream promoted source-text rules to error; the fork's router-shadowing guard (see #1969) and 4 install-copy pins (see #935) are structural assertions require() cannot express."
 }
