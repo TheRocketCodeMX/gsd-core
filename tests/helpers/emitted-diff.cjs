@@ -659,7 +659,7 @@ function diffEmitted({
  *
  * @returns {{ blocks: Array<{kind: string} & object>, ackable: Array<{key: string, reason: string}> }}
  */
-function buildReport(result, { sampleLimit = 20 } = {}) {
+function buildReport(result, { sampleLimit = 20 } = {}) { sampleLimit = process.env.GSD_ATTR_SAMPLE ? Number(process.env.GSD_ATTR_SAMPLE) : sampleLimit;
   const blocks = [];
 
   if (result.errors.length) {
