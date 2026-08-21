@@ -93,7 +93,23 @@ LEGACY-INVENTORY.md written — predecessor inventoried.
   Gap map: [in-old-not-design: N] [new: N] [salvage-candidate: N] [gap: N]
   Salvage: [Retire N · Port N · Refactor N · Rebuild N]; characterization gates: [N]
   Infra: [reuse plan recorded / from-scratch]
+```
 
+**Then route (#74 — an autonomous run must not stall here):** consult the consolidated auto-mode record — the same read `advance.md` and the discuss-phase family use:
+
+```bash
+AUTO_MODE=$(gsd_run query check auto-mode --pick active 2>/dev/null || echo "false")
+```
+
+**If `AUTO_MODE` is `true`** (the `--auto` flag, an active chain, or `workflow.auto_advance` on the config record): announce the hop and dispatch via the **Skill** tool (never an `Agent` spawn — flat-chain rule, #686):
+
+```
+Skill(skill="gsd-new-project", args="--auto")
+```
+
+**Else (interactive):** print the pointer and stop:
+
+```
 Next: /gsd:new-project — it derives requirements from (design) ∪ (old-system behavior) using this inventory.
 ```
 
