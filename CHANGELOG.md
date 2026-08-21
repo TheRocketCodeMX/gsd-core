@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.4.6] - 2026-08-21
+
+### Fixed
+
+- **Autonomous runs no longer stall at fork workflow boundaries, and planning artifacts gain a tool-provenance law.** Proven on headless sandbox pods: with `mode: yolo` and `workflow.auto_advance: true` correctly recorded, `roadmap.md` derived its auto mode from the `--auto` flag alone and printed the human "Next Up" handoff to a terminal no one was reading. Fork-authored endings now consult the consolidated auto-mode record (`check auto-mode` — chain flag OR `workflow.auto_advance`, the same read the chain driver and the discuss-phase family already use): `roadmap.md` dispatches `Skill(gsd-discuss-phase, "1 --auto")` per its driver's documented contract, and `discover-product.md` / `legacy-inventory.md` hop to `gsd-new-project --auto`; on an interactive project every human pointer prints byte-identically, and with no config record at all (pre-project) the endings still fall back to the human pointer. A mechanical sweep test derives the fork-ending roster from FORK-DELTA's additive list — no fork-authored ending may print a `/gsd` handoff without the auto_advance branch, and upstream-inherited endings (upstream's driver-based design) can never fail it. Separately, the new fork law `references/tool-provenance.md` — wired into `autonomous.md`'s required reading — states that every planning artifact (phase directories, state files, completion markers) is created through `gsd-tools` commands, never hand-made: the tool's formula is canonical, and the scope gates and ledgers only fire through the command, so a hand-made artifact silently disarms the protections an unattended run depends on. (#75)
+
 ## [2.4.5] - 2026-08-11
 
 ### Fixed
