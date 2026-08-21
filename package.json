@@ -1,6 +1,6 @@
 {
   "name": "@therocketcode/gsd-core",
-  "version": "2.4.5",
+  "version": "2.4.6",
   "description": "GSD Core is a meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
   "main": ".opencode/plugins/gsd-core.js",
   "bin": {
