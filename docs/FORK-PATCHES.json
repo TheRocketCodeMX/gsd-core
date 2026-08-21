@@ -859,7 +859,8 @@
    "feature": "identity",
    "mode": "anchors-only",
    "anchors": [
-    "\"name\": \"@therocketcode/gsd-core\""
+    "\"name\": \"@therocketcode/gsd-core\"",
+    "\"node\": \">=22\\.0\\.0\""
    ]
   },
   {
