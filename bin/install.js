@@ -13611,22 +13611,22 @@ module.exports = {
     // #41 — exported so the managed-vs-third-party statusline discrimination
     // is asserted directly instead of only through a full install.
     handleStatusline,
-    normalizeNodePath,
+    normalizeNodePath: hooksSurface.normalizeNodePath, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
     resolveNodeRunner,
     referencesHook,
     applySettingsJsonHooks,
     rewriteLegacyManagedNodeHookCommands,
-    buildCodexHookBlock,
-    rewriteLegacyCodexHookBlock,
-    buildCodexHookWindowsShimIR,
+    buildCodexHookBlock: hooksSurface.buildCodexHookBlock, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
+    rewriteLegacyCodexHookBlock: hooksSurface.rewriteLegacyCodexHookBlock, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
+    buildCodexHookWindowsShimIR: hooksSurface.buildCodexHookWindowsShimIR, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
     ensureCodexHooksJsonSessionStart,
     ensureCodexHooksJsonEvent,
     removeCodexHooksJsonEvent,
-    reconcileCodexHooksJsonEvent,
+    reconcileCodexHooksJsonEvent: hooksSurface.reconcileCodexHooksJsonEvent, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
     readGsdCommandNames,
-    installRuntimeArtifacts,
-    installOpencodeFamilySkills,
-    uninstallRuntimeArtifacts,
+    installRuntimeArtifacts: installEngine.installRuntimeArtifacts, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
+    installOpencodeFamilySkills: installEngine.installOpencodeFamilySkills, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
+    uninstallRuntimeArtifacts: installEngine.uninstallRuntimeArtifacts, // FORK(align-1.11.0): moved by upstream modularization; re-exported for fork tests
     parseConfigDirFromArgs,
     cleanupLegacyGsdCc,
     // #1191 — exported so tests exercise the REAL readSettings, not a replica
