@@ -57,6 +57,10 @@
         }
       ]
     },
+    "triggerPrecedence": [
+      "skills",
+      "commands"
+    ],
     "commandStyle": "slash-hyphen",
     "hooksSurface": "settings-json",
     "hookEvents": "claude",
@@ -100,8 +104,7 @@
       "legacyCommandsGsdCleanup": true,
       "legacyCommandsGsdInstallMigration": true,
       "legacyCommandsGsdUninstall": true,
-      "hyphenNameAgentBody": true,
-      "reviewerCli": true
+      "hyphenNameAgentBody": true
     }
   },
   "reviewer": {

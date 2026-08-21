@@ -37,6 +37,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { escapeRegex: escapeRegExp } = require('../gsd-core/bin/lib/pattern.cjs');
+
 const WORKFLOWS_DIR = path.join(__dirname, '..', 'gsd-core', 'workflows');
 const AGENTS_DIR = path.join(__dirname, '..', 'agents');
 const SNIPPET_FILE = path.join(WORKFLOWS_DIR, '_runtime-launcher.snippet.sh');
@@ -400,10 +402,6 @@ function transformFile(content, preamble) {
   if (!changed) return null;
 
   return outputLines.join('\n');
-}
-
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

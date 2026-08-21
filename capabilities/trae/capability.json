@@ -57,6 +57,10 @@
         }
       ]
     },
+    "triggerPrecedence": [
+      "skills",
+      "commands"
+    ],
     "commandStyle": "slash-hyphen",
     "hooksSurface": "none",
     "sandboxTier": "none",

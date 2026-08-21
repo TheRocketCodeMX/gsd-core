@@ -45,6 +45,10 @@
       ],
       "local": []
     },
+    "triggerPrecedence": [
+      "skills",
+      "commands"
+    ],
     "commandStyle": "slash-hyphen",
     "hooksSurface": "kimi-hooks-toml",
     "hookEvents": "claude",
