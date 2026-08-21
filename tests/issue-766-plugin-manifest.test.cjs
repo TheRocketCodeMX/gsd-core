@@ -376,9 +376,15 @@ describe('C: plugin.json schema validation', () => {
       try {
         fs.mkdirSync(path.join(pluginRoot, '.claude-plugin'), { recursive: true });
         fs.copyFileSync(PLUGIN_JSON_PATH, path.join(pluginRoot, '.claude-plugin', 'plugin.json'));
-        fs.symlinkSync(path.join(ROOT, 'commands'), path.join(pluginRoot, 'commands'), 'dir');
-        fs.symlinkSync(path.join(ROOT, 'hooks'), path.join(pluginRoot, 'hooks'), 'dir');
-        fs.symlinkSync(path.join(ROOT, 'skills'), path.join(pluginRoot, 'skills'), 'dir');
+        // Real copies, not symlinks: claude >= 2.1.234 reads component
+        // directories WITHOUT following symlinks and emits a warning for each
+        // symlinked dir, which --strict escalates to exit 1 — and worse, a
+        // symlinked fixture meant the validator read nothing at all. Copies
+        // make the validation real: the components' actual content is checked,
+        // matching the shipped plugin's shape (real directories).
+        fs.cpSync(path.join(ROOT, 'commands'), path.join(pluginRoot, 'commands'), { recursive: true });
+        fs.cpSync(path.join(ROOT, 'hooks'), path.join(pluginRoot, 'hooks'), { recursive: true });
+        fs.cpSync(path.join(ROOT, 'skills'), path.join(pluginRoot, 'skills'), { recursive: true });
 
         const result = spawnSync('claude', ['plugin', 'validate', pluginRoot, '--strict'], {
           cwd: ROOT,
