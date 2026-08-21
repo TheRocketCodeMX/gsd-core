@@ -117,7 +117,23 @@ PRODUCT-BRIEF.md written — product defined.
   Four risks: [N validated · M open]
   Spec amendments: [N proposed — apply to [spec] or it stays governing]   (challenge mode only)
   Likely strategy path: [archetype → the previewed ordered strategy steps]
+```
 
+**Then route (#74 — an autonomous run must not stall here):** consult the consolidated auto-mode record — the same read `advance.md` and the discuss-phase family use:
+
+```bash
+AUTO_MODE=$(gsd_run query check auto-mode --pick active 2>/dev/null || echo "false")
+```
+
+**If `AUTO_MODE` is `true`** (the `--auto` flag, an active chain, or `workflow.auto_advance` on the config record): announce the hop and dispatch via the **Skill** tool (never an `Agent` spawn — flat-chain rule, #686):
+
+```
+Skill(skill="gsd-new-project", args="--auto")
+```
+
+**Else (interactive):** print the pointer and stop:
+
+```
 Next: /gsd:new-project (capture it — it writes your `## Strategy Plan`) → then the strategy steps it recommends.
 ```
 
