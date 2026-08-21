@@ -53,6 +53,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/references/auth-in-tests.md`
 - `gsd-core/references/brownfield-adaptation.md`
 - `gsd-core/references/certification.md`
+- `gsd-core/references/tool-provenance.md`
 - `gsd-core/references/cicd-strategy.md`
 - `gsd-core/references/contract-testing.md`
 - `gsd-core/references/data-environments.md`
@@ -104,6 +105,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `tests/roadmap-after-strategy.test.cjs`
 - `tests/strategy-config-and-marker-contracts.test.cjs`
 - `tests/testing-certification.test.cjs`
+- `tests/auto-advance-endings.test.cjs`
 - `tests/testing-certification-wiring.test.cjs`
 - `tests/fix-regate6-uat-superseded-and-certifier-token.test.cjs`
 
@@ -275,6 +277,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/templates/verification-report.md` | fidelity | anchors-only | Mode & Source Fidelity verdict table (inside fenced template body) |
 | `gsd-core/workflows/add-tests.md` | fidelity | markers (3) | ai-test-quality contract + TEST-STRATEGY-driven classification; in-step rewrites (anchors); + round-4 (r4-b): reads the `
 | `gsd-core/workflows/autonomous.md` | grounding | anchors-only | `<canonical_refs>` block sits inside the fenced CONTEXT.md template |
+| `gsd-core/workflows/autonomous.md` | provenance | markers (1) | #74 tool-provenance law: fork-marked pointer in `<required_reading>` to `gsd-core/references/tool-provenance.md` — every planning artifact comes from `gsd-tools` commands, never hand-made (autonomous drivers silently disarm scope gates otherwise). Re-place the marker block after an upstream merge |
 | `gsd-core/workflows/code-review.md` | fidelity | anchors-only | source-fidelity inputs added inside a bash fence |
 | `gsd-core/workflows/complete-milestone.md` | context | markers | acknowledge step routes each deferral into `.planning/milestones/next/<label>-CAPSULE.md` (create from template if absent), in addition to the STATE.md Deferred Items entry (1 marker pair) |
 | `gsd-core/workflows/discuss-phase.md` | exploration, context | anchors-only + markers | mandatory-exploration scout step + engineering-standards/canonical-refs lines (anchors); capsule-aware `write_context` append-never-replace + config-gated per-round discussion log + capsule-provenance routing of check_existing "Update it" into `discuss-phase/resume.md`'s Extend branch (3 marker pairs; third pair added in the v1.9.0 realignment — upstream's inline check_existing text is kept, the old size-trim consolidation was dropped as moot under the 40960 DEFAULT cap) |

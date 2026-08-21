@@ -3,10 +3,10 @@
   "paths": {
     "add-todo.md": "2.4.1 e2e fix wave (e2e-3 F-4): the shared-clock note (marked FORK:strategy block) \u2014 `date` from init.todos is the local calendar date, the same clock transition's suite-health todo filenames use, so every writer of .planning/todos/pending/ dates files identically. +245 bytes.",
     "new-project.md": "2.4.1 e2e fix wave (e2e-1 F1): the FORK:context block now instructs including PROJECT-DISCUSSION-LOG.md in the PROJECT.md docs commit when the log exists \u2014 the durable record must not be left untracked. +201 bytes.",
-    "discover-product.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes.",
+    "discover-product.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | #74: ending consults the consolidated auto-mode record; true -> Skill(gsd-new-project --auto) hop, false -> the human pointer byte-identical (+608B).",
     "frontend-architecture.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | Greenfield-chain: grew +185B (greenfield F3: roadmap-reconciliation block guarded to run only when .planning/ROADMAP.md exists)",
     "infrastructure-strategy.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | Greenfield-chain: grew +185B (greenfield F3: reconciliation block guarded on ROADMAP.md existence)",
-    "legacy-inventory.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes.",
+    "legacy-inventory.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | #74: ending consults the consolidated auto-mode record; true -> Skill(gsd-new-project --auto) hop, false -> the human pointer byte-identical (+608B).",
     "model-domain.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | Greenfield-chain: grew +185B (greenfield F3: reconciliation block guarded on ROADMAP.md existence)",
     "recommend-architecture.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | Greenfield-chain: grew +185B (greenfield F3: reconciliation block guarded on ROADMAP.md existence)",
     "security-strategy.md": "2.4.1 e2e fix wave (e2e-1 F1): conditional DLOG expansion in the docs commit. +228 bytes. | Greenfield-chain: grew +185B (greenfield F3: reconciliation block guarded on ROADMAP.md existence)"
