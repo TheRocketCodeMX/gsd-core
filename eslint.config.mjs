@@ -66,6 +66,9 @@ export default tseslint.config(
       'node_modules/**',
       // Rocket fork: local reference clones of other frameworks — not our code.
       '_reference/**',
+      // Rocket fork: vendored zero-install visual companion (browser-served
+      // helper + minimal static server) — shipped assets, not project code.
+      'gsd-core/visual/**',
       '**/dist/**',
       '.worktrees/**',
       '.claude/**',

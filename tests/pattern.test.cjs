@@ -28,6 +28,12 @@ const { escapeRegex, literalPattern, compileUserPattern, MAX_USER_PATTERN_LEN } 
 
 // ─── Section 1: escapeRegex — rows 1-10 ───────────────────────────────────
 
+// FORK: engines floor is >=22 (org runtime; see FORK-DELTA package.json row).
+// src/pattern.cts uses upstream's own fallback below Node 24, so the builtin
+// behavior locks below assert only where the builtin exists — armed on 24+.
+const HAS_REGEXP_ESCAPE = typeof RegExp.escape === 'function';
+const skipBelow24 = HAS_REGEXP_ESCAPE ? false : 'fork engines floor >=22: RegExp.escape (Node 24+) absent; fallback path covered by the other rows';
+
 describe('escapeRegex', () => {
   test('row 1: "" returns ""', () => {
     assert.strictEqual(escapeRegex(''), '');
@@ -46,15 +52,15 @@ describe('escapeRegex', () => {
     }
   });
 
-  test('row 4: leading ASCII letter locks the MEASURED hex-escape ("abc" -> "\\x61bc", Node v26.5.1)', () => {
+  test('row 4: leading ASCII letter locks the MEASURED hex-escape ("abc" -> "\\x61bc", Node v26.5.1)', { skip: skipBelow24 }, () => {
     assert.strictEqual(escapeRegex('abc'), '\\x61bc');
   });
 
-  test('row 5: leading digit locks the MEASURED hex-escape ("5abc" -> "\\x35abc", Node v26.5.1)', () => {
+  test('row 5: leading digit locks the MEASURED hex-escape ("5abc" -> "\\x35abc", Node v26.5.1)', { skip: skipBelow24 }, () => {
     assert.strictEqual(escapeRegex('5abc'), '\\x35abc');
   });
 
-  test('row 6: hyphen anywhere locks the MEASURED hex-escape ("a-b" -> "\\x61\\x2db", Node v26.5.1)', () => {
+  test('row 6: hyphen anywhere locks the MEASURED hex-escape ("a-b" -> "\\x61\\x2db", Node v26.5.1)', { skip: skipBelow24 }, () => {
     assert.strictEqual(escapeRegex('a-b'), '\\x61\\x2db');
   });
 
@@ -93,7 +99,7 @@ describe('escapeRegex', () => {
     assert.doesNotThrow(() => new RegExp(escaped));
   });
 
-  test('row 10: RegExp.escape availability — the ADR §2 floor-vs-capability assertion', () => {
+  test('row 10: RegExp.escape availability — the ADR §2 floor-vs-capability assertion', { skip: skipBelow24 }, () => {
     assert.strictEqual(typeof RegExp.escape, 'function');
   });
 });
@@ -180,7 +186,7 @@ describe('migration equivalence (row-9 sweep)', () => {
     }
   });
 
-  test('row 17: latent-bug fix — a hyphen interpolated into a character class no longer forms a range', () => {
+  test('row 17: latent-bug fix — a hyphen interpolated into a character class no longer forms a range', { skip: skipBelow24 }, () => {
     // Pre-migration (hand-rolled, verified): new RegExp('[' + hand('a-z') + ']').test('m') === true
     // — the unescaped '-' formed an unintended a-through-z RANGE that happened
     // to match 'm'. This is design row 10's confirmed latent bug.

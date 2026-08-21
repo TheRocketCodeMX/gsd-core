@@ -64,7 +64,7 @@ From DOMAIN-MODEL's actors/roles (or ask): record the authz model — **RBAC** (
 - **Security DoD** — which CI gates block at this tier (floor: SCA + secret-scan + lockfile + SAST-on-changed; L2+: SAST-blocking + DAST-on-staging + authz/crypto tests; consumed by `cicd-strategy`).
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 7: Present & write

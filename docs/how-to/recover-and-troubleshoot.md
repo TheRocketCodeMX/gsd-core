@@ -348,7 +348,7 @@ and a file it cannot parse is refused and reported rather than partially rewritt
 model at all, so agents inherit the session model:
 
 ```bash
-npx @opengsd/gsd-core@latest --codex --global
+npx @therocketcode/gsd-core@latest --codex --global
 ```
 
 Prefer the sync if you have hand-edited your `.toml` files — a reinstall regenerates them.

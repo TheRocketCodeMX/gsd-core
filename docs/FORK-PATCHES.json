@@ -257,24 +257,14 @@
   },
   {
    "path": "agents/gsd-verifier.md",
-   "feature": "context",
-   "mode": "markers",
-   "markers": 1,
-   "anchors": [
-    "DOMAIN-MODEL\\.md",
-    "TEST-STRATEGY\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-verifier.md",
    "feature": "fidelity",
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "Reward-hacking gate",
-    "engineering-standards\\.md",
-    "gsd_run query project mode"
-   ]
+    "FORK:fidelity BEGIN",
+    "verifier-fidelity-gates\\.md"
+   ],
+   "note": "Compressed to a pointer (agent LARGE cap 49152; upstream base 49150 leaves ~0 headroom). Full gate text \u2014 incl. the former FORK:context DOMAIN-MODEL/TEST-STRATEGY line \u2014 lives in gsd-core/references/verifier-fidelity-gates.md."
   },
   {
    "path": "bin/install.js",
@@ -780,8 +770,9 @@
    "markers": 1,
    "anchors": [
     "Milestone certification sweep",
-    "certification: human \\(CERT-0\\)"
-   ]
+    "certification-sweep\\.md"
+   ],
+   "note": "Sweep body extracted to gsd-core/workflows/ship/steps/certification-sweep.md (workflow DEFAULT cap); the FORK:strategy pair now wraps the lazy dispatch line."
   },
   {
    "path": "gsd-core/workflows/transition.md",

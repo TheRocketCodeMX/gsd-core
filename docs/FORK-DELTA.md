@@ -208,7 +208,7 @@ Size-budgeted upstream workflows/agents could not absorb the fork blocks inline,
 
 - `gsd-core/references/plan-checker-strategy-compliance.md`
 - `gsd-core/references/verifier-fidelity-gates.md`
-- `gsd-core/workflows/autonomous/blocker-handling.md`
+- `gsd-core/workflows/ship/steps/certification-sweep.md` (extracted from ship.md preflight 7 — workflow DEFAULT cap)
 - `gsd-core/workflows/discuss-phase/resume.md`
 - `gsd-core/workflows/execute-phase/steps/failure-classification.md`
 

@@ -32,7 +32,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { cleanup } = require('./helpers.cjs');
 
-const SHIP_MD = path.join(__dirname, '..', 'gsd-core', 'workflows', 'ship.md');
+const SHIP_MD = path.join(__dirname, '..', 'gsd-core', 'workflows', 'ship', 'steps', 'certification-sweep.md'); // extracted from ship.md for the byte budget
 const shipDoctrine = fs.readFileSync(SHIP_MD, 'utf8');
 
 /**

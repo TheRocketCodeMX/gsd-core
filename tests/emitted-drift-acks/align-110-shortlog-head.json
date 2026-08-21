@@ -1,6 +1,6 @@
 {
   "version": 1,
   "paths": {
-    "cicd-strategy.md": "Round-2 Wave A (e2e-7 F1/F2), atop the align-110 HEAD-revarg fix: C1-a now reads the recorded ## Suite health measurement and re-times only when no measured row exists; the C1-b trigger and the post-merge-stage line carry the certification carve-out (a Not-a-pipeline-tier line can never be claimed by any C1 trigger). Cumulative +679 bytes vs next. | Round-3: grew +122B (e2e-10 F4) | Greenfield-chain: grew +24B (greenfield F6: terminal Next pointer aligned to advance.md \u2014 /gsd:roadmap, not plan-phase)"
+    "cicd-strategy.md": "Round-2 Wave A (e2e-7 F1/F2), atop the align-110 HEAD-revarg fix: C1-a now reads the recorded ## Suite health measurement and re-times only when no measured row exists; the C1-b trigger and the post-merge-stage line carry the certification carve-out (a Not-a-pipeline-tier line can never be claimed by any C1 trigger). Cumulative +679 bytes vs next. | Round-3: grew +122B (e2e-10 F4) | Greenfield-chain: grew +24B (greenfield F6: terminal Next pointer aligned to advance.md \u2014 /gsd:roadmap, not plan-phase) | wave-4b: canonical context-lifecycle cite +9B, then -4B trim to fit the DEFAULT cap; net +5B"
   }
 }

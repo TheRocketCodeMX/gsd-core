@@ -98,7 +98,7 @@ Recommend defaults, then confirm in one round (AskUserQuestion, header "Floors",
 State the surviving justifications; they go in the strategy doc.
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 8: Write INFRA-STRATEGY.md

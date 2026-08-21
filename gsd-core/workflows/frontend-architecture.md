@@ -93,7 +93,7 @@ Record the chosen libraries **dated** in the artifact ("as of YYYY-MM-DD; re-ver
 - **FE-signal telemetry:** the FE logs only client-only signals (unhandled errors, web-vitals, network failures); analytics journey events fire client-side from the typed catalog; trace context (`traceparent`) propagates FE→BE (per `application-telemetry.md`).
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 7: Present recommendation & write the artifact

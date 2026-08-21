@@ -1706,9 +1706,10 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     const phaseDirFull = path.join(cwd, phaseDir);
     let existingUat: string | undefined;
     try {
-      existingUat = fs
-        .readdirSync(phaseDirFull)
-        .find((f) => f.endsWith('-UAT.md') || f === 'UAT.md');
+      // #3518: route the single-pick through resolveUatFile — one discovery
+      // grammar, not two (allowBare covers the bare UAT.md legacy form).
+      existingUat =
+        resolveUatFile(fs.readdirSync(phaseDirFull), { allowBare: true }) ?? undefined;
     } catch {
       existingUat = undefined;
     }

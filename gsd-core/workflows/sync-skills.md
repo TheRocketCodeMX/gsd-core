@@ -96,7 +96,7 @@ error: cross-runtime skill sync is not supported (--from $FROM_RUNTIME --to $DES
        root — so a cross-runtime sync can damage a runtime you did not name.
        To install correctly-converted skills for the '$DEST' runtime, run the GSD
        installer for that runtime (not sync):
-         npx -y @opengsd/gsd-core@latest --global --<runtime>
+         npx -y @therocketcode/gsd-core@latest --global --<runtime>
        (grok and gemini have no dedicated installer flag — they alias the codex and
        claude skills roots respectively, which is itself why sync refuses them.)
        sync only supports identity sync, where --from and --to are the same runtime.
@@ -270,6 +270,6 @@ Sync complete: <N> skills synced to <M> runtime(s).
 
 ## Limitations
 
-- Sync copies files verbatim and does not apply runtime-specific content transformations. **Cross-runtime sync is refused** (#3025): skill content and layout are runtime-specific, and some runtimes alias another runtime's skills root, so a verbatim cross-runtime copy corrupts the destination (and can damage a runtime you did not name). Only identity sync (`--from` == `--to`) is supported. To install skills for a different runtime, run the GSD installer for that runtime (`npx -y @opengsd/gsd-core@latest --global --<runtime>`).
+- Sync copies files verbatim and does not apply runtime-specific content transformations. **Cross-runtime sync is refused** (#3025): skill content and layout are runtime-specific, and some runtimes alias another runtime's skills root, so a verbatim cross-runtime copy corrupts the destination (and can damage a runtime you did not name). Only identity sync (`--from` == `--to`) is supported. To install skills for a different runtime, run the GSD installer for that runtime (`npx -y @therocketcode/gsd-core@latest --global --<runtime>`).
 - Cross-project skills (`.agents/skills/`) are out of scope — this command only touches global runtime skills roots.
 - Bidirectional sync is not supported. Choose one canonical source with `--from`.
