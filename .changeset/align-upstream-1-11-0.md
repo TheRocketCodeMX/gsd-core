@@ -1,6 +1,6 @@
 ---
 type: Changed
-pr: 0
+pr: 78
 ---
 
 **Realigned the fork onto upstream open-gsd v1.11.0** (339 commits, 122 merge conflicts resolved; third execution of the merge-anchored realignment model).
