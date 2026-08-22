@@ -55,14 +55,14 @@ Verify the work is ready to ship:
    # The gate decides on ONE read. --pick takes a single field, so the two
    # human-facing fields are read only on the blocking path below — never on the
    # passing path — rather than issuing three queries up front (#2589).
-   STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status 2>/dev/null || echo "")
+   STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status 2>/dev/null)
    ```
    Only `passed` may ship. If `$STATUS` is `passed`, verification is complete — continue to the next preflight check; do not read any further verification field.
 
    Any other value (including `gaps_found`, `human_needed`, `missing`, and `unknown`) blocks with `PHASE_VERIFICATION_INCOMPLETE`. Only then, read the two message fields:
    ```bash
-   NEXT_ACTION=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_action 2>/dev/null || echo "")
-   NEXT_COMMAND=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_command 2>/dev/null || echo "")
+   NEXT_ACTION=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_action 2>/dev/null)
+   NEXT_COMMAND=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_command 2>/dev/null)
    ```
    Present `$NEXT_ACTION` to the user and, when `$NEXT_COMMAND` is non-empty, show it as the command to run next. These two are message text only — the block/allow decision has already been made from `$STATUS`, so a concurrent write between the reads cannot change the gate's verdict. The query already handles missing files and unexpected values, so no per-status arm is needed.
 
@@ -91,9 +91,9 @@ Verify the work is ready to ship:
    ```
    If `gh` not found or not authenticated: provide setup instructions and exit.
 
-6. **Security ship gate (capability-driven).**
+6. **Capability ship gates (generic dispatch).**
 
-   Resolve active `ship:pre` gate hooks from the capability registry — the registry evaluates each hook's `when` condition, so do **not** read `workflow.security_enforcement` directly:
+   Resolve active `ship:pre` gate hooks from the capability registry — the registry evaluates each hook's `when` condition, so do **not** read `workflow.security_enforcement` or `workflow.windows_enforce` directly:
 
    ```bash
    SHIP_PRE_HOOKS_JSON=$(gsd_run loop render-hooks ship:pre --raw)
@@ -102,149 +102,92 @@ Verify the work is ready to ship:
 
    Read the `activeHooks` array from `SHIP_PRE_HOOKS_JSON` in-context (do NOT pipe it through a shell parser).
 
-   If an active entry exists with `kind == "gate"`, `capId == "security"`, and `blocking == true`, enforce its predicate (`SECURITY.md` frontmatter `threats_open == 0`) before shipping:
+   **If `activeHooks` is empty or absent:** skip this check silently and continue to the next preflight step. A capability whose `when` is off contributes no entry, and one that failed to load fails OPEN with its own warning from the resolver — neither is a block.
 
-   - **`SECURITY_FILE` is empty** → block with `SECURITY_SHIP_GATE_NO_REVIEW`:
-     ```
-     ⚠ Security enforcement is enabled but no SECURITY.md exists for this phase.
-     Run /gsd:secure-phase {phase} and resolve findings before shipping.
-     ```
-   - **`SECURITY_FILE` exists** → read its frontmatter `threats_open`. The gate passes **only** when `threats_open` is exactly `0`. For any other value — `threats_open` > 0, or a missing / non-numeric / unparsable field — **fail closed and block** with `SECURITY_SHIP_GATE_OPEN_THREATS` (the predicate is strict equality to `0`; never ship on an ambiguous value):
-     ```
-     ⚠ Security ship gate: SECURITY.md does not assert threats_open == 0 (found: {threats_open|unset}).
-     Resolve open threats (or re-run /gsd:secure-phase {phase}) before shipping.
-     ```
+   **For each active entry where `kind == "gate"`** (process in array order), following `gsd-core/references/loop-hook-dispatch.md`. Entries of any other `kind` are not gates and are not enforced here. Every gate is visited exactly once by this loop — the named branches below are specializations *within* it, never a separate pass, so no gate is evaluated twice.
 
-   If no active security `ship:pre` gate hook is present (security enforcement off), skip this check silently.
+   **Step 1 — evaluate the gate's `check`.** Dispatch by check shape; read the hook's `check` object in-context to pick the branch (the registry validates exactly one of `query`/`predicate`/`agentVerdict`). Two capability IDs carry a bespoke evaluation whose fail-closed semantics the declared predicate alone does not reproduce — take their branch, then rejoin at step 2:
 
-7. **Broken-windows ship gate (capability-driven, issue #1950).**
+   - **`capId == "security"`** — enforce against `SECURITY_FILE`:
+     - **`SECURITY_FILE` is empty** → `block: true`, `SECURITY_SHIP_GATE_NO_REVIEW`:
+       ```
+       ⚠ Security enforcement is enabled but no SECURITY.md exists for this phase.
+       Run /gsd:secure-phase {phase} and resolve findings before shipping.
+       ```
+     - **`SECURITY_FILE` exists** → read its frontmatter `threats_open`. The gate passes **only** when `threats_open` is exactly `0`. For any other value — `threats_open` > 0, or a missing / non-numeric / unparsable field — **fail closed** with `block: true` and `SECURITY_SHIP_GATE_OPEN_THREATS` (the predicate is strict equality to `0`; never ship on an ambiguous value):
+       ```
+       ⚠ Security ship gate: SECURITY.md does not assert threats_open == 0 (found: {threats_open|unset}).
+       Resolve open threats (or re-run /gsd:secure-phase {phase}) before shipping.
+       ```
 
-   The `SHIP_PRE_HOOKS_JSON` resolved in step 6 already includes any `broken-windows` gate. Inspect `activeHooks` for an entry with `capId == "broken-windows"` and `kind == "gate"`:
+   - **`capId == "broken-windows"`** (issue #1950) — enforce against the ledger's typed status. The ledger lives at the **project root** (cross-phase, not phase-scoped):
 
-   ```bash
-   WINDOWS_GATE_ACTIVE=$(printf '%s' "$SHIP_PRE_HOOKS_JSON" | jq -r \
-     '.activeHooks[]? | select(.capId == "broken-windows" and .kind == "gate" and .blocking == true) | .capId' \
-     2>/dev/null | head -1)
-   ```
-
-   If `$WINDOWS_GATE_ACTIVE` is non-empty, enforce the gate by reading the ledger's typed status. The ledger lives at the **project root** (cross-phase, not phase-scoped):
-
-   ```bash
-   WINDOWS_STATUS_JSON=$(gsd_run windows status --raw 2>/dev/null || echo '')
-   WINDOWS_OPEN_COUNT=$(printf '%s' "$WINDOWS_STATUS_JSON" | jq -r '.ledger.open_count // "?"' 2>/dev/null || echo '?')
-   ```
-
-   - **`WINDOWS_OPEN_COUNT == "0"`** → gate passes; continue to the next preflight check.
-   - **`WINDOWS_OPEN_COUNT` is a positive integer** → block with `WINDOWS_SHIP_GATE_OPEN`:
-     ```
-     ⚠ Broken-windows ship gate: WINDOWS.md has {WINDOWS_OPEN_COUNT} open window(s).
-     Resolve each entry before shipping, or explicitly waive with a recorded reason:
-       gsd_run windows fixed <id> "<reason>"   # defect resolved (reason optional, recorded)
-       gsd_run windows waive <id> "<reason>"   # justified deferral (reason required)
-       gsd_run windows amend <id> --description "..."   # re-word an entry (any status)
-     Then re-run /gsd:ship.
-     ```
-   - **`WINDOWS_OPEN_COUNT` is `"?"`, empty, or non-numeric** → **fail closed and block** with `WINDOWS_SHIP_GATE_READ_FAILED` (the gate is strict equality to `0`; never ship on an unreadable ledger):
-     ```
-     ⚠ Broken-windows ship gate: could not read open_count from .planning/WINDOWS.md.
-     Inspect the file or run `gsd_run windows status --raw` to diagnose. The ledger
-     may be malformed; fix it before shipping (an unparseable ledger is a broken window).
-     If the diagnostic says the counts disagree with the entries (the shape a hand
-     edit leaves behind), repair it with `gsd_run windows reconcile`, which re-derives
-     the frontmatter counts from the authoritative entries.
+     ```bash
+     WINDOWS_STATUS_JSON=$(gsd_run windows status --raw 2>/dev/null || echo '')
+     WINDOWS_OPEN_COUNT=$(printf '%s' "$WINDOWS_STATUS_JSON" | jq -r '.ledger.open_count // "?"' 2>/dev/null || echo '?')
      ```
 
-   The ledger is **optional and backward-compatible**: on a project where `gsd_run windows status` returns `open_count: 0` (no `.planning/WINDOWS.md` yet, or an empty ledger), the gate passes silently. The gate only blocks when at least one entry is `open`.
+     - **`WINDOWS_OPEN_COUNT == "0"`** → `block: false`; the gate passes.
+     - **`WINDOWS_OPEN_COUNT` is a positive integer** → `block: true`, `WINDOWS_SHIP_GATE_OPEN`:
+       ```
+       ⚠ Broken-windows ship gate: WINDOWS.md has {WINDOWS_OPEN_COUNT} open window(s).
+       Resolve each entry before shipping, or explicitly waive with a recorded reason:
+         gsd_run windows fixed <id>      # defect resolved
+         gsd_run windows waive <id> "<reason>"   # justified deferral (reason required)
+         gsd_run windows amend <id> --description "..."   # re-word an entry (any status)
+       Then re-run /gsd:ship.
+       ```
+     - **`WINDOWS_OPEN_COUNT` is `"?"`, empty, or non-numeric** → **fail closed** with `block: true` and `WINDOWS_SHIP_GATE_READ_FAILED` (the gate is strict equality to `0`; never ship on an unreadable ledger):
+       ```
+       ⚠ Broken-windows ship gate: could not read open_count from .planning/WINDOWS.md.
+       Inspect the file or run `gsd_run windows status --raw` to diagnose. If the diagnostic
+       says the counts disagree with the entries (the shape a hand edit leaves behind), repair
+       it with `gsd_run windows reconcile`, which re-derives the frontmatter counts from the
+       authoritative entries. The ledger
+       may be malformed; fix it before shipping (an unparseable ledger is a broken window).
+       ```
 
-   If no active `broken-windows` `ship:pre` gate hook is present (gate disabled via `workflow.windows_enforce=false`, the default — tracking continues but the gate is opt-in), skip this check silently.
+     The ledger is **optional and backward-compatible**: on a project where `gsd_run windows status` returns `open_count: 0` (no `.planning/WINDOWS.md` yet, or an empty ledger), the gate passes silently. It only blocks when at least one entry is `open`.
+
+   - **Every other `capId`** — run the gate's own declared check through the generic evaluator. This arm is what makes a third-party capability's declared gate enforceable at all (#3559); before it existed, a gate whose `capId` was not named above was resolved and then silently dropped.
+
+     ⚠ **Validate `check` before shell use** (third-party manifest input) — `loop-hook-dispatch.md` § `gate`.
+
+     For a named-query gate (only a value that has passed validation is run):
+     ```bash
+     GATE_RESULT=$(gsd_run check ${hook.check.query} "${PHASE_DIR}" --raw)
+     CHECK_EXIT=$?
+     ```
+
+     (The named-query argument convention — a single `"${PHASE_DIR}"` positional — mirrors `verify-work.md`'s `verify:pre` arm verbatim. No capability declares a `check.query` gate at `ship:pre` today; the arm exists so the documented check contract is complete rather than half-implemented.)
+
+     For a `predicate` gate (ADR-2008 / #2008), serialize `hook.check.predicate` to compact JSON and pass it as a **single argv element**:
+     ```bash
+     GATE_RESULT=$(gsd_run check predicate --predicate '<hook.check.predicate as JSON>' --phase-dir "${PHASE_DIR}" --phase-number "${PHASE_NUMBER}" --raw)
+     CHECK_EXIT=$?
+     ```
+     A gate carrying neither — including an `agentVerdict` check, which has no runner at `ship:pre` — cannot be evaluated here. Record a warning naming the `capId` and treat it as a check-command failure routed per step 1a, **never** as a silent pass.
+
+   **Step 1a — did the CHECK COMMAND itself fail?** (non-zero `CHECK_EXIT`, empty output, or unparseable JSON). The two named branches above cannot reach this state — their failure modes are already folded into a fail-closed `block: true`.
+   - **`onError == "halt"`** → stop the ship. Do NOT push, do NOT create a PR. Surface: `⚠ Gate check command failed ({hook.capId}): command error. Resolve before shipping.`
+   - **`onError == "skip"`** → record a warning naming the `capId`, then continue to the next gate. Do NOT read `GATE_RESULT.block`.
+
+   **Step 2 — read the gate's `block` decision.** Only reached when the check produced a verdict.
+
+   - **`blocking == true` and `block == true`** → HALT the ship — do NOT push, do NOT create a PR — surfacing that gate's own message:
+     ```
+     ⚠ Ship blocked by capability gate ({hook.capId}): {message}
+     ```
+     This halt is **not** bypassed by `onError` — `onError` covers check-command failure (step 1a), never the gate's block decision.
+   - **`blocking == false`** (advisory) → never halts. If `block == true` or the result carries a non-empty message, print `⚠ {hook.capId} advisory: {message}`, then continue.
+   - **`blocking == true` and `block == false`** → continue silently.
+
+   **When every active gate has been processed without a halt:** continue to the next preflight check.
 
 <!-- FORK:strategy BEGIN -->
-8. **Milestone certification sweep (advisory — never blocks).**
-
-   `verify-work`'s certification step records exactly one outcome line per phase, at the
-   top of that phase's UAT `## Tests`. Each line answers "was *this* phase certified".
-   Nothing answers the milestone-level question, which is the one worth asking before a
-   PR opens: **did every phase in this milestone reach a certification outcome at all?**
-
-   ```bash
-   ls -d .planning/phases/*/ 2>/dev/null || true
-
-   # Read the outcome line from the phase's UAT `## Tests` section ONLY, never
-   # the whole file, and skip fenced blocks — so a `certification:` example
-   # inside a ``` fence (templates/UAT.md ships two column-0 ones) can never win
-   # over the phase's real outcome. The FIRST in-`## Tests` line is the record;
-   # a second is emitted as `:DUPLICATE:` and flagged, never silently dropped
-   # the way `grep -m1` dropped it.
-   for uat in .planning/phases/*/*-UAT.md; do
-     [ -e "$uat" ] || continue
-     awk -v F="$uat" '
-       /^[`][`][`]/ { fence = !fence; next }
-       fence        { next }
-       /^## /       { in_tests = ($0 ~ /^##[[:space:]]+Tests([[:space:]]|$)/); next }
-       in_tests && /^certification:[[:space:]]/ {
-         n++; print F (n == 1 ? "  :FIRST: " : "  :DUPLICATE: ") $0
-       }
-     ' "$uat"
-   done
-   ```
-
-   A phase whose only `certification:` line sits **outside** `## Tests` (a fenced
-   example, pasted guidance) produces no `:FIRST:` line and falls through to
-   **not-run** below — fail-closed, exactly as an empty record should.
-
-   This sweep **self-suppresses from the evidence** rather than reading
-   `workflow.certification` here — the loop host resolves no capability-owned config key
-   inline (ADR-857 Phase 6), and the recorded lines are the better signal anyway: they
-   describe what actually happened, not what the posture happens to be today.
-
-   **If no phase carries a `certification:` line at all**, certification is not in use on
-   this project (posture `off`, or a milestone that predates it). Print one line —
-   `[certification: not in use on this project]` — and continue. Never flag every phase in
-   that case: an absent record everywhere is a project-level fact, not N gaps.
-
-   **Otherwise** map every phase directory to its recorded line and present one table —
-   built by iterating the `ls -d` phase list in order and looking each phase up, never by
-   grep's own output order (parallel `grep` drop-ins reorder identical inputs, and this
-   table's value is being diffable run to run):
-
-   | Outcome | Recorded line (the phase's `:FIRST:` line) | Reading |
-   |---|---|---|
-   | certified | `certification: agentic (CERT-2 \| CERT-1 \| CERT-1 (limited)) — …` — the tier token is **exactly** one of those three, spelled with an ASCII hyphen | a driver proved the flows |
-   | **pending** | `certification: pending (CERT-2 — brief handed over …)` | handed to an off-machine certifier, result not yet returned — **⚠ name it** ("awaiting the certifier's result — re-run `/gsd:verify-work {phase}` once `{phase_num}-CERTIFICATION-RESULT.md` lands"), distinct from not-run: something was decided, it just hasn't come back |
-   | human | `certification: human (CERT-0)` | satisfied by the human UAT that ran — not a gap |
-   | recorded N/A | `certification: N/A — no user-facing change` | scoped out on purpose |
-   | declined | `certification: skipped (declined` prefix — the line may carry ` — {reason})` | a decision, recorded |
-   | off | `certification: off (posture)` | certification was configured off when this phase shipped — a decision, not a gap |
-   | **malformed / needs-human** | a `:FIRST:` line is present but its tier/keyword matches **none** of the rows above — an out-of-grammar tier (`CERT-9`), a Unicode look-alike (`CERT‑2` written with a non-ASCII hyphen U+2011, byte-distinct from `CERT-2` though it reads the same), or **any** `:DUPLICATE:` line the sweep emitted for that phase | **⚠ flag it** — a record that is out of grammar or duplicated is **never** silently read as certified; a human reconciles it. This row closes the "it starts with `agentic (CERT-…)` so call it certified" trap |
-   | pre-adoption | *no line, and the phase precedes the earliest phase with a recorded `certification:` line (phase order — or `git log -1 --format=%at -- <uat>` where history exists; file mtime only as a last-resort convenience, since a fresh checkout gives every file one mtime)* | verified before certification existed here — reported, **not counted** in the ⚠ line below |
-   | not-verified | *the phase directory has **no `*-UAT.md` at all*** — the loop above produced no line for it | it never reached verification; **not this sweep's business** — `/gsd:verify-work` owns it. Reported, **not counted** in the ⚠ line |
-   | **not-run** | *the phase **has** a `*-UAT.md` but no `:FIRST:` `certification:` line inside its `## Tests`, and it is not pre-adoption* | **flag it** |
-
-   The last three rows are the ones the table and this prose must agree on, and now do:
-   a phase with a UAT.md but no in-`## Tests` `certification:` line — not pre-adoption, on
-   a project where other phases have one — is **not-run**: nothing was decided, the one
-   state the "recorded, never silent" contract does not allow to pass unremarked. A phase
-   directory with **no UAT.md at all** is **not-verified**, not not-run — report it, but do
-   not count it in the ⚠ line; it is `/gsd:verify-work`'s business. Pre-adoption phases are
-   the exception that keeps the warning readable: flagging every pre-adoption phase forever
-   is a warning that is wrong on every run, and those stop being read. Name the genuinely
-   not-run phases — and, on their own line, the malformed ones — explicitly under the table:
-
-   ```
-   ⚠ {N} phase(s) have no recorded certification outcome: {phase list}
-     Certify with /gsd:verify-work {phase}, or accept and ship — this is advisory.
-   ⚠ {M} phase(s) have a malformed or duplicated certification record: {phase list}
-     Reconcile by hand — an out-of-grammar tier, a non-ASCII look-alike, or two
-     certification lines in one `## Tests`. (Print this line only when M > 0.)
-   ```
-
-   **This check is advisory: it never blocks the ship.** The human ships; a milestone with
-   an uncertified phase is a judgment call, not a mechanical failure, and there is no
-   `--force` to teach anyone to type. **But it is never silent** — print the table on every
-   run, including the all-green one, so "every phase certified" is an observed fact rather
-   than an absence of complaint. A phase directory with no UAT.md at all is reported as
-   `not-verified` and is `/gsd:verify-work`'s business, not this sweep's.
+7. **Milestone certification sweep (advisory — never blocks):** read and execute `gsd-core/workflows/ship/steps/certification-sweep.md` now — the per-phase `certification:` outcome table (certified / pending / malformed / pre-adoption / not-verified / not-run). It prints on every run and never blocks; do not skip the read.
 <!-- FORK:strategy END -->
+
 </step>
 
 <step name="push_branch">
@@ -547,7 +490,41 @@ would otherwise trigger (GitHub honors `[ci skip]` / `[skip ci]`):
 
 ```bash
 gsd_run query commit "docs(${padded_phase}): ship phase ${PHASE_NUMBER} — PR #${PR_NUMBER} [ci skip]" --files .planning/STATE.md
+SHIP_NOTE_SHA=$(git rev-parse HEAD)
 git push origin ${CURRENT_BRANCH} 2>&1 || echo "⚠ track_shipping: ship-note push failed — it is local-only; rerun: git push origin ${CURRENT_BRANCH}"
+
+# Preserve the skip-token optimization for repositories without a required-check
+# wedge; only synthesize a second CI-triggering commit when GitHub reports one (#2783).
+# Poll mergeStateStatus with backoff to avoid racing GitHub's async state computation.
+# Note: Skip tokens recognized by GitHub Actions are [skip ci], [ci skip], [no ci], [skip actions], [actions skip], and skip-checks:true.
+# The recovery commit message MUST NOT contain any of these tokens.
+
+STATUS="UNKNOWN"
+CHECKS=0
+REVIEW_DECISION=""
+for i in {1..5}; do
+  PR_STATE=$(gh pr view ${PR_NUMBER} --json headRefOid,mergeStateStatus,statusCheckRollup,reviewDecision -q '{head: .headRefOid, status: .mergeStateStatus, checks: ((.statusCheckRollup // []) | length), review: (.reviewDecision // "")}' 2>/dev/null || echo '{"head":"","status":"UNKNOWN","checks":0,"review":""}')
+  HEAD_OID=$(echo "$PR_STATE" | jq -r .head)
+  if [ "$HEAD_OID" = "$SHIP_NOTE_SHA" ]; then
+    STATUS=$(echo "$PR_STATE" | jq -r .status)
+    CHECKS=$(echo "$PR_STATE" | jq -r .checks)
+    REVIEW_DECISION=$(echo "$PR_STATE" | jq -r .review)
+  fi
+  if [ "$HEAD_OID" = "$SHIP_NOTE_SHA" ] && [ "$STATUS" != "UNKNOWN" ]; then
+    break
+  fi
+  sleep 3
+done
+
+if [ "$STATUS" = "BLOCKED" ] && [ "$CHECKS" = "0" ] && [ "$REVIEW_DECISION" != "REVIEW_REQUIRED" ] && [ "$REVIEW_DECISION" != "CHANGES_REQUESTED" ] && git log -1 --format=%B "$SHIP_NOTE_SHA" | grep -q '\[ci skip\]'; then
+  echo "⚠ PR is BLOCKED with zero checks. The [ci skip] trailer wedged the PR due to required checks."
+  echo "Pushing an empty commit to trigger the required pipelines..."
+  # gsd_run query commit requires a file list; use git directly for this intentionally empty commit.
+  git commit --allow-empty -m "chore: trigger CI (recover from ship-note skip-token)"
+  git push origin ${CURRENT_BRANCH} 2>&1 || echo "⚠ track_shipping: recovery push failed — rerun: git push origin ${CURRENT_BRANCH}"
+elif [ "$STATUS" = "UNKNOWN" ]; then
+  echo "⚠ track_shipping: PR mergeStateStatus is UNKNOWN after polling; PR may require manual check re-trigger."
+fi
 ```
 </step>
 

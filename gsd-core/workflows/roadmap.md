@@ -102,13 +102,13 @@ Spawn `gsd-roadmapper` with the block for the resolved `MODE` (omit `model=` to 
 ```text
 Agent(prompt="
 <planning_context>
-<files_to_read>
+<required_reading>
 - .planning/PROJECT.md (Project context)
 - .planning/REQUIREMENTS.md (v1 Requirements)
 - .planning/research/SUMMARY.md (Research findings - if exists)
 - .planning/config.json (Granularity and mode settings)
 - .planning/adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md (locked strategy decisions - read every one that exists)
-</files_to_read>
+</required_reading>
 
 ${AGENT_SKILLS_ROADMAPPER}
 </planning_context>
@@ -137,7 +137,7 @@ Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): deta
 ```text
 Agent(prompt="
 <planning_context>
-<files_to_read>
+<required_reading>
 - .planning/PROJECT.md (current milestone context — `## Current Milestone`)
 - .planning/REQUIREMENTS.md (this milestone's requirements)
 - .planning/ROADMAP.md (existing roadmap — APPEND to it, do not regenerate)
@@ -146,7 +146,7 @@ Agent(prompt="
 - .planning/config.json (phase_id_convention, granularity)
 - .planning/research/SUMMARY.md (if exists)
 - strategy artifacts (.planning/adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md) — read every one that exists
-</files_to_read>
+</required_reading>
 
 ${AGENT_SKILLS_ROADMAPPER}
 </planning_context>
@@ -168,7 +168,7 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 
 ## Step 4: Present, approve, commit
 
-**Handle the return.** If `## ROADMAP BLOCKED`: present the blocker, resolve with the user, re-spawn. If `## ROADMAP CREATED` / `ELABORATED`: read the ROADMAP.md and present it inline:
+**Handle the return.** If `## ROADMAP BLOCKED`: present the blocker, resolve with the user, re-spawn. If `## ROADMAP CREATED` / `## ROADMAP REVISED` / `ELABORATED`: read the ROADMAP.md and present it inline:
 
 ```
 ---

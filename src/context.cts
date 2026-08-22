@@ -10,6 +10,7 @@
 import fs = require('node:fs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import path = require('node:path');
+import { splitLines } from './text-lines.cjs';
 
 interface Provenance { phase: string | null; author: string; date: string; quality: string; note: string }
 interface Anchor { path: string; line: number | null; fact: string; bulletLine: number }
@@ -19,7 +20,7 @@ const ANCHOR_RE = /\[anchor:\s*([^\s"\]]+?)(?::(\d+))?\s+"([^"]+)"\]/g;
 const FACT_SECTIONS = ['## Verified Facts', '## Load-bearing verified facts'];
 
 function parseContextProvenance(text: string): Provenance | null {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(text);
+  const fm = /^---\r?\n([\s\S]{0,20000}?)\r?\n---/.exec(text);
   if (!fm || !/context_provenance:/.test(fm[1])) return null;
   const grab = (k: string): string => {
     const m = new RegExp(`^\\s*${k}:\\s*"?([^"\\n]+)"?\\s*$`, 'm').exec(fm[1]);
@@ -70,7 +71,7 @@ function verifyAnchors(cwd: string, anchors: Anchor[]): Result[] {
 }
 
 function annotateStale(filePath: string, results: Result[], date: string): number {
-  const lines = fs.readFileSync(filePath, 'utf8').split('\n');
+  const lines = splitLines(fs.readFileSync(filePath, 'utf8'));
   let annotated = 0;
   for (const r of results) {
     if (r.status !== 'stale' && r.status !== 'missing') continue;

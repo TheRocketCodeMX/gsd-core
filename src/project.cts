@@ -21,6 +21,7 @@ const { output, error } = io;
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningPaths } = planningWorkspace;
 import { platformWriteSync } from './shell-command-projection.cjs';
+import { splitLines } from './text-lines.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ interface StrategySkippedResult {
  * This is the robust form of the workflows' `sed -n '/## name/,/^## /p'`.
  */
 function extractSection(content: string, sectionName: string): string | null {
-  const lines = content.split('\n');
+  const lines = splitLines(content);
   let capturing = false;
   const result: string[] = [];
   const headingPattern = new RegExp(`^##\\s+${sectionName}\\s*$`);
@@ -253,7 +254,7 @@ function cmdProjectStrategyDone(cwd: string, step: string | undefined, raw: bool
 
   // Rewrite line-by-line, but only inside the Strategy Plan section, so a
   // same-named row in another table elsewhere in PROJECT.md can never be touched.
-  const lines = content.split('\n');
+  const lines = splitLines(content);
   let inSection = false;
   let matched = false;
   let changed = false;

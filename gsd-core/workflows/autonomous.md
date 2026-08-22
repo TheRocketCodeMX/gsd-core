@@ -9,7 +9,7 @@ Drive milestone phases autonomously — all remaining phases, a range via `--fro
 Read all files referenced by the invoking prompt's execution_context before starting.
 
 <!-- FORK:provenance BEGIN -->
-**Tool provenance (fork law):** every planning artifact — phase directories, state files, completion markers — is created and mutated through `gsd-tools` commands, never hand-made. Before any write under `.planning/`, read `@~/.claude/gsd-core/references/tool-provenance.md`: the tool's formula is canonical, and the gates and ledgers only fire through the command — a hand-made artifact silently disarms them.
+**Tool provenance (fork law):** before any write under `.planning/`, read `@~/.claude/gsd-core/references/tool-provenance.md` — every planning artifact comes from `gsd-tools` commands, never hand-made.
 <!-- FORK:provenance END -->
 
 </required_reading>
@@ -583,17 +583,7 @@ Display the review result summary and score from UI-REVIEW.md if produced. Conti
 </step>
 
 <step name="smart_discuss">
-
-## Smart Discuss
-
-> Full instructions are in `gsd-core/references/autonomous-smart-discuss.md`. Read that file now and follow it exactly.
-
-Smart discuss is an autonomous-optimized variant of `gsd-discuss-phase`. It proposes grey area answers in batch tables — the user accepts or overrides per area — and writes an identical CONTEXT.md to what discuss-phase produces.
-
-**Inputs:** `PHASE_NUM` from execute_phase.
-
-Read and execute: `$HOME/.claude/gsd-core/references/autonomous-smart-discuss.md`
-
+Read `@~/.claude/gsd-core/references/autonomous-smart-discuss.md` now (lazy) and execute it for this phase.
 </step>
 
 <step name="iterate">
@@ -792,7 +782,11 @@ When any phase operation fails or a blocker is detected, present 3 options via A
 2. **"Skip this phase"** — Mark phase as skipped, continue to the next incomplete phase
 3. **"Stop autonomous mode"** — Display summary of progress so far and exit cleanly
 
-**Handling each option:** Read `workflows/autonomous/blocker-handling.md` now (lazy — only on this path) and follow it exactly — the retry loop, the skip log line, and the stop progress-summary banner.
+**On "Fix and retry":** Loop back to the failed step within execute_phase. Track the retry count per phase + step (`RETRY_COUNT`, kept in memory for the run). If the same step fails again after retry, re-present these options. **Retry ceiling (#3210):** once the same phase step has failed 3 "Fix and retry" attempts, do NOT re-present the options — escalate to a terminal `needs_human` halt: display `Phase {N} ⛔ {Name} — needs_human`, list the unmet items (the blocker description from each attempt), append/update a `## Needs Human` section in STATE.md (`| ${PHASE_NUM} | needs_human | resolve blocker, then /gsd:autonomous --from ${PHASE_NUM} |`), and stop autonomous mode with the standard stopped-summary banner. A blocker that survives 3 fix attempts is an operator gate, not an executable gap — retrying it again just burns hours.
+
+**On "Skip this phase":** Log `Phase {N} ⏭ {Name} — Skipped by user` and proceed to iterate.
+
+**On "Stop autonomous mode":** read `workflows/autonomous/steps/stopped-banner.md` now (lazy) and display its banner (reused by the #3210 halt).
 
 </step>
 

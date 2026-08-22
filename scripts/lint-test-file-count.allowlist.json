@@ -7,7 +7,36 @@
         "config-field-docs.test.cjs",
         "config-get-default.test.cjs",
         "config-schema.property.test.cjs",
+        "config-validation.test.cjs",
         "config.test.cjs"
+      ],
+      "issue": "TBD"
+    },
+    "context": {
+      "files": [
+        "context-composer.property.test.cjs",
+        "context-enrichment.test.cjs",
+        "context-index-sync.test.cjs",
+        "context-predicates.property.test.cjs",
+        "context-utilization.property.test.cjs",
+        "fix-2289-context-monitor-event-allowlist.test.cjs"
+      ],
+      "issue": "FORK: the context capability (context-lifecycle program) owns context-enrichment + context-utilization; upstream's fix-2289 suite shares the derived 'context' prefix, and the v1.10.0 realignment added upstream's context-composer (#2958), context-index-sync (#2950), and context-predicates (#2938) suites to the same cluster"
+    },
+    "edge-probe": {
+      "files": [
+        "edge-probe-docs-fixtures.test.cjs",
+        "edge-probe-planner-contract.test.cjs",
+        "edge-probe-spec-phase-contract.test.cjs",
+        "edge-probe.test.cjs"
+      ],
+      "issue": "550"
+    },
+    "federated-config": {
+      "files": [
+        "federated-config-key-removal.test.cjs",
+        "federated-config-loadconfig.test.cjs",
+        "federated-config.test.cjs"
       ],
       "issue": "TBD"
     },
@@ -22,6 +51,14 @@
       ],
       "issue": "622"
     },
+    "host-integration": {
+      "files": [
+        "host-integration-descriptors.test.cjs",
+        "host-integration-validator-parity.test.cjs",
+        "host-integration.test.cjs"
+      ],
+      "issue": "1684"
+    },
     "init": {
       "files": [
         "init-debug-workflow-contract.test.cjs",
@@ -30,66 +67,6 @@
         "init.test.cjs"
       ],
       "issue": "3149"
-    },
-    "milestone": {
-      "files": [
-        "milestone-archive.test.cjs",
-        "milestone-helper.test.cjs",
-        "milestone-name-duplication.test.cjs",
-        "milestone-prefixed-convention.test.cjs",
-        "milestone-summary.test.cjs",
-        "milestone.test.cjs"
-      ],
-      "issue": "62"
-    },
-    "roadmap": {
-      "files": [
-        "roadmap-after-strategy.test.cjs",
-        "roadmap-mode-field.test.cjs",
-        "roadmap-phase-fallback.test.cjs",
-        "roadmap.test.cjs"
-      ],
-      "issue": "FORK: roadmap-after-strategy.test.cjs guards the fork's roadmap-after-strategy reorder (the gsd-roadmap skill owns the single roadmapper spawn point)"
-    },
-    "runtime-artifact-layout": {
-      "files": [
-        "runtime-artifact-layout-descriptor-drive.test.cjs",
-        "runtime-artifact-layout-install-profiles.test.cjs",
-        "runtime-artifact-layout-surface.test.cjs",
-        "runtime-artifact-layout.test.cjs"
-      ],
-      "issue": "TBD"
-    },
-    "security": {
-      "files": [
-        "security-dead-exports.regression.test.cjs",
-        "security-prompt-injection.security.test.cjs",
-        "security-scan.security.test.cjs",
-        "security.test.cjs"
-      ],
-      "issue": "2198"
-    },
-    "state": {
-      "files": [
-        "state-acquirestatelock-non-eexist.test.cjs",
-        "state-command-cutover.test.cjs",
-        "state-prune.test.cjs",
-        "state-rebuild-cli.test.cjs",
-        "state-rebuild.test.cjs",
-        "state.test.cjs"
-      ],
-      "issue": "180"
-    },
-    "verify": {
-      "files": [
-        "verify-health.test.cjs",
-        "verify-mvp-uat.test.cjs",
-        "verify-npm-publish.test.cjs",
-        "verify-test-quality.test.cjs",
-        "verify-work-auto-transition.test.cjs",
-        "verify.test.cjs"
-      ],
-      "issue": "3767"
     },
     "install": {
       "files": [
@@ -104,41 +81,29 @@
       ],
       "issue": "1679"
     },
-    "edge-probe": {
+    "milestone": {
       "files": [
-        "edge-probe-docs-fixtures.test.cjs",
-        "edge-probe-planner-contract.test.cjs",
-        "edge-probe-spec-phase-contract.test.cjs",
-        "edge-probe.test.cjs"
+        "milestone-archive-hygiene.test.cjs",
+        "milestone-archive.test.cjs",
+        "milestone-helper.test.cjs",
+        "milestone-name-duplication.test.cjs",
+        "milestone-prefixed-convention.test.cjs",
+        "milestone-summary.test.cjs",
+        "milestone-window-drift-guard.test.cjs",
+        "milestone-window-single-owner.test.cjs",
+        "milestone.test.cjs"
       ],
-      "issue": "550"
+      "issue": "62"
     },
-    "context": {
+    "phase": {
       "files": [
-        "context-composer.property.test.cjs",
-        "context-enrichment.test.cjs",
-        "context-index-sync.test.cjs",
-        "context-predicates.property.test.cjs",
-        "context-utilization.property.test.cjs",
-        "fix-2289-context-monitor-event-allowlist.test.cjs"
+        "phase-completion-single-owner.test.cjs",
+        "phase-dependency-levels.test.cjs",
+        "phase-resolution-parity.test.cjs",
+        "phase-structure.test.cjs",
+        "phase.test.cjs"
       ],
-      "issue": "FORK: the context capability (context-lifecycle program) owns context-enrichment + context-utilization; upstream's fix-2289 suite shares the derived 'context' prefix, and the v1.10.0 realignment added upstream's context-composer (#2958), context-index-sync (#2950), and context-predicates (#2938) suites to the same cluster"
-    },
-    "federated-config": {
-      "files": [
-        "federated-config.test.cjs",
-        "federated-config-loadconfig.test.cjs",
-        "federated-config-key-removal.test.cjs"
-      ],
-      "issue": "TBD"
-    },
-    "host-integration": {
-      "files": [
-        "host-integration.test.cjs",
-        "host-integration-validator-parity.test.cjs",
-        "host-integration-descriptors.test.cjs"
-      ],
-      "issue": "1684"
+      "issue": "3186"
     },
     "prompt-budget": {
       "files": [
@@ -148,13 +113,59 @@
       ],
       "issue": "2929"
     },
-    "audit": {
+    "roadmap": {
       "files": [
-        "audit-command-cutover.test.cjs",
-        "audit-fix-command.test.cjs",
-        "fix-2766-audit-uat-archived-and-table-shapes.test.cjs"
+        "roadmap-after-strategy.test.cjs",
+        "roadmap-disk-consistency.test.cjs",
+        "roadmap-mode-field.test.cjs",
+        "roadmap-phase-fallback.test.cjs",
+        "roadmap.test.cjs"
       ],
-      "issue": "2766"
+      "issue": "FORK: roadmap-after-strategy.test.cjs guards the fork's roadmap-after-strategy reorder (the gsd-roadmap skill owns the single roadmapper spawn point)"
+    },
+    "runtime-artifact-layout": {
+      "files": [
+        "runtime-artifact-layout-descriptor-drive.test.cjs",
+        "runtime-artifact-layout-install-profiles.test.cjs",
+        "runtime-artifact-layout-surface.test.cjs",
+        "runtime-artifact-layout-trigger-surface.test.cjs",
+        "runtime-artifact-layout.test.cjs"
+      ],
+      "issue": "2871"
+    },
+    "security": {
+      "files": [
+        "security-dead-exports.regression.test.cjs",
+        "security-prompt-injection.security.test.cjs",
+        "security-scan.security.test.cjs",
+        "security.test.cjs"
+      ],
+      "issue": "2198"
+    },
+    "state": {
+      "files": [
+        "state-acquirestatelock-non-eexist.test.cjs",
+        "state-command-cutover.test.cjs",
+        "state-consistency.test.cjs",
+        "state-field-drift.test.cjs",
+        "state-prune.test.cjs",
+        "state-rebuild-cli.test.cjs",
+        "state-rebuild.test.cjs",
+        "state-write-path-drift-guard.test.cjs",
+        "state.test.cjs"
+      ],
+      "issue": "180"
+    },
+    "verify": {
+      "files": [
+        "verify-health.test.cjs",
+        "verify-mvp-uat.test.cjs",
+        "verify-npm-publish.test.cjs",
+        "verify-test-quality.test.cjs",
+        "verify-work-auto-transition.test.cjs",
+        "verify.test.cjs"
+      ],
+      "issue": "3767"
     }
   }
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { splitLines } from './text-lines.cjs';
 
 interface CatalogNode {
   id: string;
@@ -39,7 +40,7 @@ function trackToShort(track: string): string {
 // | `id` | Concept text | `file.md § Section` | `prereq-a`, `prereq-b` | diagram |
 function parseCatalog(): { count: number; nodes: CatalogNode[]; tracks: string[] } {
   const text = fs.readFileSync(catalogPath(), 'utf8');
-  const lines = text.split('\n');
+  const lines = splitLines(text);
   const nodes: CatalogNode[] = [];
   const tracks: string[] = [];
   let currentTrack = '';
@@ -106,7 +107,7 @@ function readProgress(): Progress {
   if (!fs.existsSync(p)) return emptyProgress();
   const text = fs.readFileSync(p, 'utf8');
   // allow-adhoc-markdown: extracts the single ```json state block this module itself writes (fixed self-owned format, not general markdown); consider migrating to stripFencedCode() when Phase 3 re-wires learn
-  const m = text.match(/```json\s*([\s\S]*?)```/);
+  const m = text.match(/```json\s{0,10}([\s\S]{0,50000}?)```/);
   if (!m) return emptyProgress();
   try {
     const parsed = JSON.parse(m[1]) as Partial<Progress>;

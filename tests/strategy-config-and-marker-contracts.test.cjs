@@ -44,7 +44,7 @@ describe('CONFIG: workflows only config-set valid keys (#security_asvs_level reg
 
   for (const file of workflowFiles()) {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, file), 'utf8');
-    const matches = [...content.matchAll(/config-set\s+([^\s]+)/g)];
+    const matches = [...content.matchAll(/config-set\s{1,5}([^\s]{1,200})/g)];
     if (matches.length === 0) continue;
 
     test(`${file}: every config-set key is schema-valid`, () => {
@@ -70,12 +70,12 @@ describe('MARKER: roadmap-elaboration idempotency contract (plan-phase ⇄ gsd-r
   const roadmapper = fs.readFileSync(path.join(AGENTS_DIR, 'gsd-roadmapper.md'), 'utf8');
 
   test('plan-phase greps for the elaboration marker', () => {
-    const grep = planPhase.match(/grep -q '([^']*Elaborated[^']*)'/);
+    const grep = planPhase.match(/grep -q '([^']{0,100}Elaborated[^']{0,100})'/);
     assert.ok(grep, 'plan-phase.md must grep ROADMAP.md for the elaboration marker literal');
   });
 
   test('the grep literal is a substring of the marker gsd-roadmapper writes', () => {
-    const grep = planPhase.match(/grep -q '([^']*Elaborated[^']*)'/);
+    const grep = planPhase.match(/grep -q '([^']{0,100}Elaborated[^']{0,100})'/);
     const literal = grep[1];
     assert.ok(
       roadmapper.includes(literal),
@@ -106,6 +106,7 @@ describe('TRIPWIRE: capability-owned command families are not re-shadowed in gsd
     test(`gsd-tools.cjs has no hardcoded case '${family}' (owned by a rocket capability)`, () => {
       const caseRe = new RegExp(`^\\s*case '${family}'\\s*:`, 'm');
       assert.ok(
+        // allow-test-rule: asserts a case LABEL is absent from router source — a structural shadowing guard no require() surface can express (see #1969)
         !caseRe.test(gsdToolsSrc),
         `gsd-tools.cjs contains a hardcoded \`case '${family}'\` — this shadows the ` +
           `capability-registered router (capabilities/{learn,strategy,grounding}/capability.json). ` +

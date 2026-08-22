@@ -10,12 +10,11 @@
     "gsd-core/references/planner-human-verify-mode.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
     "gsd-core/templates/README.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
     "gsd-core/templates/claude-md.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
-    "gsd-core/templates/codebase/structure.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
     "gsd-core/workflows/milestone-summary.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
-    "gsd-core/workflows/profile-user.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md'). | Round-3: re-emits under the corrected non-Claude/Claude-Desktop brand transform (round-3 e2e-12, bin/install.js transform-only)",
     "gsd-core/workflows/sketch-wrap-up.md": "#2658: same CLAUDE.md replacement-target change as checkpoints.md above (bare directory '.trae/rules/' -> concrete file '.trae/rules/rules.md').",
     "skills/gsd-ns-project/skills/profile-user/SKILL.md": "#2658: derived (via commands/gsd/profile-user.md, which mentions CLAUDE.md) through convertClaudeToTraeMarkdown; same replacement-target change as checkpoints.md above.",
     "skills/gsd-ns-review/skills/code-review/SKILL.md": "#2658: derived (via commands/gsd/code-review.md, which mentions CLAUDE.md) through convertClaudeToTraeMarkdown; same replacement-target change as checkpoints.md above.",
-    "ingest-docs.md": "#2658: runtime-detection block gained a `/.trae/` path-based line and a `TRAE_CONFIG_DIR` env-var fallback line (the same trae-detection gap found in new-project.md, fixed here too since it is the identical defect in a sibling workflow)."
+    "ingest-docs.md": "#2658: runtime-detection block gained a `/.trae/` path-based line and a `TRAE_CONFIG_DIR` env-var fallback line (the same trae-detection gap found in new-project.md, fixed here too since it is the identical defect in a sibling workflow). | align-1.11.0: grew 39 bytes \u2014 upstream tag standardization (#3423 required_reading) in the emitted command.",
+    "new-project.md": "#2658: runtime-detection block gained a `/.trae/` path-based line and a `TRAE_CONFIG_DIR` env-var fallback line, so trae resolves to RUNTIME=trae instead of falling through to the claude default. \u2014 #3423 append (epic #1891 F8): also grew with the <files_to_read> -> <required_reading> tag rename (15 chars/block, tag-token-only delta)."
   }
 }

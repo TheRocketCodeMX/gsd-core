@@ -257,24 +257,14 @@
   },
   {
    "path": "agents/gsd-verifier.md",
-   "feature": "context",
-   "mode": "markers",
-   "markers": 1,
-   "anchors": [
-    "DOMAIN-MODEL\\.md",
-    "TEST-STRATEGY\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-verifier.md",
    "feature": "fidelity",
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "Reward-hacking gate",
-    "engineering-standards\\.md",
-    "gsd_run query project mode"
-   ]
+    "FORK:fidelity BEGIN",
+    "verifier-fidelity-gates\\.md"
+   ],
+   "note": "Compressed to a pointer (agent LARGE cap 49152; upstream base 49150 leaves ~0 headroom). Full gate text \u2014 incl. the former FORK:context DOMAIN-MODEL/TEST-STRATEGY line \u2014 lives in gsd-core/references/verifier-fidelity-gates.md."
   },
   {
    "path": "bin/install.js",
@@ -780,8 +770,9 @@
    "markers": 1,
    "anchors": [
     "Milestone certification sweep",
-    "certification: human \\(CERT-0\\)"
-   ]
+    "certification-sweep\\.md"
+   ],
+   "note": "Sweep body extracted to gsd-core/workflows/ship/steps/certification-sweep.md (workflow DEFAULT cap); the FORK:strategy pair now wraps the lazy dispatch line."
   },
   {
    "path": "gsd-core/workflows/transition.md",
@@ -859,7 +850,8 @@
    "feature": "identity",
    "mode": "anchors-only",
    "anchors": [
-    "\"name\": \"@therocketcode/gsd-core\""
+    "\"name\": \"@therocketcode/gsd-core\"",
+    "\"node\": \">=22\\.0\\.0\""
    ]
   },
   {
@@ -1089,15 +1081,6 @@
    "anchors": [
     "provided-design detection",
     "single spawn point is the gsd-roadmap skill"
-   ]
-  },
-  {
-   "path": "tests/issue-607-legacy-cleanup.test.cjs",
-   "feature": "identity",
-   "mode": "markers",
-   "markers": 4,
-   "anchors": [
-    "empty-legacy-runtime-dir"
    ]
   },
   {
@@ -1345,7 +1328,8 @@
    "feature": "verify-work-bundle",
    "mode": "anchors-only",
    "anchors": [
-    "const uatFile = existingUat \\|\\| \\(paddedPhase"
+    "const uatFile = existingUat \\|\\| \\(paddedPhase",
+    "phaseToken: extractPhaseToken\\(uatPhaseDirName\\)"
    ]
   },
   {
@@ -1509,6 +1493,51 @@
    "anchors": [
     "FORK:provenance BEGIN",
     "tool-provenance\\.md"
+   ]
+  },
+  {
+   "path": "scripts/lint-phase-enumeration-drift.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "context-command-router\\.cts'\\), new Set\\(\\['resolvePhaseCapsules"
+   ]
+  },
+  {
+   "path": "tests/sync-skills-cross-runtime-refuse.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "@therocketcode"
+   ]
+  },
+  {
+   "path": "src/runtime-artifact-conversion.cts",
+   "feature": "skill-argument-hint",
+   "mode": "markers",
+   "markers": 4,
+   "anchors": [
+    "FORK:skill-argument-hint BEGIN",
+    "argHintLine",
+    "cursorArgHintLine"
+   ]
+  },
+  {
+   "path": "src/runtime-artifact-conversion.cts",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "FORK:fidelity BEGIN",
+    " Desktop\\|-\\)"
+   ]
+  },
+  {
+   "path": "tests/lint-allow-test-rule-refs.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "REPO_BASELINE_LINT_TIMEOUT_MS = 90000"
    ]
   }
  ]
