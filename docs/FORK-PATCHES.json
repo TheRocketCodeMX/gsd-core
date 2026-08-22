@@ -1501,6 +1501,14 @@
    "anchors": [
     "context-command-router\\.cts'\\), new Set\\(\\['resolvePhaseCapsules"
    ]
+  },
+  {
+   "path": "tests/sync-skills-cross-runtime-refuse.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "@therocketcode"
+   ]
   }
  ]
 }

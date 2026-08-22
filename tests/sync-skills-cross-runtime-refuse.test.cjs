@@ -52,7 +52,7 @@ describe('#3025: sync-skills refuses cross-runtime skill sync', () => {
     // hand the user a command that produces correctly converted skills. The pointer is
     // generic (`--<runtime>`, not `--$DEST`) because grok/gemini have no dedicated flag.
     assert.match(text, /cross-runtime skill sync is not supported/, 'names the unsupported operation');
-    assert.match(text, /npx -y @opengsd\/gsd-core@latest --global --<runtime>/, 'prints the installer command');
+    assert.match(text, /npx -y @therocketcode\/gsd-core@latest --global --<runtime>/, 'prints the installer command');
     assert.match(text, /\$DEST/, 'names the refused destination runtime');
     assert.match(text, /grok and gemini have no dedicated installer flag/, 'accurately notes grok/gemini aliasing rather than printing a wrong --grok/--gemini flag');
   });
