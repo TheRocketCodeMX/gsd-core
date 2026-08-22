@@ -28,6 +28,6 @@
     "context.md": "wave-4b: scout-corrections commit --files placeholder -> shell-var form (#2269 gate), +8B",
     "autonomous.md": "wave-4b: #3210 blocker-handling re-inlined per upstream's own shape (fragment deleted; upstream test pins it inline), +1405B",
     "discuss-phase.md": "wave-4b: canonical gsd-core/references/ cite form x2 (#3576), +18B",
-    "gsd-core/workflows/autonomous/steps/stopped-banner.md": "wave-4b: NEW fork step \u2014 autonomous.md's stop-banner extracted here for the #2196 40K-char Read limit; autonomous.md carries the lazy read line."
+    "gsd-core/workflows/autonomous/blocker-handling.md": "wave-4b: DELETED from the emit \u2014 upstream ships the #3210 blocker text inline in autonomous.md and its test pins it there; the fork's verbatim-copy fragment is retired (content re-inlined)."
   }
 }
