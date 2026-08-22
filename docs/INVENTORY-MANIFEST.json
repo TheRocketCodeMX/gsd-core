@@ -646,6 +646,7 @@
       "autonomous/steps/converge-dispatch-inline.md",
       "autonomous/steps/converge-fail-fast.md",
       "autonomous/steps/converge-loop.md",
+      "autonomous/steps/stopped-banner.md",
       "code-review/steps/dispatch-fix.md",
       "code-review/steps/structural-pre-pass.md",
       "complete-milestone/steps/git-tag.md",

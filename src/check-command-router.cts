@@ -214,10 +214,16 @@ function listPlanFiles(phaseDir: string): { planFiles: string[]; nearMisses: str
     // comes from scanPhasePlans, never a re-derived -PLAN.md regex. Near-misses
     // are md files that LOOK plan-like but are not in the owner's plan set.
     const scanned = planScanMod.scanPhasePlans(phaseDir);
-    const planSet = new Set<string>(scanned.allPlanFiles);
+    // Fork grounding semantics (#21 P1-4): only case-strict *-PLAN.md (or bare
+    // PLAN.md) count as scanned plans; a case-variant the owner tolerates
+    // (01-01-plan.md) is a NEAR-MISS to warn about, so a vacuous pass stays
+    // visible. The owner still sources the candidate set (plan-count-drift).
+    const strict = (e: string) => e.endsWith('-PLAN.md') || e === 'PLAN.md';
+    const planFiles = scanned.allPlanFiles.filter(strict);
+    const planSet = new Set<string>(planFiles);
     const entries = fs.readdirSync(phaseDir);
     return {
-      planFiles: (scanned.allPlanFiles).slice(),
+      planFiles,
       nearMisses: entries.filter((entry) => !planSet.has(entry) && /\.md$/i.test(entry) && /PLAN/i.test(entry)),
     };
   } catch {

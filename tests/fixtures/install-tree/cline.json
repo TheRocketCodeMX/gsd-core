@@ -285,6 +285,7 @@
   "gsd-core/workflows/autonomous/steps/converge-dispatch-inline.md",
   "gsd-core/workflows/autonomous/steps/converge-fail-fast.md",
   "gsd-core/workflows/autonomous/steps/converge-loop.md",
+  "gsd-core/workflows/autonomous/steps/stopped-banner.md",
   "gsd-core/workflows/check-todos.md",
   "gsd-core/workflows/cicd-strategy.md",
   "gsd-core/workflows/cleanup.md",

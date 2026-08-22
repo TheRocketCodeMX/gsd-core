@@ -21,13 +21,22 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
 describe('gsd-verifier.md: strategy-fit gate names all four strategy artifacts', () => {
-  const content = fs.readFileSync(path.join(ROOT, 'agents', 'gsd-verifier.md'), 'utf8');
+  // v1.11.0 realignment: the gate BODY lives in verifier-fidelity-gates.md
+  // (agent LARGE cap left ~0 headroom after upstream growth); the agent keeps
+  // the @-load seam (asserted in source-fidelity-contracts). Window the
+  // reference, not the agent.
+  const content = fs.readFileSync(path.join(ROOT, 'gsd-core', 'references', 'verifier-fidelity-gates.md'), 'utf8');
+  assert.match(
+    fs.readFileSync(path.join(ROOT, 'agents', 'gsd-verifier.md'), 'utf8'),
+    /verifier-fidelity-gates\.md/,
+    'the agent must keep the @-load seam to the gate reference'
+  );
 
   // Window from the Strategy-fit bullet through the end of its FORK:context
   // extension (or the next bullet, whichever comes first) — tolerant of the
   // inline FORK marker comments splitting the paragraph across lines.
   function strategyFitSection() {
-    const start = content.indexOf('**Strategy-fit:**');
+    const start = content.indexOf('**Strategy-fit');
     assert.notEqual(start, -1, 'expected a Strategy-fit gate bullet in gsd-verifier.md');
     const nextBullet = content.indexOf('\n- **', start + 1);
     const end = nextBullet === -1 ? content.length : nextBullet;

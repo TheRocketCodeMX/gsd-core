@@ -114,7 +114,7 @@ Read and execute `gsd-core/workflows/plan-phase/steps/closed-phase-gate.md` — 
 
 ## 1.6. Roadmap elaboration gate (strategy → build; fires once per milestone)
 
-If `.planning/ROADMAP.md` exists WITHOUT the `Elaborated against strategy` marker AND any strategy artifact exists (`.planning/adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`): read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy — it carries the detection bash, the auto/offer split, and the `gsd-roadmapper` elaborate-mode spawn); re-read ROADMAP.md and continue. Else proceed — per-phase planning consumes the artifacts via canonical_refs.
+If `.planning/ROADMAP.md` exists WITHOUT the elaboration marker (`grep -q 'Elaborated against strategy' .planning/ROADMAP.md` fails) AND any strategy artifact exists (`.planning/adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`): read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy — it carries the detection bash, the auto/offer split, and the `gsd-roadmapper` elaborate-mode spawn); re-read ROADMAP.md and continue. Else proceed — per-phase planning consumes the artifacts via canonical_refs.
 
 ## 2. Parse and Normalize Arguments
 
