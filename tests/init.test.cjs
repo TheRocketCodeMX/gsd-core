@@ -228,6 +228,28 @@ describe('init commands', () => {
     );
   });
 
+  // matrix111-b L2: init verify-work's uat_path (the fork bundle field the
+  // verify-work workflow WRITES results and the certification: line into) must
+  // be phase-pinned exactly like the plan-phase projector above — without the
+  // pin a stray cross-phase 01-UAT.md becomes the write target while
+  // `phase uat-passed` (#3511-scoped) answers correctly for the same phase.
+  test('matrix111-b L2: init verify-work uat_path is phase-pinned — a stray cross-phase -UAT.md must not win', () => {
+    seedPhase(tmpDir, '02-chat', {
+      '01-UAT.md': '# Stray cross-phase UAT artifact (belongs to phase 01)',
+      '02-UAT.md': '# UAT',
+    });
+    writePlanningDocs(tmpDir);
+
+    const result = runGsdTools('init verify-work 02', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(
+      output.uat_path,
+      absPlanningPath(tmpDir, 'phases', '02-chat', '02-UAT.md'),
+      'a stray cross-phase 01-UAT.md must never become phase 02 uat_path',
+    );
+  });
+
   // #3518: init plan-phase's uat_path projector must resolve via the shared
   // resolveUatFile resolver (phase-pinned, deterministic) instead of a
   // hand-rolled `.find()` over unsorted readdir() order. A stray cross-phase

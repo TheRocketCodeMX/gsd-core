@@ -1708,8 +1708,17 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     try {
       // #3518: route the single-pick through resolveUatFile — one discovery
       // grammar, not two (allowBare covers the bare UAT.md legacy form).
+      // matrix111-b L2: pinned to this phase's own token and phase-scoped via
+      // phaseDirName, matching both sibling projectors above — without the
+      // pin, a stray cross-phase 01-UAT.md becomes the path verify-work WRITES
+      // its results and certification: line into.
+      const uatPhaseDirName = path.basename(phaseDirFull);
       existingUat =
-        resolveUatFile(fs.readdirSync(phaseDirFull), { allowBare: true }) ?? undefined;
+        resolveUatFile(fs.readdirSync(phaseDirFull), {
+          allowBare: true,
+          phaseToken: extractPhaseToken(uatPhaseDirName),
+          phaseDirName: uatPhaseDirName,
+        }) ?? undefined;
     } catch {
       existingUat = undefined;
     }

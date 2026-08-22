@@ -1328,7 +1328,8 @@
    "feature": "verify-work-bundle",
    "mode": "anchors-only",
    "anchors": [
-    "const uatFile = existingUat \\|\\| \\(paddedPhase"
+    "const uatFile = existingUat \\|\\| \\(paddedPhase",
+    "phaseToken: extractPhaseToken\\(uatPhaseDirName\\)"
    ]
   },
   {
@@ -1508,6 +1509,27 @@
    "mode": "anchors-only",
    "anchors": [
     "@therocketcode"
+   ]
+  },
+  {
+   "path": "src/runtime-artifact-conversion.cts",
+   "feature": "skill-argument-hint",
+   "mode": "markers",
+   "markers": 4,
+   "anchors": [
+    "FORK:skill-argument-hint BEGIN",
+    "argHintLine",
+    "cursorArgHintLine"
+   ]
+  },
+  {
+   "path": "src/runtime-artifact-conversion.cts",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "FORK:fidelity BEGIN",
+    " Desktop\\|-\\)"
    ]
   }
  ]

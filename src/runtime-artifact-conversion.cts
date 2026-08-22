@@ -1081,13 +1081,18 @@ function convertClaudeCommandToCursorSkill(content, skillName) {
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  // FORK:skill-argument-hint BEGIN
+  // e2e-12 F3 / matrix111-b E1: same carry as the codex converter above.
+  const cursorArgHint = frontmatter ? extractFrontmatterField(frontmatter, 'argument-hint') : null;
+  const cursorArgHintLine = cursorArgHint ? `argument-hint: ${yamlQuote(toSingleLine(cursorArgHint))}\n` : '';
+  // FORK:skill-argument-hint END
   const adapter = getCursorSkillAdapterHeader(skillName);
 
   // Cursor skills are both slash-invocable and model-invocable. Do not emit the
   // unsupported `user-invocable` field: it is ignored by Cursor and previously
   // hid the real cause of duplicate entries, the parallel commands/ surface
   // retired in #2644.
-  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlIdentifier(skillName)}\ndescription: ${yamlQuote(shortDescription)}\n${cursorArgHintLine}---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 // --- Windsurf converters ---
@@ -1801,24 +1806,48 @@ function convertClaudeCommandToCodexSkill(content, skillName) {
   const converted = convertClaudeToCodexMarkdown(content);
   const { frontmatter, body } = extractFrontmatterAndBody(converted);
   let description = `Run GSD workflow ${skillName}.`;
+  // FORK:skill-argument-hint BEGIN
+  // e2e-12 F3 / matrix111-b E1: carry argument-hint to the invocation surface
+  // (parity with copilot/qwen) so modifiers like --tune-up stay discoverable
+  // from the skill signature, not just the body. This is the LIVE converter
+  // (#2875 descriptor dispatch resolves from this module); bin/install.js
+  // carries a patched twin for its remaining direct call sites.
+  let argumentHint = '';
+  // FORK:skill-argument-hint END
   if (frontmatter) {
     const maybeDescription = extractFrontmatterField(frontmatter, 'description');
     if (maybeDescription) {
       description = maybeDescription;
     }
+    // FORK:skill-argument-hint BEGIN
+    const maybeArgHint = extractFrontmatterField(frontmatter, 'argument-hint');
+    if (maybeArgHint) argumentHint = maybeArgHint;
+    // FORK:skill-argument-hint END
   }
   description = toSingleLine(description);
   const shortDescription = description.length > 180 ? `${description.slice(0, 177)}...` : description;
+  // FORK:skill-argument-hint BEGIN
+  const argHintLine = argumentHint ? `argument-hint: ${yamlQuote(toSingleLine(argumentHint))}\n` : '';
+  // FORK:skill-argument-hint END
   const adapter = getCodexSkillAdapterHeader(skillName);
 
-  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\nmetadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
+  return `---\nname: ${yamlQuote(skillName)}\ndescription: ${yamlQuote(description)}\n${argHintLine}metadata:\n  short-description: ${yamlQuote(shortDescription)}\n---\n\n${adapter}\n\n${body.trimStart()}`;
 }
 
 function neutralizeAgentReferences(content, instructionFile) {
   let c = content;
   // Replace standalone "Claude" (the agent) but preserve product/model names.
   // Negative lookahead avoids: Claude Code, Claude Opus/Sonnet/Haiku, Claude native, Claude-based
-  c = c.replace(/\bClaude(?! Code| Opus| Sonnet| Haiku| native| based|-)\b(?!\.md)/g, 'the agent');
+  // FORK:fidelity BEGIN
+  // e2e-12 F1/F2 / matrix111-b E3, ported to the LIVE converter module (#2875
+  // moved skill/agent emit here; bin/install.js keeps a patched twin for its
+  // remaining direct call sites): ` Desktop` joins the proper-noun allow-list
+  // ("Claude Desktop" is a vendor product, not a host self-reference), and the
+  // `(?<!-)` lookbehind keeps hyphenated compounds ("non-Claude runtimes")
+  // intact — without it the swap inverted the sentence's meaning in exactly
+  // the runtimes it describes.
+  c = c.replace(/(?<!-)\bClaude(?! Code| Opus| Sonnet| Haiku| native| based| Desktop|-)\b(?!\.md)/g, 'the agent');
+  // FORK:fidelity END
   // Replace CLAUDE.md with runtime-appropriate instruction file
   if (instructionFile) {
     c = c.replace(/CLAUDE\.md/g, instructionFile);

@@ -19,3 +19,5 @@ Notable supersessions (recorded in FORK-PATCHES/FORK-DELTA):
 - `discovery-phase.md`, `plan-milestone-gaps.md`, `verify-phase.md` deleted upstream as unreachable (#3560/#3421); no fork pins lost.
 - The fork's stale `plan-phase/modes/prd-express.md` orphan pruned — upstream's `steps/prd-express-path.md` is the live successor.
 - Four upstream-folded test clusters (#3334/#3336/#3337) removed with their manifest entries; the fork's `execute-phase.md` now fits upstream's ratcheted-down size ceiling with no fork raise.
+
+**Upgrade note (upstream #3186, disk-strict completion):** phase completion now requires a passing, non-stale `*-VERIFICATION.md` on disk. Phases completed under ≤2.4.6 without one — for example while the verifier was disabled — will report as incomplete after upgrading until they are re-verified (`/gsd-verify-work` per phase, or `/gsd-execute-phase`, which resumes at the verification gates without re-running summarized plans). Completion is also mtime-sensitive: a plain `cp -R` or fresh checkout can shift verification staleness and change the completed count; committed, clean files keep their commit-time anchoring.

@@ -56,7 +56,7 @@
     "commands/gsd-ship.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-sketch.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-spec-phase.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
-    "commands/gsd-spike.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
+    "commands/gsd-spike.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644). | Round-align-111: matrix111-b E3 fix: brand-swap hardening re-placed on the LIVE converter \u2014 'non-Claude' compounds survive verbatim; transform-only.",
     "commands/gsd-stats.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-surface.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-thread.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
@@ -69,8 +69,8 @@
     "commands/gsd-verify-work.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-workspace.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
     "commands/gsd-workstreams.md": "Cursor deliberately retires its duplicate commands surface in favor of skills (#2644).",
-    "skills/gsd-discuss-phase/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
-    "skills/gsd-graphify/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
+    "skills/gsd-discuss-phase/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644). | Round-align-111: matrix111-b E1 fix: argument-hint carry re-placed on the LIVE #2875 converter module \u2014 transform-only, source command unchanged.",
+    "skills/gsd-graphify/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644). | Round-align-111: matrix111-b E1 fix: argument-hint carry re-placed on the LIVE #2875 converter module \u2014 transform-only, source command unchanged.",
     "skills/gsd-mempalace-recall/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
     "skills/gsd-ns-context/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
     "skills/gsd-ns-ideate/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
@@ -79,7 +79,7 @@
     "skills/gsd-ns-review/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
     "skills/gsd-ns-workflow/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
     "skills/gsd-review-backlog/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
-    "skills/gsd-surface/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644).",
+    "skills/gsd-surface/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644). | Round-align-111: matrix111-b E1 fix: argument-hint carry re-placed on the LIVE #2875 converter module \u2014 transform-only, source command unchanged.",
     "skills/gsd-workstreams/SKILL.md": "Cursor skill frontmatter deliberately drops the unsupported user-invocable field while retaining model invocation (#2644)."
   }
 }
