@@ -1531,6 +1531,14 @@
     "FORK:fidelity BEGIN",
     " Desktop\\|-\\)"
    ]
+  },
+  {
+   "path": "tests/lint-allow-test-rule-refs.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "REPO_BASELINE_LINT_TIMEOUT_MS = 90000"
+   ]
   }
  ]
 }

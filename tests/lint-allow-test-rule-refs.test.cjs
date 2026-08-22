@@ -46,7 +46,11 @@ const SCRIPT = path.join(ROOT, 'scripts', 'lint-allow-test-rule-refs.cjs');
 // timeout, not a real assertion failure). 30000ms is ~10x the measured local
 // runtime, leaving real headroom for slower CI runners without hand-waving
 // the bound back up to "whatever makes it pass this once."
-const REPO_BASELINE_LINT_TIMEOUT_MS = 30000;
+// FORK: 30000 upstream. The repo-baseline scan walks every marker-bearing file
+// (283 post-v1.11.0) and measures 28s idle on the fork's WSL2 reference machine —
+// zero headroom, so the child is killed under any concurrent load (status null,
+// a spurious 'null !== 0'). Timeout is environmental headroom, not doctrine.
+const REPO_BASELINE_LINT_TIMEOUT_MS = 90000;
 
 // Deliberately split so this file's OWN source never contains the contiguous
 // exemption-marker substring the script under test scans for — the script
