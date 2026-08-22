@@ -1,4 +1,3 @@
-// allow-test-rule: source-text-is-the-product
 'use strict';
 
 const { describe, test } = require('node:test');
@@ -21,13 +20,10 @@ const CORE_SUBSTRATE_TERMS = [
 
 const registry = require('../gsd-core/bin/lib/capability-registry.cjs');
 const { isCentralConfigKey } = require('../gsd-core/bin/lib/config-schema.cjs');
+const { escapeRegex: escapeRegExp } = require('../gsd-core/bin/lib/pattern.cjs');
 
 function readRepoFile(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function activeWhenKeys() {
@@ -228,14 +224,14 @@ describe('ADR-857 Phase 6 capstone conformance (#1139)', () => {
     // v1.10.0 realignment replay (align/upstream-1.10.0): the promised
     // ratchet-down happened — upstream SHRANK plan-phase (their section-manifest
     // extraction moved whole steps out of the host body), so plan-phase.md
-    // ratchets 96875 → 91071 (measured 91007 + 64 headroom). execute-phase.md
+    // plan-phase keeps upstream v1.11.0's own frozen 94519 (fork carries ~2.3KB of marked features atop upstream's 90627; still materially under). execute-phase.md
     // is forced UP 93600 → 93985 (measured 93921 + 64): upstream's own 1.10.0
     // body is 93400 LF bytes — zero headroom under the old freeze — so the
     // fork's two condensed FORK:context lines (+521 B, already extracted-down
     // in the v1.9.0 replay) cannot fit at any compression. Ratchet back down
     // at the next upstream shrink.
     const { lfByteCount } = require('../scripts/workflow-size.cjs');
-    const PRE_PHASE6 = { 'plan-phase.md': 91071, 'execute-phase.md': 93985 };
+    const PRE_PHASE6 = { 'plan-phase.md': 94519, 'execute-phase.md': 93985 };
     const notShrunk = [];
     for (const [file, frozen] of Object.entries(PRE_PHASE6)) {
       const now = lfByteCount(path.join(ROOT, 'gsd-core', 'workflows', file));
@@ -278,6 +274,7 @@ describe('ADR-857 phase 6 — capabilities must not bake install paths into the 
 
   test('generated capability-registry.cjs contains no ~/.claude install path', () => {
     const reg = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'bin', 'lib', 'capability-registry.cjs'), 'utf8');
+    // allow-test-rule: source-text-is-the-product
     const leakLines = reg.split(/\r?\n/).map((l, i) => [i + 1, l]).filter(([, l]) => LEAK.test(l)).map(([n]) => n);
     assert.deepEqual(leakLines, [],
       `capability-registry.cjs leaks ~/.claude install paths at line(s) ${leakLines.join(', ')} — the registry is copied verbatim to non-Claude runtimes (only workflow .md files are path-converted at install). Make the source capability fragment path-free.`);

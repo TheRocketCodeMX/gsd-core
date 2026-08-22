@@ -79,7 +79,7 @@ Run the ordered question set from the reference. **Posture: the first answer is 
 - **Step 9 — Success:** the **outcome metric** (a change in customer behavior or business result) + by when; the PMF check, **pre-registered**: define now the Sean Ellis criterion (≥40% "very disappointed") to survey once ≥N pilots have used the core (only users who used it) — a *planned measurement*, never a founder prediction. **Reject vanity/output metrics — signups, waitlist size, downloads, page views, "launched" — and push to the behavior/result they proxy for (retained paying users, task completion, % of the target behavior achieved). A user-count is an output unless tied to retained value.**
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
 <!-- FORK:context END -->
 
 ## Step 10: Write PRODUCT-BRIEF.md

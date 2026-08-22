@@ -212,7 +212,7 @@ Run this in **both directions** — it is a first-class gate, not a formality. A
 - A published package with no provenance / trusted publishing → raise now (it's free).
 
 <!-- FORK:context BEGIN -->
-After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
+After each elicitation round append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` disabled).
 <!-- FORK:context END -->
 
 ## Step 9: Write CICD-STRATEGY.md

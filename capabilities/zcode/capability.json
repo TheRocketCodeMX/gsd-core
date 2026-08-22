@@ -43,7 +43,7 @@
           "prefix": "gsd-",
           "nesting": "flat",
           "recursive": false,
-          "converter": null
+          "converter": "convertClaudeAgentToZcodeAgent"
         }
       ],
       "local": [
@@ -69,10 +69,14 @@
           "prefix": "gsd-",
           "nesting": "flat",
           "recursive": false,
-          "converter": null
+          "converter": "convertClaudeAgentToZcodeAgent"
         }
       ]
     },
+    "triggerPrecedence": [
+      "skills",
+      "commands"
+    ],
     "commandStyle": "slash-hyphen",
     "hooksSurface": "none",
     "sandboxTier": "none",

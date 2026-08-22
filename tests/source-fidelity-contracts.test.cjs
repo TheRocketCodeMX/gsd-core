@@ -119,9 +119,10 @@ describe('GATES: per-source fidelity gates are wired', () => {
   });
 
   test('gsd-verifier splits the Mode-fit gate: design-delta parity-exempt + vibe intent-gate', () => {
-    const V = AG('gsd-verifier.md');
-    has(V, 'parity-EXEMPT');                       // design-mandated change is not drift
+    // v1.11.0: the Mode-fit split lives wholly in the gates reference (agent
+    // cap ~0 headroom after upstream growth; the agent keeps the @-load seam).
     const G = REF('verifier-fidelity-gates.md');
+    has(G, 'parity-EXEMPT');                       // design-mandated change is not drift
     has(G, 'intent-hardening, NOT behavior-parity'); // vibe is not pinned to its bugs
   });
 

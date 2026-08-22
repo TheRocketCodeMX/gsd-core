@@ -132,7 +132,7 @@ Create UI design contract for Phase {phase_number}: {phase_name}
 Answer: "What visual and interaction contracts does this phase need?"
 </objective>
 
-<files_to_read>
+<required_reading>
 - .planning/PROJECT.md (the `## Mode` Design-input pointer: a provided design to ingest, per design-ingestion.md)
 - {state_path} (Project State)
 - {roadmap_path} (Roadmap)
@@ -141,7 +141,7 @@ Answer: "What visual and interaction contracts does this phase need?"
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
 - {research_path} (Technical Research — stack decisions)
 - {SKETCH_FINDINGS_PATH} (Sketch Findings — validated design decisions, CSS patterns, visual direction from /gsd:sketch, if exists)
-</files_to_read>
+</required_reading>
 
 ${AGENT_SKILLS_UI}
 
@@ -157,7 +157,7 @@ padded_phase: {padded_phase}
 </config>
 ```
 
-Omit null file paths from `<files_to_read>`.
+Omit null file paths from `<required_reading>`.
 
 <!-- #2508 runtime-aware-dispatch -->
 
@@ -207,11 +207,11 @@ Validate UI design contract for Phase {phase_number}: {phase_name}
 Check all 6 dimensions. Return APPROVED or BLOCKED.
 </objective>
 
-<files_to_read>
+<required_reading>
 - {phase_dir}/{padded_phase}-UI-SPEC.md (UI Design Contract — PRIMARY INPUT)
 - {context_path} (USER DECISIONS — check compliance)
 - {research_path} (Technical Research — check stack alignment)
-</files_to_read>
+</required_reading>
 
 ${AGENT_SKILLS_UI_CHECKER}
 

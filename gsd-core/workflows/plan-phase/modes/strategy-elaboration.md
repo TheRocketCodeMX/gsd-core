@@ -2,6 +2,18 @@
 
 Loaded by `plan-phase` Step 1.6 **only when `ELAB=stale`** (a coarse roadmap predates the strategy artifacts). Keeps this body out of the always-loaded plan-phase context for the common case where the roadmap is already elaborated or no strategy artifacts exist.
 
+**Detection (run first — gated + idempotent via the marker):**
+```bash
+ELAB=skip
+if [ -f .planning/ROADMAP.md ] && ! grep -q 'Elaborated against strategy' .planning/ROADMAP.md; then
+  for f in .planning/adr/*.md .planning/SECURITY-STRATEGY.md .planning/FRONTEND-ARCHITECTURE.md .planning/TEST-STRATEGY.md .planning/INFRA-STRATEGY.md .planning/CICD-STRATEGY.md; do
+    [ -e "$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
+  done
+fi
+echo "roadmap_elaboration: $ELAB"
+```
+`ELAB=skip` → return to plan-phase and proceed; `ELAB=stale` → continue below.
+
 Elaborate ONCE so phase *boundaries* reflect the locked decisions (Phase 1 absorbs the IaC/CI-CD/security scaffolding; split phases that straddle seams). Per-phase *detail* still comes from canonical_refs at plan time — this gate fixes only **structure**.
 
 - **Non-interactive (auto/autonomous/`--text`):** elaborate automatically; announce what changed.

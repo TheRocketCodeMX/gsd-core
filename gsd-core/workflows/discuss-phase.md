@@ -380,7 +380,7 @@ All modes preserve the universal rules below.
 - **Incremental checkpoint** — after each area completes, write `${phase_dir}/${padded_phase}-DISCUSS-CHECKPOINT.json`. Read `workflows/discuss-phase/templates/checkpoint.json` for the schema. The checkpoint is structured state, not the canonical CONTEXT.md (`write_context` produces the canonical output). On session resume, the parent's `check_existing` step detects the checkpoint and offers to resume.
 - **Discussion log accumulation** — for each question asked, accumulate area name, options presented, user's selection, follow-up notes. Used by `git_commit` to write DISCUSSION-LOG.md.
 <!-- FORK:context BEGIN -->
-- **Per-round discussion log** — when the `context_lifecycle.discussion_logs` capability config is enabled, append `### <date> — <topic>` (`Q:`/`A:`/`Rejected/considered:`) to `${phase_dir}/${padded_phase}-DISCUSSION-LOG.md` after each Q&A round. Format + the config read: `references/context-lifecycle.md`.
+- **Per-round discussion log** — when the `context_lifecycle.discussion_logs` capability config is enabled, append `### <date> — <topic>` (`Q:`/`A:`/`Rejected/considered:`) to `${phase_dir}/${padded_phase}-DISCUSSION-LOG.md` after each Q&A round. Format + the config read: `gsd-core/references/context-lifecycle.md`.
 <!-- FORK:context END -->
 </step>
 
@@ -401,7 +401,7 @@ Set `phase_dir="${expected_phase_dir}"` after creation.
 **File location:** `${phase_dir}/${padded_phase}-CONTEXT.md`
 
 <!-- FORK:context BEGIN -->
-**Capsule-aware write** — if `gsd_run context provenance --file "${phase_dir}/${padded_phase}-CONTEXT.md"` is non-null, the file is a pre-seeded capsule: **never overwrite it**. Append a `## Discussion additions (<date>)` layer holding this discussion's `<decisions>`/`<deferred>` blocks; prior layers stay byte-identical. Null/absent → write the template below. See `references/context-lifecycle.md`.
+**Capsule-aware write** — if `gsd_run context provenance --file "${phase_dir}/${padded_phase}-CONTEXT.md"` is non-null, the file is a pre-seeded capsule: **never overwrite it**. Append a `## Discussion additions (<date>)` layer holding this discussion's `<decisions>`/`<deferred>` blocks; prior layers stay byte-identical. Null/absent → write the template below. See `gsd-core/references/context-lifecycle.md`.
 <!-- FORK:context END -->
 
 **Read the CONTEXT.md template now (lazy-loaded):**

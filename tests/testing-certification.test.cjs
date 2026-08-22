@@ -1026,7 +1026,8 @@ const SUMMARY_TEMPLATE = 'gsd-core/templates/summary.md';
 const POST_MERGE_GATE = 'gsd-core/workflows/execute-phase/steps/post-merge-gate.md';
 const TRANSITION = 'gsd-core/workflows/transition.md';
 const TUNE_UP = 'gsd-core/workflows/testing-strategy/steps/suite-tune-up.md';
-const SHIP = 'gsd-core/workflows/ship.md';
+const SHIP = 'gsd-core/workflows/ship/steps/certification-sweep.md'; // sweep extracted from ship.md (byte budget); the dispatch line remains in ship.md
+const SHIP_HOST = 'gsd-core/workflows/ship.md'; // the host: dispatch line + preflight ordering
 const CMD_TESTING_STRATEGY = 'commands/gsd/testing-strategy.md';
 const SKILL_TESTING_STRATEGY = 'skills/gsd-testing-strategy/SKILL.md';
 
@@ -1125,15 +1126,15 @@ describe('suite-metrics capture — the executor records what it actually ran', 
     assert.match(text, /never estimate|do not estimate|measured, not estimated/i);
   });
 
-  test('the line-pinned PROSE_ALLOWLIST entry for execute-plan.md:387 has not shifted', () => {
+  test('the line-pinned PROSE_ALLOWLIST entry for execute-plan.md:414 has not shifted', () => {
     // tests/no-bare-gsd-tools-command-position.test.cjs pins this file:line pair.
     // Wave 2 broke it once; this guard makes a re-break loud HERE, in the file
     // that owns the change, instead of in an upstream test.
-    const line = read(EXECUTE_PLAN).split('\n')[386];
+    const line = read(EXECUTE_PLAN).split('\n')[413];
     assert.match(
       line,
       /Every deliverable MUST be classified/,
-      'execute-plan.md line 387 must still be the allowlisted `validated downstream by` line'
+      'execute-plan.md line 414 must still be the allowlisted `validated downstream by` line'
     );
   });
 });
@@ -1515,19 +1516,15 @@ describe('the emitted mirror carries the certification-era scope (tracked N3)', 
 // The sweep block, bounded by its own FORK:strategy markers rather than a fixed
 // byte window (Wave 3 review T4: a +4000 slice ran past </step> into push_branch).
 function shipSweep() {
-  const text = read(SHIP);
-  const sweepAt = at(text, /certification sweep/i);
-  const begins = [...text.matchAll(/<!-- FORK:strategy BEGIN -->/g)].map((m) => m.index);
-  const ends = [...text.matchAll(/<!-- FORK:strategy END -->/g)].map((m) => m.index);
-  for (let i = 0; i < begins.length; i++) {
-    if (begins[i] < sweepAt && sweepAt < ends[i]) return text.slice(begins[i], ends[i]);
-  }
-  assert.fail('the certification sweep must sit inside a FORK:strategy marker pair');
+  // The sweep is the whole extracted step file (fork-owned wholesale); the
+  // dispatch line in ship.md stays inside its FORK:strategy pair and is
+  // asserted separately via SHIP_HOST.
+  return read(SHIP);
 }
 
 describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () => {
   test('ship carries the sweep at the pre-gate surface', () => {
-    const text = read(SHIP);
+    const text = read(SHIP_HOST);
     assert.match(text, /certification sweep/i);
   });
 
@@ -1561,8 +1558,9 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
     // inline (tests/phase6-capstone-conformance.test.cjs enforces it, and
     // tests/workflow-compat.test.cjs already bans the same shape for
     // workflow.tdd_mode). The recorded lines are the better signal anyway.
-    const text = read(SHIP);
-    assert.doesNotMatch(text, /config-get\s+workflow\.certification/, 'no inline capability config read in the host loop');
+    for (const f of [SHIP_HOST, SHIP]) {
+      assert.doesNotMatch(read(f), /config-get\s+workflow\.certification/, 'no inline capability config read in the host loop');
+    }
     const sweep = shipSweep();
     assert.match(sweep, /self-suppress/i);
     assert.match(sweep, /no phase carries a `certification:` line|not in use on this project/i,
@@ -1571,7 +1569,7 @@ describe('ship:pre milestone certification sweep (spec §5 secondary slot)', () 
   });
 
   test('the sweep sits after the existing ship:pre gates and before the branch is pushed (by index)', () => {
-    const text = read(SHIP);
+    const text = read(SHIP_HOST);
     const windows = at(text, /Broken-windows ship gate/);
     const sweep = at(text, /certification sweep/i);
     const push = at(text, /<step name="push_branch">/);

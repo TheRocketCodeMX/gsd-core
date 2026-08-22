@@ -89,7 +89,7 @@ Requires a phase (`--phase <N>`, default: the active phase from STATE.md). Guard
 1. Extract the capsule's **Verified Facts** claims across all layers (latest layer supersedes).
 2. Spawn **2–3 explorer subagents** ("Explore" type) in parallel, splitting the claims between them. Prompt each: "For each claim, CONFIRM or REFUTE it against the live codebase. Do not trust the claim — hunt for counter-evidence first. Return per claim: verdict, evidence (path + exact substring), and the corrected claim when refuted."
 3. Append the findings as a `## Scout corrections (<date>)` layer, opening with the line: *corrections below override the corresponding claims above.* Refuted/corrected claims get full entries with fresh anchors; confirmed claims share one summary line.
-4. Commit: `gsd_run query commit "docs(context): scout corrections phase ${N}" --files <capsule>`.
+4. Commit: `gsd_run query commit "docs(context): scout corrections phase ${N}" --files "${CAPSULE_FILE}"`.
 
 **When offered:** pre-discussion, when provenance quality is `rich` AND the capsule is older than `context_lifecycle.verify_max_age_commits` commits — offered, never forced. AskUserQuestion (header "Scout") — "Capsule is rich but aging. Confirm-or-refute its facts against the live code first?" → "Scout" / "Skip" (TEXT_MODE: numbered list).
 

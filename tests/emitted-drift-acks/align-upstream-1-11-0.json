@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "paths": {
+    "gsd-core/references/brownfield-adaptation.md": "align-1.11.0: fork source unchanged; emitted copy re-transformed by upstream's #2875 descriptor-driven install pipeline (per-platform emitters rebuilt).",
+    "gsd-core/references/data-environments.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/design-ingestion.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/engineering-standards.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/planner-source-audit.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/product-discovery.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/strategy-chain.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/test-strategy.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/untrusted-input-boundary.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/references/verifier-fidelity-gates.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/templates/design-inventory.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/templates/legacy-inventory.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/workflows/execute-phase/steps/failure-classification.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/workflows/plan-phase/modes/prd-express.md": "align-1.11.0: stale fork orphan DELETED (upstream reachability lint flagged it; steps/prd-express-path.md is the live successor) \u2014 emitted antigravity/augment copies removed with it.",
+    "ai-integration-phase.md": "align-1.11.0: grew 1 byte \u2014 upstream v1.11.0 punctuation/wording touch-up in shared preamble.",
+    "plan-review-convergence.md": "align-1.11.0: grew 4694 bytes \u2014 upstream v1.11.0 convergence-loop expansion (disk-strict completion predicate #3186 + reviewer retry ceiling #3210).",
+    "quick.md": "align-1.11.0: grew 1607 bytes \u2014 upstream v1.11.0 quick-mode additions (scopeToPhase #3511 plumbing and gate-runner wording).",
+    "secure-phase.md": "align-1.11.0: grew 6 bytes \u2014 upstream tag rename ripple (files_to_read -> required_reading).",
+    "ui-review.md": "align-1.11.0: grew 6 bytes \u2014 upstream tag rename ripple (files_to_read -> required_reading).",
+    "validate-phase.md": "align-1.11.0: grew 6 bytes \u2014 upstream tag rename ripple (files_to_read -> required_reading).",
+    "gsd-core/workflows/learn.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/workflows/testing-strategy.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/workflows/testing-strategy/steps/suite-tune-up.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "gsd-core/workflows/verify-work/steps/agentic-certification.md": "align-1.11.0: fork source re-emitted by the #2875 descriptor-driven pipeline.",
+    "context.md": "wave-4b: scout-corrections commit --files placeholder -> shell-var form (#2269 gate), +8B",
+    "autonomous.md": "wave-4b: #3210 blocker-handling re-inlined per upstream's own shape (fragment deleted; upstream test pins it inline), +1405B",
+    "discuss-phase.md": "wave-4b: canonical gsd-core/references/ cite form x2 (#3576), +18B",
+    "gsd-core/workflows/autonomous/blocker-handling.md": "wave-4b: DELETED from the emit \u2014 upstream ships the #3210 blocker text inline in autonomous.md and its test pins it there; the fork's verbatim-copy fragment is retired (content re-inlined)."
+  }
+}

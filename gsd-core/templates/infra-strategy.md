@@ -21,7 +21,7 @@ Every rung above the default must name the **current, concrete trigger** that ju
 
 ## Data layer (per environment)
 
-Detail and pooling rules: see `references/data-environments.md`. **Pooling is mandatory** wherever serverless compute talks to Postgres.
+Detail and pooling rules: see `gsd-core/references/data-environments.md`. **Pooling is mandatory** wherever serverless compute talks to Postgres.
 
 | Env | Database | Size / tier | Notes |
 |-----|----------|-------------|-------|
@@ -38,7 +38,7 @@ Detail and pooling rules: see `references/data-environments.md`. **Pooling is ma
 
 ## Secrets
 
-[Secret Manager / Secrets Manager / Key Vault] — injected at deploy, never in tfvars or repo. (See `references/data-environments.md` for per-env secret handling.)
+[Secret Manager / Secrets Manager / Key Vault] — injected at deploy, never in tfvars or repo. (See `gsd-core/references/data-environments.md` for per-env secret handling.)
 
 ## Observability floor (day one)
 

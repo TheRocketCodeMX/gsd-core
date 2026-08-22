@@ -57,6 +57,10 @@
         }
       ]
     },
+    "triggerPrecedence": [
+      "skills",
+      "commands"
+    ],
     "commandStyle": "slash-hyphen",
     "hooksSurface": "cursor-hooks-json",
     "hookEvents": "claude",
@@ -107,8 +111,7 @@
         "stop",
         "subagentStart",
         "subagentStop"
-      ],
-      "reviewerCli": true
+      ]
     }
   },
   "reviewer": {

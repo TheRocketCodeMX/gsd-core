@@ -57,6 +57,8 @@ export const CANONICAL_EXACT: ReadonlySet<string> = new Set([
   'DESIGN-INVENTORY.md',        // design ingestion
   'PROJECT-DISCUSSION-LOG.md',  // strategy-chain discussion log
   'MASTER-CONTEXT.md',          // context capability (capsule index)
+  'STATE-ARCHIVE.md', // state.cts's cmdStatePrune writes this at the .planning/ root
+  'milestone.lock', // #3311: milestone (phase + session) claim (src/milestone-lock.cts); persistent, unlike the transient STATE.md.lock/WAITING.json
 ]);
 
 // Pattern-match canonical file names (regex tests on the basename)

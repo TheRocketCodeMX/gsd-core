@@ -1,1 +1,3 @@
-[]
+[
+  "fix-2289-context-monitor-event-allowlist.test.cjs"
+]
