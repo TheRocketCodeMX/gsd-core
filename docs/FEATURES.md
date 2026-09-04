@@ -1238,9 +1238,10 @@ When verification returns `human_needed`, items are persisted as a trackable HUM
 - REQ-FAST-02: System MUST produce an atomic git commit for the change
 - REQ-FAST-03: System MUST track the task in `.planning/quick/` for state consistency
 - REQ-FAST-04: System MUST NOT be used for tasks requiring research, multi-step planning, or verification
+- REQ-FAST-05: System MUST NOT redirect to `/gsd-quick` on file count alone below the ~10-file ceiling
 
 **When to use vs `/gsd-quick`:**
-- `/gsd-fast` — One-sentence tasks executable in under 2 minutes (typo, config change, small addition)
+- `/gsd-fast` — Tasks you already know how to make: typos, config changes, renames, deleting a component with its tests and styles, dead-code cleanup
 - `/gsd-quick` — Anything needing research, multi-step planning, or verification
 
 ---

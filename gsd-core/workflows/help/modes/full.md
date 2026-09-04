@@ -207,11 +207,11 @@ Result: Creates `.planning/quick/NNN-slug/PLAN.md`, `.planning/quick/NNN-slug/NN
 **`/gsd:fast [description]`**
 Execute a trivial task inline — no subagents, no planning files, no overhead.
 
-For tasks too small to justify planning: typo fixes, config changes, forgotten commits, simple additions. Runs in the current context, makes the change, commits, and logs to STATE.md.
+For tasks where you already know what to change: typo fixes, config changes, renames, removing a component along with its tests and styles, dead-code cleanup, forgotten commits. Runs in the current context, makes the change, commits, and logs to STATE.md.
 
 - No PLAN.md or SUMMARY.md created
 - No subagent spawned (runs inline)
-- ≤ 3 file edits — redirects to `/gsd:quick` if task is non-trivial
+- Redirects to `/gsd:quick` only when the work needs research, is ambiguous, adds a dependency or architectural pattern, or spans more than ~10 files — not on file count alone
 - Atomic commit with conventional message
 
 Usage: `/gsd:fast "fix the typo in README"`
