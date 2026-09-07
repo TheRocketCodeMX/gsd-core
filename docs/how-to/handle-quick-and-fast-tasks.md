@@ -11,10 +11,10 @@ For context on when the full phase pipeline is worth its overhead, see [Context 
 | Situation | Command |
 |-----------|---------|
 | Fixing a bug, adding a small feature, or any task you cannot summarise as a single trivial edit | `/gsd-quick` |
-| Fixing a typo, updating a config value, adding a `.gitignore` entry, or any change that touches ≤ 3 files and takes under a minute | `/gsd-fast` |
+| Fixing a typo, updating a config value, adding a `.gitignore` entry, deleting a component along with its tests and styles, or any other change you already know how to make | `/gsd-fast` |
 | The task has unknowns, needs research, or will touch more than a handful of files | `/gsd-quick` with `--research` |
 
-**The rule of thumb:** if you hesitate for even a moment about whether the task is trivial, use `/gsd-quick`. `/gsd-fast` redirects you to `/gsd-quick` automatically if the scope looks non-trivial.
+**The rule of thumb:** if you already know exactly what to change, use `/gsd-fast` — file count is not the test. Reach for `/gsd-quick` when the work needs research, the intent is ambiguous, it introduces a dependency or a new architectural pattern, or it spans more than ~10 files. `/gsd-fast` redirects you to `/gsd-quick` automatically when it hits one of those.
 
 ---
 

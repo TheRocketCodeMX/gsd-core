@@ -24,7 +24,7 @@ Existing codebase? Run `/gsd:onboard` to map the repo, ingest existing docs, and
 |---|---|
 | `/gsd:progress` | Where am I, what's next — also routes freeform intent with `--do "..."` |
 | `/gsd:quick` | Small ad-hoc task with GSD guarantees (planning dir + atomic commit) |
-| `/gsd:fast "<task>"` | Trivial inline change — no subagents, ≤3 file edits |
+| `/gsd:fast "<task>"` | Known, mechanical change — runs inline, no subagents |
 | `/gsd:discuss-phase <N>` | Capture vision and decisions before planning |
 | `/gsd:debug "<symptom>"` | Persistent debug session, survives `/clear` |
 | `/gsd:capture` | Save an idea, todo, note, seed, or backlog item |
