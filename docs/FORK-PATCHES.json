@@ -1079,6 +1079,14 @@
    ]
   },
   {
+   "path": "tests/failing-direction.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "cap mirrors the XL tier this fork records for gsd-planner"
+   ]
+  },
+  {
    "path": "tests/fix-2289-context-monitor-event-allowlist.test.cjs",
    "feature": "context-monitor",
    "mode": "anchors-only",
@@ -1510,7 +1518,8 @@
    "mode": "anchors-only",
    "anchors": [
     "-UAT-superseded-",
-    "\\[\\\\w-\\]\\+"
+    "\\[\\\\w-\\]\\+",
+    "UAT_CERTIFIER_RESULT"
    ]
   },
   {

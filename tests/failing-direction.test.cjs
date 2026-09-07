@@ -578,7 +578,12 @@ describe('the plan-authoring contract text (#3172)', () => {
     // itself, and the absence of this issue's rule from the agent file.
     const src = read('agents/gsd-planner.md');
     const lf = src.replace(/\r\n/g, '\n').length;
-    assert.ok(lf < 49152, `gsd-planner.md is ${lf} LF chars — must stay < 49152 (#3172 keeps the planner frozen; the rule lives in plan-phase.md's spawn contract)`);
+    // FORK: cap mirrors the XL tier this fork records for gsd-planner in
+    // tests/emitted-sizes.test.cjs (upstream's body is 48,838 of 49,152 — no fork
+    // block fits; same pin as tests/agent-tracked-source-rule.test.cjs and
+    // tests/planner-decomposition.test.cjs). The freeze this guards still holds:
+    // the fork's FORK:fidelity blocks predate #3172. Ratchet back if upstream shrinks.
+    assert.ok(lf < 57344, `gsd-planner.md is ${lf} LF chars — must stay < 57344 (#3172 keeps the planner frozen; the rule lives in plan-phase.md's spawn contract)`);
     assert.ok(!src.includes('fails_when'),
       'the failing-direction rule belongs in the spawn contract, not the frozen agent file (#3172)');
   });

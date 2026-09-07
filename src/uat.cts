@@ -859,6 +859,9 @@ function buildCheckpoint(currentTest: { number: number; name: string; expected: 
  * favor of the fail-safe direction over a larger "known synonyms" allowlist.
  */
 const UAT_PASS_RESULTS = new Set(['pass', 'passed']);
+// FORK: the certification token verify-work's agentic-certification step writes
+// (`result: [pending-certifier]`) — see the audit-uat skip in parseUatItems.
+const UAT_CERTIFIER_RESULT = 'pending-certifier';
 
 /**
  * A fenced-code OPENER line at COLUMN 0 (``` or ~~~).
@@ -1565,6 +1568,14 @@ function parseUatItemsWithStats(content: string): { items: UatItem[]; headingsSe
     // dead work and implied a second, independent normalization that does not
     // exist (#3078 round-5 MINOR).
     if (UAT_PASS_RESULTS.has(result)) continue;
+    // FORK (re-gate 6 N2): `[pending-certifier]` is the CERTIFIER's own state —
+    // a checkpoint verify-work's agentic-certification step owns and resolves
+    // (verify-work/steps/agentic-certification.md §7). It is never the human's
+    // outstanding work, so audit-uat must not surface it. Under the old
+    // `pending|skipped|blocked` whitelist the widened `[\w-]+` token kept it out
+    // implicitly; the #3707 PASS-set inversion surfaces every non-pass token, so
+    // the rule has to be stated here.
+    if (result === UAT_CERTIFIER_RESULT) continue;
 
     // #3707 follow-up MINOR: the heading filter above now admits `### 3.`
     // (no name at all) and `### 3.Foo` (no space before the name), so this
