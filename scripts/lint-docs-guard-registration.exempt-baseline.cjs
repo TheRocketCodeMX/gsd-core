@@ -54,6 +54,7 @@ const DOCS_GUARD_EXEMPT_BASELINE = [
   'emitted-attribution.test.cjs',
   'eslint-rules.test.cjs',
   'estimate-calibrate.test.cjs',
+  'fix-2289-context-monitor-event-allowlist.test.cjs',
   'gen-context-index.test.cjs',
   'gen-registry.test.cjs',
   'gsd-agent-isolation-guard.test.cjs',
@@ -80,11 +81,14 @@ const DOCS_GUARD_EXEMPT_BASELINE = [
   'repo-invariants.test.cjs',
   'require-issue-link-policy.test.cjs',
   'reviewer-manifest-body.test.cjs',
+  'roadmap-after-strategy.test.cjs',
   'run-tests-harness.test.cjs',
   'runtime-name-policy.test.cjs',
   'security-prompt-injection.security.test.cjs',
   'shipped-reference-cites.test.cjs',
+  'skill-frontmatter-contract.test.cjs',
   'state.test.cjs',
+  'workflow-size-budget.test.cjs',
   'worktree-safety.test.cjs',
 ];
 
@@ -104,6 +108,14 @@ const DOCS_GUARD_EXEMPT_BASELINE = [
  * exact same scan.
  */
 const DOCS_GUARD_EXEMPT_DOCS_PATHS = {
+  // FORK (align-1.13.0): fix-2289-context-monitor-event-allowlist.test.cjs mentions these docs/ paths in prose or roster strings only — no docs/ file is read.
+  'fix-2289-context-monitor-event-allowlist.test.cjs': ['docs/FORK-DELTA.md'],
+  // FORK (align-1.13.0): roadmap-after-strategy.test.cjs mentions these docs/ paths in prose or roster strings only — no docs/ file is read.
+  'roadmap-after-strategy.test.cjs': ['docs/superpowers/plans/2026-07-14-roadmap-after-strategy-chain.md'],
+  // FORK (align-1.13.0): skill-frontmatter-contract.test.cjs mentions these docs/ paths in prose or roster strings only — no docs/ file is read.
+  'skill-frontmatter-contract.test.cjs': ['docs/FORK-DELTA.md'],
+  // FORK (align-1.13.0): workflow-size-budget.test.cjs mentions these docs/ paths in prose or roster strings only — no docs/ file is read.
+  'workflow-size-budget.test.cjs': ['docs/FORK-DELTA.md'],
   // #2761: cites docs/adr/612-bracket-phase-id-convention.md in an explanatory
   // comment describing ADR-612's Decision 1; the file never reads that (or any)
   // docs/ file — every read call it makes targets a tmpdir .planning fixture.

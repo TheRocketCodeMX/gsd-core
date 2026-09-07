@@ -362,11 +362,13 @@ function transformFile(content, preamble) {
   // `carriedPreamble` records which blocks had a canonical preamble BEFORE the
   // strip pass, so an author's deliberate per-block copy survives (see the
   // opt-in rationale in this file's header).
-  const preambleStr = preamble.join('\n');
   const carriedPreamble = [];
   const strippedBlocks = shellBlockRanges.map((range) => {
     const blockLines = outputLines.slice(range.contentStart, range.contentEnd);
-    carriedPreamble.push(blockLines.join('\n').includes(preambleStr));
+    // Shape match (same predicate as existingPreambleBlockIdx above), not byte
+    // equality: a block that carried an OLDER canonical preamble still opted in,
+    // and must be re-emitted with the current one rather than stripped.
+    carriedPreamble.push(blockLines.some((l) => /^\s*_GSD_SHIM_NAME=/.test(l)));
     const stripped = stripAndReplace(blockLines, preamble);
     return stripped;
   });

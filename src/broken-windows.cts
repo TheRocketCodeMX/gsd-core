@@ -1203,7 +1203,14 @@ function renameWithRetry(tmp: string, target: string): void {
   throw lastErr;
 }
 
-function writeLedgerAtomic(cwd: string, ledger: Ledger): void {
+/**
+ * @param opts.regenerateTable — FORK (windows-ledger): set by `windows reconcile`, the
+ * one verb whose contract is to REGENERATE the rendered table from the fenced JSON
+ * (the sole source of truth). The #3689 table-drift guard below exists to stop
+ * every OTHER verb from silently overwriting a hand-edited table; for reconcile a
+ * missing or drifted table region is the input, not a refusal.
+ */
+function writeLedgerAtomic(cwd: string, ledger: Ledger, opts: { regenerateTable?: boolean } = {}): void {
   ensurePlanningDir(cwd);
   const p = ledgerPath(cwd);
   const tmp = `${p}.${process.pid}.tmp`;
@@ -1304,6 +1311,7 @@ function writeLedgerAtomic(cwd: string, ledger: Ledger): void {
     // the post-mutation state: an appended entry or a changed status);
     // comparing against `ledger` would report drift on every legitimate
     // write.
+    if (!opts.regenerateTable) {
     const onDiskEntries = parseJsonBlock(existing, preImageExpectedTotal);
     const expectedTable = renderTable(onDiskEntries);
     const actualTable = extractTableRegion(existing, preImageExpectedTotal);
@@ -1331,6 +1339,7 @@ function writeLedgerAtomic(cwd: string, ledger: Ledger): void {
           'directly, or discard the table edit and re-run the command so gsd-tools ' +
           'regenerates the table; never hand-edit the rendered table.',
       );
+    }
     }
   }
 
@@ -1539,7 +1548,7 @@ export function cmdWindowsReconcile(
 
   const result = reconcileLedger(raw, { now: nowIso() });
   if (result.repaired || result.normalized) {
-    writeLedgerAtomic(cwd, result.ledger);
+    writeLedgerAtomic(cwd, result.ledger, { regenerateTable: true });
   }
   emit({
     ok: true,

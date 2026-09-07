@@ -1,3 +1,4 @@
+// docs-guard-exempt: no docs/ file is read; 'docs-update.md' / 'ingest-docs.md' are commands/gsd/ roster entries, not repo docs.
 // allow-test-rule: source-text-is-the-product
 // The commands/gsd/*.md and gsd-core/workflows/*.md files are the
 // installed agent stubs — their frontmatter and workflow body IS the
@@ -950,11 +951,12 @@ const DEFAULT_BUDGET = 60;
 // takes — the pinned response-language directive and its blank separator — are a
 // coverage contract every workflow carries, not content creep, which is what this
 // budget guards. The ratchet rule is unchanged: actualMax 846, slack 0.
-// FORK: raised 844 → 880 for the v1.9.0 realignment. Upstream's own full.md is
-// 829 lines (15 under the 844 ceiling); the fork's help entries (learn + the
-// 9-skill strategy chain + roadmap/context rows, see docs/FORK-DELTA.md) add 39
-// lines that cannot fit under it. actual=868; ratchet back on upstream shrink.
-const FULL_BUDGET = 880;
+// FORK: raised 844 → 880 for the v1.9.0 realignment, → 890 for v1.13.0. Upstream's
+// own full.md is 846 lines (its ceiling is 846 — zero headroom); the fork's help
+// entries (learn + the 9-skill strategy chain + roadmap/context rows, see
+// docs/FORK-DELTA.md) add 39 lines that cannot fit under it. actual=885; ratchet
+// back on upstream shrink.
+const FULL_BUDGET = 890;
 
 // Grace bands:
 //   SMALL_GRACE — for the tiny brief/default/dispatcher files (≤ ~70 lines):

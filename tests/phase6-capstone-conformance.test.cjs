@@ -220,7 +220,13 @@ describe('ADR-857 Phase 6 capstone conformance (#1139)', () => {
     // conflict-record persistence is core planner control flow, not an un-extracted
     // optional feature.
     const { lfByteCount } = require('../scripts/workflow-size.cjs');
-    const PRE_PHASE6 = { 'plan-phase.md': 98300, 'execute-phase.md': 93600 };
+    //
+    // FORK (align-1.13.0): plan-phase.md ceiling raised 98300 → 100344. Upstream's own
+    // v1.13.0 body is 98,290 LF bytes — 10 bytes under its own freeze, zero headroom —
+    // so the fork's marked context/grounding blocks (~2 KB, already pointer-compressed)
+    // cannot fit. Measured 100280 + 64; same policy as the v1.10.0 execute-phase raise:
+    // ratchet back down at the next upstream shrink. execute-phase.md keeps upstream's 93600.
+    const PRE_PHASE6 = { 'plan-phase.md': 100344, 'execute-phase.md': 93600 };
     const notShrunk = [];
     for (const [file, frozen] of Object.entries(PRE_PHASE6)) {
       const now = lfByteCount(path.join(ROOT, 'gsd-core', 'workflows', file));

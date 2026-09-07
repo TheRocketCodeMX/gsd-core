@@ -231,6 +231,14 @@ const TABLE = [
     allow: () => ({ payload: {} }), // no session_id -> allow(undefined)
   },
   {
+    // FORK (grounding capability, #11): FileChanged advisory hook — advisory-only,
+    // so its declared crash policy is ALLOW like the other advisory hooks above.
+    file: 'gsd-grounding-index-refresh.js',
+    stdinTimeoutMs: 8000,
+    declaredOnCrash: 'allow',
+    allow: () => ({ payload: { event: 'unlink' } }), // unlink events -> allow(undefined)
+  },
+  {
     file: 'gsd-config-reload.js',
     stdinTimeoutMs: 8000,
     declaredOnCrash: 'allow',

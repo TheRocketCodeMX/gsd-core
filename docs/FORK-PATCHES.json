@@ -893,7 +893,8 @@
     "reconcileLedger",
     "amendWindow",
     "WINDOWS_DUPLICATE_ID",
-    "stripHeaderProse"
+    "stripHeaderProse",
+    "regenerateTable"
    ]
   },
   {
@@ -1161,7 +1162,8 @@
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "raised 32000 → 34400 for the v1\\.9\\.0 realignment"
+    "raised 32000 → 34400 for the v1\\.9\\.0 realignment",
+    "XL cap raised 98304 → 100344 for the v1\\.13\\.0 realignment"
    ]
   },
   {
@@ -1537,6 +1539,14 @@
     "git add -- \\{touched paths\\}",
     "git diff --cached --name-only",
     "Never bounce on file count alone"
+   ]
+  },
+  {
+   "path": "tests/phase6-capstone-conformance.test.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "plan-phase\\.md ceiling raised 98300 → 100344"
    ]
   }
  ]

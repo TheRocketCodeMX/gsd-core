@@ -170,6 +170,8 @@ const DOCS_GUARD_TESTS = {
   // entry).
   'tests/learnings.test.cjs': ['docs/FEATURES.md'],
   'tests/analyze-dependencies.test.cjs': ['docs/COMMANDS.md'],
+  // FORK: auto-advance-endings.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
+  'tests/auto-advance-endings.test.cjs': ['docs/FORK-DELTA.md'],
   'tests/autonomous-converge.test.cjs': [
     'docs/COMMANDS.md',
     'docs/how-to/run-phases-autonomously.md',
@@ -252,6 +254,8 @@ const DOCS_GUARD_TESTS = {
   // (content invariants, F1/F3) and docs/README.md (F4, the index link).
   'tests/exit-code-registry.test.cjs': ['docs/reference/exit-codes.md', 'docs/README.md'],
   'tests/external-job-waiting.test.cjs': ['docs/reference/planning-artifacts.md'],
+  // FORK: fork-delta-manifest.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
+  'tests/fork-delta-manifest.test.cjs': ['docs/FORK-DELTA.md', 'docs/FORK-PATCHES.json'],
   // Rows 8/9 (negative controls) read real docs/registries/eos.json and
   // docs/adr/0001-dispatch-policy-module.md and assert on their EXACT
   // committed content (an entry's name field, ADR-0001's H1 title) as a
@@ -362,6 +366,8 @@ const DOCS_GUARD_TESTS = {
   'tests/secure-phase.test.cjs': ['docs/CONFIGURATION.md'],
   'tests/security-dead-exports.regression.test.cjs': ['docs/FEATURES.md'],
   'tests/security.test.cjs': ['docs/INVENTORY-MANIFEST.json'],
+  // FORK: testing-certification.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
+  'tests/testing-certification.test.cjs': ['docs/COMMANDS.md', 'docs/CONTEXT-INDEX.json', 'docs/superpowers/specs/2026-08-10-testing-certification-design.md'],
   // Walks docs/ recursively (todos-done-rename-guard.test.cjs:19-22
   // SCAN_DIRS) looking for stale references — a generic tree walk.
   'tests/todos-done-rename-guard.test.cjs': ['*'],

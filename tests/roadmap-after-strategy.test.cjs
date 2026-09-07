@@ -1,3 +1,4 @@
+// docs-guard-exempt: no docs/ file is read; every read targets gsd-core/ workflow/agent sources and tmpdir .planning fixtures.
 'use strict';
 
 /**

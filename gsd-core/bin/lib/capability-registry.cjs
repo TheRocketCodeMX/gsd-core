@@ -1292,7 +1292,7 @@ const capabilities = {
   "context": {
     "id": "context",
     "role": "feature",
-    "version": "2.4.6",
+    "version": "2.5.0",
     "title": "Context lifecycle — durable project knowledge",
     "description": "The knowledge lifecycle: MASTER-CONTEXT index, quality-stamped phase capsules inside <N>-CONTEXT.md, append-only layers, deterministic anchor verification (gsd-tools context verify), the calm context-pressure flush hook, and the re-anchor procedure. Doctrine: plans are perishable; context is durable.",
     "tier": "full",
@@ -1981,7 +1981,7 @@ const capabilities = {
   "grounding": {
     "id": "grounding",
     "role": "feature",
-    "version": "2.4.6",
+    "version": "2.5.0",
     "title": "Source-grounding enforcement",
     "description": "Source-grounding enforcement: the `gsd-tools grounding required` resolver that computes the required source set from the project's ## Strategy Plan (done steps + present oracles), and the workflow.grounding_gate config slice consumed by the plan-phase deterministic grounding gate. The check.grounding-plan verb and the plan-phase bash gate stay in core by design — this capability owns the command family and the config key only.",
     "tier": "full",
@@ -2584,7 +2584,7 @@ const capabilities = {
   "learn": {
     "id": "learn",
     "role": "feature",
-    "version": "2.4.6",
+    "version": "2.5.0",
     "title": "Learn teaching system",
     "description": "The /gsd:learn teaching system: concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
     "tier": "full",
@@ -3903,7 +3903,7 @@ const capabilities = {
   "strategy": {
     "id": "strategy",
     "role": "feature",
-    "version": "2.4.6",
+    "version": "2.5.0",
     "title": "Strategy chain",
     "description": "Discovery/strategy chain: the Strategy Plan lifecycle skills (discover-product, model-domain, recommend-architecture, frontend-architecture, security-strategy, testing-strategy, infrastructure-strategy, cicd-strategy, legacy-inventory) and the `gsd-tools project` command family (mode, strategy-plan, strategy-skipped, strategy-done) backing PROJECT.md ## Mode and ## Strategy Plan queries. The family name stays `project` (67 workflow/agent call sites); a tripwire test guards against upstream re-shadowing it with a hardcoded case.",
     "tier": "full",

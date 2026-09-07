@@ -2077,10 +2077,14 @@ describe('broken-windows CLI: windows reconcile', () => {
   test('reconcile re-renders a hand-mangled but count-consistent ledger (normalized, not repaired)', (t) => {
     const tmp = createTempDir('bw-reconcile-normalize-');
     t.after(() => cleanup(tmp));
-    // Counts agree, so the strict reader accepts it — but the fence line was
-    // mangled by a hand edit (`````json[` on one line). Reconcile re-renders.
+    // Counts agree, so the strict reader accepts it — but a formatter narrowed the
+    // four-backtick fence to three (upstream #3733: the reader accepts any
+    // CommonMark-legal fence width, the writer still emits four). Reconcile
+    // re-renders. (Pre-1.13.0 this fixture mangled the fence onto one line —
+    // a shape upstream's reader now refuses outright, so it is no longer the
+    // "count-consistent but not renderer-shaped" case this test is about.)
     const mangled = rawLedgerWithCounts([makeRawEntry({ id: 1 })], { open: 1, waived: 0, fixed: 0, total: 1 })
-      .replace('````json\n[', '````json[');
+      .replace('````json\n[', '```json\n[').replace(/\r?\n````\r?\n$/, '\n```\n');
     writeLedger(tmp, mangled);
 
     const rec = runGsdTools(['windows', 'reconcile'], tmp);
@@ -2136,6 +2140,7 @@ describe('broken-windows: the REASON enum is a frozen typed surface', () => {
       'WINDOWS_INVALID_TEXT',
       'WINDOWS_LEDGER_MALFORMED',
       'WINDOWS_LEDGER_MISSING',
+      'WINDOWS_LEDGER_TABLE_DRIFT', // upstream #3733 (align-1.13.0): table-region drift refusal
       'WINDOWS_OK',
       'WINDOWS_USAGE',
       'WINDOWS_WAIVE_REASON_EMPTY',

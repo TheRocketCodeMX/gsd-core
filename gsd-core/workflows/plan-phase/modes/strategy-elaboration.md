@@ -1,3 +1,5 @@
+Apply response_language to all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code, paths, and identifiers.
+
 # plan-phase — roadmap elaboration (lazy mode)
 
 Loaded by `plan-phase` Step 1.6 **only when `ELAB=stale`** (a coarse roadmap predates the strategy artifacts). Keeps this body out of the always-loaded plan-phase context for the common case where the roadmap is already elaborated or no strategy artifacts exist.
