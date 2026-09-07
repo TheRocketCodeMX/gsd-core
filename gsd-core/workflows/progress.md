@@ -27,7 +27,7 @@ DISCUSS_MODE=$(gsd_run query config-get workflow.discuss_mode --raw 2>/dev/null 
 ```
 
 <!-- FORK:strategy BEGIN -->
-**Strategy chain in progress (roadmap pending) — checked BEFORE the `init_incomplete` route below.** The roadmap is now generated once, at the end of the strategy chain, by `/gsd:roadmap`. So a fresh project that is mid-chain has PROJECT.md but no ROADMAP.md / STATE.md yet — that is expected, not an error. If `project_exists` is true, `roadmap_exists` is false, `state_exists` is false, AND PROJECT.md contains a `## Strategy Plan` section, the strategy chain is still running:
+**Strategy chain in progress (roadmap pending) — checked BEFORE the `init_incomplete` route below.** The roadmap is now generated once, at the end of the strategy chain, by `/gsd:roadmap`. So a fresh project that is mid-chain has PROJECT.md and REQUIREMENTS.md but no ROADMAP.md / STATE.md yet — that is expected, not an interrupted bootstrap, and not a case for resuming /gsd:new-project. If `project_exists` is true, `roadmap_exists` is false, `state_exists` is false, AND PROJECT.md contains a `## Strategy Plan` section, the strategy chain is still running:
 
 ```
 Strategy chain in progress — roadmap pending.

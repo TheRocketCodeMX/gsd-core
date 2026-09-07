@@ -1184,27 +1184,11 @@
    ]
   },
   {
-   "path": "src/config.cts",
-   "feature": "bracket-guard",
-   "mode": "anchors-only",
-   "anchors": [
-    "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
-   ]
-  },
-  {
    "path": "src/milestone.cts",
    "feature": "milestone-render",
    "mode": "anchors-only",
    "anchors": [
     "const nameSuffix = options.name && options.name !== version"
-   ]
-  },
-  {
-   "path": "tests/config.test.cjs",
-   "feature": "bracket-guard",
-   "mode": "anchors-only",
-   "anchors": [
-    "config-set phase_id_convention bracket warns that the grammar has no consumers"
    ]
   },
   {
@@ -1547,6 +1531,15 @@
    "mode": "anchors-only",
    "anchors": [
     "plan-phase\\.md ceiling raised 98300 → 100344"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/resume-project.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Strategy chain in progress \\(roadmap pending\\)"
    ]
   }
  ]

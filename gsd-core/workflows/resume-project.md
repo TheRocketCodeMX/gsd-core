@@ -29,6 +29,20 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `requirements_exists`, `init_incomplete`, `has_interrupted_agent`, `interrupted_agent_id`, `commit_docs`.
 
+<!-- FORK:strategy BEGIN -->
+**Strategy chain in progress (roadmap pending) — checked BEFORE the `init_incomplete` route below.** The roadmap is generated once, at the end of the strategy chain, by `/gsd:roadmap`, so a fresh project that is mid-chain has PROJECT.md but no ROADMAP.md / STATE.md yet — that is expected, not an interrupted bootstrap. If `project_exists` is true, `roadmap_exists` is false, `state_exists` is false, AND PROJECT.md contains a `## Strategy Plan` section, the strategy chain is still running:
+
+```
+Strategy chain in progress — roadmap pending.
+
+There is no STATE.md to resume from yet: the roadmap is generated once, at the end of the strategy chain.
+Continue with your next strategy step, or run /gsd:roadmap to generate the roadmap now
+(it will use whatever strategy artifacts exist so far, then point you into the build loop).
+```
+
+Then exit — do not route to `/gsd:new-project` (nothing was interrupted) and do not offer STATE.md reconstruction (there is no history to reconstruct). The roadmap is owed by `/gsd:roadmap`.
+<!-- FORK:strategy END -->
+
 **If `init_incomplete` is true (#4040 — interrupted bootstrap):** `.planning/` exists but initialization never finished — one or more of `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md` were never created. This is NOT a STATE.md-reconstruction case (there is no project history to reconstruct from). Route to initialization recovery: resume `/gsd:new-project`, which continues from the first missing artifact and keeps the existing PROJECT.md and any already-created artifacts. Do not proceed to load_state.
 
 **If `state_exists` is true:** Proceed to load_state
