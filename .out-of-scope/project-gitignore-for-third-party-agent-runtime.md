@@ -1,6 +1,6 @@
 # Scaffolding a project `.gitignore` for third-party agent runtime state
 
-**Source:** [#3198](https://github.com/open-gsd/gsd-core/issues/3198)
+**Source:** [#3198](https://github.com/TheRocketCodeMX/gsd-core/issues/3198)
 **Decision:** wontfix — closed as filed; the premise the request rests on does not hold
 **Date:** 2026-08-08
 

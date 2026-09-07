@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-09
-- **Issue:** [#2980](https://github.com/open-gsd/gsd-core/issues/2980)
+- **Issue:** [#2980](https://github.com/TheRocketCodeMX/gsd-core/issues/2980)
 - **Supersedes:** —
 - **Relationship to prior work:** Resolves the decision [ADR-2966](2966-loop-qa-walk.md) explicitly deferred when its `soft-error-exit-zero` smell first fired. Constrained by [ADR-1411](1411-resolution-provenance.md) (resolution must report its provenance) and [ADR-227](227-input-validation-shape-not-just-type.md).
 
@@ -25,8 +25,8 @@ The second idiom is used at **60 call sites across nine modules**:
 | `src/frontmatter.cts` | 6 | | `src/roadmap.cts` | 2 |
 | `src/commands.cts` | 5 | | **Total** | **60** |
 
-> **On the number 42.** [#2966](https://github.com/open-gsd/gsd-core/issues/2966) and
-> [#2980](https://github.com/open-gsd/gsd-core/issues/2980) both record this population as *42 sites
+> **On the number 42.** [#2966](https://github.com/TheRocketCodeMX/gsd-core/issues/2966) and
+> [#2980](https://github.com/TheRocketCodeMX/gsd-core/issues/2980) both record this population as *42 sites
 > across six modules*. That figure counts only the sites where `error` is the object literal's
 > **first** key — the shape a line regex such as `output\(\{\s*error:` matches. Eighteen further
 > sites put another key first (`src/roadmap.cts:260` is
@@ -182,3 +182,35 @@ long-lived observable behavior is to *document what is stable*, which is what th
   far smaller radius than the full 60.
 - A future `gsd-tools` major version provides a compatibility boundary that a CLI exit code
   otherwise lacks.
+
+## Amendment — 2026-08-27: the compatibility boundary now exists (#3912, ADR-3889 §4)
+
+The third bullet above is answered. [ADR-3889](3889-process-exit-contract.md) §4 gives `gsd-tools`
+a versioned exit-contract projection (`v1`/`v2`, selected by `--exit-contract=`/
+`GSD_EXIT_CONTRACT=`), and [#3912](https://github.com/TheRocketCodeMX/gsd-core/issues/3912) is the phase
+that lands the projection this idiom's population feeds.
+
+- **`output()` now declares an outcome.** A payload carrying a *serializable* `error` key — any key
+  order, `error: undefined` excluded because `JSON.stringify` drops it before the wire — records
+  `DEGRADED` into the pending-outcome cell `runMain` reads (`src/cli-exit.cts`, `src/io.cts`).
+- **Under `v1` — today's default — nothing here changes anything.** Every ratified site still exits
+  `0` byte-for-byte; the declaration is recorded but `projectOutcome` pins `DEGRADED -> 0` under
+  `v1` specifically so this ADR's Consequences ("no call site, exit code, or payload shape changes")
+  stays true.
+- **Under `v2`, a caller that opts in gets a real signal.** `DEGRADED` projects to exit code `80`
+  (`exitCodeFor('DEGRADED')`, ADR-3889's registry) — non-zero, so `if ! cmd; then` finally trips on
+  this idiom, without moving a single call site or changing the payload shape Option 2/3 above
+  declined to touch.
+- **The population this ADR ratifies is 64, not 60.** This ADR's own site count was measured by
+  brace-matching in 2026-08-09; an AST-based re-measure for #3912 finds the same **nine modules**
+  but **64** `output({error})` call sites, not 60 — the drift concentrates in
+  `src/frontmatter.cts` (7, not 6), `src/phase.cts` (4, not 2), and `src/roadmap.cts` (3, not 2).
+  Do not restate 60 as current: the `v2` `DEGRADED` projection above is asserted over the enumerated
+  **64**, and any future re-measure that finds a different count should amend this note rather than
+  silently correct the number back.
+
+This does not reopen the Decision above. The 64 sites are still unchanged, still exit `0` under the
+default contract, and the richer named-field shape (`state update-progress`'s
+`{"updated": false, "reason": …}`) is still the recommended shape for new code. What changes is that
+a caller who explicitly asks for `v2` no longer has to parse the payload to notice a degraded
+result — the exit code says so.

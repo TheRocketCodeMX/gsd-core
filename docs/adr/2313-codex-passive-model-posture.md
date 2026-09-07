@@ -2,10 +2,10 @@
 
 - **Status:** Accepted (Phase 0 — ADR only; locks the contract Phases 1–5 execute against. **No production code lands in this PR, and the posture is not real until Phase 1 merges.**)
 - **Date:** 2026-08-09
-- **Issue:** [#2313](https://github.com/open-gsd/gsd-core/issues/2313) — epic (`enhancement` + `approved-enhancement`). This Phase-0 sub-issue: [#3240](https://github.com/open-gsd/gsd-core/issues/3240)
-- **Supersedes:** [#2517](https://github.com/open-gsd/gsd-core/issues/2517)'s Codex per-tier `model` embedding **on the default path only**. Explicit `model_overrides` pins are unaffected; other runtimes are untouched.
+- **Issue:** [#2313](https://github.com/TheRocketCodeMX/gsd-core/issues/2313) — epic (`enhancement` + `approved-enhancement`). This Phase-0 sub-issue: [#3240](https://github.com/TheRocketCodeMX/gsd-core/issues/3240)
+- **Supersedes:** [#2517](https://github.com/TheRocketCodeMX/gsd-core/issues/2517)'s Codex per-tier `model` embedding **on the default path only**. Explicit `model_overrides` pins are unaffected; other runtimes are untouched.
 - **Builds on:** [ADR-1239](1239-gsd-embeddable-orchestration-engine.md) (**EoS**), which classifies Codex `modelMode: passive`. This ADR is the install-time half its `:137` boundary note names as "not yet written".
-- **Relationship to prior work:** completes [#2310](https://github.com/open-gsd/gsd-core/issues/2310) / PR [#2312](https://github.com/open-gsd/gsd-core/pull/2312), which shipped the emission *guard*. Related model defaults: [#2122](https://github.com/open-gsd/gsd-core/issues/2122) (GPT-5.6 family), [#838](https://github.com/open-gsd/gsd-core/issues/838) (model ⇄ effort coupling), [#774](https://github.com/open-gsd/gsd-core/issues/774) (light-tier `service_tier`/`model_verbosity`).
+- **Relationship to prior work:** completes [#2310](https://github.com/TheRocketCodeMX/gsd-core/issues/2310) / PR [#2312](https://github.com/TheRocketCodeMX/gsd-core/pull/2312), which shipped the emission *guard*. Related model defaults: [#2122](https://github.com/TheRocketCodeMX/gsd-core/issues/2122) (GPT-5.6 family), [#838](https://github.com/TheRocketCodeMX/gsd-core/issues/838) (model ⇄ effort coupling), [#774](https://github.com/TheRocketCodeMX/gsd-core/issues/774) (light-tier `service_tier`/`model_verbosity`).
 
 ## Context
 
@@ -39,7 +39,7 @@ account does not carry fails the request outright:
 400 invalid_request_error: "The 'sonnet' model is not supported when using Codex with a ChatGPT account."
 ```
 
-That is [#2310](https://github.com/open-gsd/gsd-core/issues/2310) / #2311 (closed duplicate). The
+That is [#2310](https://github.com/TheRocketCodeMX/gsd-core/issues/2310) / #2311 (closed duplicate). The
 blast is not confined to one agent: a typed agent spawn that 400s degrades the whole plan/execute
 flow to the non-equivalent generic-agent workaround, so the user loses the routing GSD was trying
 to give them *and* the agent specialization, in exchange for a pin that never worked.
@@ -202,7 +202,7 @@ same phase.
    path was never the defect — and it entrenches the contradiction with ADR-1239's `passive`
    classification.
 2. **Persist `runtime:"codex"` into the shared `~/.gsd/defaults.json`.** Rejected: that is exactly
-   the cross-runtime poisoning open bug [#2297](https://github.com/open-gsd/gsd-core/issues/2297)
+   the cross-runtime poisoning open bug [#2297](https://github.com/TheRocketCodeMX/gsd-core/issues/2297)
    flags. Recorded here as a standing constraint: no phase of this epic writes shared defaults.
 3. **Hybrid — pin when the model is available, omit when it is not.** *Deferred, not rejected on
    merit.* It needs a model-availability signal Codex does not clearly expose. If Codex later
@@ -226,7 +226,7 @@ same phase.
   other side; this ADR restates it. The two channels may share a descriptor once `EFFORT_RENDERING`
   folds in, but not here.
 - **Re-architecting `agent_runtime` derivation.** Phase 5 corrects `init`'s *report* of the
-  detected host (folded from [#2320](https://github.com/open-gsd/gsd-core/issues/2320)); the
+  detected host (folded from [#2320](https://github.com/TheRocketCodeMX/gsd-core/issues/2320)); the
   broader runtime-identity model and its intersection with #2297 is not redesigned here.
 - **Every non-Codex runtime.** Claude, OpenCode, Kilo, Hermes and the rest keep their current model
   handling unchanged.
@@ -238,12 +238,12 @@ exactly one phase, and every user-facing capability wired by an owning phase.
 
 | Phase | Sub-issue | Owns | Deliverable |
 |---|---|---|---|
-| 0 | [#3240](https://github.com/open-gsd/gsd-core/issues/3240) | this ADR | ADR + index regen + the ADR-1239 cross-ref |
-| 1 | [#3241](https://github.com/open-gsd/gsd-core/issues/3241) | D1–D5 | emission rework in `generateCodexAgentToml`; extract the posture predicate into one module with a parity test |
-| 2 | [#3242](https://github.com/open-gsd/gsd-core/issues/3242) | D6 | posture health-check, as a **new exported function** — `checkAgentsInstalled` carries 33 dependents and cyclomatic 25 and does not get more branches |
-| 3 | [#3243](https://github.com/open-gsd/gsd-core/issues/3243) | D7 | Codex `.toml` sync path |
-| 4 | [#3244](https://github.com/open-gsd/gsd-core/issues/3244) | end-to-end proof | smoke test: researcher/planner/checker under **both** `model_profile: balanced` (the default, and the path that actually changes) **and** `inherit` — see the scoping correction below |
-| 5 | [#3245](https://github.com/open-gsd/gsd-core/issues/3245) | #2320 fold | `init` reports the detected host; explicit `config.runtime` still overrides; no `defaults.json` write |
+| 0 | [#3240](https://github.com/TheRocketCodeMX/gsd-core/issues/3240) | this ADR | ADR + index regen + the ADR-1239 cross-ref |
+| 1 | [#3241](https://github.com/TheRocketCodeMX/gsd-core/issues/3241) | D1–D5 | emission rework in `generateCodexAgentToml`; extract the posture predicate into one module with a parity test |
+| 2 | [#3242](https://github.com/TheRocketCodeMX/gsd-core/issues/3242) | D6 | posture health-check, as a **new exported function** — `checkAgentsInstalled` carries 33 dependents and cyclomatic 25 and does not get more branches |
+| 3 | [#3243](https://github.com/TheRocketCodeMX/gsd-core/issues/3243) | D7 | Codex `.toml` sync path |
+| 4 | [#3244](https://github.com/TheRocketCodeMX/gsd-core/issues/3244) | end-to-end proof | smoke test: researcher/planner/checker under **both** `model_profile: balanced` (the default, and the path that actually changes) **and** `inherit` — see the scoping correction below |
+| 5 | [#3245](https://github.com/TheRocketCodeMX/gsd-core/issues/3245) | #2320 fold | `init` reports the detected host; explicit `config.runtime` still overrides; no `defaults.json` write |
 
 **Phase 5 exists because the coverage gate found it missing.** The #2320 fold was promised in a
 maintainer comment on #2313 but claimed by none of the phases in the epic body, which lists 0–4 —
@@ -334,3 +334,18 @@ is silently no-pin, matching how `""` already behaved.
 
 This ADR's D2 ("embed a `model` only for an explicit real-Codex pin") always implied this. The
 implementation simply did not enforce it, and no test covered the case.
+
+## Amendment (2026-09-04): capability-gated invocation-time routing (#4270)
+
+Codex now exposes `model` and `reasoning_effort` on some `spawn_agent` schemas. This is the
+invocation-time capability signal that did not exist when this ADR adopted a session-only posture.
+GSD therefore passes a workflow's resolved values on an individual spawn when — and only when —
+the visible schema advertises each field. The fields are detected independently from each other
+and from `agent_type`; absent fields, empty values, and `"inherit"` continue to degrade to session
+or static agent configuration.
+
+This amendment does not reverse D1–D4 for the static/install-time channel. Profile-resolved values
+remain absent from generated TOML, explicit `model_overrides` pins remain the only static model
+transport, and effort remains coupled to a static pin there. It supersedes only the broader claim
+that Codex has no tier routing: capable schemas now route at invocation time, while older schemas
+retain the passive fallback.

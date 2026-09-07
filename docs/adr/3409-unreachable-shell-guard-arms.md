@@ -2,9 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-15
-- **Issue:** [#3409](https://github.com/open-gsd/gsd-core/issues/3409) (`epic` + `approved-enhancement`), which is why this ADR carries its number.
+- **Issue:** [#3409](https://github.com/TheRocketCodeMX/gsd-core/issues/3409) (`epic` + `approved-enhancement`), which is why this ADR carries its number.
 - **Supersedes:** nothing
-- **Relationship to prior work:** applies [ADR-3180](3180-planning-semantic-model-single-owner.md)'s Decision 4 mechanism — whole-repo discovery, exemption by documented reason rather than file allowlist, and the shrink-only ratchet of 4(e) — to a **different invariant**, one layer up from the derivation-counting `lint-planning-prompt-drift.cjs` owns. Distinct from [#3473](https://github.com/open-gsd/gsd-core/issues/3473), which owns the upstream fix described in Decision 7 below; this ADR deliberately does not attempt it.
+- **Relationship to prior work:** applies [ADR-3180](3180-planning-semantic-model-single-owner.md)'s Decision 4 mechanism — whole-repo discovery, exemption by documented reason rather than file allowlist, and the shrink-only ratchet of 4(e) — to a **different invariant**, one layer up from the derivation-counting `lint-planning-prompt-drift.cjs` owns. Distinct from [#3473](https://github.com/TheRocketCodeMX/gsd-core/issues/3473), which owns the upstream fix described in Decision 7 below; this ADR deliberately does not attempt it.
 
 Symbol names and shell idioms are the durable anchors throughout. Line references, where given, are as of `next` @ `bc9a22868` and will drift.
 
@@ -44,8 +44,8 @@ The audit this ADR mandates (Decision 5) surfaced more than the issue knew about
 
 | Shape | Sites | Note |
 |---|---|---|
-| `--pick … \|\| echo <default>` | 9 | 2 causing live wrong behavior ([#3365](https://github.com/open-gsd/gsd-core/issues/3365); `phase_req_ids` never reaching its `TBD` sentinel); 7 dead-but-misleading |
-| bare `cat <glob>` (stdin hang) | 8 | in files [#3300](https://github.com/open-gsd/gsd-core/issues/3300) never touched |
+| `--pick … \|\| echo <default>` | 9 | 2 causing live wrong behavior ([#3365](https://github.com/TheRocketCodeMX/gsd-core/issues/3365); `phase_req_ids` never reaching its `TBD` sentinel); 7 dead-but-misleading |
+| bare `cat <glob>` (stdin hang) | 8 | in files [#3300](https://github.com/TheRocketCodeMX/gsd-core/issues/3300) never touched |
 | `ls <glob> \|\| echo "<message>"` | 3 | message unreachable; one in a **generated** `skills/` artifact |
 | `if`/`while ls <glob>` | 0 | the #3300 shape, now extinct |
 | informational `ls <glob>` (stdout consumed) | 97 | **not this class** — see Decision 2 |
@@ -73,7 +73,7 @@ A rule keyed on "invokes `gsd_run` and has `|| echo`" was written, measured at 1
 
 **6. Exemption is per-line and must name an owner.** A deliberate counter-example — documentation showing the anti-pattern — is byte-identical to a regression, so only a declaration can separate them. The marker is `# gsd-scan-ignore: <reason>` on the violating line, where the reason must name an issue (`#NNN`) or an `http(s)://` URL, matching the precedent in `tests/commit-files-pathspec.test.cjs` and the sibling `allow-test-rule:` marker of [ADR-456](456-test-rigor-architecture.md). A malformed reason is reported as a *distinct* malformed-declaration error rather than silently exempting. **File allowlists remain forbidden** (ADR-3180 Decision 4(a)) — an allowlist points at the file most likely to grow the next copy.
 
-**7. The upstream contract fix is explicitly out of scope.** The true single-owner cure is at `--pick` itself: it should signal absence rather than emitting `''` at exit 0, so that no caller has to guard for it. That is a CRITICAL-blast-radius change across 111+ call sites and it belongs to [#3473](https://github.com/open-gsd/gsd-core/issues/3473) ("enforcement by construction — one owner per invariant … failure returns"). This ADR governs the shell layer and the guard; it does not re-litigate the CLI contract. Until #3473 lands, every new `--pick` caller remains one careless line from this class — which is exactly what the guard makes visible in review.
+**7. The upstream contract fix is explicitly out of scope.** The true single-owner cure is at `--pick` itself: it should signal absence rather than emitting `''` at exit 0, so that no caller has to guard for it. That is a CRITICAL-blast-radius change across 111+ call sites and it belongs to [#3473](https://github.com/TheRocketCodeMX/gsd-core/issues/3473) ("enforcement by construction — one owner per invariant … failure returns"). This ADR governs the shell layer and the guard; it does not re-litigate the CLI contract. Until #3473 lands, every new `--pick` caller remains one careless line from this class — which is exactly what the guard makes visible in review.
 
 ## Consequences
 

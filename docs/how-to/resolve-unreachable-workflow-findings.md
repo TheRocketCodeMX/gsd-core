@@ -40,7 +40,7 @@ Add a reference in the loader that dispatches to it. Prefer a **lazy path** unle
   `~/.claude/gsd-core/workflows/scan.md` (passing remaining args).
 ```
 
-An eager `@`-include is inlined into context on *every* invocation of that command, including the paths that never use the workflow. The progressive-disclosure split ([#717](https://github.com/open-gsd/gsd-core/issues/717)) exists specifically to keep that cost off the common path, so reach for the lazy form first.
+An eager `@`-include is inlined into context on *every* invocation of that command, including the paths that never use the workflow. The progressive-disclosure split ([#717](https://github.com/TheRocketCodeMX/gsd-core/issues/717)) exists specifically to keep that cost off the common path, so reach for the lazy form first.
 
 If the loader is a `commands/gsd/*.md` file, regenerate the skill surface afterward:
 
@@ -48,7 +48,7 @@ If the loader is a `commands/gsd/*.md` file, regenerate the skill surface afterw
 npm run gen:plugin-skills
 ```
 
-**This was the right answer for `scan.md`** — `/gsd-map-codebase --fast` was a shipped, documented flag whose routing line named no resolvable path. Deleting the file would have removed the only implementation of a live feature ([#3561](https://github.com/open-gsd/gsd-core/issues/3561)).
+**This was the right answer for `scan.md`** — `/gsd-map-codebase --fast` was a shipped, documented flag whose routing line named no resolvable path. Deleting the file would have removed the only implementation of a live feature ([#3561](https://github.com/TheRocketCodeMX/gsd-core/issues/3561)).
 
 ---
 

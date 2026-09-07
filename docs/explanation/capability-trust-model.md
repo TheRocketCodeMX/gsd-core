@@ -210,7 +210,7 @@ to a surface — including an env or cwd change — deactivates the capability u
 the user re-consents, while a harmless key reorder does not.
 
 One asymmetry the summary now names explicitly
-([#3515](https://github.com/open-gsd/gsd-core/issues/3515)): hook commands are
+([#3515](https://github.com/TheRocketCodeMX/gsd-core/issues/3515)): hook commands are
 *confined to the capability bundle*, but an MCP server's `command`, `args`,
 `env`, and `cwd` are written **verbatim** and may point anywhere on the machine.
 That is intentional — most real MCP servers legitimately resolve to global
@@ -257,7 +257,7 @@ does not exist. This is not a claim that agents are safe or inert: they are
 still classified as an instruction surface, they are simply not staged for
 third-party capabilities today, which is why they are not itemized below.
 
-**Itemized at the prompt.** [#3248](https://github.com/open-gsd/gsd-core/issues/3248)
+**Itemized at the prompt.** [#3248](https://github.com/TheRocketCodeMX/gsd-core/issues/3248)
 made the pre-install consent summary name each contributed skill in its own
 section. A capability whose only contribution is skills — which used to
 disclose nothing at all beyond the bundle's integrity — is included: you see its
@@ -291,7 +291,7 @@ extracting any files. A mismatch aborts the install.
 When NO pin is supplied, the consent prompt says so plainly: a
 `content: NO PINNED HASH — staged unverified` line distinguishes an install
 whose bytes were verified against a commitment from one that was not
-([#3514](https://github.com/open-gsd/gsd-core/issues/3514)). A computed
+([#3514](https://github.com/TheRocketCodeMX/gsd-core/issues/3514)). A computed
 sha512 of what was actually fetched is still recorded in the ledger at
 install, so a later `trust` inspection shows exactly which bytes landed.
 Prompt claims are exact per kind: a sha512 `--integrity` pin renders as
@@ -302,7 +302,7 @@ supplied), and a mutable `#sha:<branch>` ref is not a pin at all.
 ### Fetch-host denylist
 
 The URL importer's fetch transport refuses, before any bytes leave
-([#3514](https://github.com/open-gsd/gsd-core/issues/3514)):
+([#3514](https://github.com/TheRocketCodeMX/gsd-core/issues/3514)):
 
 - **loopback, link-local, and unspecified hosts** — `127.0.0.0/8`,
   `169.254.0.0/16` (which contains the cloud metadata addresses), `0.0.0.0/8`,

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted. Phase 0 ships this file alone; every rule in §8 is *Required — Phase N* until its phase lands.
 - **Date:** 2026-08-14
-- **Issue:** [#3408](https://github.com/open-gsd/gsd-core/issues/3408) is the **scope authority** (`epic` + `approved-enhancement`), which is why this ADR carries its number. [#3467](https://github.com/open-gsd/gsd-core/issues/3467) is the Phase-0 tracking sub-issue this PR closes — the epic stays open until Phase 4 merges. Convention follows [ADR-3180](3180-planning-semantic-model-single-owner.md) and [ADR-3128](3128-adaptive-runtime-evidence.md).
+- **Issue:** [#3408](https://github.com/TheRocketCodeMX/gsd-core/issues/3408) is the **scope authority** (`epic` + `approved-enhancement`), which is why this ADR carries its number. [#3467](https://github.com/TheRocketCodeMX/gsd-core/issues/3467) is the Phase-0 tracking sub-issue this PR closes — the epic stays open until Phase 4 merges. Convention follows [ADR-3180](3180-planning-semantic-model-single-owner.md) and [ADR-3128](3128-adaptive-runtime-evidence.md).
 - **Supersedes:** nothing.
 - **Relationship to prior work:** the **write-side mirror** of [ADR-3180](3180-planning-semantic-model-single-owner.md), which gave each read-side derivation one owner and proved it with drift guards. Every owner in ADR-3180 §7 is a read derivation; no ADR owns the write path. This applies the same mechanism to it, and adopts ADR-3180's Decision 4 constraints (a)–(e) verbatim rather than restating them.
 
@@ -129,7 +129,7 @@ Per ADR-3180 Amendment 3's standing rule, each phase states its copy count as **
 
 ### 6. Migration order — the guard first, the seam second
 
-**Locked:** Phase 0 (this ADR) → Phase 1 (executor + ratcheted guard, [#3468](https://github.com/open-gsd/gsd-core/issues/3468)) → Phase 2 (one write seam, [#3469](https://github.com/open-gsd/gsd-core/issues/3469)) → Phase 3 (report from `postFm`, [#3470](https://github.com/open-gsd/gsd-core/issues/3470)) → Phase 4 (stale-but-present + identity test + ratchet to 0, [#3471](https://github.com/open-gsd/gsd-core/issues/3471)).
+**Locked:** Phase 0 (this ADR) → Phase 1 (executor + ratcheted guard, [#3468](https://github.com/TheRocketCodeMX/gsd-core/issues/3468)) → Phase 2 (one write seam, [#3469](https://github.com/TheRocketCodeMX/gsd-core/issues/3469)) → Phase 3 (report from `postFm`, [#3470](https://github.com/TheRocketCodeMX/gsd-core/issues/3470)) → Phase 4 (stale-but-present + identity test + ratchet to 0, [#3471](https://github.com/TheRocketCodeMX/gsd-core/issues/3471)).
 
 Stacked and sequential, never parallel: `get_impact(direction=both, depth=6)` against `next` rates `readModifyWriteStateMd` **CRITICAL** (185 affected symbols, lower bound; 38 files; 25 processes) and `syncStateFrontmatter` **CRITICAL** (154). Every symbol these phases name sits inside one blast radius, so a parallel phase would edit symbols inside a sibling's.
 
@@ -268,7 +268,7 @@ Considered and not applicable to *this* deliverable: **Hyrum's Law** and **Gall'
 - `scripts/lib/drift-scan.cjs` — the shared tree-walk / confinement / sanitizer every guard uses
 - `CONTRIBUTING.md` § *Prohibited: Raw Text Matching on Test Outputs* — why reports are typed IR, not prose
 - `CONTRIBUTING.md` § *Fixture provenance (#2371)* — why the identity test alone is insufficient
-- Phase sub-issues: [#3467](https://github.com/open-gsd/gsd-core/issues/3467), [#3468](https://github.com/open-gsd/gsd-core/issues/3468), [#3469](https://github.com/open-gsd/gsd-core/issues/3469), [#3470](https://github.com/open-gsd/gsd-core/issues/3470), [#3471](https://github.com/open-gsd/gsd-core/issues/3471)
+- Phase sub-issues: [#3467](https://github.com/TheRocketCodeMX/gsd-core/issues/3467), [#3468](https://github.com/TheRocketCodeMX/gsd-core/issues/3468), [#3469](https://github.com/TheRocketCodeMX/gsd-core/issues/3469), [#3470](https://github.com/TheRocketCodeMX/gsd-core/issues/3470), [#3471](https://github.com/TheRocketCodeMX/gsd-core/issues/3471)
 
 ### Guard roster
 
