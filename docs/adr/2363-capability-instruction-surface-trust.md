@@ -2,13 +2,13 @@
 
 - **Status:** Accepted — ratified 2026-08-09 (originally Proposed 2026-08-09); see "Ratification" below
 - **Date:** 2026-08-09
-- **Issue:** [#2363](https://github.com/open-gsd/gsd-core/issues/2363) (epic); Phase 0 tracked by [#3247](https://github.com/open-gsd/gsd-core/issues/3247), Phase 1 by [#3248](https://github.com/open-gsd/gsd-core/issues/3248)
+- **Issue:** [#2363](https://github.com/TheRocketCodeMX/gsd-core/issues/2363) (epic); Phase 0 tracked by [#3247](https://github.com/TheRocketCodeMX/gsd-core/issues/3247), Phase 1 by [#3248](https://github.com/TheRocketCodeMX/gsd-core/issues/3248)
 - **Amends:** [ADR-1244](1244-capability-ecosystem.md) — D5's disclosure gains a **fifth** class, and it is the first that is *not* an executable surface. [ADR-2782](2782-reviewer-lane-capability-surface.md) added the fourth (reviewer lanes); this adds the first non-executable one, which is why it needs its own classification rather than a fifth entry in the same list.
 - **Related, and deliberately not amended:** [ADR-1577](1577-untrusted-input-boundary-and-injection-blocking.md) — the untrusted-input boundary and its injection scanner. D2 explains at length why that control does **not** transfer to this surface. The two share the word "trust" and solve opposite problems.
 
 ## Context
 
-[#2322](https://github.com/open-gsd/gsd-core/issues/2322) / [PR #2340](https://github.com/open-gsd/gsd-core/pull/2340) made an installed third-party capability's `skills/<stem>/SKILL.md` materialize into the user's runtime skills directory, where it becomes an agent-invocable instruction file. That fix was correct and shipped the protections it set out to ship — all of them **path-level**:
+[#2322](https://github.com/TheRocketCodeMX/gsd-core/issues/2322) / [PR #2340](https://github.com/TheRocketCodeMX/gsd-core/pull/2340) made an installed third-party capability's `skills/<stem>/SKILL.md` materialize into the user's runtime skills directory, where it becomes an agent-invocable instruction file. That fix was correct and shipped the protections it set out to ship — all of them **path-level**:
 
 - skill stems bound to their declaring capability via `registry.capabilityClusters`, closing a cross-capability hijack;
 - stem sanitization plus `isPathConfined` on both read and write;
@@ -91,7 +91,7 @@ Point 3 is the part that makes this a decision rather than a punt: the door stay
 
 **The residual gap, stated plainly — and it is smaller than it first looks.** At **project** scope there is no gap at all: `bundleContentHash` walks every entry under the bundle with no exclusions and hashes every regular file (failing closed on symlinks and non-regular files), so a single changed byte in a skill body already deactivates a project-scoped capability until re-consent. At **global** scope there is no consent record in the first place — a global install is trusted because it sits under the user's own home ([ADR-1244](1244-capability-ecosystem.md) D5) — so a skill-body change on upgrade is not consent-gated there, and would not have been even if instruction surfaces were signature-bound. **The gap global scope has is the one it already had for code, and D4 neither widens nor narrows it.** What D4 declines to add is a re-consent *prompt* on skill-body change during an interactive upgrade; the v2 path above is where that would land if it is ever wanted.
 
-### D5 — The mechanism *(Phase 1, shipped in [#3248](https://github.com/open-gsd/gsd-core/issues/3248) — not by this ADR itself)*
+### D5 — The mechanism *(Phase 1, shipped in [#3248](https://github.com/TheRocketCodeMX/gsd-core/issues/3248) — not by this ADR itself)*
 
 `discloseExecutableSurfaces` gains an `instructionSurfaces` collector, enumerating each skill stem the manifest contributes, collected through the same `safeCollect` wrapper as the existing four classes so a hostile value degrades only that class and the function stays total for any manifest shape. The pre-install consent summary names those skills as an instruction surface. The signature behavior implements D4 exactly, pinned by a test that asserts what happens to a pre-existing consent record rather than leaving it incidental.
 
@@ -115,7 +115,7 @@ The design is deliberately **additive** — a new independent collector and a ne
 
 ## Ratification (2026-08-09): Proposed → Accepted
 
-Ratified against `docs/adr/README.md` → "Ratifying a stale `Proposed`". Tracked by [#3256](https://github.com/open-gsd/gsd-core/issues/3256). All four bar conditions, with evidence:
+Ratified against `docs/adr/README.md` → "Ratifying a stale `Proposed`". Tracked by [#3256](https://github.com/TheRocketCodeMX/gsd-core/issues/3256). All four bar conditions, with evidence:
 
 **1. The decided mechanism demonstrably exists in the tree.**
 
@@ -128,7 +128,7 @@ Ratified against `docs/adr/README.md` → "Ratifying a stale `Proposed`". Tracke
 
 Verified by `gsd-test` for the exact merged HEAD, plus CI's Linux and Windows lanes, the coverage gate, and the 80% mutation gate on changed files.
 
-**2. The owning issue is closed as completed.** [#2363](https://github.com/open-gsd/gsd-core/issues/2363) — `stateReason: COMPLETED`, as are both phase children [#3247](https://github.com/open-gsd/gsd-core/issues/3247) and [#3248](https://github.com/open-gsd/gsd-core/issues/3248).
+**2. The owning issue is closed as completed.** [#2363](https://github.com/TheRocketCodeMX/gsd-core/issues/2363) — `stateReason: COMPLETED`, as are both phase children [#3247](https://github.com/TheRocketCodeMX/gsd-core/issues/3247) and [#3248](https://github.com/TheRocketCodeMX/gsd-core/issues/3248).
 
 **3. No material part is unshipped.** This ADR's own stated bar named three conditions — #3248 merged, the consent summary rendering instruction surfaces, and the D4 signature behavior pinned by a passing test. All three hold.
 

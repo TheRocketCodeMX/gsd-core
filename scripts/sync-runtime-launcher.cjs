@@ -348,15 +348,27 @@ function transformFile(content, preamble) {
   let changed = false;
   let firstGsdRunBlockIdx = -1; // index into shellBlockRanges of the first gsd_run block (after strip)
 
+  // A file may place the preamble in a bootstrap-only block that defines
+  // gsd_run without calling it (gsd-core/workflows/explore.md Step 1, which
+  // documents exactly why). Stripping empties that block of gsd_run calls, so
+  // a pure "first block that CALLS gsd_run" target silently relocates the
+  // preamble forward and breaks define-before-use. Honour where it already is.
+  const existingPreambleBlockIdx = shellBlockRanges.findIndex((range) =>
+    allLines
+      .slice(range.contentStart, range.contentEnd)
+      .some((l) => /^\s*_GSD_SHIM_NAME=/.test(l)));
+
   // First: strip + replace in all blocks, find first gsd_run block.
   // `carriedPreamble` records which blocks had a canonical preamble BEFORE the
   // strip pass, so an author's deliberate per-block copy survives (see the
   // opt-in rationale in this file's header).
-  const preambleStr = preamble.join('\n');
   const carriedPreamble = [];
   const strippedBlocks = shellBlockRanges.map((range) => {
     const blockLines = outputLines.slice(range.contentStart, range.contentEnd);
-    carriedPreamble.push(blockLines.join('\n').includes(preambleStr));
+    // Shape match (same predicate as existingPreambleBlockIdx above), not byte
+    // equality: a block that carried an OLDER canonical preamble still opted in,
+    // and must be re-emitted with the current one rather than stripped.
+    carriedPreamble.push(blockLines.some((l) => /^\s*_GSD_SHIM_NAME=/.test(l)));
     const stripped = stripAndReplace(blockLines, preamble);
     return stripped;
   });
@@ -369,13 +381,18 @@ function transformFile(content, preamble) {
     }
   }
 
-  // Insert preamble into the first gsd_run block only — UNLESS this file
+  // If the preamble already existed in a specific block before stripping,
+  // keep it there (even if that block no longer calls gsd_run after
+  // stripping). Otherwise fall back to the first gsd_run-calling block.
+  const preambleTargetIdx = existingPreambleBlockIdx >= 0 ? existingPreambleBlockIdx : firstGsdRunBlockIdx;
+
+  // Insert preamble into the target block only — UNLESS this file
   // delegates to the shared resolver reference (@-include). Delegating files keep
   // the stripped blocks (any inline preamble removed) but never get one inserted.
   const delegates = delegatesToResolverReference(content);
   const finalBlocks = strippedBlocks.map((stripped, bi) => {
     if (delegates) return stripped;
-    if (bi === firstGsdRunBlockIdx) return insertPreamble(stripped, preamble);
+    if (bi === preambleTargetIdx) return insertPreamble(stripped, preamble);
     // A later block that already carried its own preamble keeps it — but only
     // when it actually calls gsd_run; a preamble in a block with no call is dead
     // weight and is dropped by the strip pass above.
@@ -457,4 +474,8 @@ function main() {
   console.log(`\nDone. ${transformedCount} files transformed, ${unchangedCount} unchanged.`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { transformFile };

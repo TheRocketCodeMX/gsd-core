@@ -13,13 +13,15 @@ requires: [config, quick]
 ---
 
 <objective>
-Execute a trivial task directly in the current context without spawning subagents
-or generating PLAN.md files. For tasks too small to justify planning overhead:
-typo fixes, config changes, small refactors, forgotten commits, simple additions.
+Execute a known, mechanical task directly in the current context without spawning
+subagents or generating PLAN.md files. For tasks that do not justify planning
+overhead: typo fixes, config changes, renames, removing a component along with its
+tests and styles, dead-code cleanup, forgotten commits, simple additions.
 
-This is NOT a replacement for /gsd:quick — use /gsd:quick for anything that
-needs research, multi-step planning, or verification. /gsd:fast is for tasks
-you could describe in one sentence and execute in under 2 minutes.
+This is NOT a replacement for /gsd:quick — use /gsd:quick when the work needs
+research, genuine multi-step planning, or a decision you cannot make from the code
+in front of you. /gsd:fast is for changes you already know how to make; the number of
+files they touch is not the deciding factor.
 </objective>
 
 <execution_context>

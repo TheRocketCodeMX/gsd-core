@@ -31,6 +31,12 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { HOOK_ON_CRASH, allow, crash } = require('./lib/hook-exit.js');
+
+// ADR-3889 / #3911: declared crash policy. This hook is advisory-only and must
+// NEVER block a session — a crash is a silent PASS (exit 0), exactly the
+// pre-#3911 behaviour, now declared instead of implied by a bare exit.
+const ON_CRASH = HOOK_ON_CRASH.ALLOW;
 
 const STALE_SECONDS = 60;    // ignore metrics older than 60s
 const DEBOUNCE_CALLS = 5;    // min tool uses between warn messages
@@ -89,12 +95,12 @@ const PRECOMPACT_MESSAGE =
 let input = '';
 // Timeout guard: if stdin never closes (pipe issues on Windows/Git Bash), exit
 // silently rather than hang until Claude Code kills the process. See #775.
-const stdinTimeout = setTimeout(() => process.exit(0), 3000);
+const stdinTimeout = setTimeout(() => allow(undefined), 3000);
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => { input += chunk; });
 process.stdin.on('error', () => {
   clearTimeout(stdinTimeout);
-  process.exit(0);
+  allow(undefined);
 });
 process.stdin.on('end', () => {
   clearTimeout(stdinTimeout);
@@ -182,7 +188,9 @@ process.stdin.on('end', () => {
     const message = currentLevel === 'urge' ? urgeMessage(usedPct) : warnMessage(usedPct);
     emit(message, event);
   } catch {
-    // Silent fail — a hook must never block or crash the session.
+    // Silent fail — a hook must never block or crash the session. Declared
+    // policy (ADR-3889 / #3911): ALLOW → exit 0 with no payload.
+    crash(ON_CRASH, undefined);
   }
 });
 

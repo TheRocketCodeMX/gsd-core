@@ -2,9 +2,9 @@
 
 - **Status:** Accepted (Phase 0 — ADR only; locks the contract Phases 1–4 execute against. No production code lands in this PR.)
 - **Date:** 2026-08-08
-- **Issue:** [#3212](https://github.com/open-gsd/gsd-core/issues/3212) — epic (tech-debt / root-cause consolidation, `type: chore` + `approved-enhancement`)
+- **Issue:** [#3212](https://github.com/TheRocketCodeMX/gsd-core/issues/3212) — epic (tech-debt / root-cause consolidation, `type: chore` + `approved-enhancement`)
 - **Supersedes:** nothing
-- **Relationship to prior work:** the layer *beneath* [#1372](https://github.com/open-gsd/gsd-core/issues/1372) (`markdown-sectionizer`, closed) and [#2143](https://github.com/open-gsd/gsd-core/issues/2143) (tables + bounded mutation, **open and in progress**). Sibling of [#2121](https://github.com/open-gsd/gsd-core/issues/2121) (`phase-id.cts`). The extend-never-mutate lock (§6) is inherited verbatim from ADR-2143 §2.
+- **Relationship to prior work:** the layer *beneath* [#1372](https://github.com/TheRocketCodeMX/gsd-core/issues/1372) (`markdown-sectionizer`, closed) and [#2143](https://github.com/TheRocketCodeMX/gsd-core/issues/2143) (tables + bounded mutation, **open and in progress**). Sibling of [#2121](https://github.com/TheRocketCodeMX/gsd-core/issues/2121) (`phase-id.cts`). The extend-never-mutate lock (§6) is inherited verbatim from ADR-2143 §2.
 
 ## Context
 
@@ -188,7 +188,7 @@ No user-facing command output, file format, or CLI contract changes in any phase
 
 ## References
 
-- Epic: [#3212](https://github.com/open-gsd/gsd-core/issues/3212)
+- Epic: [#3212](https://github.com/TheRocketCodeMX/gsd-core/issues/3212)
 - Prior seams: [ADR-1372](1372-markdown-sectionizer-seam.md) · [ADR-2143](2143-markdown-table-and-mutation-consolidation.md) (open) · [ADR-2121](2121-phase-identifier-parsing-consolidation.md)
 - Fail-loud precedent: [ADR-1411](1411-resolution-provenance.md) · Input-shape precedent: [ADR-227](227-input-validation-shape-not-just-type.md)
 - In-repo tokenizer precedent: #3129 → `hooks/lib/git-cmd.js`

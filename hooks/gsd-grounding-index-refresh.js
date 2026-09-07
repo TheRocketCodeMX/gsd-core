@@ -20,6 +20,11 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { HOOK_ON_CRASH, allow, crash } = require('./lib/hook-exit.js');
+
+// ADR-3889 / #3911: declared crash policy. Advisory FileChanged hook — a crash
+// is a silent PASS (exit 0); it must never block an edit.
+const ON_CRASH = HOOK_ON_CRASH.ALLOW;
 
 const STRATEGY_BASENAMES = new Set([
   'PROJECT.md', 'DOMAIN-MODEL.md', 'TEST-STRATEGY.md', 'SECURITY-STRATEGY.md',
@@ -33,21 +38,21 @@ function isStrategyDoc(filePath) {
 }
 
 let input = '';
-const stdinTimeout = setTimeout(() => process.exit(0), 8000);
+const stdinTimeout = setTimeout(() => allow(undefined), 8000);
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => (input += chunk));
 process.stdin.on('end', () => {
   clearTimeout(stdinTimeout);
   try {
     const data = JSON.parse(input);
-    if (data.event === 'unlink') process.exit(0);
+    if (data.event === 'unlink') { allow(undefined); return; }
     const filePath = data.file_path || '';
     const cwd = data.cwd || process.cwd();
 
     // Only fire for a strategy/source doc under THIS project's .planning/.
     const planning = path.resolve(cwd, '.planning');
-    if (!path.resolve(filePath).startsWith(planning + path.sep)) process.exit(0);
-    if (!isStrategyDoc(filePath)) process.exit(0);
+    if (!path.resolve(filePath).startsWith(planning + path.sep)) { allow(undefined); return; }
+    if (!isStrategyDoc(filePath)) { allow(undefined); return; }
 
     // Compute the current active source set (in-process; the resolver is a sibling lib).
     let summary;
@@ -62,7 +67,8 @@ process.stdin.on('end', () => {
         ? 'GSD sources of truth updated — read and cite these in the plan\'s ## Grounding before planning/editing (they override your memory):\n- ' + items.join('\n- ')
         : 'GSD strategy updated — no active sources yet; build to the engineering-standards floor.';
     } catch {
-      process.exit(0); // grounding lib not resolvable → no-op
+      allow(undefined); // grounding lib not resolvable → no-op
+      return;
     }
 
     // Best-effort: refresh the persisted ambient index for future sessions / other CLIs.
@@ -79,11 +85,10 @@ process.stdin.on('end', () => {
       }
     } catch { /* best effort — the additionalContext injection is the primary value */ }
 
-    process.stdout.write(JSON.stringify({
+    allow({
       hookSpecificOutput: { hookEventName: 'FileChanged', additionalContext: summary },
-    }));
-    process.exit(0);
+    });
   } catch {
-    process.exit(0);
+    crash(ON_CRASH, undefined);
   }
 });

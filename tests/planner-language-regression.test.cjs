@@ -20,6 +20,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { collectSection } = require('../gsd-core/bin/lib/markdown-sectionizer.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const AGENTS_DIR = path.join(ROOT, 'agents');
@@ -118,8 +119,6 @@ const ALLOWLIST = {
   'explore.md': ['time_sizing'],
   // Review uses "up to 5 minutes" for CodeRabbit timeout
   'review.md': ['time_sizing'],
-  // Fast uses "under 2 minutes wall time" as operational constraint
-  'fast.md': ['time_sizing'],
   // Execute-phase uses a configurable test-gate timeout (workflow.test_gate_timeout, #1857)
   'execute-phase.md': ['time_sizing'],
   // Map-codebase documents subagent_timeout
@@ -291,9 +290,9 @@ describe('plan-phase.md — source audit orchestration (#2091)', () => {
 
   test('step 9b does not use "too complex" language', () => {
     // Extract just step 9b content (between "## 9b" and "## 9c" or "## 10")
-    const step9bMatch = workflowContent.match(/## 9b\.([\s\S]*?)(?=## 9c|## 10)/);
-    if (step9bMatch) {
-      const step9b = step9bMatch[1];
+    const step9bSection = collectSection(workflowContent, (h) => h.text.startsWith('9b.'));
+    if (step9bSection) {
+      const step9b = step9bSection.body;
       assert.ok(
         !step9b.includes('too complex'),
         'step 9b must not use "too complex" — use context budget language instead'
@@ -678,5 +677,131 @@ test('#3430: planner depends_on docs show canonical in-phase plan ids', () => {
     'planner must not document phase-slug/plan-number depends_on examples as canonical'
   );
 });
+  });
+}
+
+
+// ────────────────────────────────────────────────────────────────────────
+// fast.md scope_check + staging contract (uncertainty-based gating)
+// ────────────────────────────────────────────────────────────────────────
+{
+  const { describe: __scopeDescribe, test: __scopeTest } = require('node:test');
+  const __assert = require('node:assert/strict');
+  const __fs = require('node:fs');
+  const __path = require('node:path');
+
+  // allow-test-rule: source-text-is-the-product (see #3805)
+  // Reads gsd-core/workflows/fast.md whose deployed text IS the product —
+  // the workflow markdown is executed verbatim by LLM runtimes, so the only
+  // faithful assertion about its gating contract is over its source text.
+  const SCOPE_FAST_MD = __path.join(__dirname, '..', 'gsd-core', 'workflows', 'fast.md');
+
+  /**
+   * The old scope_check gated the fast lane on "≤ 3 file edits / ≤ 1 minute of
+   * work". File count is not a proxy for complexity: deleting a component along
+   * with its spec and its styles touches 4-5 files and needs no planning. The
+   * bounce is also asymmetrically expensive — the user has already paid a full
+   * turn loading the workflow, gets nothing back, then pays the whole
+   * /gsd:quick pipeline (planner -> executor -> code-reviewer) on top.
+   *
+   * The gate is now uncertainty-based. These cases lock that in so the size
+   * heuristic cannot creep back.
+   */
+  __scopeDescribe('fast.md scope_check must gate on uncertainty, not size', () => {
+    const read = () => __fs.readFileSync(SCOPE_FAST_MD, 'utf-8');
+
+    __scopeTest('no size-based trivial-task heuristic survives anywhere in the file', () => {
+      const content = read();
+      for (const banned of [/≤\s*3\s*file\s*edits/i, /≤\s*1\s*minute\s*of\s*work/i, /under\s*2\s*minutes/i, /more than 3 file edits/i]) {
+        __assert.doesNotMatch(
+          content,
+          banned,
+          `fast.md still carries the size-based scope heuristic ${banned} — file count is not a proxy for complexity`,
+        );
+      }
+    });
+
+    __scopeTest('scope_check defaults to proceeding rather than to bouncing', () => {
+      const step = read().match(/<step name="scope_check">([\s\S]*?)<\/step>/);
+      __assert.ok(step, 'fast.md must contain a <step name="scope_check"> element');
+      __assert.match(
+        step[1],
+        /default is to PROCEED/i,
+        'scope_check must state that proceeding is the default, so the lane is usable',
+      );
+      __assert.match(
+        step[1],
+        /Never bounce on file count alone/i,
+        'scope_check must explicitly forbid bouncing on file count',
+      );
+    });
+
+    __scopeTest('scope_check bounces only on the four uncertainty criteria', () => {
+      const step = read().match(/<step name="scope_check">([\s\S]*?)<\/step>/)[1];
+      const criteria = [
+        /would have to research first/i,
+        /ambiguous enough that you would be guessing/i,
+        /adds a dependency, a new architectural pattern, or a schema\/API contract change/i,
+        /more than ~10 files/i,
+      ];
+      for (const c of criteria) {
+        __assert.match(step, c, `scope_check must name the bounce criterion ${c}`);
+      }
+    });
+
+    __scopeTest('guardrails carry the ~10-file ceiling, not a 3-edit ceiling', () => {
+      const guardrails = read().match(/<guardrails>([\s\S]*?)<\/guardrails>/);
+      __assert.ok(guardrails, 'fast.md must contain a <guardrails> element');
+      __assert.match(guardrails[1], /more than ~10 files/i, 'guardrails must use the ~10-file ceiling');
+      __assert.match(
+        guardrails[1],
+        /Do NOT bounce on file count below that ceiling/i,
+        'guardrails must forbid bouncing below the ceiling on file count alone',
+      );
+    });
+
+    /**
+     * The commit step used a blanket `git add -A`, which sweeps any unrelated
+     * change the user had in flight into the task's commit — breaking the
+     * atomic-commit guarantee the same workflow declares in <success_criteria>.
+     */
+    __scopeTest('commit step does not blanket-stage the working tree', () => {
+      const step = read().match(/<step name="commit">([\s\S]*?)<\/step>/);
+      __assert.ok(step, 'fast.md must contain a <step name="commit"> element');
+      const executable = step[1]
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('#'))
+        .join('\n');
+      __assert.doesNotMatch(
+        executable,
+        /git add\s+(-A|--all|\.)\b/,
+        'commit step must not blanket-stage — it drags foreign changes into the commit',
+      );
+      __assert.match(
+        executable,
+        /git add -- \{touched paths\}/,
+        'commit step must stage the explicit paths execute_inline recorded',
+      );
+      __assert.match(
+        executable,
+        /git diff --cached --name-only/,
+        'commit step must print the staged set so a foreign path can be unstaged',
+      );
+    });
+
+    __scopeTest('execute_inline records the pre-existing dirty paths and its own touched paths', () => {
+      const step = read().match(/<step name="execute_inline">([\s\S]*?)<\/step>/);
+      __assert.ok(step, 'fast.md must contain a <step name="execute_inline"> element');
+      __assert.match(
+        step[1],
+        /git status --porcelain/,
+        'execute_inline must snapshot the pre-existing dirty paths before working',
+      );
+      __assert.match(
+        step[1],
+        /explicit list of every path YOU created, edited, or deleted/i,
+        'execute_inline must record the touched paths the commit step stages',
+      );
+    });
   });
 }

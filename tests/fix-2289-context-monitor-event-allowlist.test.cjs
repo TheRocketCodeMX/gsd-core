@@ -1,3 +1,4 @@
+// docs-guard-exempt: no docs/ file is read; the fork calm-hook test only names the context-monitor doc in prose.
 'use strict';
 
 /**

@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-09
-- **Issue:** [#2866](https://github.com/open-gsd/gsd-core/issues/2866) (epic); Phase 0 tracked by [#2869](https://github.com/open-gsd/gsd-core/issues/2869)
-- **Amends:** [ADR-3660](3660-runtime-artifact-layout-module.md) (widens the Runtime Artifact Layout Module from placement-only to placement **+** trigger resolution) and [ADR-1016](1016-runtime-capability-descriptor.md) (adds one axis — host trigger precedence — to its closed descriptor vocabulary). Neither is superseded; both remain `Accepted` and live, and both carry the reciprocal `Amended by` field. Both widenings shipped in Phase 2 ([#2871](https://github.com/open-gsd/gsd-core/issues/2871)) — see [Reciprocal amendment notes](#reciprocal-amendment-notes).
+- **Issue:** [#2866](https://github.com/TheRocketCodeMX/gsd-core/issues/2866) (epic); Phase 0 tracked by [#2869](https://github.com/TheRocketCodeMX/gsd-core/issues/2869)
+- **Amends:** [ADR-3660](3660-runtime-artifact-layout-module.md) (widens the Runtime Artifact Layout Module from placement-only to placement **+** trigger resolution) and [ADR-1016](1016-runtime-capability-descriptor.md) (adds one axis — host trigger precedence — to its closed descriptor vocabulary). Neither is superseded; both remain `Accepted` and live, and both carry the reciprocal `Amended by` field. Both widenings shipped in Phase 2 ([#2871](https://github.com/TheRocketCodeMX/gsd-core/issues/2871)) — see [Reciprocal amendment notes](#reciprocal-amendment-notes).
 - **Relationship to prior work:** *completes* [ADR-58](58-runtime-install-policy-module.md) rather than revising it (its rollout's cleanup step never landed); preserves [ADR-1508](1508-runtime-artifact-conversion-module.md)'s dependency direction (installer/layout → conversion, never upward); Phase 3's manifest schema bump is [ADR-0008](0008-installer-migration-module.md) territory; Phase 2's schema change is additive-with-default per [ADR-894](894-capability-declaration-format.md). Like the adapters it touches, this ADR sits **beneath** [ADR-1239](1239-gsd-embeddable-orchestration-engine.md) (EoS) — it widens one negotiated surface of the Host-Integration Interface; it does not re-answer how GSD meets a host.
 
 ## Amendment (2026-08-10): `agents` is not a trigger-bearing kind — claude's disjointness is `commands` vs `skills`, not `commands, agents` vs `skills`
@@ -82,7 +82,7 @@ See `.gsd/phase/feat-2871-trigger-resolution/40-design.md` for the full analysis
 
 ## Context
 
-[#2218](https://github.com/open-gsd/gsd-core/issues/2218) is the presenting defect: a user who installs the Claude runtime at **both** scopes — `--claude --global` and `--claude --local` — silently loses 100% of the project-local `/gsd-*` surface. It is "every time — 100% reproducible", the reporter's impact assessment is "major — core feature is broken, no workaround", and its triage stalled at `ready-for-human` because every proposed remediation read as a product decision bolted onto the installer.
+[#2218](https://github.com/TheRocketCodeMX/gsd-core/issues/2218) is the presenting defect: a user who installs the Claude runtime at **both** scopes — `--claude --global` and `--claude --local` — silently loses 100% of the project-local `/gsd-*` surface. It is "every time — 100% reproducible", the reporter's impact assessment is "major — core feature is broken, no workaround", and its triage stalled at `ready-for-human` because every proposed remediation read as a product decision bolted onto the installer.
 
 It stalled for a deeper reason. **The codebase cannot state the problem.**
 
@@ -176,7 +176,7 @@ This is the hard constraint on any #2218 fix, and it decides two of the three re
 Recorded explicitly, because an ADR that quietly ratifies these would be laundering decisions no one made.
 
 - **Phase 4b's mechanism is NOT decided here.** Making the project-local spec tree reachable requires changing what the winning artifact points at. The epic's recommendation — for the Claude runtime only, emit the **spec-root reference only** as a two-step imperative resolution (prefer `<cwd>/.claude/gsd-core/…`, fall back to `~/.claude/gsd-core/…`) instead of a single static `@`-include — is recorded as **recommended, pending explicit maintainer sign-off**, with its tradeoff stated plainly: an `@`-include is pre-expanded by the host and is *guaranteed inclusion*; a resolved reference costs the agent one read and is *instruction-following*. That is a genuinely weaker promise, and scoping it to the spec-root reference alone (every other `@`-include stays static) is what makes it acceptable rather than what makes it equivalent. If the tradeoff is rejected, Phase 4a still ships and #2218 downgrades from "broken silently" to "unsupported loudly" — which must then be documented per option 3 above.
-- **The trigger-resolution interface is not specified here.** `{trigger, kind, scope, destPath, shadowedBy}` is a sketch. Phase 2 ([#2871](https://github.com/open-gsd/gsd-core/issues/2871)) settles the shape. This ADR decides *that* the layout module resolves triggers, not its signature.
+- **The trigger-resolution interface is not specified here.** `{trigger, kind, scope, destPath, shadowedBy}` is a sketch. Phase 2 ([#2871](https://github.com/TheRocketCodeMX/gsd-core/issues/2871)) settles the shape. This ADR decides *that* the layout module resolves triggers, not its signature.
 - **Phase 6's Layout Materializer is a new module and therefore owes its own ADR.** It is not decided here; folding a second module decision into this file would violate CONTRIBUTING's "one issue = one ADR-or-PRD = one PR".
 - **The `local`/`project` spelling is not chosen here.** Phase 1 reconciles the three-way split and records the chosen spelling in `CONTEXT.md`'s glossary, which is where domain vocabulary is owned.
 - **`hostIntegration.embeddingMode: "imperative"` is unrelated to any of this.** Per `docs/reference/host-integration-capability-matrix.md` it classifies the host's plugin API, not spec-path emission. It shares a word with Phase 4b's "imperative reference" and nothing else.
@@ -185,7 +185,7 @@ Recorded explicitly, because an ADR that quietly ratifies these would be launder
 
 [ADR-3660](3660-runtime-artifact-layout-module.md) and [ADR-1016](1016-runtime-capability-descriptor.md) each carry an `Amended by: ADR-2866` back-reference, added in this same PR — the corpus's established practice for an amendment relation ([ADR-1016](1016-runtime-capability-descriptor.md) already carries the equivalent field for [ADR-2782](2782-reviewer-lane-capability-surface.md)). A one-way pointer is the failure mode this corpus has actually suffered: a reader landing on the amended file learns nothing about the decision that moved it.
 
-Each back-reference states **when the widening takes effect** — the decision was recorded when this ADR became `Accepted`, while the shipped modules still resolved placement only until Phase 2 ([#2871](https://github.com/open-gsd/gsd-core/issues/2871)) landed; both back-references now describe a widening that has actually shipped. Recording the relation without that timing note would have told a reader the layout module already resolved triggers before it did, which would have been false for four phases.
+Each back-reference states **when the widening takes effect** — the decision was recorded when this ADR became `Accepted`, while the shipped modules still resolved placement only until Phase 2 ([#2871](https://github.com/TheRocketCodeMX/gsd-core/issues/2871)) landed; both back-references now describe a widening that has actually shipped. Recording the relation without that timing note would have told a reader the layout module already resolved triggers before it did, which would have been false for four phases.
 
 *Mechanical note for future readers:* `scripts/gen-adr-index.cjs` tracks only `Supersedes`/`Subsumes` and their inverses. **`Amends` is not machine-checked in either direction** — the back-links above are a convention this ADR honors deliberately, not something the gate would have caught had they been omitted.
 
@@ -195,14 +195,14 @@ Each phase is its own issue and its own PR. `0 → 1 → 2 → 3 → 4` is a har
 
 | Phase | Issue | Deliverable | ADR touched |
 |---|---|---|---|
-| 0 | [#2869](https://github.com/open-gsd/gsd-core/issues/2869) | This ADR + the `CONTEXT.md` correction | — |
-| 1 | [#2870](https://github.com/open-gsd/gsd-core/issues/2870) | Install Scope Module — one resolved scope value | — |
-| 2 | [#2871](https://github.com/open-gsd/gsd-core/issues/2871) | Trigger resolution + host-precedence axis | [ADR-3660](3660-runtime-artifact-layout-module.md), [ADR-1016](1016-runtime-capability-descriptor.md) amended here |
-| 3 | [#2872](https://github.com/open-gsd/gsd-core/issues/2872) | Manifest `scope`+`runtime`; Installed Surface Resolver | [ADR-0008](0008-installer-migration-module.md) (migration) |
-| 4 | [#2873](https://github.com/open-gsd/gsd-core/issues/2873) | **Resolves [#2218](https://github.com/open-gsd/gsd-core/issues/2218)** — detection floor + behavioral fix | — |
-| 5 | [#2874](https://github.com/open-gsd/gsd-core/issues/2874) | Executed-plan return value | [ADR-58](58-runtime-install-policy-module.md) completed |
-| 6 | [#2875](https://github.com/open-gsd/gsd-core/issues/2875) | Layout Materializer + #1874-F19 durable staging | needs its own ADR |
-| 7 | [#2876](https://github.com/open-gsd/gsd-core/issues/2876) | Retire dead + pass-through installer exports | [ADR-1508](1508-runtime-artifact-conversion-module.md) / [ADR-857](857-capability-system.md) re-export mandate revisited |
+| 0 | [#2869](https://github.com/TheRocketCodeMX/gsd-core/issues/2869) | This ADR + the `CONTEXT.md` correction | — |
+| 1 | [#2870](https://github.com/TheRocketCodeMX/gsd-core/issues/2870) | Install Scope Module — one resolved scope value | — |
+| 2 | [#2871](https://github.com/TheRocketCodeMX/gsd-core/issues/2871) | Trigger resolution + host-precedence axis | [ADR-3660](3660-runtime-artifact-layout-module.md), [ADR-1016](1016-runtime-capability-descriptor.md) amended here |
+| 3 | [#2872](https://github.com/TheRocketCodeMX/gsd-core/issues/2872) | Manifest `scope`+`runtime`; Installed Surface Resolver | [ADR-0008](0008-installer-migration-module.md) (migration) |
+| 4 | [#2873](https://github.com/TheRocketCodeMX/gsd-core/issues/2873) | **Resolves [#2218](https://github.com/TheRocketCodeMX/gsd-core/issues/2218)** — detection floor + behavioral fix | — |
+| 5 | [#2874](https://github.com/TheRocketCodeMX/gsd-core/issues/2874) | Executed-plan return value | [ADR-58](58-runtime-install-policy-module.md) completed |
+| 6 | [#2875](https://github.com/TheRocketCodeMX/gsd-core/issues/2875) | Layout Materializer + #1874-F19 durable staging | needs its own ADR |
+| 7 | [#2876](https://github.com/TheRocketCodeMX/gsd-core/issues/2876) | Retire dead + pass-through installer exports | [ADR-1508](1508-runtime-artifact-conversion-module.md) / [ADR-857](857-capability-system.md) re-export mandate revisited |
 
 ## Consequences
 
@@ -210,7 +210,7 @@ Each phase is its own issue and its own PR. `0 → 1 → 2 → 3 → 4` is a har
 - **Shadowing is decided in one module.** Today it is decided in the host, invisibly, and modeled nowhere. After Phase 2 it is a field on a returned value that an error message, `/gsd-health`, and a test can each read.
 - **One resolved projection serves install, uninstall, `/gsd:surface`, the migration planner, and the docs matrix.** Adding a runtime stays "author one `capability.json`" — ADR-1016's stated goal — instead of also teaching N modules what its scopes mean.
 - **Install becomes assertable as a value** (Phase 5), so the 10,539-line `install.test.cjs` can collapse toward the shape `runtime-artifact-install-plan.test.cjs` already demonstrates.
-- **Deletions, not just additions:** 12 scope conversions in `bin/install.js`, 12 dead exports, and 2 of the 3 duplicate layout walkers. [#1874](https://github.com/open-gsd/gsd-core/issues/1874)-F19's durable-staging fix lands inside Phase 6's extraction rather than as a second conflicting pass over the same choreography.
+- **Deletions, not just additions:** 12 scope conversions in `bin/install.js`, 12 dead exports, and 2 of the 3 duplicate layout walkers. [#1874](https://github.com/TheRocketCodeMX/gsd-core/issues/1874)-F19's durable-staging fix lands inside Phase 6's extraction rather than as a second conflicting pass over the same choreography.
 - **The costs, stated:** ADR-1016's closed vocabulary is one axis wider and stays wider forever; the Runtime Artifact Layout Module now owns two concepts instead of one, which is a boundary future reviews must hold rather than keep widening; and Phase 3's manifest schema bump obliges a v1-tolerant read path for the life of that format — **users must not need to reinstall.** Phase 4a adds install-time output and must not change exit codes: a shadowed install is a warning, not a failure.
 - **Extraction, not rewrite.** `bin/install.js` keeps working at every phase boundary. This is the pattern that has actually worked in this repo — [ADR-857](857-capability-system.md), [ADR-1508](1508-runtime-artifact-conversion-module.md) and [ADR-3660](3660-runtime-artifact-layout-module.md) have each moved one slice — and the reason the whole-installer rewrite is rejected below.
 
@@ -227,9 +227,9 @@ Each phase is its own issue and its own PR. `0 → 1 → 2 → 3 → 4` is a har
 
 ## References
 
-- Presenting defect: [#2218](https://github.com/open-gsd/gsd-core/issues/2218) — `--local` Claude install silently shadowed by a coexisting `--global` skills install
-- Epic: [#2866](https://github.com/open-gsd/gsd-core/issues/2866); phases [#2869](https://github.com/open-gsd/gsd-core/issues/2869)–[#2876](https://github.com/open-gsd/gsd-core/issues/2876)
-- Incorporated: [#1874](https://github.com/open-gsd/gsd-core/issues/1874)-F19 (durable user-artifact staging) lands with Phase 6; the rest of that epic is untouched
+- Presenting defect: [#2218](https://github.com/TheRocketCodeMX/gsd-core/issues/2218) — `--local` Claude install silently shadowed by a coexisting `--global` skills install
+- Epic: [#2866](https://github.com/TheRocketCodeMX/gsd-core/issues/2866); phases [#2869](https://github.com/TheRocketCodeMX/gsd-core/issues/2869)–[#2876](https://github.com/TheRocketCodeMX/gsd-core/issues/2876)
+- Incorporated: [#1874](https://github.com/TheRocketCodeMX/gsd-core/issues/1874)-F19 (durable user-artifact staging) lands with Phase 6; the rest of that epic is untouched
 - Placement seam this amends: [ADR-3660](3660-runtime-artifact-layout-module.md); content sibling: [ADR-1508](1508-runtime-artifact-conversion-module.md)
 - Descriptor vocabulary this widens: [ADR-1016](1016-runtime-capability-descriptor.md); its stability contract: [ADR-894](894-capability-declaration-format.md)
 - Install-plan projection this completes: [ADR-58](58-runtime-install-policy-module.md); its generalization: [ADR-857](857-capability-system.md)
