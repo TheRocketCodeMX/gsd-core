@@ -68,6 +68,21 @@ describe('quick-batch: /gsd:quick command + workflow stay byte-identical (row 48
     }
 
     const changed = resolveChangedPaths(resolved.ref);
+    // FORK: an upstream-realignment branch (`align/upstream-X.Y.Z`, always
+    // carrying a `.changeset/align-upstream-*.md`) folds upstream's OWN edits to
+    // quick.md and the quick-batch surface (e.g. the #3789 responsive separators)
+    // plus the identity rebrand over the whole tree. That is upstream content
+    // arriving, not #3676 phase work, and every scope heuristic below reads it
+    // as both "touches quick-batch" and "edits quick.md". Row 48 has nothing to
+    // say about a realignment; skip it there (reported, per ADR-2719 §6).
+    const realignmentChangeset = changed.find((p) => /^\.changeset\/align-upstream-[^/]+\.md$/.test(p));
+    if (realignmentChangeset) {
+      t.skip(
+        `upstream-realignment branch (${realignmentChangeset}) — the quick/quick-batch edits ` +
+        'are upstream content folded in, not #3676 phase work; row 48 governs #3676-phase branches only',
+      );
+      return;
+    }
     // #3730 review: row 48 is the #3676 PHASE's invariant — quick-batch adds new
     // call sites onto shared primitives without editing ordinary quick. Judging
     // every FUTURE branch by it would freeze quick.md forever (observed: the

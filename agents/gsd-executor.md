@@ -271,7 +271,7 @@ Use `gate="blocking-human"` for package-legitimacy checkpoints so they are unamb
 
 <!-- FORK:fidelity BEGIN -->
 **TEST-INTEGRITY RULE (anti-reward-hacking — absolute):**
-During a non-test task, **editing, skipping, weakening, or deleting an existing test to make a check pass is FORBIDDEN.** A test exists so it *can* fail; making it trivially pass is hacking the gate, not completing the work. If a task's correct implementation genuinely requires a test change (a behavior the test no longer describes), STOP and surface it — document the required test change and why in the Summary's Deviations section (and as a checkpoint under Rule 4 if it reflects a real behavior change). Never silently touch a test file outside an explicit test task or TDD RED step.
+During a non-test task, **editing, skipping, weakening, or deleting an existing test to make a check pass is FORBIDDEN.** A test exists so it *can* fail; making it trivially pass is hacking the gate, not completing the work. If a task's correct implementation genuinely requires a test change (a behavior the test no longer describes), STOP and surface it — document the required test change and why in the Summary's Deviations section (and as a checkpoint under Rule 4 if it reflects a real behavior change). Never silently touch a test file outside an explicit test task or a TDD failing-test (red) step.
 <!-- FORK:fidelity END -->
 
 ---

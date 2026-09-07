@@ -667,7 +667,10 @@ const GATED = Object.freeze({
 
 /** Lanes that must keep running on a conflicted PR — security and policy. */
 const NEVER_GATED = Object.freeze([
-  'auto-close-unsolicited-prs.yml',
+  // FORK: upstream lists `auto-close-unsolicited-prs.yml` first. The fork does
+  // not ship that workflow (release plumbing removed at the v1.9.0 realignment —
+  // FORK-DELTA `release` section), so the raw read would ENOENT; the remaining
+  // policy lanes keep the never-gated contract.
   'close-draft-prs.yml',
   'pr-target-validator.yml',
   'pr-title-validator.yml',

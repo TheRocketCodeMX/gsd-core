@@ -171,6 +171,25 @@ These six routers are descriptor-only entries that the model picks first; the bo
 | `/gsd-update` | Update GSD to latest version; use `--sync` to sync skills across runtimes or `--reapply` to reapply local patches. | [commands/gsd/update.md](../commands/gsd/update.md) |
 | `/gsd-help` | Show available GSD commands and usage guide. | [commands/gsd/help.md](../commands/gsd/help.md) |
 
+### Discovery, Strategy Chain & Knowledge (fork)
+
+Fork-owned surfaces (`docs/FORK-DELTA.md` — `strategy`, `context`, `learn`). The strategy chain runs between `/gsd-new-project` and `/gsd-roadmap` in the order `gsd-core/references/strategy-chain.md` fixes; `/gsd-roadmap` is the single owner of the roadmapper spawn.
+
+| Command | Role | Source |
+|---------|------|--------|
+| `/gsd-discover-product` | Optional product discovery — demand vs interest, the narrowest wedge, four risks, outcome-framed. | [commands/gsd/discover-product.md](../commands/gsd/discover-product.md) |
+| `/gsd-legacy-inventory` | Inventory a predecessor codebase for a rewrite — coverage matrix, salvage card, gap map. | [commands/gsd/legacy-inventory.md](../commands/gsd/legacy-inventory.md) |
+| `/gsd-model-domain` | Greenfield DDD — capture ubiquitous language and classify subdomains (core/supporting/generic). | [commands/gsd/model-domain.md](../commands/gsd/model-domain.md) |
+| `/gsd-recommend-architecture` | Recommend an architecture matched to domain complexity and NFRs; produces an ADR. | [commands/gsd/recommend-architecture.md](../commands/gsd/recommend-architecture.md) |
+| `/gsd-frontend-architecture` | Recommend a frontend architecture — structure, state, rendering, design system, FE/BE seam. | [commands/gsd/frontend-architecture.md](../commands/gsd/frontend-architecture.md) |
+| `/gsd-security-strategy` | Decide the app-wide security posture — data classification, ASVS level, authz model, security DoD. | [commands/gsd/security-strategy.md](../commands/gsd/security-strategy.md) |
+| `/gsd-testing-strategy` | Recommend a test strategy matched to the architecture — test shape, levels, and what to test. | [commands/gsd/testing-strategy.md](../commands/gsd/testing-strategy.md) |
+| `/gsd-infrastructure-strategy` | Recommend an infrastructure strategy matched to the project — compute rung, data layer, floors. | [commands/gsd/infrastructure-strategy.md](../commands/gsd/infrastructure-strategy.md) |
+| `/gsd-cicd-strategy` | Recommend a right-sized CI/CD strategy — CI rung ladder, OIDC auth, deploy rung, forcing facts. | [commands/gsd/cicd-strategy.md](../commands/gsd/cicd-strategy.md) |
+| `/gsd-roadmap` | Generate the project roadmap after the strategy chain, then hand off to the build loop. | [commands/gsd/roadmap.md](../commands/gsd/roadmap.md) |
+| `/gsd-context` | Seed, verify, and grow durable project knowledge — context capsules and the MASTER-CONTEXT index. | [commands/gsd/context.md](../commands/gsd/context.md) |
+| `/gsd-learn` | Learn the engineering concepts GSD enforces — concept first, then when and why to use them. | [commands/gsd/learn.md](../commands/gsd/learn.md) |
+
 ---
 
 ## Workflows
@@ -192,6 +211,17 @@ Full roster at `gsd-core/workflows/*.md`. Workflows are thin orchestrators that 
 | `check-todos.md` | List pending todos, allow selection, load context, and route to the appropriate action. | `/gsd-capture --list` |
 | `cicd-strategy.md` | Recommend a right-sized CI/CD strategy via independent rung ladders (CI C0–C3, delivery D0–D5) with measured triggers, a matrix gate, and a bidirectional over/under-engineering check. | `/gsd-cicd-strategy` |
 | `cleanup.md` | Archive accumulated phase directories from completed milestones. | `/gsd-cleanup` |
+| `context.md` | Knowledge lifecycle for durable project context — seed, verify, and grow anchored context capsules and the MASTER-CONTEXT index (fork `context` capability). | `/gsd-context` |
+| `discover-product.md` | Define WHAT to build and WHY — real demand vs interest, the narrowest valuable wedge, the four product risks, outcome-framed success; writes `PRODUCT-BRIEF.md`. | `/gsd-discover-product` |
+| `frontend-architecture.md` | Recommend a frontend architecture matched to the backend topology — module structure, state, rendering, design system, the FE side of the FE↔BE seam; writes `FRONTEND-ARCHITECTURE.md`. | `/gsd-frontend-architecture` |
+| `infrastructure-strategy.md` | Recommend an infrastructure strategy matched to traffic shape, team size, and spend — cloud, compute rung per component, data layer per environment, observability + IaC floors; writes `INFRA-STRATEGY.md`. | `/gsd-infrastructure-strategy` |
+| `learn.md` | Teach a concept (or sequence) from `learn-catalog.md` through the five-beat teaching pattern — inline, personalized, standalone. | `/gsd-learn` |
+| `legacy-inventory.md` | Exhaustively inventory a predecessor codebase being replaced — coverage matrix, salvage card, gap map — so requirements derive from design ∪ old-system behavior; writes `LEGACY-INVENTORY.md`. | `/gsd-legacy-inventory` |
+| `model-domain.md` | Strategic DDD for greenfield — shared ubiquitous language + subdomain distillation (core/supporting/generic), optional bounded contexts; writes `DOMAIN-MODEL.md`. | `/gsd-model-domain` |
+| `recommend-architecture.md` | Recommend a complexity-matched application architecture on two independent axes (domain-logic organization, structural topology) and capture it as an ADR. | `/gsd-recommend-architecture` |
+| `roadmap.md` | Create — or bring current — ROADMAP.md at the strategy-chain → build-loop transition; the single owner of the `gsd-roadmapper` spawn (create / elaborate / extend modes). | `/gsd-roadmap` |
+| `security-strategy.md` | Decide the app-wide, decide-once security posture — data classification, ASVS level, authz model, security DoD; writes `SECURITY-STRATEGY.md`. | `/gsd-security-strategy` |
+| `testing-strategy.md` | Recommend a test strategy matched to the architecture — what to test, at which level, how much; the test shape is an output of the architecture decision; writes `TEST-STRATEGY.md`. | `/gsd-testing-strategy` |
 | `code-review-fix.md` | Auto-fix issues from REVIEW.md via gsd-code-fixer with per-fix atomic commits. | `/gsd-code-review --fix` |
 | `code-review.md` | Review phase source changes via gsd-code-reviewer; produces REVIEW.md. | `/gsd-code-review` |
 | `complete-milestone.md` | Mark a shipped version as complete — MILESTONES.md entry, PROJECT.md evolution, tag. | `/gsd-complete-milestone` |
@@ -441,6 +471,47 @@ The `gsd-planner` agent is decomposed into a core agent plus reference modules t
 | `user-story-template.md` | User story format for MVP planning — "As a / I want to / So that" structured fields. |
 | `specless-probe-fallback.md` | Spec-less probe fallback protocol — gate (toggle + per-section absence via the shared `spec-section` helper), the deterministic edge probe (mirrors spec-phase 5.5), the in-planner prohibition recall, and the `must_haves` authoring lift; consumed by plan-phase step 7.95 when a phase SPEC omits `## Edge Coverage` / `## Prohibitions` (ADR-857 Phase 6). |
 | `spidr-splitting.md` | SPIDR splitting decomposition rules for handling large user stories in MVP mode. |
+
+### Strategy, Testing, Fidelity & Knowledge References (fork)
+
+Fork-owned references (`docs/FORK-DELTA.md` — `strategy`, `fidelity`, `grounding`, `context`, `learn`). The strategy references back the discovery/strategy-chain skills; the testing how-tos are the doctrine `testing-strategy` and `add-tests` cite; the fidelity/grounding references are the quality contract the producing and reviewing agents share.
+
+| Reference | Role |
+|-----------|------|
+| `strategy-chain.md` | The strategy chain's canonical order and wiring manifest — every command's "Position in workflow" header and "Next:" pointer must agree with it. |
+| `strategy-flow.md` | The selection policy over `strategy-chain.md` — archetype → recommended path, `## Strategy Plan` + skip-ledger semantics. |
+| `product-discovery.md` | Reference for `/gsd-discover-product` — real demand vs interest, the narrowest wedge, outcome-framed success, the four product risks. |
+| `domain-modeling.md` | Reference for `/gsd-model-domain` — lightweight strategic DDD: shared language, subdomain distillation, optional bounded contexts. |
+| `architecture-decision.md` | Reference for `/gsd-recommend-architecture` — two-axis, complexity-matched architecture recommendation captured as an ADR. |
+| `frontend-architecture.md` | The frontend half of the architecture doctrine — floor, triggers, state, rendering, and the design system. |
+| `fe-be-seam.md` | The frontend↔backend seam as one decision — type contract, error contract, and the responsibility split. |
+| `security-posture.md` | The app-wide, decide-once security decisions — ASVS-by-context, the floor, authz model, and the regime switch — consumed by `security-strategy` and folded into per-feature enforcement. |
+| `infrastructure-strategy.md` | Reference for `/gsd-infrastructure-strategy` — the quantified compute ladder matched to traffic shape, team size, and spend. |
+| `data-environments.md` | Reference for the infrastructure data-layer step — Postgres hosting, database-per-environment, non-prod data, migrations, secrets. |
+| `application-telemetry.md` | The application-level telemetry decision — logging, cross-tier tracing without duplication, product analytics. |
+| `cicd-strategy.md` | Reference for `/gsd-cicd-strategy` — the CI rung ladder (Axis C) and the delivery rung ladder (Axis D), pipeline follows the test strategy. |
+| `test-strategy.md` | Reference for `/gsd-testing-strategy` — what to test, at which level, how much; shape follows architecture, extends an existing `TESTING-STANDARDS.md`. |
+| `certification.md` | Gate-vs-certify at the top of the test pyramid — capability detection and the substrate for `verify-work`'s agentic-certification step. |
+| `ai-test-quality.md` | The quality contract for model-authored tests — named LLM test-writer failure modes and the enforcement `add-tests` / TDD execution apply. |
+| `test-doubles.md` | Which kind of test double (dummy, stub, spy, mock, fake), at which seams, and what to assert. |
+| `test-containers.md` | Real dependencies in integration tests with Testcontainers. |
+| `db-test-isolation.md` | Deterministic DB integration tests under parallelism — the "passes alone, fails in parallel" problem. |
+| `contract-testing.md` | Verifying integrations against a dependency you cannot run or control in every test. |
+| `auth-in-tests.md` | Authentication in integration and e2e tests — authenticate once, reuse the session, handle roles. |
+| `e2e-tiering.md` | End-to-end test tiering — persistent smoke vs transient — so CI stays fast and the suite maintainable. |
+| `flaky-test-checklist.md` | Flaky-test avoidance checklist — async waits, concurrency, test-order dependence. |
+| `realistic-test-data.md` | Test data generation — synthetic first, dumps anonymized. |
+| `engineering-standards.md` | The senior quality contract injected into the producing agents and enforced by the reviewing agents (`fidelity`). |
+| `brownfield-adaptation.md` | How GSD adapts the strategy chain and the build loop to an existing codebase — the brownfield half of `engineering-standards.md`. |
+| `exploration-and-adaptability.md` | Mandatory scouting (code · design · live web), the combinable mode taxonomy, and the runtime tech-selection discipline; owns the source-precedence rule. |
+| `design-ingestion.md` | How a provided design is read into the build — per-form reading mechanics and the in-repo design oracle (`DESIGN-INVENTORY.md`). |
+| `grounding-citations.md` | The `## Grounding` block contract — how a PLAN.md proves it read the active sources, cross-checked by `check.grounding-plan`. |
+| `plan-checker-strategy-compliance.md` | The plan-checker's full per-artifact rubric for canonical discovery-artifact compliance (extracted from the agent to respect its byte budget). |
+| `plan-phase-coverage-gate.md` | How the plan-phase orchestrator handles the `check.decision-coverage-plan` result at step 13a (lazy-loaded extraction). |
+| `verifier-fidelity-gates.md` | The verifier's full source-fidelity and integrity gate procedures — reward-hacking, architecture-fit, strategy-fit, design-fit, mode-fit (extracted from the agent to respect its byte budget). |
+| `context-lifecycle.md` | Reference for the `context` capability — durable knowledge across a project: capsules, anchors, the MASTER-CONTEXT index, and the elicitation discussion logs. |
+| `learn-catalog.md` | The `/gsd-learn` curriculum backbone — the concept graph: what is teachable, where each concept's truth lives, prerequisite edges. |
+| `teaching-pattern.md` | How `/gsd-learn` teaches a concept — the five-beat teaching doctrine (the teaching analog of `engineering-standards.md`). |
 
 > **Subdirectory:** `gsd-core/references/few-shot-examples/` contains additional few-shot examples (`plan-checker.md`, `verifier.md`) that are referenced from specific agents. These are not among the top-level references.
 
@@ -693,6 +764,14 @@ Full listing: `gsd-core/bin/lib/*.cjs`.
 | `vendor/js-yaml.cjs` | **Vendored third-party artifact, not a GSD module.** Verbatim copy of `js-yaml`'s UMD `dist` build (ADR-3473 §8.1, #3881) — the single YAML parser adopted to replace this repo's hand-rolled frontmatter scanner. Vendored because `gsd-core/bin/**` is copied into installed trees that have no `node_modules`, so it may contain no external requires (enforced by `local/no-external-require-in-bin`). Its type twin, `src/vendor/js-yaml.d.cts`, is hand-authored (js-yaml ships no `.d.ts` upstream and `@types/js-yaml` is not installed) and deliberately narrow — only `load`/`dump`/`FAILSAFE_SCHEMA`/`YAMLException` are declared, so anchors/aliases/custom types/`loadAll` are unreachable from typed code. Never hand-edit the `.cjs`; `scripts/lint-vendored-deps.cjs` byte-compares it against the pinned `js-yaml` devDependency in `lint:ci` (the hand-authored twin is excluded from that byte-compare — there is no upstream file to compare against). See `gsd-core/bin/lib/vendor/README.md` |
 | `vendor/re2js.cjs` | **Vendored third-party artifact, not a GSD module.** Verbatim copy of `re2js`' CJS build — the RE2 linear-time regex engine used by `pattern.cjs` to evaluate untrusted `key_links` patterns without catastrophic backtracking (#3477). Vendored because `gsd-core/bin/**` is copied into installed trees that have no `node_modules`, so it may contain no external requires (enforced by `local/no-external-require-in-bin`). Never hand-edit; `scripts/lint-vendored-deps.cjs` byte-compares it against the pinned `re2js` devDependency in `lint:ci`. See `gsd-core/bin/lib/vendor/README.md` |
 | `write-set.cjs` | Shared fail-loud `Result<T>` (`{ok:true,value}\|{ok:false,reason}`) and per-surface write-set contracts (ADR-2143, epic #2143) — `WriteOutcome` (`{surface,applied}`), `WriteSet` (`WriteOutcome[]`), and `writeSetComplete(ws)` (true only when the set is non-empty AND every surface applied, never an OR-into-one-flag); `markdown-table.cjs` re-exports `Result` from here so existing importers are unaffected; consumed by `milestone.cts`'s `requirements mark-complete` handler to report a structured per-surface (`checkbox`/`traceability`) write-set alongside its existing fields (fixes the structural half of #2140) |
+| `context-command-router.cjs` | Fork (`context` capability): thin CJS subcommand router for `gsd-tools context` — the context-lifecycle verb family (seed / verify / grow of context capsules and the MASTER-CONTEXT index); compiled from `src/context-command-router.cts`, gitignored |
+| `context.cjs` | Fork (`context` capability): context-lifecycle core — provenance parsing, `[anchor: <path>[:<line>] "<substring>"]` extraction, anchored-claim verification and stale annotation for context capsules (`parseContextProvenance`, `extractAnchors`, `verifyAnchors`, `annotateStale`, `verifyContextFile`); compiled from `src/context.cts`, gitignored |
+| `grounding-command-router.cjs` | Fork (`grounding` capability, Rocket capability pack #25): thin CJS subcommand router for `gsd-tools grounding`; compiled from `src/grounding-command-router.cts`, gitignored |
+| `grounding.cjs` | Fork (`grounding` capability): source-grounding core — resolves the required/literal source-of-truth set from `## Strategy Plan` and the strategy artifacts and cross-checks a PLAN.md `## Grounding` block's citations against it (`resolveRequiredSources`, `parseStrategyPlan`, `parseSources`, `parseGroundingBlock`, `crossCheck`, `checkSourceCitation`); compiled from `src/grounding.cts`, gitignored |
+| `learn-command-router.cjs` | Fork (`learn` capability, Rocket capability pack #25): thin CJS subcommand router for `gsd-tools learn`; compiled from `src/learn-command-router.cts`, gitignored |
+| `learn.cjs` | Fork (`learn` capability): `/gsd-learn` core — `learn-catalog.md` concept-graph parsing, prerequisite chains, per-project learning progress read/update, and the next-concept query (`parseCatalog`, `prereqChain`, `cmdCatalog`, `cmdNode`, `cmdProgressRead`, `cmdProgressUpdate`, `cmdNext`); compiled from `src/learn.cts`, gitignored |
+| `project-command-router.cjs` | Fork (`strategy` capability): manifest-backed `gsd-tools project.*` subcommand router — PROJECT.md `## Mode` and `## Strategy Plan` lifecycle queries; compiled from `src/project-command-router.cts`, gitignored |
+| `project.cjs` | Fork (`strategy` capability): structured, placeholder-aware reads of PROJECT.md's `## Mode` (origin / design-input / code-quality, `has_provided_design`) and `## Strategy Plan` (recommended steps + skip-ledger) sections; compiled from `src/project.cts`, gitignored |
 
 [`docs/CLI-TOOLS.md`](CLI-TOOLS.md) may describe a subset of these modules; when it disagrees with the filesystem, this table and the directory listing are authoritative.
 
@@ -706,6 +785,7 @@ Full listing: `hooks/`.
 |------|-------|---------|
 | `gsd-statusline.js` | `statusLine` | Displays model, task, directory, context usage |
 | `gsd-context-monitor.js` | `PostToolUse` / `AfterTool` | Injects agent-facing context warnings at 35%/25% remaining |
+| `gsd-grounding-index-refresh.js` | `FileChanged` | Fork (`grounding` capability): when a strategy/source artifact (`DOMAIN-MODEL.md`, `adr/*.md`, `*-STRATEGY.md`, `DESIGN`/`LEGACY-INVENTORY.md`, `PROJECT.md`) is written mid-session, refreshes the grounding "Sources of Truth" index and injects the current active-source set as additionalContext |
 | `gsd-check-update.js` | `SessionStart` | Background check for new GSD versions |
 | `gsd-check-update-worker.js` | (worker) | Background worker helper for check-update |
 | `gsd-update-banner.js` | `SessionStart` | Opt-in banner surfacing update availability when GSD statusline isn't used (PR #2795) |

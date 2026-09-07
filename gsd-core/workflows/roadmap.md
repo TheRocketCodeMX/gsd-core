@@ -41,6 +41,9 @@ AUTO_MODE=false; case " $ARGUMENTS " in *" --auto "*|*" --autonomous "*) AUTO_MO
 MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 RESET_PHASES=false; case " $ARGUMENTS " in *" --reset-phase-numbers "*) RESET_PHASES=true;; esac
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper 2>/dev/null)
+# #3602: bind the roadmapper's model here (dynamic_routing / model_profile), never
+# inherit it silently. Empty or "inherit" → omit `model=` at the spawn (#2517).
+ROADMAPPER_MODEL=$(gsd_run query resolve-model gsd-roadmapper --raw 2>/dev/null || true)
 ```
 
 **Guard — no project yet.** If `.planning/PROJECT.md` and `.planning/REQUIREMENTS.md` do not both exist, there is nothing to roadmap:
@@ -90,14 +93,12 @@ if [ -z "$PROJECT_MODE" ]; then [ "$AUTO_MODE" = true ] && PROJECT_MODE=mvp || P
 **If `MODE=create`, `elaborate`, or `extend`:** display the banner and spawn the roadmapper.
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- GSD ► CREATING ROADMAP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### GSD ► CREATING ROADMAP
 
 ◆ Spawning roadmapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
 ```
 
-Spawn `gsd-roadmapper` with the block for the resolved `MODE` (omit `model=` to inherit). Substitute `${AGENT_SKILLS_ROADMAPPER}` and, for MVP projects, the Step-2 template rule.
+Spawn `gsd-roadmapper` with the block for the resolved `MODE`, passing `model="{ROADMAPPER_MODEL}"` — **omit the `model=` parameter entirely when `ROADMAPPER_MODEL` is `inherit` or empty** (an empty value 404s on runtimes without native tier aliases; omitting it inherits the orchestrator's model — #2517, see @gsd-core/references/model-profile-resolution.md). Substitute `${AGENT_SKILLS_ROADMAPPER}` and, for MVP projects, the Step-2 template rule.
 
 **MODE=create:**
 
@@ -125,13 +126,13 @@ Create the roadmap:
 6. Validate 100% coverage
 7. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability), then return ROADMAP CREATED with a summary.
 </instructions>
-", subagent_type="gsd-roadmapper", description="Create roadmap")
+", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Create roadmap")
 ```
 
 **MODE=elaborate** (a coarse roadmap predates the strategy artifacts — mirrors `workflows/plan-phase/modes/strategy-elaboration.md`):
 
 ```text
-Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon .planning/ROADMAP.md phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>", subagent_type="gsd-roadmapper", description="Elaborate roadmap against strategy")
+Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon .planning/ROADMAP.md phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Elaborate roadmap against strategy")
 ```
 
 **MODE=extend** (a new milestone's requirements on top of an existing roadmap):
@@ -163,7 +164,7 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 6. Apply the phase-template mode: {MVP template rule if PROJECT_MODE=mvp, else standard}
 7. Validate 100% coverage of this milestone's requirements. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability), then return ROADMAP CREATED with a summary.
 </instructions>
-", subagent_type="gsd-roadmapper", description="Extend roadmap for milestone")
+", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Extend roadmap for milestone")
 ```
 
 > **ORCHESTRATOR RULE:** the roadmapper **runs in a subagent** — after spawning, stop and wait (silence during the subagent run is expected; do not kill it, do not read files or run tests meanwhile). Then re-read ROADMAP.md — never route against the pre-spawn roadmap.
@@ -231,7 +232,7 @@ Skill(skill="gsd-discuss-phase", args="1 --auto")
 **Else (interactive standalone / chain-end pointer):** print the next-step pointer and stop:
 
 ```
-───────────────────────────────────────────────────────────────
+---
 
 ## ▶ Next Up
 
@@ -243,7 +244,7 @@ Skill(skill="gsd-discuss-phase", args="1 --auto")
 
 Also: /gsd:plan-phase 1 — skip discussion, plan directly
 
-───────────────────────────────────────────────────────────────
+---
 ```
 
 </process>

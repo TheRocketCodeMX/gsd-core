@@ -58,6 +58,10 @@ const EXPECTED_SURFACE_HOOKS = [
   'gsd-config-reload.js',
   'gsd-context-monitor.js',
   'gsd-graphify-update.sh',
+  // FORK: the grounding capability's FileChanged hook (hooks/gsd-grounding-index-refresh.js)
+  // is registered on the surface by src/runtime-hooks-surface.cts (FORK:grounding) and
+  // rostered in the docs hook tables; upstream's pin does not know it.
+  'gsd-grounding-index-refresh.js',
   'gsd-phase-boundary.sh',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',

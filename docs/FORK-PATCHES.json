@@ -363,6 +363,18 @@
    ]
   },
   {
+   "path": "docs/INVENTORY.md",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "Discovery, Strategy Chain & Knowledge \\(fork\\)",
+    "commands/gsd/roadmap\\.md",
+    "Strategy, Testing, Fidelity & Knowledge References \\(fork\\)",
+    "gsd-grounding-index-refresh\\.js",
+    "grounding-command-router\\.cjs"
+   ]
+  },
+  {
    "path": "docs/context-monitor.md",
    "feature": "context-monitor",
    "mode": "whole-file",
@@ -862,7 +874,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "untrusted-input-boundary\\.md"
+    "untrusted-input-boundary\\.md",
+    "antigravity-reviewer\\.test\\.cjs"
    ]
   },
   {
@@ -998,12 +1011,37 @@
    ]
   },
   {
+   "path": "tests/agent-tracked-source-rule.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "cap mirrors the XL tier this fork records for gsd-planner"
+   ]
+  },
+  {
+   "path": "tests/artifacts.test.cjs",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "NOT_ROOT_ARTIFACTS",
+    "STATEX\\.md"
+   ]
+  },
+  {
    "path": "tests/broken-windows.test.cjs",
    "feature": "windows-ledger",
    "mode": "anchors-only",
    "anchors": [
     "broken-windows CLI: windows reconcile",
     "WINDOWS_DUPLICATE_ID"
+   ]
+  },
+  {
+   "path": "tests/ci-pr-mergeability.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "policy lanes keep the never-gated contract"
    ]
   },
   {
@@ -1024,6 +1062,14 @@
    ]
   },
   {
+   "path": "tests/docs-hooks-table-parity.test.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gsd-grounding-index-refresh\\.js"
+   ]
+  },
+  {
    "path": "tests/emitted-attribution.test.cjs",
    "feature": "release",
    "mode": "anchors-only",
@@ -1039,6 +1085,15 @@
    "anchors": [
     "fork calm-hook semantics",
     "spawn-free calm hook has no Stop-time state"
+   ]
+  },
+  {
+   "path": "tests/gsd-quick-batch-quick-regression.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "upstream-realignment branch",
+    "align-upstream-"
    ]
   },
   {
@@ -1086,6 +1141,22 @@
    "anchors": [
     "upstream pins the prompt count to its own literal 71",
     "COMMAND_COUNT"
+   ]
+  },
+  {
+   "path": "tests/no-bare-gsd-tools-command-position.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "resolver form, so there is no bare"
+   ]
+  },
+  {
+   "path": "tests/plan-phase-background-wait-wakeup.test.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "PLAN_PHASE_PHASE6_LINE = 100344"
    ]
   },
   {

@@ -49,7 +49,11 @@ const MANAGER_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'manager.md')
 // PRE_PHASE6 value (94519 -> 96700 -> 98300) for the REVISION_CONFLICT
 // persistence/routing gate before this file's own next-merge landed; keep
 // this mirror equal to that constant, not a stale snapshot of it.
-const PLAN_PHASE_PHASE6_LINE = 98300;
+// FORK: 98300 → 100344, the fork's PRE_PHASE6 value (v1.13.0 realignment —
+// upstream's own body is 98,290, zero headroom for the fork's marked
+// context/grounding blocks; see docs/FORK-DELTA.md, plan-phase.md row).
+// Ratchet back with tests/phase6-capstone-conformance.test.cjs.
+const PLAN_PHASE_PHASE6_LINE = 100344;
 
 function lfByteCount(p) {
   return Buffer.byteLength(readFileNormalized(p), 'utf-8');

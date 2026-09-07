@@ -74,7 +74,13 @@ describe('#3645 — agents write only git-tracked source paths', () => {
     // must not have grown the agent file past its baseline.
     const src = fs.readFileSync(path.join(AGENTS_DIR, 'gsd-planner.md'), 'utf8');
     const lf = src.replace(/\r\n/g, '\n').length;
-    assert.ok(lf < 49152, `gsd-planner.md is ${lf} LF chars — must stay < 49152 (#3645 keeps the planner frozen; enforcement lives in plan-phase.md)`);
+    // FORK: cap mirrors the XL tier this fork records for gsd-planner in
+    // tests/emitted-sizes.test.cjs (upstream's body is 48,838 of 49,152 — no fork
+    // block fits; same pin as tests/planner-decomposition.test.cjs and
+    // tests/precondition-element.test.cjs, see docs/FORK-DELTA.md). The freeze
+    // this guards — #3645 must not grow the planner — still holds: the fork's
+    // FORK:fidelity blocks predate #3645. Ratchet back to 49152 if upstream shrinks.
+    assert.ok(lf < 57344, `gsd-planner.md is ${lf} LF chars — must stay < 57344 (#3645 keeps the planner frozen; enforcement lives in plan-phase.md)`);
     assert.ok(!src.includes('Tracked-source'),
       'the rule belongs in the spawn contract, not the frozen agent file (#3645)');
   });

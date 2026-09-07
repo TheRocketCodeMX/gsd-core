@@ -1126,15 +1126,16 @@ describe('suite-metrics capture — the executor records what it actually ran', 
     assert.match(text, /never estimate|do not estimate|measured, not estimated/i);
   });
 
-  test('the line-pinned PROSE_ALLOWLIST entry for execute-plan.md:414 has not shifted', () => {
+  test('the line-pinned PROSE_ALLOWLIST entry for execute-plan.md:419 has not shifted', () => {
     // tests/no-bare-gsd-tools-command-position.test.cjs pins this file:line pair.
     // Wave 2 broke it once; this guard makes a re-break loud HERE, in the file
-    // that owns the change, instead of in an upstream test.
-    const line = read(EXECUTE_PLAN).split('\n')[413];
+    // that owns the change, instead of in an upstream test. (v1.13.0: upstream's
+    // own pin moved 414 → 419 — the fork's line is now the same as upstream's.)
+    const line = read(EXECUTE_PLAN).split('\n')[418];
     assert.match(
       line,
       /Every deliverable MUST be classified/,
-      'execute-plan.md line 414 must still be the allowlisted `validated downstream by` line'
+      'execute-plan.md line 419 must still be the allowlisted `validated downstream by` line'
     );
   });
 });

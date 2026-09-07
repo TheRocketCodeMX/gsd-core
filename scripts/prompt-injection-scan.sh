@@ -179,6 +179,14 @@ ALLOWLIST=(
   # rendering, never a command. Same DEFECT.PROMPT-INJECTION-SCAN-COLLISION
   # class as the input-validator fixtures above.
   'tests/quick-batch.test.cjs'
+  # FORK: upstream #3996 (PR #4184) proves the antigravity stub carries hostile
+  # agy stderr VERBATIM as data — the fixture must be a real "IGNORE ALL
+  # PREVIOUS INSTRUCTIONS" phrase or the test asserts nothing. Upstream never
+  # allowlisted it because its security-scan.yml `paths:` filter did not fire on
+  # that PR; the fork's realignment PRs touch scripts/ and walk the whole diff,
+  # so the collision surfaces here. Same DEFECT.PROMPT-INJECTION-SCAN-COLLISION
+  # class as the fixtures above.
+  'tests/antigravity-reviewer.test.cjs'
 )
 
 is_allowlisted() {

@@ -78,7 +78,10 @@ describe('CANONICAL_EXACT vs the shipped corpus (drift gate)', () => {
   // Each entry must say why — an unexplained entry is the drift this gate exists
   // to stop.
   const NOT_ROOT_ARTIFACTS = new Set([
-    // (empty — every literal in the corpus today is a real root artifact)
+    // Upstream #3720 (pr-branch.md `STRUCTURAL_RE` comment) names `.planning/STATEX.md`
+    // as a NEGATIVE example — a spelling the anchored regex must NOT treat as
+    // structural. Nothing writes it; it is a counter-example, not an artifact.
+    'STATEX.md',
   ]);
 
   function walk(dir) {
