@@ -1539,6 +1539,18 @@
    "anchors": [
     "REPO_BASELINE_LINT_TIMEOUT_MS = 90000"
    ]
+  },
+  {
+   "path": "gsd-core/workflows/fast.md",
+   "feature": "fast-scope",
+   "mode": "markers",
+   "markers": 6,
+   "anchors": [
+    "default is to PROCEED",
+    "git add -- \\{touched paths\\}",
+    "git diff --cached --name-only",
+    "Never bounce on file count alone"
+   ]
   }
  ]
 }

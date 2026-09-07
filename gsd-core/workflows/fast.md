@@ -25,6 +25,7 @@ Store as `$TASK`.
 </step>
 
 <step name="scope_check">
+<!-- FORK:fast-scope BEGIN -->
 **Sanity check only — the default is to PROCEED.**
 
 The user already chose /gsd:fast. Trust that choice. Do NOT bounce a task merely
@@ -50,12 +51,15 @@ And stop.
 Bouncing is expensive — it burns a full turn and the user then pays for the whole
 quick pipeline on top. Never bounce on file count alone, on line count, or on a vague
 sense that the change is "big". Bounce only on the four criteria above.
+<!-- FORK:fast-scope END -->
 </step>
 
 <step name="execute_inline">
+<!-- FORK:fast-scope BEGIN -->
 Before touching anything, run `git status --porcelain` and note which paths were
 ALREADY dirty. Those are the user's pre-existing changes — they are not yours and
 must not end up in this commit.
+<!-- FORK:fast-scope END -->
 
 Do the work directly:
 
@@ -63,8 +67,10 @@ Do the work directly:
 2. Make the change(s)
 3. Verify the change works (run existing tests if applicable, or do a quick sanity check)
 
+<!-- FORK:fast-scope BEGIN -->
 Keep an explicit list of every path YOU created, edited, or deleted. That list —
 not the working tree — is what gets staged in the next step.
+<!-- FORK:fast-scope END -->
 
 **No PLAN.md.** Just do it.
 </step>
@@ -136,15 +142,21 @@ No next-step suggestions. No workflow routing. Just done.
 - NEVER spawn a Task/subagent — this runs inline
 - NEVER create PLAN.md or SUMMARY.md files
 - NEVER run research or plan-checking
+<!-- FORK:fast-scope BEGIN -->
 - If the task spans more than ~10 files or needs work sequenced across several
   commits, STOP and redirect to /gsd:quick
+<!-- FORK:fast-scope END -->
 - If you're unsure how to implement it, STOP and redirect to /gsd:quick
+<!-- FORK:fast-scope BEGIN -->
 - Do NOT bounce on file count below that ceiling — a 5-file deletion belongs here
+<!-- FORK:fast-scope END -->
 </guardrails>
 
 <success_criteria>
 - [ ] Task completed in current context (no subagents)
 - [ ] Atomic git commit with conventional message
 - [ ] STATE.md updated if it exists
+<!-- FORK:fast-scope BEGIN -->
 - [ ] No subagents spawned and no PLAN.md written — that is the point of this lane
+<!-- FORK:fast-scope END -->
 </success_criteria>
