@@ -1623,6 +1623,15 @@
    "anchors": [
     "Strategy chain in progress \\(roadmap pending\\)"
    ]
+  },
+  {
+   "path": ".github/workflows/test.yml",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "Scoped Windows lane superseded by the full Windows lane",
+    "matrix\\.scope == \\x27windows\\x27 && needs\\.changes\\.outputs\\.full_matrix == \\x27true\\x27"
+   ]
   }
  ]
 }

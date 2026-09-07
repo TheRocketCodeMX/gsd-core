@@ -376,8 +376,20 @@ jobs:
           path: .gsd-cache/emitted-baseline.json
           key: emitted-baseline-${{ github.event.pull_request.base.sha }}
 
+      # FORK (ci): the scoped Windows lane stands down when full_matrix is true.
+      # On a change-everything PR (an upstream realignment) `windows_tests`
+      # degenerates to the whole Windows-relevant set (135 files), which
+      # cannot fit the scoped lane's default 600 s per-chunk budget on the
+      # Windows runners (three shards, all chunk-killed, four heads in a row),
+      # while the `test-full` job — gated on the same full_matrix — already runs
+      # the entire unit suite on Windows and passes. Upstream never hits this
+      # because their PRs are scoped; keep the guard on the two scoped steps only.
+      - name: Scoped Windows lane superseded by the full Windows lane
+        if: matrix.scope == 'windows' && needs.changes.outputs.full_matrix == 'true'
+        run: echo "full_matrix=true — the test-full Windows shards run the whole suite; scoped lane stands down."
+
       - name: Prepare scoped test list
-        if: matrix.scope != 'full'
+        if: matrix.scope != 'full' && !(matrix.scope == 'windows' && needs.changes.outputs.full_matrix == 'true')
         env:
           TEST_SCOPE: ${{ matrix.scope }}
           TARGETED_TESTS: ${{ needs.changes.outputs.targeted_tests }}
@@ -385,7 +397,7 @@ jobs:
         run: node scripts/ci-prepare-test-scope.cjs
 
       - name: Run scoped tests
-        if: matrix.scope != 'full'
+        if: matrix.scope != 'full' && !(matrix.scope == 'windows' && needs.changes.outputs.full_matrix == 'true')
         run: node scripts/run-tests.cjs --files-from .ci-selected-tests.txt${{ matrix.shard && format(' --shard {0}', matrix.shard) || '' }}
 
       # #2952: each shard runs its slice of the unit suite under c8 but renders
