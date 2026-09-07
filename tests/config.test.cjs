@@ -436,6 +436,90 @@ describe('config-set command', () => {
   });
 });
 
+// ─── config-set git.protected_branches (#3552) ──────────────────────────────
+
+describe('config-set git.protected_branches (#3552)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('accepts and persists multiple non-empty branch names', () => {
+    const branches = ['develop', 'next'];
+    const result = runGsdTools(
+      ['config-set', 'git.protected_branches', JSON.stringify(branches)],
+      tmpDir,
+    );
+
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    assert.deepStrictEqual(readConfig(tmpDir).git.protected_branches, branches);
+  });
+
+  test('rejects invalid shapes and preserves the previous list', () => {
+    const previous = ['develop', 'next'];
+    const seed = runGsdTools(
+      ['config-set', 'git.protected_branches', JSON.stringify(previous)],
+      tmpDir,
+    );
+    assert.ok(seed.success, `Seed failed: ${seed.error}`);
+
+    const invalidValues = [
+      'develop',
+      { develop: true },
+      ['develop', 42],
+      [],
+      [''],
+      ['develop', '   '],
+    ];
+
+    for (const invalidValue of invalidValues) {
+      const result = runGsdTools(
+        ['config-set', 'git.protected_branches', JSON.stringify(invalidValue)],
+        tmpDir,
+      );
+      assert.strictEqual(
+        result.success,
+        false,
+        `Expected rejection for ${JSON.stringify(invalidValue)}, got: ${result.output}`,
+      );
+      assert.deepStrictEqual(
+        readConfig(tmpDir).git.protected_branches,
+        previous,
+        `Rejected value ${JSON.stringify(invalidValue)} must not change the prior list`,
+      );
+    }
+  });
+
+  test('is absent by default and null removes the configured list', () => {
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(readConfig(tmpDir).git, 'protected_branches'),
+      'config-ensure-section must not add a protected_branches default',
+    );
+
+    const setResult = runGsdTools(
+      ['config-set', 'git.protected_branches', '["develop","next"]'],
+      tmpDir,
+    );
+    assert.ok(setResult.success, `Set failed: ${setResult.error}`);
+
+    const unsetResult = runGsdTools(
+      ['config-set', 'git.protected_branches', 'null'],
+      tmpDir,
+    );
+    assert.ok(unsetResult.success, `Unset failed: ${unsetResult.error}`);
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(readConfig(tmpDir).git, 'protected_branches'),
+      'git.protected_branches must be absent after unset',
+    );
+  });
+});
+
 // ─── config-get ──────────────────────────────────────────────────────────────
 
 describe('config-get command', () => {
@@ -981,97 +1065,6 @@ describe('config-set unknown key (no suggestion)', () => {
       result.error.includes('Unknown config key'),
       `Expected "Unknown config key" in error: ${result.error}`
     );
-  });
-});
-
-// ─── phase_id_convention: "bracket" has no consumers yet ─────────────────────
-//
-// ADR-612 (bracket phase-id grammar) is still "Proposed / PR-0 — ADR only".
-// The grammar primitives landed in src/phase-id.cts, but no CLI or roadmap
-// surface consumes the flag: with `phase_id_convention: "bracket"` set and the
-// ADR's canonical headings (`### [GSD.02] 05: Name`), `roadmap analyze` returns
-// phase_count 0, exit 0, no warning. Upstream's sequencing is deliberate; the
-// fork's footgun is that the 1.10.0 #2997/#3098 fix (the key now survives
-// resolution) makes "bracket" *settable* while the failure mode stays silent.
-// Minimal fork guard: config-set warns at the point of setting. Not an error —
-// the value is still written, so a user tracking ADR-612 can stage it.
-// Recorded as UPSTREAM-ISSUE CANDIDATE (.superpowers/sdd/feats-110-report.md §5).
-describe('config-set phase_id_convention bracket warns that the grammar has no consumers', () => {
-  const processSeam = require('./helpers/process-seam.cjs');
-  const TOOLS = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
-
-  // runGsdTools drops stderr on exit 0; this warning is a stderr-on-success
-  // contract, so drive the seam directly to keep both streams.
-  function runCapturingStderr(argv, cwd) {
-    return processSeam.runNode([TOOLS, ...argv], {
-      cwd,
-      env: { ...process.env, GSD_TEST_MODE: '1' },
-      timeoutMs: 60000,
-    });
-  }
-
-  let tmpDir;
-
-  beforeEach(() => {
-    tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
-  });
-
-  afterEach(() => {
-    cleanup(tmpDir);
-  });
-
-  test('setting "bracket" succeeds, writes the value, and warns on stderr', () => {
-    const result = runCapturingStderr(['config-set', 'phase_id_convention', 'bracket'], tmpDir);
-    assert.strictEqual(result.exitCode, 0, `config-set must still succeed; stderr: ${result.stderr}`);
-    assert.strictEqual(
-      readConfig(tmpDir).phase_id_convention,
-      'bracket',
-      'the value must still be written — this is a warning, not a rejection',
-    );
-    assert.match(
-      result.stderr,
-      /gsd: warning —/,
-      `expected the gsd warning idiom on stderr, got: ${result.stderr}`,
-    );
-    assert.match(
-      result.stderr,
-      /phase_id_convention/,
-      `warning must name the key, got: ${result.stderr}`,
-    );
-    assert.match(
-      result.stderr,
-      /bracket/,
-      `warning must name the value, got: ${result.stderr}`,
-    );
-    assert.match(
-      result.stderr,
-      /no consumer|not consumed|no CLI/i,
-      `warning must say the grammar has no consumers yet, got: ${result.stderr}`,
-    );
-    assert.match(
-      result.stderr,
-      /legacy/i,
-      `warning must say legacy phase-id parsing remains active, got: ${result.stderr}`,
-    );
-  });
-
-  test('stdout stays clean so --raw consumers are unaffected', () => {
-    const result = runCapturingStderr(['config-set', 'phase_id_convention', 'bracket', '--raw'], tmpDir);
-    assert.strictEqual(result.exitCode, 0);
-    assert.strictEqual(result.stdout.trim(), 'phase_id_convention=bracket');
-  });
-
-  test('the other accepted conventions do NOT warn', () => {
-    for (const value of ['milestone-prefixed', 'null']) {
-      const result = runCapturingStderr(['config-set', 'phase_id_convention', value], tmpDir);
-      assert.strictEqual(result.exitCode, 0, `config-set ${value} must succeed; stderr: ${result.stderr}`);
-      assert.doesNotMatch(
-        result.stderr,
-        /gsd: warning —/,
-        `phase_id_convention=${value} must not warn, got: ${result.stderr}`,
-      );
-    }
   });
 });
 
@@ -2500,7 +2493,10 @@ describe('bug #3212 execute-phase stall detection and safe resume', () => {
     const workflow = read('gsd-core/workflows/execute-phase.md');
 
     assert.match(workflow, /<step name="safe_resume_gate"/, 'execute-phase must define a safe_resume_gate step');
-    assert.match(workflow, /git log --oneline --grep="\$\{CURRENT_PLAN_ID\}"/, 'safe resume gate must check commits for the current plan id');
+    // #4003: the gate greps an anchored, zero-pad-tolerant scope regex derived from the
+    // current plan id (a bare padded substring matched other milestones' plans).
+    assert.match(workflow, /PLAN_SCOPE_RE="\^\[a-z\]\+\\\(\(0\*\$\{PHASE_N\}\)-\(0\*\$\{PLAN_N\}\)\\\):"/, 'safe resume gate must derive an anchored plan-scope regex');
+    assert.match(workflow, /--grep="\$\{PLAN_SCOPE_RE\}"/, 'safe resume gate must check commits for the current plan id');
     assert.match(workflow, /SUMMARY.md is missing/, 'safe resume gate must detect production commits with missing SUMMARY.md');
     assert.match(workflow, /close out manually/, 'safe resume gate must offer manual close-out recovery');
     assert.match(workflow, /re-execute from scratch/, 'safe resume gate must offer re-execute recovery');

@@ -1,6 +1,6 @@
 # A parallel `commit_gates` config for artifact preconditions in `cmdCommit`
 
-**Source:** [#3353](https://github.com/open-gsd/gsd-core/issues/3353)
+**Source:** [#3353](https://github.com/TheRocketCodeMX/gsd-core/issues/3353)
 **Decision:** wontfix — closed as filed; the mechanism already exists in the capability gate system
 **Date:** 2026-08-11
 
@@ -20,7 +20,7 @@ This entry denies **the `commit_gates` config as filed.** It does not deny the u
 ## Why GSD does not own this (as filed)
 
 - **The exact mechanism already exists in the capability system.** Since
-  [#2008](https://github.com/open-gsd/gsd-core/issues/2008) / ADR-2008, a capability can declare a
+  [#2008](https://github.com/TheRocketCodeMX/gsd-core/issues/2008) / ADR-2008, a capability can declare a
   `gates` entry with `check.predicate.kind: "command-exit-zero"` — "run your command, block the
   loop on non-zero" — at a chosen loop point, with `blocking` and `onError` semantics and a `when`
   config-key gate. See
@@ -55,7 +55,7 @@ not deny, and must never be cited against:
 - **Adding a `commit:pre` (and/or `commit:post`) loop extension point** so capabilities can
   declare `command-exit-zero` gates at commit time. This is the route the filing should take, and
   it is welcome as a capability-system proposal (new loop point + ADR-level schema note).
-- **The companion defect.** [#3352](https://github.com/open-gsd/gsd-core/issues/3352) — reviewer
+- **The companion defect.** [#3352](https://github.com/TheRocketCodeMX/gsd-core/issues/3352) — reviewer
   evidence is never verified, raw per-lane output is `rm -rf`'d, and an ungrounded `REVIEWS.md`
   feeds `/gsd-plan-phase --reviews` — is confirmed-bug on its own merits and stays open. That a
   full fix will likely *use* a commit-point gate does not make the `commit_gates` config the right
@@ -75,9 +75,9 @@ not deny, and must never be cited against:
 
 ## Related
 
-- [#3352](https://github.com/open-gsd/gsd-core/issues/3352) — companion defect (confirmed-bug):
+- [#3352](https://github.com/TheRocketCodeMX/gsd-core/issues/3352) — companion defect (confirmed-bug):
   ungrounded `REVIEWS.md` is never verified then deleted
-- [#2008](https://github.com/open-gsd/gsd-core/issues/2008) / ADR-2008 — the `command-exit-zero`
+- [#2008](https://github.com/TheRocketCodeMX/gsd-core/issues/2008) / ADR-2008 — the `command-exit-zero`
   capability gate this decision points to
 - [`docs/how-to/command-exit-zero-gate.md`](../docs/how-to/command-exit-zero-gate.md) — authoring
   recipe

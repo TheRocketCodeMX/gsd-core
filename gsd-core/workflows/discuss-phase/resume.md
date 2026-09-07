@@ -1,3 +1,5 @@
+Apply response_language to all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code, paths, and identifiers.
+
 # discuss-phase: existing-context / checkpoint-resume / plans-exist branches
 
 Lazy-loaded by the parent `check_existing` step (#717 thin-dispatcher budget). Follow the branch that matches the detected state, then return to the parent flow.

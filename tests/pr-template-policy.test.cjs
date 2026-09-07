@@ -299,7 +299,7 @@ describe('pr-template-policy', () => {
 // The tooling-paths carve-out RELAXES template enforcement, so trusting a
 // possibly-truncated list would let a >100-file PR skip enforcement on the
 // strength of its first 100 (all-tooling) paths. Verified live: PR
-// open-gsd/gsd-core#3202 returns 100 paths for 118 changed files.
+// TheRocketCodeMX/gsd-core#3202 returns 100 paths for 118 changed files.
 describe('pr-template-policy carve-out — truncated file lists (#3211)', () => {
   const toolingPaths = (n) => Array.from({ length: n }, (_, i) => `docs/generated-${i}.md`);
 

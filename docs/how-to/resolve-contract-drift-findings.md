@@ -4,7 +4,7 @@
 
 **Prerequisites:** A failing `npm run lint:ci` (or a direct `npm run check:contract-drift`) reporting one or more violations. The check runs automatically as part of `lint:ci` — you do not invoke it separately.
 
-For why the registry exists (five shipped defects, all one root cause: two surfaces sharing a contract with nothing enforcing agreement), see [issue #3565](https://github.com/open-gsd/gsd-core/issues/3565) and epic [#1891](https://github.com/open-gsd/gsd-core/issues/1891). This guide covers only how to *act* on a finding.
+For why the registry exists (five shipped defects, all one root cause: two surfaces sharing a contract with nothing enforcing agreement), see [issue #3565](https://github.com/TheRocketCodeMX/gsd-core/issues/3565) and epic [#1891](https://github.com/TheRocketCodeMX/gsd-core/issues/1891). This guide covers only how to *act* on a finding.
 
 ---
 
@@ -32,7 +32,7 @@ Every finding names its **kind**, the agent (or registry), the marker where one 
 | `agent_without_contract` / `duplicate_registry_row` | An agent file with no row, or two rows | Add exactly one row; the registry is the declaration of record for every agent |
 | `unknown_producer` / `unknown_consumer` | A row names an agent or a `Consumed by` file that does not exist | Fix or drop the name — a lint over fictional paths guards nothing |
 | `read_tag_gate_missing` | A declared consumer emits `<required_reading>` but the agent never references the gate | Add the MUST-Read gate clause to the agent (an `@`-included reference carrying it counts) — this is the F8 defect one layer up |
-| `legacy_read_tag` | A `<files_to_read>` survived under workflows/commands/agents | Rename to `<required_reading>` ([#3423](https://github.com/open-gsd/gsd-core/issues/3423) standardized on the gate tag) |
+| `legacy_read_tag` | A `<files_to_read>` survived under workflows/commands/agents | Rename to `<required_reading>` ([#3423](https://github.com/TheRocketCodeMX/gsd-core/issues/3423) standardized on the gate tag) |
 | `unmatched_consumer_token` | A workflow/command matches a quoted `## TOKEN` no agent declares or emits | Declare the producer, or delete the dispatch — this is F9's shape from the consumer side |
 | `parse_error` / `unclosed_fence` | The registry table or an agent file is malformed | Fix the row / close the fence; extraction over an unclosed fence is unreliable |
 | `pins-existence` (from `lint-removed-but-needed`) | A test depends on a file this PR deleted | Update the test to assert absence instead — `assert.ok(!content.includes('x.md'))` is the correct post-deletion state |

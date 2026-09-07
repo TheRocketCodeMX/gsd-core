@@ -1,6 +1,6 @@
 # New host runtimes as first-class in-tree registry entries
 
-**Source:** [#3346](https://github.com/open-gsd/gsd-core/issues/3346)
+**Source:** [#3346](https://github.com/TheRocketCodeMX/gsd-core/issues/3346)
 **Decision:** wontfix — closed as filed; redirected to the EoS Registry / out-of-tree host-plugin path
 **Date:** 2026-08-11
 
@@ -32,7 +32,7 @@ new entry in the in-tree runtime registry GSD maintains itself.
   the non-endorsing discoverability catalog, via a docs PR (`npm run gen:registry`). Existing
   entries (`gsd-cursor`, `gsd-omp`) already follow this path.
 - **The directly-analogous precedent is one month old and on point.** The Devin CLI request
-  ([#2170](https://github.com/open-gsd/gsd-core/issues/2170), closed not planned 2026-07-11) — a
+  ([#2170](https://github.com/TheRocketCodeMX/gsd-core/issues/2170), closed not planned 2026-07-11) — a
   genuinely new terminal coding agent proposed as a new runtime integration — was declined with
   an explicit policy statement: *"The point of the EoS is to let people deploy and curate their
   own integrations, not to have the maintainers continually monitor all the platforms and make
@@ -85,5 +85,5 @@ and must never be cited against:
   out-of-tree authoring path
 - [`docs/registries/README.md`](../docs/registries/README.md) — EoS Registry entry schema +
   submission process
-- [#2170](https://github.com/open-gsd/gsd-core/issues/2170) — Devin CLI runtime, the one-month-old
+- [#2170](https://github.com/TheRocketCodeMX/gsd-core/issues/2170) — Devin CLI runtime, the one-month-old
   on-point precedent

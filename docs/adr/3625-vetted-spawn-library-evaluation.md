@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-18
-- **Issue:** [#3625](https://github.com/open-gsd/gsd-core/issues/3625)
-- **Epic:** [#3411](https://github.com/open-gsd/gsd-core/issues/3411) — evaluated against its Phase 1 ([#3621](https://github.com/open-gsd/gsd-core/pull/3621))
+- **Issue:** [#3625](https://github.com/TheRocketCodeMX/gsd-core/issues/3625)
+- **Epic:** [#3411](https://github.com/TheRocketCodeMX/gsd-core/issues/3411) — evaluated against its Phase 1 ([#3621](https://github.com/TheRocketCodeMX/gsd-core/pull/3621))
 - **Scope:** `src/shell-command-projection.cts` subprocess dispatch (`execTool`, `execNpm`, `execGit`)
 - **Amends:** none. Constrained by [ADR-0009](0009-shell-command-projection-module.md).
 

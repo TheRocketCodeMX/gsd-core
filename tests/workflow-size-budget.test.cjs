@@ -1,3 +1,4 @@
+// docs-guard-exempt: no docs/ file is read; 'docs-update' is a gsd-core/workflows/ tier entry, not a repo doc.
 // allow-test-rule: source-text-is-the-product
 // Tests measure byte sizes of workflow files — the workflow file text IS the
 // product loaded by agents at runtime. No command output is parsed.
@@ -99,7 +100,12 @@ const WORKFLOWS_DIR = path.join(__dirname, '..', 'gsd-core', 'workflows');
 // gsd-core/references/verifier-phase-gates.md behind the gsd-verifier agent.
 // Measured 2026-08-13 via measureWorkflows() after that deletion; the note
 // before that named settings-advanced.md at 39,160, stale on both counts.)
-const XL_CAP = 98304;       // 96 KiB
+// FORK: XL cap raised 98304 → 100344 for the v1.13.0 realignment. Upstream's own
+// plan-phase.md is 98,290 LF bytes (14 under the 96 KiB cap — zero headroom), so the
+// fork's ~2 KB of marked context/grounding blocks cannot fit at any compression;
+// measured 100280 + 64. Same policy as the v1.10.0 execute-phase raise: ratchet back
+// down at the next upstream shrink.
+const XL_CAP = 100344;       // 96 KiB upstream; fork-raised (see above)
 const LARGE_CAP = 61440;    // 60 KiB
 const DEFAULT_CAP = 40960;  // 40 KiB
 

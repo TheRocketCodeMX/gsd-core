@@ -118,6 +118,7 @@ export const CLUSTERS: ClusterMap = Object.freeze({
     'undo',
     'fast',
     'quick',
+    'quick-batch',
     'autonomous',
     'config',
     'progress',

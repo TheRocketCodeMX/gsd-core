@@ -193,7 +193,7 @@
    "anchors": [
     "engineering-standards\\.md",
     "brownfield-adaptation\\.md",
-    "Ship Fast \u2260 skip structure"
+    "Ship Fast ≠ skip structure"
    ]
   },
   {
@@ -264,7 +264,7 @@
     "FORK:fidelity BEGIN",
     "verifier-fidelity-gates\\.md"
    ],
-   "note": "Compressed to a pointer (agent LARGE cap 49152; upstream base 49150 leaves ~0 headroom). Full gate text \u2014 incl. the former FORK:context DOMAIN-MODEL/TEST-STRATEGY line \u2014 lives in gsd-core/references/verifier-fidelity-gates.md."
+   "note": "Compressed to a pointer (agent LARGE cap 49152; upstream base 49150 leaves ~0 headroom). Full gate text — incl. the former FORK:context DOMAIN-MODEL/TEST-STRATEGY line — lives in gsd-core/references/verifier-fidelity-gates.md."
   },
   {
    "path": "bin/install.js",
@@ -281,7 +281,8 @@
    "mode": "anchors-only",
    "anchors": [
     "settingsFilesToClean",
-    "_uninstallScopedSettingsFile"
+    "_uninstallScopedSettingsFile",
+    "hook-exit\\.js"
    ]
   },
   {
@@ -309,15 +310,6 @@
    "mode": "anchors-only",
    "anchors": [
     "argument-hint to the invocation surface"
-   ]
-  },
-  {
-   "path": "bin/lib/ui-safety-gate.cjs",
-   "feature": "fidelity",
-   "mode": "markers",
-   "markers": 2,
-   "anchors": [
-    "NEGATOR_BEFORE_TOKEN"
    ]
   },
   {
@@ -360,7 +352,7 @@
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "kind\u2208unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
+    "kind∈unit\\|integration\\|e2e\\|automated_ui\\|agentic_certification"
    ]
   },
   {
@@ -369,6 +361,18 @@
    "mode": "anchors-only",
    "anchors": [
     "`automated_ui` \\\\\\| `agentic_certification`"
+   ]
+  },
+  {
+   "path": "docs/INVENTORY.md",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "Discovery, Strategy Chain & Knowledge \\(fork\\)",
+    "commands/gsd/roadmap\\.md",
+    "Strategy, Testing, Fidelity & Knowledge References \\(fork\\)",
+    "gsd-grounding-index-refresh\\.js",
+    "grounding-command-router\\.cjs"
    ]
   },
   {
@@ -638,11 +642,12 @@
    "path": "gsd-core/workflows/new-milestone.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 3,
+   "markers": 4,
    "anchors": [
     "Strategy Plan",
     "strategy-flow\\.md",
-    "NEXT_STRATEGY"
+    "NEXT_STRATEGY",
+    "Skill\\(skill=\"gsd-roadmap\", args=\"--milestone\"\\)"
    ]
   },
   {
@@ -666,11 +671,14 @@
    "path": "gsd-core/workflows/new-project.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 4,
+   "markers": 6,
    "anchors": [
     "Strategy Plan",
     "has_design_hint",
-    "strategy-flow\\.md"
+    "strategy-flow\\.md",
+    "Roadmap-after-strategy caveat",
+    "<!-- roadmap-mode: %s -->",
+    "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\""
    ]
   },
   {
@@ -730,9 +738,10 @@
    "path": "gsd-core/workflows/progress.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 1,
+   "markers": 2,
    "anchors": [
-    "Strategy Plan awareness"
+    "Strategy Plan awareness",
+    "Strategy chain in progress \\(roadmap pending\\)"
    ]
   },
   {
@@ -867,7 +876,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "untrusted-input-boundary\\.md"
+    "untrusted-input-boundary\\.md",
+    "antigravity-reviewer\\.test\\.cjs"
    ]
   },
   {
@@ -898,7 +908,8 @@
     "reconcileLedger",
     "amendWindow",
     "WINDOWS_DUPLICATE_ID",
-    "stripHeaderProse"
+    "stripHeaderProse",
+    "regenerateTable"
    ]
   },
   {
@@ -1002,12 +1013,37 @@
    ]
   },
   {
+   "path": "tests/agent-tracked-source-rule.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "cap mirrors the XL tier this fork records for gsd-planner"
+   ]
+  },
+  {
+   "path": "tests/artifacts.test.cjs",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "NOT_ROOT_ARTIFACTS",
+    "STATEX\\.md"
+   ]
+  },
+  {
    "path": "tests/broken-windows.test.cjs",
    "feature": "windows-ledger",
    "mode": "anchors-only",
    "anchors": [
     "broken-windows CLI: windows reconcile",
     "WINDOWS_DUPLICATE_ID"
+   ]
+  },
+  {
+   "path": "tests/ci-pr-mergeability.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "policy lanes keep the never-gated contract"
    ]
   },
   {
@@ -1028,6 +1064,14 @@
    ]
   },
   {
+   "path": "tests/docs-hooks-table-parity.test.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gsd-grounding-index-refresh\\.js"
+   ]
+  },
+  {
    "path": "tests/emitted-attribution.test.cjs",
    "feature": "release",
    "mode": "anchors-only",
@@ -1037,12 +1081,29 @@
    ]
   },
   {
+   "path": "tests/failing-direction.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "cap mirrors the XL tier this fork records for gsd-planner"
+   ]
+  },
+  {
    "path": "tests/fix-2289-context-monitor-event-allowlist.test.cjs",
    "feature": "context-monitor",
    "mode": "anchors-only",
    "anchors": [
     "fork calm-hook semantics",
     "spawn-free calm hook has no Stop-time state"
+   ]
+  },
+  {
+   "path": "tests/gsd-quick-batch-quick-regression.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "upstream-realignment branch",
+    "align-upstream-"
    ]
   },
   {
@@ -1093,6 +1154,22 @@
    ]
   },
   {
+   "path": "tests/no-bare-gsd-tools-command-position.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "resolver form, so there is no bare"
+   ]
+  },
+  {
+   "path": "tests/plan-phase-background-wait-wakeup.test.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "PLAN_PHASE_PHASE6_LINE = 100344"
+   ]
+  },
+  {
    "path": "tests/planner-decomposition.test.cjs",
    "feature": "fidelity",
    "mode": "anchors-only",
@@ -1140,7 +1217,7 @@
    "anchors": [
     "Ported from the fork",
     "cicd-strategy\\.md",
-    "raised 844 \u2192 880 for the v1\\.9\\.0 realignment"
+    "raised 844 → 880 for the v1\\.9\\.0 realignment"
    ]
   },
   {
@@ -1166,17 +1243,18 @@
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "raised 32000 \u2192 34400 for the v1\\.9\\.0 realignment"
+    "raised 32000 → 34400 for the v1\\.9\\.0 realignment",
+    "XL cap raised 98304 → 100344 for the v1\\.13\\.0 realignment"
    ]
   },
   {
    "path": "src/shell-command-projection.cts",
-   "feature": "managed-hook-coverage",
+   "feature": "grounding",
    "mode": "anchors-only",
    "anchors": [
-    "'gsd-agent-isolation-guard\\.js'",
-    "'gsd-write-guard\\.js'"
-   ]
+    "'gsd-grounding-index-refresh\\.js'"
+   ],
+   "note": "align-1.13.0: gsd-agent-isolation-guard.js / gsd-write-guard.js / gsd-worktree-path-guard.js are UPSTREAM-ABSORBED (#3662) in both managed sets; only the fork grounding hook remains fork-owned here."
   },
   {
    "path": "tests/shell-command-projection-dispatch.test.cjs",
@@ -1184,14 +1262,6 @@
    "mode": "anchors-only",
    "anchors": [
     "managed-hook basename sets cover every hook the installer registers in settings\\.json"
-   ]
-  },
-  {
-   "path": "src/config.cts",
-   "feature": "bracket-guard",
-   "mode": "anchors-only",
-   "anchors": [
-    "phase_id_convention \"bracket\" \\(ADR-612\\) has no consumers in this release"
    ]
   },
   {
@@ -1203,19 +1273,11 @@
    ]
   },
   {
-   "path": "tests/config.test.cjs",
-   "feature": "bracket-guard",
-   "mode": "anchors-only",
-   "anchors": [
-    "config-set phase_id_convention bracket warns that the grammar has no consumers"
-   ]
-  },
-  {
    "path": "tests/coverage-metadata-parser.test.cjs",
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "coverage classify \u2014 agentic_certification evidence",
+    "coverage classify — agentic_certification evidence",
     "agentic_certification"
    ]
   },
@@ -1229,7 +1291,7 @@
     "<step name=\"coverage_gap_capture\">",
     "##\\s*Coverage debt",
     "source: agentic",
-    "Certification re-entry \u2014 before the pending scan",
+    "Certification re-entry — before the pending scan",
     "CERTIFICATION-RESULT\\.md",
     "This step never overwrites"
    ]
@@ -1249,7 +1311,7 @@
    "mode": "anchors-only",
    "anchors": [
     "SUITE_START_MS=\\$\\(node -e",
-    "Step C \u2014 Suite-metrics capture"
+    "Step C — Suite-metrics capture"
    ]
   },
   {
@@ -1362,7 +1424,7 @@
    "feature": "gate-handoff",
    "mode": "anchors-only",
    "anchors": [
-    "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"\u2717 Post-merge test gate",
+    "command -v gsd_run >/dev/null 2>&1 \\|\\| \\{ echo \"✗ Post-merge test gate",
     "\\.gsd-post-merge-gate\\.json",
     "\\.planning/\\.gitignore"
    ]
@@ -1458,7 +1520,8 @@
    "mode": "anchors-only",
    "anchors": [
     "-UAT-superseded-",
-    "\\[\\\\w-\\]\\+"
+    "\\[\\\\w-\\]\\+",
+    "UAT_CERTIFIER_RESULT"
    ]
   },
   {
@@ -1533,14 +1596,6 @@
    ]
   },
   {
-   "path": "tests/lint-allow-test-rule-refs.test.cjs",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "REPO_BASELINE_LINT_TIMEOUT_MS = 90000"
-   ]
-  },
-  {
    "path": "gsd-core/workflows/fast.md",
    "feature": "fast-scope",
    "mode": "markers",
@@ -1550,6 +1605,32 @@
     "git add -- \\{touched paths\\}",
     "git diff --cached --name-only",
     "Never bounce on file count alone"
+   ]
+  },
+  {
+   "path": "tests/phase6-capstone-conformance.test.cjs",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "plan-phase\\.md ceiling raised 98300 → 100344"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/resume-project.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Strategy chain in progress \\(roadmap pending\\)"
+   ]
+  },
+  {
+   "path": ".github/workflows/test.yml",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "Scoped Windows lane superseded by the full Windows lane",
+    "matrix\\.scope == \\x27windows\\x27 && needs\\.changes\\.outputs\\.full_matrix == \\x27true\\x27"
    ]
   }
  ]

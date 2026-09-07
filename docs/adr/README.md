@@ -80,6 +80,12 @@ If A declares either relation toward B, **B must record the reciprocal.** A one-
 
 Only an `Accepted` ADR is owed the back-link. A `Proposed` ADR's claim is **prospective**: it has not taken effect, so its target is not marked. On ratification, the check begins demanding the back-links.
 
+### 3a. Amendment is symmetric too — but not yet gated
+
+A same-file `## Amendment (YYYY-MM-DD): <topic>` section (see `docs/contributor-standards.md`'s "Amending an accepted ADR") needs no back-link — there is only one file. A **separate** ADR that amends another is the same relation as Supersedes/Subsumes and follows the same rule: if A declares `**Amends:** [ADR-B]`, B **must** carry the reciprocal `**Amended by:** [ADR-A]` in the same PR. [ADR-2782](2782-reviewer-lane-capability-surface.md)'s single `Amends` field names four targets — [ADR-857](857-capability-system.md), [ADR-894](894-capability-declaration-format.md), [ADR-1016](1016-runtime-capability-descriptor.md), [ADR-1244](1244-capability-ecosystem.md) — and all four carry the reciprocal `Amended by` back-link.
+
+Unlike `Supersedes`/`Subsumes`, this is not yet enforced by `scripts/gen-adr-index.cjs` — `relationSections()` only recognizes `## Supersedes` / `## Subsumes` headings, and the header-field parity check does not walk `Amends`. Get the back-link right by review until that gap closes.
+
 ### 4. The declared id matches the filename
 
 An H1 of `# ADR-0175: …` in a file named `218-*.md` is a rename that never finished. The id in the title must match the filename's prefix.
@@ -208,6 +214,7 @@ These govern the system as it stands. Cite these.
 | [ADR-218](218-release-version-validation.md) | Harden release-workflow version validation — reject leading zeros and pre-check npm | Accepted | — |
 | [ADR-227](227-input-validation-shape-not-just-type.md) | Input validation must check semantic shape, not just type | Accepted | — |
 | [ADR-415](415-prevent-stale-base-token-reintroduction.md) | Prevent stale-base reintroduction of retired runtime tokens | Accepted | — |
+| [ADR-443](443-opus48-unified-effort-and-fast-mode-routing.md) | Unified cross-provider effort controls and fast-mode-aware routing | Accepted | — |
 | [ADR-452](452-eslint-lint-harness.md) | Adopt standard ESLint flat-config lint harness | Accepted | — |
 | [ADR-456](456-test-rigor-architecture.md) | Test-rigor architecture — deterministic scheduling, antagonistic tier, typed-surface mandate, and delete-bad-tests policy | Accepted | — |
 | [ADR-457](457-generated-cjs-single-source.md) | Generation model for `bin/lib/*.cjs` type safety | Accepted | — |
@@ -254,9 +261,12 @@ These govern the system as it stands. Cite these.
 | [ADR-3212](3212-lexical-seam-consolidation.md) | The Lexical Seam — Safe Pattern Construction, Line-Terminator Normalization, and Tokenizer-First Stateful Grammars | Accepted | — |
 | [ADR-3408](3408-state-write-path-preservation.md) | STATE.md Write Path — One Declared Policy, One Write Seam | Accepted | — |
 | [ADR-3409](3409-unreachable-shell-guard-arms.md) | Shell Guards Must Observe Their Own Failure Arm | Accepted | — |
+| [ADR-3473](3473-enforcement-by-construction.md) | Enforcement by Construction — One Owner per Invariant | Accepted | — |
 | [ADR-3574](3574-install-materialization-primitives.md) | Install materialization shares primitives, not one writer | Accepted | — |
 | [ADR-3625](3625-vetted-spawn-library-evaluation.md) | The platform seam keeps its own Windows binary resolution rather than adopting a spawn library | Accepted | — |
+| [ADR-3626](3626-context-md-seam-claim-gate.md) | CONTEXT.md seam claims carry a checkable enforcement pointer | Accepted | — |
 | [ADR-3660](3660-runtime-artifact-layout-module.md) | Runtime Artifact Layout Module owns per-runtime artifact placement | Accepted | [ADR-1239](1239-gsd-embeddable-orchestration-engine.md) |
+| [ADR-3806](3806-review-dispositions-ledger.md) | Review Dispositions Ledger canonizes where and how reviews-mode records incorporate/defer decisions in PLAN.md | Accepted | — |
 
 ### Proposed
 
@@ -265,7 +275,6 @@ Decided in principle, not yet ratified. Do not cite as settled architecture.
 | ADR | Title | Status | Read first |
 |-----|-------|--------|------------|
 | [ADR-230](230-introduce-next-integration-branch.md) | Introduce `next` as a long-lived integration branch | Proposed | — |
-| [ADR-443](443-opus48-unified-effort-and-fast-mode-routing.md) | Unified cross-provider effort controls and fast-mode-aware routing | Proposed | — |
 | [ADR-612](612-bracket-phase-id-convention.md) | Bracket Phase-ID Convention | Proposed | — |
 | [ADR-660](660-release-from-next-head.md) | Release from the head of `next`; immutable release tags; `@next` dist-tag as the RC surface | Proposed | — |
 | [ADR-1143](1143-claude-orchestration-capability.md) | Claude orchestration capability — Workflow tool (ultracode) as a runtime-gated loop execution backend | Proposed | — |
@@ -274,6 +283,9 @@ Decided in principle, not yet ratified. Do not cite as settled architecture.
 | [ADR-1671](1671-dynamic-context-management-platform.md) | Dynamic context management platform | Proposed | — |
 | [ADR-1953](1953-complexity-triggered-refactor.md) | Complexity-triggered refactor — the loop measures the entropy it just added | Proposed | — |
 | [ADR-3128](3128-adaptive-runtime-evidence.md) | Adaptive runtime evidence for GSD Debug | Proposed | — |
+| [ADR-3646](3646-per-task-content-resolution-seam.md) | Per-task external-tracker content-resolution seam | Proposed | — |
+| [ADR-3889](3889-process-exit-contract.md) | One exit-code registry — 0 and 1 are free, everything else is allocated | Proposed | — |
+| [ADR-3942](3942-emitted-drift-ack-commit-trailer.md) | The emitted-drift acknowledgment is PR-lifetime data — it belongs in a commit trailer, not the working tree | Proposed | — |
 
 ### Superseded, Retired, and Legacy
 

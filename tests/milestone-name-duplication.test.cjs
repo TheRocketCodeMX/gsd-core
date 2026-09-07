@@ -43,7 +43,7 @@ describe('e2e-10 F7: milestone complete does not duplicate the version', () => {
 
   test('no --name: MILESTONES.md header is "## v1.0", not "## v1.0 v1.0"', () => {
     seedProject(tmpDir);
-    const result = runGsdTools(['milestone.complete', 'v1.0'], tmpDir);
+    const result = runGsdTools(['milestone.complete', 'v1.0', '--confirm'], tmpDir);
     assert.ok(result.success, `milestone.complete failed: ${result.error}`);
 
     const milestones = fs.readFileSync(path.join(tmpDir, '.planning', 'MILESTONES.md'), 'utf-8');
@@ -53,7 +53,7 @@ describe('e2e-10 F7: milestone complete does not duplicate the version', () => {
 
   test('no --name: requirements archive header is "# Requirements Archive: v1.0", not doubled', () => {
     seedProject(tmpDir);
-    const result = runGsdTools(['milestone.complete', 'v1.0'], tmpDir);
+    const result = runGsdTools(['milestone.complete', 'v1.0', '--confirm'], tmpDir);
     assert.ok(result.success, `milestone.complete failed: ${result.error}`);
 
     const archived = fs.readFileSync(
@@ -66,7 +66,7 @@ describe('e2e-10 F7: milestone complete does not duplicate the version', () => {
 
   test('with a distinct --name: the name IS appended once', () => {
     seedProject(tmpDir);
-    const result = runGsdTools(['milestone.complete', 'v1.0', '--name', 'Foundation'], tmpDir);
+    const result = runGsdTools(['milestone.complete', 'v1.0', '--name', 'Foundation', '--confirm'], tmpDir);
     assert.ok(result.success, `milestone.complete failed: ${result.error}`);
 
     const milestones = fs.readFileSync(path.join(tmpDir, '.planning', 'MILESTONES.md'), 'utf-8');

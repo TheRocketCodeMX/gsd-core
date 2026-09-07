@@ -1,3 +1,5 @@
+Apply response_language to all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code, paths, and identifiers.
+
 # Step: suite tune-up (strategy-governed, four ordered passes)
 
 The repair half of suite health. `/gsd:testing-strategy` decides how fast a suite is

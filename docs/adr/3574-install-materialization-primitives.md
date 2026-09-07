@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-16
-- **Issue:** [#3574](https://github.com/open-gsd/gsd-core/issues/3574)
-- **Epic:** [#2866](https://github.com/open-gsd/gsd-core/issues/2866) — Phase 6 ([#2875](https://github.com/open-gsd/gsd-core/issues/2875))
+- **Issue:** [#3574](https://github.com/TheRocketCodeMX/gsd-core/issues/3574)
+- **Epic:** [#2866](https://github.com/TheRocketCodeMX/gsd-core/issues/2866) — Phase 6 ([#2875](https://github.com/TheRocketCodeMX/gsd-core/issues/2875))
 - **Amends:** none. Constrained by [ADR-58](58-runtime-install-policy-module.md), [ADR-3660](3660-runtime-artifact-layout-module.md), [ADR-1508](1508-runtime-artifact-conversion-module.md).
 
 ## Context
@@ -13,7 +13,7 @@ times and skipped once, and that the remedy is to extract the
 preserve → prune → stage → copy → restore choreography into **one** module with the three sites
 becoming callers.
 
-That premise was measured against the tree on 2026-08-16, after Phase 5 ([#2874](https://github.com/open-gsd/gsd-core/issues/2874))
+That premise was measured against the tree on 2026-08-16, after Phase 5 ([#2874](https://github.com/TheRocketCodeMX/gsd-core/issues/2874))
 landed. **It does not hold.** The three sites overlap in *shape* and diverge in *mechanism*:
 
 | step | `installRuntimeArtifacts`<br>`src/install-engine.cts:770-958` | `applySurface`<br>`src/surface.cts:359-452` | agent loop<br>`bin/install.js:11120+` |
@@ -154,14 +154,14 @@ Blast-radius figures for this seam are **not** reliable and were not used to jus
 `get_impact` on `installRuntimeArtifacts` resolved to a same-named test helper
 (`tests/adapter-declarative-equivalence.test.cjs:52`) and reported zero affected — the same
 name-collision failure mode that produced a misleading clean radius during
-[#3544](https://github.com/open-gsd/gsd-core/issues/3544). `applySurface` returned **CRITICAL /
+[#3544](https://github.com/TheRocketCodeMX/gsd-core/issues/3544). `applySurface` returned **CRITICAL /
 184+** from one tool and **LOW / 0** from another, disambiguating to two different in-file matches of
 the same name. The decision above rests on read code, not on those numbers.
 
 ## References
 
-- Epic: [#2866](https://github.com/open-gsd/gsd-core/issues/2866); this phase: [#2875](https://github.com/open-gsd/gsd-core/issues/2875); this ADR: [#3574](https://github.com/open-gsd/gsd-core/issues/3574)
-- Durability finding: [#1874](https://github.com/open-gsd/gsd-core/issues/1874)-F19 (and its closed child #1878 — do not re-file)
+- Epic: [#2866](https://github.com/TheRocketCodeMX/gsd-core/issues/2866); this phase: [#2875](https://github.com/TheRocketCodeMX/gsd-core/issues/2875); this ADR: [#3574](https://github.com/TheRocketCodeMX/gsd-core/issues/3574)
+- Durability finding: [#1874](https://github.com/TheRocketCodeMX/gsd-core/issues/1874)-F19 (and its closed child #1878 — do not re-file)
 - Placement seam: [ADR-3660](3660-runtime-artifact-layout-module.md) · content seam: [ADR-1508](1508-runtime-artifact-conversion-module.md) · policy/adapter split: [ADR-58](58-runtime-install-policy-module.md)
 - The epic's own frame: [ADR-2866](2866-install-surface-resolution.md), which mandated that this module owe its own ADR
 - User-directory preservation this ADR protects: #2973, #3664
