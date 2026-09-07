@@ -281,7 +281,8 @@
    "mode": "anchors-only",
    "anchors": [
     "settingsFilesToClean",
-    "_uninstallScopedSettingsFile"
+    "_uninstallScopedSettingsFile",
+    "hook-exit\\.js"
    ]
   },
   {
