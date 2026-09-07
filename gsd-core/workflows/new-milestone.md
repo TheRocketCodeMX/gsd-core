@@ -605,7 +605,7 @@ Print a summary:
 NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # first `recommended` step, or empty
 ```
 
-- **Auto mode + `NEXT_STRATEGY` set:** exit and `SlashCommand("/gsd:${NEXT_STRATEGY} --auto")` — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
+- **Auto mode + `NEXT_STRATEGY` set:** exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (Skill tool, never `SlashCommand` — an interpolated `/gsd:${…}` name is invisible to the slash-form converter and resolves to nothing on skill-only installs) — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
 - **Interactive + `NEXT_STRATEGY` set:** lead the panel below with `/gsd:${NEXT_STRATEGY}` (the strategy this milestone needs) as the next step, and offer `/gsd:discuss-phase [N]` as "skip strategy, build directly" — do NOT jump straight to discuss-phase when a strategy step is recommended.
 - **`NEXT_STRATEGY` empty** (strategy artifacts still fit, or none recommended): use the build-loop handoff below.
 <!-- FORK:strategy END -->

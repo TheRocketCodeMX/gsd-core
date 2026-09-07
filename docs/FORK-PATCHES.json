@@ -671,13 +671,14 @@
    "path": "gsd-core/workflows/new-project.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 5,
+   "markers": 6,
    "anchors": [
     "Strategy Plan",
     "has_design_hint",
     "strategy-flow\\.md",
     "Roadmap-after-strategy caveat",
-    "<!-- roadmap-mode: %s -->"
+    "<!-- roadmap-mode: %s -->",
+    "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\""
    ]
   },
   {
