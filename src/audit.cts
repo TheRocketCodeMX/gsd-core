@@ -22,22 +22,32 @@ import coreUtils = require('./core-utils.cjs');
 const { normalizeLineEndings } = coreUtils;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
-const { planningDir, quickDirFrom } = planningWorkspace;
+const { planningDir, quickDirFrom, debugDir, todosDir } = planningWorkspace;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import frontmatter = require('./frontmatter.cjs');
-const { extractFrontmatter, spliceFrontmatter } = frontmatter;
+// #4378 (roll-in): scanSeeds publishes the SAME canonical seed identity the
+// list-seeds gate derives — one grammar, two surfaces, no drift. commands.cjs
+// does not require this module, so the edge is acyclic.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import commandsModule = require('./commands.cjs');
+const { extractFrontmatter, frontmatterBlock, spliceFrontmatter, isFrontmatterWriteRefusal } = frontmatter;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseIdMod = require('./phase-id.cjs');
 const { PHASE_NUMBER_TOKEN_SOURCE, scopeToPhase } = phaseIdMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseLocator = require('./phase-locator.cjs');
 const { getAllArchivedPhaseDirs } = phaseLocator;
-import { requireSafePath, sanitizeForDisplay, sanitizeLabel } from './security.cjs';
+import { requireSafePath, sanitizeForDisplay, sanitizeLabel, PathAcceptance } from './security.cjs';
 import { platformWriteSync } from './shell-command-projection.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import io = require('./io.cjs');
 const { output, error: ioError } = io;
 import { parseNamedArgsOrExit } from './command-arg-projection.cjs';
+// #5118: the verification-status owner's report reader and closed enum.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import verificationMod = require('./verification.cjs');
+const { reportStatusOf, VERIFICATION_STATUS, VerificationStatusError } = verificationMod;
+import { realClock } from './clock.cjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -431,19 +441,28 @@ function deriveOpenQuestionsDigest(questions: string[]): string {
 // ─── scanDebugSessions ────────────────────────────────────────────────────────
 
 /**
- * Scan .planning/debug/ for open sessions.
- * Open = status NOT in ['resolved', 'complete'].
- * Ignores the resolved/ subdirectory.
+ * #4869: gsd-debugger's archive_session step appends every resolved session to
+ * this file in the debug directory. It is a document, not a session: it has no
+ * frontmatter, so its status would derive `unknown` and read as open forever.
+ * Excluded by this fixed name only. Any other file with missing or unparseable
+ * frontmatter is still an open session. Every shipped debug-directory reader
+ * excludes the same name from active sessions (#5011).
  */
-function scanDebugSessions(planDir: string): ScanOutcome<DebugSessionItem> {
-  const debugDir = path.join(planDir, 'debug');
-  if (!fs.existsSync(debugDir)) return { items: [], acknowledged: 0 };
+const DEBUG_KNOWLEDGE_BASE_FILENAME = 'knowledge-base.md';
+
+/**
+ * Scan the root-scoped .planning/debug/ directory supplied by the caller for open sessions.
+ * Open = status NOT in ['resolved', 'complete'].
+ * Ignores the resolved/ subdirectory and the debugger's knowledge base.
+ */
+function scanDebugSessions(debugPath: string): ScanOutcome<DebugSessionItem> {
+  if (!fs.existsSync(debugPath)) return { items: [], acknowledged: 0 };
 
   const results: DebugSessionItem[] = [];
   let acknowledged = 0;
   let files: fs.Dirent[];
   try {
-    files = fs.readdirSync(debugDir, { withFileTypes: true });
+    files = fs.readdirSync(debugPath, { withFileTypes: true });
   } catch {
     return { items: [{ scan_error: true, slug: '', status: '', updated: '', hypothesis: '' }], acknowledged: 0 };
   }
@@ -451,12 +470,13 @@ function scanDebugSessions(planDir: string): ScanOutcome<DebugSessionItem> {
   for (const entry of files) {
     if (!entry.isFile()) continue;
     if (!entry.name.endsWith('.md')) continue;
+    if (entry.name === DEBUG_KNOWLEDGE_BASE_FILENAME) continue;
 
-    const filePath = path.join(debugDir, entry.name);
+    const filePath = path.join(debugPath, entry.name);
 
     let safeFilePath: string;
     try {
-      safeFilePath = requireSafePath(filePath, planDir, 'debug session file', { allowAbsolute: true });
+      safeFilePath = requireSafePath(filePath, path.dirname(debugPath), 'debug session file', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -465,9 +485,9 @@ function scanDebugSessions(planDir: string): ScanOutcome<DebugSessionItem> {
     // document at this read boundary, same seam as `src/uat.cts`'s
     // `readNormalizedDocument` — `platformReadSync` performs no line-ending
     // normalization itself, and extractFrontmatter/status-derivation below
-    // degrade a lone-CR file's frontmatter to `unknown`, which every scan
-    // in this module treats as "not open" (fail-open, the permissive
-    // direction) rather than a real parse gap.
+    // degrade a lone-CR file's frontmatter to `unknown`, which this scan
+    // reports as an open session (#4869) — so an un-normalized resolved
+    // session would resurface as open.
     const rawContent = platformReadSync(safeFilePath);
     if (rawContent === null) continue;
     const content = normalizeLineEndings(rawContent);
@@ -572,7 +592,7 @@ function scanQuickTasks(planDir: string): ScanOutcome<QuickTaskItem> {
 
     let safeTaskDir: string;
     try {
-      safeTaskDir = requireSafePath(taskDir, planDir, 'quick task dir', { allowAbsolute: true });
+      safeTaskDir = requireSafePath(taskDir, planDir, 'quick task dir', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -586,7 +606,7 @@ function scanQuickTasks(planDir: string): ScanOutcome<QuickTaskItem> {
     if (summaryPath && fs.existsSync(summaryPath)) {
       let safeSum: string;
       try {
-        safeSum = requireSafePath(summaryPath, planDir, 'quick task summary', { allowAbsolute: true });
+        safeSum = requireSafePath(summaryPath, planDir, 'quick task summary', PathAcceptance.AbsoluteInsideRoot);
       } catch {
         continue;
       }
@@ -667,7 +687,7 @@ function scanThreads(planDir: string): ScanOutcome<ThreadItem> {
 
     let safeFilePath: string;
     try {
-      safeFilePath = requireSafePath(filePath, planDir, 'thread file', { allowAbsolute: true });
+      safeFilePath = requireSafePath(filePath, planDir, 'thread file', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -720,9 +740,16 @@ function scanThreads(planDir: string): ScanOutcome<ThreadItem> {
  * Scan .planning/todos/pending/ for pending todos.
  * Returns array of { filename, priority, area, summary }.
  * Display limited to first 5 + count of remainder.
+ *
+ * #4256: takes the ROOT-scoped todos base (`todosDir(cwd)`), NOT the
+ * workstream-scoped planning dir the other scans use — todos are shared
+ * project state (the migrateToWorkstreams contract keeps them at
+ * .planning/todos/), so the close gate must read the root or it clears
+ * vacuously under a workstream. The requireSafePath boundary below moves
+ * with the base.
  */
-function scanTodos(planDir: string): ScanOutcome<TodoItem> {
-  const pendingDir = path.join(planDir, 'todos', 'pending');
+function scanTodos(todosBase: string): ScanOutcome<TodoItem> {
+  const pendingDir = path.join(todosBase, 'pending');
   if (!fs.existsSync(pendingDir)) return { items: [], acknowledged: 0 };
 
   let files: fs.Dirent[];
@@ -750,7 +777,7 @@ function scanTodos(planDir: string): ScanOutcome<TodoItem> {
 
     let safeFilePath: string;
     try {
-      safeFilePath = requireSafePath(filePath, planDir, 'todo file', { allowAbsolute: true });
+      safeFilePath = requireSafePath(filePath, todosBase, 'todo file', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -782,9 +809,11 @@ function scanTodos(planDir: string): ScanOutcome<TodoItem> {
 
   const displayFiles = openFiles.slice(0, 5);
   for (const { entry, content, fm } of displayFiles) {
-    // Extract first line of body after frontmatter
-    const bodyMatch = content.replace(/^---[\s\S]*?---\r?\n?/, '');
-    const firstLine = splitLines(bodyMatch.trim())[0] || '';
+    // Extract first line of body after frontmatter — the block `extractFrontmatter` read above
+    // (the one fence owner), so a `---` inside a value cannot end it early.
+    const block = frontmatterBlock(content);
+    const todoBody = block ? block.rest : content;
+    const firstLine = splitLines(todoBody.trim())[0] || '';
     const summary = sanitizeForDisplay(firstLine.slice(0, 100));
 
     results.push({
@@ -805,6 +834,15 @@ function scanTodos(planDir: string): ScanOutcome<TodoItem> {
   }
 
   return { items: results, acknowledged };
+}
+
+// #4378 (roll-in): true when the filename is a well-formed seed name —
+// `SEED-` prefix, `.md` suffix, and no control bytes anywhere in between (the
+// scanSeeds admission filter passes such names through to the identity
+// derivation; a name with an embedded control byte falls back to its raw
+// stem exactly as the pre-canonical code did).
+function seedIdMatchRawName(name: string): boolean {
+  return !/[\u0000-\u001f\u007f]/.test(name);
 }
 
 // ─── scanSeeds ────────────────────────────────────────────────────────────────
@@ -836,7 +874,7 @@ function scanSeeds(planDir: string): ScanOutcome<SeedItem> {
 
     let safeFilePath: string;
     try {
-      safeFilePath = requireSafePath(filePath, planDir, 'seed file', { allowAbsolute: true });
+      safeFilePath = requireSafePath(filePath, planDir, 'seed file', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -862,16 +900,18 @@ function scanSeeds(planDir: string): ScanOutcome<SeedItem> {
       continue;
     }
 
-    // Extract seed_id from filename or frontmatter. The regex match is
-    // `\w`/hyphen-constrained (safe by construction, like `archived_milestone`)
-    // but the fallback taken when a filename doesn't fully match — e.g. a
-    // `SEED-`-prefixed, `.md`-suffixed name with a control byte SOMEWHERE in
-    // the middle, which still passes the `startsWith`/`endsWith` filter above
-    // — is the raw, unconstrained basename. Both branches are routed through
-    // sanitizeLabel below.
-    const seedIdMatch = entry.name.match(/^(SEED-[\w-]+)\.md$/);
-    const seed_id = seedIdMatch ? seedIdMatch[1] : path.basename(entry.name, '.md');
-    const slug = sanitizeLabel(seed_id.replace(/^SEED-/, ''));
+    // #4378 (roll-in): the canonical identity comes from the SAME derivation
+    // the list-seeds surface uses — frontmatter `id:` when it matches a seed
+    // grammar (legacy `SEED-NNN` or date-suffixed `SEED-YYMMDD-xxx`), else the
+    // filename's id prefix, else the whole stem. The old fused
+    // filename-stem id (e.g. `SEED-081-region` for `SEED-081-region.md`)
+    // disagreed with list-seeds and misfiled deferrals; publishing the
+    // canonical id keeps the two surfaces answering identically. The raw-
+    // basename fallback for control-byte-bearing names is preserved.
+    const stem = path.basename(entry.name, '.md');
+    const derived = commandsModule.deriveSeedIdentity(stem, fm.id);
+    const seed_id = seedIdMatchRawName(entry.name) ? derived.seed_id : stem;
+    const slug = sanitizeLabel(derived.slug);
 
     let title = sanitizeForDisplay(fm.title || '');
     if (!title) {
@@ -1021,7 +1061,7 @@ function scanUatGaps(planDir: string, cwd: string): ScanOutcome<UatGapItem> {
 
       let safeFilePath: string;
       try {
-        safeFilePath = requireSafePath(filePath, planDir, 'UAT file', { allowAbsolute: true });
+        safeFilePath = requireSafePath(filePath, planDir, 'UAT file', PathAcceptance.AbsoluteInsideRoot);
       } catch {
         continue;
       }
@@ -1030,9 +1070,9 @@ function scanUatGaps(planDir: string, cwd: string): ScanOutcome<UatGapItem> {
       // document at this read boundary, same seam as `src/uat.cts`'s
       // `readNormalizedDocument` — `platformReadSync` performs no line-ending
       // normalization itself, and extractFrontmatter/status-derivation below
-      // degrade a lone-CR file's frontmatter to `unknown`, which every scan
-      // in this module treats as "not open" (fail-open, the permissive
-      // direction) rather than a real parse gap.
+      // degrade a lone-CR file's frontmatter to `unknown`, which this scan
+      // reports as an open gap unless `result: all_pass` (#4869 triage) — so
+      // an un-normalized terminal UAT would resurface as open.
       const rawContent = platformReadSync(safeFilePath);
       if (rawContent === null) continue;
       const content = normalizeLineEndings(rawContent);
@@ -1104,7 +1144,7 @@ function scanVerificationGaps(planDir: string, cwd: string): ScanOutcome<Verific
 
       let safeFilePath: string;
       try {
-        safeFilePath = requireSafePath(filePath, planDir, 'VERIFICATION file', { allowAbsolute: true });
+        safeFilePath = requireSafePath(filePath, planDir, 'VERIFICATION file', PathAcceptance.AbsoluteInsideRoot);
       } catch {
         continue;
       }
@@ -1121,9 +1161,11 @@ function scanVerificationGaps(planDir: string, cwd: string): ScanOutcome<Verific
       const content = normalizeLineEndings(rawContent);
 
       const fm = extractFrontmatter(content, safeFilePath);
-      const status = ((fm.status as string) || 'unknown').toLowerCase();
+      // #5118: the owner's report reader judges `status` — exact match, no
+      // case folding; an out-of-set value throws VerificationStatusError.
+      const status = reportStatusOf(fm, safeFilePath);
 
-      if (status !== 'gaps_found' && status !== 'human_needed') continue;
+      if (status !== VERIFICATION_STATUS.GAPS_FOUND && status !== VERIFICATION_STATUS.HUMAN_NEEDED) continue;
 
       if (isAuditItemAcknowledged(fm, { snapshotKey: 'status', currentValue: status })) {
         acknowledged++;
@@ -1173,7 +1215,7 @@ function scanContextQuestions(planDir: string, cwd: string): ScanOutcome<Context
 
       let safeFilePath: string;
       try {
-        safeFilePath = requireSafePath(filePath, planDir, 'CONTEXT file', { allowAbsolute: true });
+        safeFilePath = requireSafePath(filePath, planDir, 'CONTEXT file', PathAcceptance.AbsoluteInsideRoot);
       } catch {
         continue;
       }
@@ -1269,7 +1311,7 @@ function scanDeferredItems(planDir: string, cwd: string): ScanOutcome<DeferredIt
 
     let safeFilePath: string;
     try {
-      safeFilePath = requireSafePath(filePath, planDir, 'deferred items file', { allowAbsolute: true });
+      safeFilePath = requireSafePath(filePath, planDir, 'deferred items file', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue;
     }
@@ -1316,7 +1358,9 @@ function auditOpenArtifacts(cwd: string): AuditResult {
   const planDir = planningDir(cwd);
 
   const debugSessions = (() => {
-    try { return scanDebugSessions(planDir); } catch { return { items: [{ scan_error: true, slug: '', status: '', updated: '', hypothesis: '' }], acknowledged: 0 }; }
+    // #5042: debug sessions are shared project state; workflow writers use
+    // the root .planning/debug directory even when a workstream is active.
+    try { return scanDebugSessions(debugDir(cwd)); } catch { return { items: [{ scan_error: true, slug: '', status: '', updated: '', hypothesis: '' }], acknowledged: 0 }; }
   })();
 
   const quickTasks = (() => {
@@ -1328,7 +1372,12 @@ function auditOpenArtifacts(cwd: string): AuditResult {
   })();
 
   const todos = (() => {
-    try { return scanTodos(planDir); } catch { return { items: [{ scan_error: true, filename: '', priority: '', severity: '', title: '', area: '', summary: '' }], acknowledged: 0 }; }
+    // #4256: todos are shared project state, like debug sessions (#5042),
+    // so the close gate reads todosDir(cwd) (the root), not the workstream-
+    // scoped planDir every other scan below receives. Reading planDir here
+    // made audit-open print "All artifact types clear. Safe to proceed."
+    // with pending todos on disk under a workstream.
+    try { return scanTodos(todosDir(cwd)); } catch { return { items: [{ scan_error: true, filename: '', priority: '', severity: '', title: '', area: '', summary: '' }], acknowledged: 0 }; }
   })();
 
   const seeds = (() => {
@@ -1340,7 +1389,14 @@ function auditOpenArtifacts(cwd: string): AuditResult {
   })();
 
   const verificationGaps = (() => {
-    try { return scanVerificationGaps(planDir, cwd); } catch { return { items: [{ scan_error: true, phase: '', file: '', status: '' }], acknowledged: 0 }; }
+    try {
+      return scanVerificationGaps(planDir, cwd);
+    } catch (err) {
+      // #5118: an out-of-set report status is the owner's hard error, not a
+      // scan failure to fold into a sentinel — let it reach the CLI seam.
+      if (err instanceof VerificationStatusError) throw err;
+      return { items: [{ scan_error: true, phase: '', file: '', status: '' }], acknowledged: 0 };
+    }
   })();
 
   const contextQuestions = (() => {
@@ -1624,6 +1680,25 @@ function resolvePhaseTargetDir(planDir: string, cwd: string, phase: string, arch
  * artifact identifier that resolves outside the project is refused before
  * any read or write is attempted.
  */
+/**
+ * #4802: splice the acknowledgement marker, surfacing `spliceFrontmatter`'s
+ * write refusal (the one owner of that decision) as an `ioError` naming the
+ * file — an unparseable frontmatter block is NOT an empty one, and splicing
+ * over it would discard every field the author actually wrote.
+ */
+function spliceAcknowledgement(content: string, fm: Parameters<typeof spliceFrontmatter>[1], fileLabel: string): string {
+  try {
+    return spliceFrontmatter(content, fm);
+  } catch (err) {
+    if (!isFrontmatterWriteRefusal(err)) throw err;
+    if (err.code === 'FRONTMATTER_UNPARSEABLE') {
+      ioError(`refusing to acknowledge — the frontmatter of "${fileLabel}" is not parseable YAML (splicing would discard every other frontmatter field); fix the YAML syntax error first, then re-run`);
+    }
+    ioError(`refusing to acknowledge "${fileLabel}" — ${err.message}`);
+    throw err; // unreachable — ioError throws
+  }
+}
+
 function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
   // args already has the family + subcommand tokens stripped by the caller
   // (audit-command-router.cts:147 passes `hubArgs.slice(2)`), so validation
@@ -1646,7 +1721,9 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
   // All declared flags above are value flags, so each resolves to `string |
   // null` at runtime; the cast narrows away the `boolean` arm of
   // ParsedNamedArgs's value type that this call site never produces.
-  const at = (atFlag as string | null) || new Date().toISOString().slice(0, 10);
+  // #4905: without --at, the operator-facing local calendar day (#2136)
+  // through the clock seam, which honors the GSD_NOW_MS pin (#474).
+  const at = (atFlag as string | null) || realClock.localToday();
 
   const planDir = planningDir(cwd);
   const markerBase = { milestone: milestone as string, at };
@@ -1676,7 +1753,7 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
       ioError(`no phase directory found for phase "${phase as string}"${archivedMilestone ? ` (archived-milestone "${archivedMilestone}")` : ''}`);
     }
     const filePath = path.join(targetDir as string, file as string);
-    const safeFilePath = requireSafePath(filePath, planDir, 'audit acknowledge target', { allowAbsolute: true });
+    const safeFilePath = requireSafePath(filePath, planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
     if (!fs.existsSync(safeFilePath)) ioError(`file not found: ${file as string}`);
 
     if (category === 'deferred_items') {
@@ -1732,7 +1809,7 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
       currentValue = deriveOpenQuestionsDigest(deriveOpenQuestions(normalizedContent, fm));
     }
     fm.audit_acknowledged = { ...markerBase, [snapshotKey]: currentValue };
-    const newContent = spliceFrontmatter(content, fm);
+    const newContent = spliceAcknowledgement(content, fm, file as string);
     platformWriteSync(safeFilePath, newContent);
     output({ acknowledged: true, category, phase, file, [snapshotKey]: currentValue }, raw, 'true');
     return;
@@ -1754,36 +1831,77 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
 
   if (category === 'debug_sessions') {
     if (!slug) ioError('--slug is required for --category debug_sessions');
-    safeFilePath = requireSafePath(path.join(planDir, 'debug', `${slug as string}.md`), planDir, 'audit acknowledge target', { allowAbsolute: true });
+    safeFilePath = requireSafePath(path.join(planDir, 'debug', `${slug as string}.md`), planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
     if (!fs.existsSync(safeFilePath)) ioError(`file not found: debug/${slug as string}.md`);
     const content = fs.readFileSync(safeFilePath, 'utf-8');
     currentValue = ((extractFrontmatter(content, safeFilePath).status as string) || 'unknown').toLowerCase();
   } else if (category === 'threads') {
     if (!slug) ioError('--slug is required for --category threads');
-    safeFilePath = requireSafePath(path.join(planDir, 'threads', `${slug as string}.md`), planDir, 'audit acknowledge target', { allowAbsolute: true });
+    safeFilePath = requireSafePath(path.join(planDir, 'threads', `${slug as string}.md`), planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
     if (!fs.existsSync(safeFilePath)) ioError(`file not found: threads/${slug as string}.md`);
     const content = fs.readFileSync(safeFilePath, 'utf-8');
     currentValue = deriveThreadStatus(extractFrontmatter(content, safeFilePath), content);
   } else if (category === 'seeds') {
     if (!seedId) ioError('--seed-id is required for --category seeds');
-    safeFilePath = requireSafePath(path.join(planDir, 'seeds', `${seedId as string}.md`), planDir, 'audit acknowledge target', { allowAbsolute: true });
-    if (!fs.existsSync(safeFilePath)) ioError(`file not found: seeds/${seedId as string}.md`);
+    // #4378 (roll-in): `--seed-id` arrives as whichever id an audit/list
+    // surface published — the canonical identity (frontmatter `id:` or the
+    // derived prefix, e.g. `SEED-081`, `SEED-260914-k3x`) or, for callers
+    // scripted against pre-canonical output, the full filename stem. Resolve
+    // by scanning the seeds directory and matching each candidate's derived
+    // identity (falling back to the literal stem), then prove the winner with
+    // requireSafePath exactly like every other acknowledge target. The direct
+    // `seeds/<seedId>.md` build stays as the final fallback so a genuine
+    // miss still reports the same "file not found" error as before.
+    const seedsAckDir = path.join(planDir, 'seeds');
+    let ackCandidate: string | null = null;
+    let ackEntries: string[] = [];
+    try {
+      ackEntries = fs.readdirSync(seedsAckDir).filter((n) => n.startsWith('SEED-') && n.endsWith('.md'));
+    } catch {
+      ackEntries = [];
+    }
+    for (const name of ackEntries) {
+      const stem = path.basename(name, '.md');
+      let fmId: unknown;
+      try {
+        const rawAck = platformReadSync(path.join(seedsAckDir, name));
+        if (rawAck !== null) fmId = extractFrontmatter(normalizeLineEndings(rawAck), path.join(seedsAckDir, name)).id;
+      } catch {
+        fmId = undefined;
+      }
+      const { seed_id: derivedAckId } = commandsModule.deriveSeedIdentity(stem, fmId);
+      if (derivedAckId === seedId || stem === seedId) {
+        ackCandidate = name;
+        break;
+      }
+    }
+    if (ackCandidate !== null) {
+      safeFilePath = requireSafePath(path.join(seedsAckDir, ackCandidate), planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
+    } else {
+      safeFilePath = requireSafePath(path.join(seedsAckDir, `${seedId as string}.md`), planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
+      ioError(`file not found: seeds/${seedId as string}.md`);
+    }
     const content = fs.readFileSync(safeFilePath, 'utf-8');
     currentValue = ((extractFrontmatter(content, safeFilePath).status as string) || 'dormant').toLowerCase();
   } else if (category === 'todos') {
     if (!filename) ioError('--filename is required for --category todos');
-    safeFilePath = requireSafePath(path.join(planDir, 'todos', 'pending', filename as string), planDir, 'audit acknowledge target', { allowAbsolute: true });
+    // #4256: todos are root-scoped shared state — derive the todos base and
+    // pass it as BOTH the path base and the requireSafePath boundary. The
+    // old workstream-scoped planDir boundary would refuse a root todos file
+    // outright, and even a path fix alone would have thrown here.
+    const rootTodos = todosDir(cwd);
+    safeFilePath = requireSafePath(path.join(rootTodos, 'pending', filename as string), rootTodos, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
     if (!fs.existsSync(safeFilePath)) ioError(`file not found: todos/pending/${filename as string}`);
     currentValue = ''; // presence-only — see scanTodos
   } else if (category === 'quick_tasks') {
     if (!quickDir) ioError('--dir is required for --category quick_tasks');
-    const taskDir = requireSafePath(path.join(planDir, 'quick', quickDir as string), planDir, 'audit acknowledge target dir', { allowAbsolute: true });
+    const taskDir = requireSafePath(path.join(planDir, 'quick', quickDir as string), planDir, 'audit acknowledge target dir', PathAcceptance.AbsoluteInsideRoot);
     if (!fs.existsSync(taskDir)) ioError(`directory not found: quick/${quickDir as string}`);
     // Shared with scanQuickTasks (#3458 follow-up) so the reader and this
     // writer can never disagree about which file is the task's record.
     const resolvedSummaryPath = resolveQuickTaskSummaryFile(taskDir, quickDir as string);
     if (resolvedSummaryPath) {
-      safeFilePath = requireSafePath(resolvedSummaryPath, planDir, 'audit acknowledge target', { allowAbsolute: true });
+      safeFilePath = requireSafePath(resolvedSummaryPath, planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
       const content = fs.readFileSync(safeFilePath, 'utf-8');
       currentValue = ((extractFrontmatter(content, safeFilePath).status as string) || 'unknown').toLowerCase();
     } else {
@@ -1793,7 +1911,7 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
       // acknowledgment's own snapshot of "no summary exists yet", which
       // self-invalidates the moment a real SUMMARY.md is written (the
       // scanner then reads THAT file's own status instead).
-      safeFilePath = requireSafePath(path.join(taskDir, `${quickDir as string}-SUMMARY.md`), planDir, 'audit acknowledge target', { allowAbsolute: true });
+      safeFilePath = requireSafePath(path.join(taskDir, `${quickDir as string}-SUMMARY.md`), planDir, 'audit acknowledge target', PathAcceptance.AbsoluteInsideRoot);
       currentValue = 'missing';
       createIfMissing = true;
       fmForCreate = { status: 'missing' };
@@ -1804,11 +1922,12 @@ function cmdAuditAcknowledge(cwd: string, args: string[], raw: boolean): void {
   }
 
   const presenceOnly = category === 'todos';
-  const fm = createIfMissing ? fmForCreate : extractFrontmatter(fs.readFileSync(safeFilePath, 'utf-8'), safeFilePath);
+  const existingContent = createIfMissing ? '' : fs.readFileSync(safeFilePath, 'utf-8');
+  const fm = createIfMissing ? fmForCreate : extractFrontmatter(existingContent, safeFilePath);
   fm.audit_acknowledged = presenceOnly ? { ...markerBase } : { ...markerBase, [snapshotKey]: currentValue };
-  const newContent = createIfMissing
-    ? spliceFrontmatter('', fm)
-    : spliceFrontmatter(fs.readFileSync(safeFilePath, 'utf-8'), fm);
+  // #4802: createIfMissing splices into '' (no block to refuse on); an existing
+  // file with broken YAML is refused by `spliceAcknowledgement`.
+  const newContent = spliceAcknowledgement(existingContent, fm, safeFilePath);
   platformWriteSync(safeFilePath, newContent);
   output({ acknowledged: true, category, ...(presenceOnly ? {} : { [snapshotKey]: currentValue }) }, raw, 'true');
 }

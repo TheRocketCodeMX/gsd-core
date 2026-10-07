@@ -133,6 +133,7 @@ match `package.json`:
 - `.claude-plugin/marketplace.json` — Claude plugin marketplace manifest; its
   version lives at `plugins[0].version` and is stamped via a nested versionKey
   descriptor (issue #1855)
+- `vscode/package.json` — VS Code extension manifest (issue #1942)
 
 The `version` npm lifecycle script (`scripts/sync-manifest-versions.cjs --stage`)
 stamps these files automatically on every `npm version` call, and stages them so

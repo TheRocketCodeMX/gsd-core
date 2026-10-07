@@ -21,7 +21,7 @@ import { transitionCore } from './state-transition.cjs';
 import { writeSetComplete } from './write-set.cjs';
 import type { WriteSet } from './write-set.cjs';
 import { updateTableCell, resetQuickTaskRows, QUICK_TASKS_SECTION_ABSENT } from './markdown-table.cjs';
-import { requireSafePath } from './security.cjs';
+import { requireSafePath, PathAcceptance, type ContainedPath } from './security.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- audit.cjs is an export= CommonJS module
 import auditMod = require('./audit.cjs');
 const { resolveQuickTaskSummaryFile } = auditMod;
@@ -36,7 +36,7 @@ import stateContract = require('./state-contract.cjs');
 const { publishStateContract } = stateContract;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseIdMod = require('./phase-id.cjs');
-const { normalizePhaseName, matchPhaseDirs, PHASE_NUMBER_TOKEN_SOURCE, isSentinelPhaseId, isSentinelPhaseDir } = phaseIdMod;
+const { normalizePhaseName, matchPhaseDirs, isSentinelPhaseId, isSentinelPhaseDir, buildPhaseHeadingScanRegex, PHASE_HEADING_BASELINE } = phaseIdMod;
 import { escapeRegex } from './pattern.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import roadmapParserMod = require('./roadmap-parser.cjs');
@@ -66,7 +66,7 @@ const { extractFrontmatter } = frontmatterMod;
 // divergence signal). Routed through the single write-seam composition
 // (`syncAndPreserveStateMd`) instead, under `withStateLock` — see
 // `cmdMilestoneComplete`'s own STATE.md-update block for the full rationale.
-const { syncAndPreserveStateMd, withStateLock, readModifyWriteStateMd } = stateMod;
+const { syncAndPreserveStateMd, withStateLock, readModifyWriteStateMd, assertVerificationReportsReadable } = stateMod;
 
 // #2288 security: a milestone version label becomes a filesystem directory
 // component (`milestones/<label>-phases/`) into which phase directories are
@@ -742,8 +742,23 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
       // windows converge to the same value regardless of which version drove
       // the lookup.
       const scopedContent = sliceMilestoneWindow(roadmapContent, version) ?? extractCurrentMilestone(roadmapContent, cwd);
-      // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
-      const phasePattern = new RegExp(`#{2,4}\\s*Phase\\s+(${PHASE_NUMBER_TOKEN_SOURCE})(?:\\s*\\([^)\\n]{0,200}\\))?\\s*:\\s*([^\\n]+)`, 'gi');
+      // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag, owned
+      // by buildPhaseHeadingScanRegex (phase-id.cts) so this guard also
+      // recognizes bracket-convention headings instead of hand-rolling a
+      // literal `Phase\s+`.
+      // #4984 fix: resolved ONCE and threaded into BOTH the heading scan and
+      // the disk-side matchPhaseDirs check below — the heading scan alone
+      // recognizing `[GSD.02] 01:` and extracting the bare phase-number token
+      // "01" is only half the fix. Without also passing this convention to
+      // matchPhaseDirs, its bracket-qualified match arm never fires, "01"
+      // matches no bracket directory name ("GSD.02-01-setup"), and every
+      // properly-scaffolded bracket phase reads as disk_status: 'no_directory'
+      // — turning a real bracket project's own phases into false "ROADMAP
+      // lists N unstarted phase(s)" failures on `milestone complete`.
+      const convention = resolvePhaseIdConvention(cwd);
+      const { regex: phasePattern, phaseNumGroup } = buildPhaseHeadingScanRegex(
+        PHASE_HEADING_BASELINE.ANY_BRACKET, convention,
+      );
       const noDirectoryPhases: string[] = [];
       let pm: RegExpExecArray | null;
       const phaseDirEntries = ((): string[] => {
@@ -757,7 +772,7 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
         }
       })();
       while ((pm = phasePattern.exec(scopedContent)) !== null) {
-        const phaseNum = pm[1];
+        const phaseNum = pm[phaseNumGroup];
         // Phase 0 (pre-milestone) and Phase 999 (backlog) are sentinels, not
         // real phases — they legitimately have no directory and must not block
         // milestone completion. Mirrors the engine-wide sentinel convention
@@ -770,7 +785,7 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
         // with a matching token exists on disk. Use the same matchPhaseDirs
         // owner that roadmap.analyze uses to avoid false positives on decimal
         // (2.1) and letter-suffix (12A) phase IDs. (#2528)
-        const hasDirectory = matchPhaseDirs(phaseDirEntries, normalized).matches.length > 0;
+        const hasDirectory = matchPhaseDirs(phaseDirEntries, normalized, convention).matches.length > 0;
         if (!hasDirectory) {
           noDirectoryPhases.push(phaseNum);
         }
@@ -927,7 +942,7 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
     // never disagree with what a real run actually archives. Absent
     // --archive-quick this stays `[]` and nothing on disk is touched either
     // way (dry-run always returns before any mutation below).
-    const quickDirsToArchive: string[] = options.archiveQuick ? listQuickTaskDirsForArchive(cwd) : [];
+    const quickDirsToArchive: string[] = options.archiveQuick ? listQuickTaskDirsForArchive(cwd).map((d) => d.name) : [];
     const dryRunResult = {
       dry_run: true,
       version,
@@ -956,6 +971,16 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
     };
     output(dryRunResult, raw);
     return;
+  }
+
+  // #5118 (no write before the error): the STATE.md update further down
+  // rebuilds the frontmatter from every phase's report and throws on a
+  // `status` outside the closed set — AFTER the archive directory, the
+  // archived ROADMAP/REQUIREMENTS copies, MILESTONES.md and the moved audit
+  // and quick-task files. Validate first, so the refusal leaves the tree
+  // untouched.
+  if (fs.existsSync(statePath)) {
+    assertVerificationReportsReadable(platformReadSync(statePath) || '', cwd);
   }
 
   // Ensure archive directory exists. Deliberately placed AFTER the dry-run
@@ -1635,8 +1660,18 @@ function writeQuickArchiveReadme(archiveQuickDir: string): void {
  * written three times, and only the real-run copy applied `requireSafePath`,
  * so a dry-run preview could list a directory the real run would silently
  * skip).
+ *
+ * Returns the proven `ContainedPath` alongside each entry's bare `name`
+ * (`no-unconfined-path-join`'s `discardedContainmentResult` arm — a bare
+ * statement call to `requireSafePath` throws away the exact answer it just
+ * computed). The two dry-run previews only need `name` for display;
+ * `archiveQuickTaskDirectories` deliberately does NOT reuse `abs` for its
+ * rename — it re-derives and re-validates independently as TOCTOU
+ * defense-in-depth (see its own comment), so `abs` exists here only to make
+ * this function's own discard explicit, not to be trusted downstream as a
+ * stale-safe proof.
  */
-function listQuickTaskDirsForArchive(cwd: string): string[] {
+function listQuickTaskDirsForArchive(cwd: string): Array<{ name: string; abs: ContainedPath }> {
   const planningBase = planningPaths(cwd).planning;
   const quickDir = planningPaths(cwd).quick;
   let sourceEntries: fs.Dirent[];
@@ -1646,17 +1681,18 @@ function listQuickTaskDirsForArchive(cwd: string): string[] {
     // .planning/quick absent or unreadable — nothing to select.
     return [];
   }
-  const names: string[] = [];
+  const results: Array<{ name: string; abs: ContainedPath }> = [];
   for (const entry of sourceEntries) {
     if (!entry.isDirectory()) continue; // excludes symlinks too — see MAJOR 3 note above
+    let abs: ContainedPath;
     try {
-      requireSafePath(path.join(quickDir, entry.name), planningBase, 'quick task dir', { allowAbsolute: true });
+      abs = requireSafePath(path.join(quickDir, entry.name), planningBase, 'quick task dir', PathAcceptance.AbsoluteInsideRoot);
     } catch {
       continue; // symlink/escape attempt — never a candidate, in preview OR real run
     }
-    names.push(entry.name);
+    results.push({ name: entry.name, abs });
   }
-  return names.sort();
+  return results.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 /**
@@ -1707,7 +1743,7 @@ function archiveQuickTaskDirectories(cwd: string, version: string): { archiveDir
   // #2142 MAJOR 5 (review): dirNames is the SAME selection
   // `listQuickTaskDirsForArchive` hands to both dry-run previews — this is
   // the real run, so it cannot disagree with what a preview reported.
-  const dirNames = listQuickTaskDirsForArchive(cwd);
+  const dirNames = listQuickTaskDirsForArchive(cwd).map((d) => d.name);
   if (dirNames.length === 0) {
     // Boundary 0 (#2142): zero (safe) directory entries (empty dir, only
     // stray files, or every entry excluded by the selection rule) must not
@@ -1729,7 +1765,7 @@ function archiveQuickTaskDirectories(cwd: string, version: string): { archiveDir
         // rename are two separate filesystem observations, and an entry
         // that was a safe real directory at selection time could in theory
         // be swapped for a symlink before this loop reaches it.
-        safeSrc = requireSafePath(src, planningBase, 'quick task dir', { allowAbsolute: true });
+        safeSrc = requireSafePath(src, planningBase, 'quick task dir', PathAcceptance.AbsoluteInsideRoot);
       } catch {
         continue; // symlink/escape attempt — skip, not archived
       }
@@ -1830,7 +1866,7 @@ function cmdQuickArchive(cwd: string, version: string, options: QuickArchiveOpti
   // `cmdMilestoneComplete`'s own dry-run preview and the real
   // `archiveQuickTaskDirectories` both use, so all three can never disagree.
   if (options.dryRun) {
-    const quickDirsToArchive: string[] = listQuickTaskDirsForArchive(cwd);
+    const quickDirsToArchive: string[] = listQuickTaskDirsForArchive(cwd).map((d) => d.name);
     output(
       {
         dry_run: true,
@@ -1841,6 +1877,16 @@ function cmdQuickArchive(cwd: string, version: string, options: QuickArchiveOpti
       raw,
     );
     return;
+  }
+
+  // #5118 (no write before the error): the STATE.md reset below goes through
+  // `readModifyWriteStateMd`, whose frontmatter rebuild reads every phase's
+  // report and throws on a `status` outside the closed set — AFTER the quick
+  // task directories have been MOVED. Validate first, so the refusal leaves the
+  // tree untouched. Gated on there being anything to archive: a run that would
+  // move nothing never reaches that rebuild.
+  if (fs.existsSync(statePath) && listQuickTaskDirsForArchive(cwd).length > 0) {
+    assertVerificationReportsReadable(fs.readFileSync(statePath, 'utf-8'), cwd);
   }
 
   const quickArchiveResult = archiveQuickTaskDirectories(cwd, version);

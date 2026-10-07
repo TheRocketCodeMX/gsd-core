@@ -162,6 +162,19 @@ describe('detectSubRepos', () => {
     assert.deepEqual(coreUtils.detectSubRepos(tmpDir), ['myrepo']);
   });
 
+  // #4458: a linked git worktree's .git is a FILE (a `gitdir: <path>` pointer),
+  // not a directory. detectSubRepos uses fs.existsSync (type-agnostic), so this
+  // was already correct before #4458 — this test proves it explicitly, since
+  // the actual #4458 defect was new-project.md's own `find -exec test -d
+  // "{}/.git"` predicate never calling this helper at all.
+  test('detects directory with .git as a FILE (linked worktree) as sub-repo', () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cu-test-'));
+    const subDir = path.join(tmpDir, 'myworktree');
+    fs.mkdirSync(subDir);
+    fs.writeFileSync(path.join(subDir, '.git'), 'gitdir: /some/main/repo/.git/worktrees/myworktree\n');
+    assert.deepEqual(coreUtils.detectSubRepos(tmpDir), ['myworktree']);
+  });
+
   test('excludes hidden directories', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cu-test-'));
     const hiddenDir = path.join(tmpDir, '.hidden');
@@ -629,6 +642,20 @@ describe('extractOneLinerFromBody', () => {
   test('empty string → null', () => {
     assert.strictEqual(coreUtils.extractOneLinerFromBody(''), null);
   });
+
+  // Found while implementing #5105: the body starts after the block the one fence owner finds.
+  // The old strip regex missed a BOM block and closed on a `--- x` line, so a Summary-shaped
+  // YAML comment inside the frontmatter was read as the body's one-liner.
+  for (const [label, content] of [
+    ['a BOM block', '\uFEFF---\n# Summary\n**Frontmatter comment**\n---\n\n## Summary\n\n**Body one-liner**\n'],
+    ['a block with a `--- x` line', '---\nnote: x\n--- x\n# Summary\n**Frontmatter comment**\n---\n\n## Summary\n\n**Body one-liner**\n'],
+    ['an adjacent empty block', '---\n---\n# Summary\n\n**Body one-liner**\n'],
+    ['a CRLF block', '---\r\n# Summary\r\n**Frontmatter comment**\r\n---\r\n\r\n## Summary\r\n\r\n**Body one-liner**\r\n'],
+  ]) {
+    test(`${label}: the one-liner comes from the body, never the frontmatter`, () => {
+      assert.strictEqual(coreUtils.extractOneLinerFromBody(content), 'Body one-liner');
+    });
+  }
 
   // #3170: extractOneLinerFromBody anchors to a Summary/Overview/Accomplishments
   // heading (the function is summary-specific — both callers extract a SUMMARY

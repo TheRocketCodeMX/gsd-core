@@ -113,7 +113,7 @@ node gsd-tools.cjs state add-decision --summary-file path [--rationale-file path
 node gsd-tools.cjs state add-blocker --text "..."
 node gsd-tools.cjs state resolve-blocker --text "..."
 
-# Record session continuity
+# Record session continuity (at least one of --stopped-at / --resume-file is required)
 node gsd-tools.cjs state record-session --stopped-at "..." [--resume-file path]
 
 # Phase start — update STATE.md Status/Last activity for a new phase
@@ -162,7 +162,7 @@ node gsd-tools.cjs phase next-decimal <phase>
 node gsd-tools.cjs phase add <description>
 
 # Insert decimal phase after existing
-node gsd-tools.cjs phase insert <after> <description>
+node gsd-tools.cjs phase insert <after> <description> [--sibling]
 
 # Remove phase, renumber subsequent
 node gsd-tools.cjs phase remove <phase> [--force]
@@ -174,6 +174,7 @@ node gsd-tools.cjs phase complete <phase>
 
 # Evaluate HUMAN-UAT results for a phase (markdown-aware; ignores false-positive contexts)
 # Returns JSON: { passed, uat_files[], verification_files[], checks[], blockers[], policy }
+# Exit 0 when passed, 1 when not (#5170); a phase it cannot read is error() with empty stdout
 node gsd-tools.cjs phase uat-passed <phase> [--require-verification]
 
 # Index plans with waves and status
@@ -433,6 +434,45 @@ node gsd-tools.cjs roadmap analyze
 # Update progress table row from disk
 node gsd-tools.cjs roadmap update-plan-progress <N>
 ```
+
+When the phase has no writable ROADMAP entry — no matching Progress-table row,
+no `### Phase N` detail section, and no checklist bullet this command can update
+(the checklist-only form) — the command declines with `updated: false` and a
+`missing_phase_details` reason instead of claiming success, and leaves
+`ROADMAP.md` byte-identical.
+
+### Checkbox conflicts (`roadmap analyze`)
+
+`roadmap analyze` derives `current_phase`, `next_phase`, and `completed_phases`
+from each phase's on-disk status (`disk_status`), not from the ROADMAP
+checkbox: a ticked `[x]` is a human annotation with no machine authority
+(ADR-3180 §7.4, [#2957](https://github.com/TheRocketCodeMX/gsd-core/issues/2957)).
+The two signals can legitimately disagree, for example a backfilled phase that
+has a `SUMMARY.md` and no `PLAN.md` (`disk_status: empty`) or a phase whose
+plans are all summarized but which has no passing `*-VERIFICATION.md`
+(`disk_status: executed`), both ticked `[x]`.
+
+`checkbox_conflict` lists every such phase so a caller is never handed a
+ticked phase, or withheld an unticked-but-verified one, with no signal. It is
+always an array when `ROADMAP.md` exists (empty when every phase agrees). A
+phase is listed when its `roadmap_complete` differs from
+`disk_status === "complete"`. Only phases that have a ROADMAP checkbox are
+compared: a phase declared only by a progress-table row, or by a heading with
+no checklist entry, has no checkbox to disagree with and is never listed
+(its `roadmap_complete` is `false` because there is nothing to read).
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `number` | string | Phase number, as in `phases[].number` |
+| `roadmap_complete` | boolean | The ROADMAP checkbox state (`true` for `[x]`) |
+| `disk_status` | string | The disk-derived status the selectors use |
+| `plan_count` | number | Plans found for the phase |
+| `summary_count` | number | Summaries paired with a plan |
+
+The selectors are unchanged: `checkbox_conflict` only reports the
+disagreement. To treat a phase as done despite its disk status, verify it
+(`verify-phase`) so a passing `*-VERIFICATION.md` exists.
+([#4757](https://github.com/TheRocketCodeMX/gsd-core/issues/4757))
 
 ### Milestone window scope (`roadmap analyze`)
 
@@ -787,7 +827,93 @@ node gsd-tools.cjs verify artifacts <plan-file>
 node gsd-tools.cjs verify key-links <plan-file>
 ```
 
+**Exit status (#5170).** These verbs are verdict-driven: the JSON on stdout is the verdict and is unchanged, and the exit status follows it, so a caller can branch on `$?`. `0` = positive verdict (`valid` / `complete` / `all_valid` / `all_passed` / `all_verified` is `true`); `1` = negative verdict (read the JSON for what failed); `66` (`NO_INPUT`) = the plan was read and declares nothing to verify (`verify artifacts` with no `must_haves.artifacts`, `verify key-links` with no `must_haves.key_links`); `69` (`UNAVAILABLE`) = the verb could not look (the plan or document is absent or unreadable, the phase did not resolve, the directory is not a git work tree): never a clean exit. A plan file that exists but is empty was read: for `verify artifacts` and `verify key-links` it is `66`, for `verify plan-structure` a negative verdict (`1`). `verify schema-drift` is the exception: it is also the capability gate dispatched as `check verify-schema-drift`, whose consumer reads `.block` from stdout and routes a non-zero exit by `onError`, so a blocking drift verdict stays exit `0` and only "could not look" exits `69`.
+
 `verify key-links` confines each link's `from:`/`to:` to the project directory (#3493): a path that resolves outside the project (via `../` traversal, an absolute path, or a symlink) is never read. That link's `links[]` entry reports `path_rejected: "from"` or `path_rejected: "to"` (whichever field was rejected) alongside `verified: false`, without echoing the underlying path-confinement error (which would embed an absolute host path). A rejected link fails independently — it does not abort evaluation of the other links in the same plan, and does not set `path_rejected` on links whose paths resolve inside the project.
+
+### Gate verb exit statuses (#5170)
+
+The exit status of a gate verb is a function of its verdict (`gateExitOutcome`, [Gate Exit Module](../CONTEXT.md)); no verb picks a code itself. The stdout JSON is authoritative in every row.
+
+| Exit | Outcome | Meaning |
+|---|---|---|
+| `0` | `PASS` | Positive verdict; or, in payload mode, any delivered verdict including a blocking one |
+| `1` | `FAIL` | Negative verdict (status mode only). Also `error()` (a usage or runtime failure), which prints nothing on stdout |
+| `66` | `NO_INPUT` | The evidence was read and the scope it defines is genuinely empty (status mode: `verify artifacts` with no `must_haves.artifacts`, `verify key-links` with no `must_haves.key_links`) |
+| `69` | `UNAVAILABLE` | The gate could not look: the evidence is absent where it must exist, unreadable (`EISDIR`, `EACCES`, `EIO`, an encoding failure), the phase did not resolve, or a plan scan did not see every plan. Never `0` |
+
+| Mode | Verbs | Verdict is carried by | Non-zero exit means |
+|---|---|---|---|
+| Status | `phase uat-passed`, `verify artifacts`, `verify plan-structure`, `verify phase-completeness`, `verify references`, `verify commits`, `verify key-links` | stdout JSON and `$?` (`valid` / `complete` / `all_valid` / `all_passed` / `all_verified` / `passed`) | `1` negative verdict, `66` empty scope, `69` could not look |
+| Payload | every `check <verb>`, `verify schema-drift`, `verify codebase-drift`, `verify context-drift`, `check prohibition-enforcement` | stdout JSON, `.block` | only `69` (or an `error()`): the gate dispatch routes a non-zero status by `onError`, so a blocking verdict stays `0` |
+
+`phase uat-passed` exits `0` when `passed` is `true` and `1` when it is `false` with the JSON on stdout; a phase it cannot read is `error()` (exit `1`, stdout empty), so the two are told apart by whether stdout is empty. `verify commits` outside a git work tree answers `{"error":"Not a git repository"}` with `69`. `verify schema-drift` reads `files_modified` through the Frontmatter Module, so a YAML block sequence and CRLF line endings yield their files (#4562). `verify plan-structure` flags a `! grep -q 'LIT' f` negative gate whose literal also appears in the same task `<action>`, as it does for the positive form (#4541). To handle every status from a script see [Handle gate verb exit statuses](how-to/handle-gate-verb-exit-statuses.md).
+
+### `verify codebase-drift` (structural drift of the codebase map, #2003, #5134)
+
+```bash
+node gsd-tools.cjs verify codebase-drift
+```
+
+Compares the changes since `last_mapped_commit` against the codebase map in `.planning/codebase/` and reports whether the map has drifted past `workflow.drift_threshold`. Warn-only by contract: an internal failure returns a `skipped` payload, never an error. A non-blocking verdict computed from fewer documents than the map has (a map document that could not be read) exits `69` with the payload plus `documents_unreadable`; a blocking verdict stands and exits `0` (payload mode, #5170).
+
+**Territory.** The command reads all seven generated documents (`STACK.md`, `ARCHITECTURE.md`, `STRUCTURE.md`, `CONVENTIONS.md`, `TESTING.md`, `INTEGRATIONS.md`, `CONCERNS.md`). A directory is *mapped* when its path appears, at a path-component boundary, in any of them. `STRUCTURE.md` is still required; the other six are optional, so a partial map works.
+
+**Categories.** Added files are drift outside mapped territory; modified and deleted files are drift inside it (an edit or deletion changes something the map describes).
+
+| Category | Change | Rule |
+|---|---|---|
+| `new_dir` | added file | its directory is not mapped |
+| `barrel` | added file | a barrel export at `(packages\|apps)/*/src/index.*` |
+| `migration` | added file | a migration file |
+| `route` | added file | a route module under `routes/` or `api/` |
+| `modified` | modified file | its directory is mapped |
+| `deleted` | deleted file | its directory is mapped |
+
+A rename counts its old path as `deleted` and its new path as an addition; a typechange counts as `modified`. For an added file the specific category (`migration`, then `route`, then `barrel`) wins over `new_dir`. Every element counts toward `workflow.drift_threshold`.
+
+**Skip reasons** (`skipped: true`, with `reason`): `no-structure-md` (no `STRUCTURE.md`), `cannot-read-structure-md` (`STRUCTURE.md` is not a regular file or is larger than 1 MiB), plus the existing git and baseline reasons. Any other document that is not a regular file or is larger than 1 MiB is unreadable: it is left out and listed in `documents_unreadable`.
+
+**Payload fields added by #5134:**
+
+| Field | Meaning |
+|---|---|
+| `documents_read` | The map documents that were read |
+| `documents_unreadable` | Map documents (other than `STRUCTURE.md`) that were skipped as unreadable |
+| `withheld_paths` | The first 50 paths withheld from output, display-escaped, each capped at 200 characters |
+| `withheld_count` | Total number of withheld paths, before the cap of 50 |
+
+`elements[].path` values are display-escaped: control, bidirectional and zero-width characters are shown as `\uXXXX`.
+
+**Path allowlist.** `affected_paths`, the `--paths` argument and every path listed in `message` pass only through one allowlist: components of ASCII letters, digits, `_`, `.` and `-`, separated by `/`; no `..` component, no lone `.`, not absolute. A path that fails is never printed in `message`; the message instead states `N path(s) withheld: not passed to the mapper or listed (absolute, traversal, whitespace, non-ASCII or shell-metacharacter characters)`. A directory with a non-ASCII or space-containing name is therefore withheld and counted, not silently dropped. `spawn_mapper` is `false` when no safe path remains, so `auto-remap` does not run (an empty `--paths` would remap the whole repository); `action_required` and `directive` are unchanged.
+
+### `verification status` (the verification verdict, #5118)
+
+```bash
+node gsd-tools.cjs verification status <phase-dir> [--pick <field>]
+```
+
+Reads the phase's `*-VERIFICATION.md` frontmatter and answers with one member of a **closed enum**, projected through **one routing table** (`VERIFICATION_ROUTES` in `src/verification.cts`, ADR-5057 Phase 4). Every workflow that needs the verdict reads this answer; none re-reads the report or branches on a status word of its own.
+
+| `status` | Meaning | `route` (bare command) |
+|----------|---------|------------------------|
+| `passed` | Report says `passed` and its covered-input fingerprint is current | `""` (continue) |
+| `gaps_found` | Report says `gaps_found` | `plan-phase` (`next_command` carries `--gaps`) |
+| `human_needed` | Report says `human_needed` | `verify-work` |
+| `stale` | Covered source changed after the verifier ran | `execute-phase` (its shared verification step re-runs the verifier) |
+| `missing` | Phase directory exists but holds no report, or the report has no `status` | `execute-phase` (resumes at the verification gates) |
+| `unparseable` | The report's frontmatter is not YAML | `""` (fix the report itself) |
+| `phase_dir_not_found` | There is no phase directory at that path | `""` (a usage error — see below) |
+
+The JSON result carries `status`, `next_action`, `next_command` (the route projected for the project's runtime, for example `/gsd-execute-phase 3` or `$gsd-execute-phase 3` on Codex), and — additive since #5118 — `route`, the bare command from the same table entry, so the two can never disagree. `message` is present only where a usage error needs one. `staleCheckIndeterminate` is unchanged. The `init *` bundles expose the same bare command as `verification_route` beside `verification_next_command`, and each `planning inspect` phase carries `verification.route` beside `verification.status`.
+
+- **`phase_dir_not_found`** is a usage error, not a verification state: nothing was there to look in (a dangling symlink and a path that is a regular file both read this way). It has no next command — re-running `execute-phase` could re-run a phase already archived under `.planning/milestones/`. Resolve the directory with `find-phase`.
+- **`unknown` no longer exists.** A `status` outside the set used to route as `unknown` to `execute-phase`; that is now the hard error below, and no command emits `unknown`.
+- **A report may carry only `passed`, `gaps_found`, or `human_needed`.** Any other value — `verified`, `Passed`, `stale` (a reader-only member), a number — fails every command that reads the report with `verification_status_invalid`, stdout empty, naming the file, the value (quoted, control characters escaped, truncated at 120 characters) and the accepted values. Recovery: set the report's frontmatter `status:` to one of the accepted values, or delete the report (it then reads `missing` and routes to `execute-phase`, whose verification step regenerates it). `validate health` reports the same file as warning `W030` instead of failing.
+- **No write before the error.** A command that writes (`phase complete`, `phase remove`, `state sync`, `milestone complete`, `milestone archive-quick`, `validate health --repair`) validates every report it will read before its first write, so a refused report leaves `STATE.md`, `ROADMAP.md` and the phase directories untouched.
+- **Exact match, no folding (behavior change).** The check is an exact string match. Case-folded and legacy statuses — `Passed`, `pending`, `partial` — that `phase complete`'s warning pre-scan and `audit-uat` used to fold into a known status now hard-error like any other out-of-set value, on every command; correct the report's `status:` to an accepted value.
+- **`missing` on `verify-work`.** `/gsd-verify-work` runs the regeneration step for a `stale` report, and for a `missing` one only when every plan has a `SUMMARY.md` (the verify step never ran on an executed phase). A `missing` report on a phase that is not fully executed does not dispatch it: the command blocks with `next_command` (`execute-phase`) instead.
+- **Containment.** Two checks, both before any read. The phase directory must resolve under its phases root, and the report (and each `*-UAT.md` and `*-HUMAN-UAT.md`) must resolve inside its phase directory. Anything that escapes (a symlink out of the project) is never read and none of its content reaches any output: an escaped report reads `missing` from `verification status`, an escaped UAT file is treated as absent, and an escaped phase directory reads `missing` from `verification status` but `phase_dir_not_found` from `init verify-work`.
 
 ---
 
@@ -858,7 +984,7 @@ signal absence, because omission is itself something callers come to depend on.
 | `generated_from` | Resolved `cwd` and `.planning/` root (`null` when there is no planning root) |
 | `milestone` | `version`, `name`, and the `scope` of that answer |
 | `active` | `phase`, `plan`, and `status` — three distinct STATE.md facts, each scoped separately |
-| `phases[]` | Per phase: completion, verification, roadmap acceptance, UAT, plan and task rows |
+| `phases[]` | Per phase: completion, verification (`status`, `next_action`, and the additive `route` — see [`verification status`](#verification-status-the-verification-verdict-5118)), roadmap acceptance, UAT, plan and task rows |
 | `orphan_phase_dirs[]` | Directories under `phases/` that the current milestone window does not declare |
 | `requirements[]` | Requirement rows with mapped-phase traceability |
 | `progress` | `accepted_phases` and `completed_plans`, as independent fractions |
@@ -1129,9 +1255,13 @@ node gsd-tools.cjs quick-tasks-append --task "<description>"
 # `/gsd-quick` workflow itself renders, instead of a positional `#` and an em-dash `Directory`:
 node gsd-tools.cjs quick-tasks-append --task "<description>" --quick-id <id> --slug <slug>
 node gsd-tools.cjs quick-tasks-append --task "<description>" --directory "[<id>-<slug>](./quick/<id>-<slug>/)"
-# All three flags are optional. Omit them (as `fast.md` does, having neither an id nor a task
+# All four flags are optional. Omit them (as `fast.md` does, having neither an id nor a task
 # directory) and the emitted row is byte-identical to the pre-#3356 behavior. `--directory` wins
 # outright when given; otherwise `--quick-id` + `--slug` together derive the permalink.
+# --status (#4906 Phase 3, #4958) writes the Status column on a table that has one (the
+# $VALIDATE_MODE row shape workflows/quick.md renders) — omitted, the Status cell falls back to
+# `appendQuickTaskRow`'s own '—' default, unchanged for every caller that never sets it:
+node gsd-tools.cjs quick-tasks-append --task "<description>" --quick-id <id> --slug <slug> --status PASS
 # This append touches only the body table — it no longer forces a re-derive of the disk-derived
 # `progress.*` frontmatter, which previously overwrote curated values (#3356).
 # See "Milestone Commands" below for `milestone archive-quick` (#2142) — sweeps .planning/quick/* into
@@ -1159,6 +1289,13 @@ pre-milestone directories are not counted as current-milestone phases, and the
 aggregate completion percentage no longer reads `100` while phases from the
 active window are still outstanding.
 
+On a project explicitly configured with `phase_id_convention: "bracket"`, both
+JSON surfaces keep the phase's bare join key in `phases[].number` and add its
+canonical human label in `phases[].display_id` (for example,
+`{"number":"05.03","display_id":"[GSD.02] 05.03"}`). Their
+`milestone_version` and table headings use `[GSD.02]` rather than the legacy
+`v2.0` marker. Other conventions retain their prior object and table shapes.
+
 ```bash
 # Complete a todo
 node gsd-tools.cjs todo complete <filename> [--dry-run]
@@ -1170,6 +1307,20 @@ moving the file or touching anything on disk. A real completion moves the todo
 from `todos/pending/` to `todos/completed/` and upserts `completed:` and
 `status: completed` inside the file's frontmatter block. Unknown flags are
 rejected loudly.
+
+`<filename>` is a **basename inside the todos root**, not a path. A basename
+guard runs first, before `<filename>` is joined onto any directory: a value
+containing an embedded separator (either `/` or `\`, e.g. `sub/name.md` or
+`sub\name.md`), a value whose own basename differs from itself (e.g.
+`a/../../b.md`, `../sibling.md`), a bare `.` or `..`, an absolute path (e.g.
+`/etc/passwd`), or a NUL byte is rejected as a usage error **before** any file
+is read or moved (#4327, #4652). A traversal that only escapes the `pending`/
+`completed` subdirectory without leaving the todos root (`../sibling.md`) is
+caught by this same guard, not by containment. Containment against the todos
+root still runs afterward as defense-in-depth for the resolved source and
+target paths, so neither half of the move can land outside the root. The
+check covers both halves of the move, and `--dry-run` is rejected on the same
+terms rather than previewing a resolved outside path.
 
 ```bash
 # UAT audit — scan all phases for unresolved items
@@ -1188,8 +1339,10 @@ node gsd-tools.cjs audit-open acknowledge --category <category> --milestone <ver
 node gsd-tools.cjs from-gsd2 [--path <dir>] [--force] [--dry-run]
 
 # Git commit with config checks
-node gsd-tools.cjs commit <message> [--files f1 f2] [--amend] [--no-verify] [--respect-staged]
+node gsd-tools.cjs commit <message> [--files f1 f2] [--files-removed f3 dir/] [--amend] [--no-verify] [--respect-staged]
 ```
+
+> `--files-removed <paths>` (#4208): the caller-declared deletions. A `--files` entry that is missing on disk is skipped, never staged as a deletion (#2014) — so a moved file's old path cannot be recorded through `--files` at all, and the only form that recorded a move was a directory entry, which also commits any unrelated file sitting in that directory. Each `--files-removed` entry names a file, or a directory whose tracked-but-absent files are the removals; those paths are staged as deletions and join the commit pathspec. "Tracked" means in the index or in `HEAD`, so a deletion the caller already staged with `git rm` is committed too; "present" is the path itself (`lstat`), so a symlink counts as present even when its target is gone. A file entry that is still present on disk fails the commit closed (`reason: 'staging_failed'`); a path git never tracked is a no-op. Absence alone is not removal: an index entry that is absent from the worktree by design — a submodule gitlink, a skip-worktree (sparse-checkout) path, an assume-unchanged path, an unmerged entry, an intent-to-add (`git add -N`) entry — is never staged as a deletion; under a directory entry it is left alone like a present file, and named directly (by any spelling that resolves to it) it fails closed naming the state. On a staging failure the rollback puts back every index entry this call removed with its recorded mode and blob (`update-index --cacheinfo`), including on an unborn `HEAD` where `git reset` has nothing to restore from; like the addition-side reset it is best-effort — an index that cannot be written reports the staging error, not a clean rollback. `--files` keeps its skip-if-missing contract unchanged. A move is therefore `--files new/path --files-removed old/path`. GSD's own `close_phase_todos` step (`execute-phase.md`) uses exactly that form, naming each moved todo on both sides rather than passing the two directories: a directory entry would also commit an unrelated todo a concurrent session dropped into `pending/` or `completed/` while the phase was closing.
 
 > `--no-verify`: Skips pre-commit hooks. Used by parallel executor agents during wave-based execution to avoid build lock contention (e.g., cargo lock fights in Rust projects). The orchestrator runs hooks once after each wave completes. Do not use `--no-verify` during sequential execution — let hooks run normally.
 > `--files <paths>` **staging behaviour**: by default, `--files` runs `git add -- <path>` for each named file before committing. This overwrites any per-hunk staging set up via `git add -p`. Pass `--respect-staged` to skip the `git add` step and commit only what is already in the index within the requested pathspec. If nothing is staged within that scope, the command returns `{ committed: false, reason: 'nothing staged' }` without error. The trailing `-- <paths>` pathspec on the commit is applied under both modes, so files staged outside the `--files` scope are never included (#3061 invariant).
@@ -1225,7 +1378,7 @@ node gsd-tools.cjs restore-custom-files --config-dir <config-dir> --apply
 | Field | Meaning |
 |---|---|
 | `path` | Path relative to the config dir — where the file came from and goes back to |
-| `outcome` | `eligible` (plan mode) · `restored` · `skipped_destination_managed` · `skipped_destination_exists` · `skipped_copy_failed` · `skipped_unsafe_path` |
+| `outcome` | `eligible` (plan mode) · `restored` · `already_present` · `skipped_destination_managed` · `skipped_destination_exists` · `skipped_copy_failed` · `skipped_unsafe_path` |
 | `warnings` | Advisory `{code, detail}` findings from the compatibility pass; never blocks a restore |
 
 Warning codes: `destination_managed`, `destination_exists`,
@@ -1240,9 +1393,12 @@ retired, invokes a `/gsd:` command that no longer exists, or is missing the
 Three things the restore never does: it never deletes the backup, it never
 overwrites a path the new release ships (`skipped_destination_managed`), and it
 never overwrites a different file already on disk
-(`skipped_destination_exists`). Symlinked backup entries are skipped outright
-rather than followed (`skipped_unsafe_path`). A single unwritable entry is
-reported and the remaining entries still restore.
+(`skipped_destination_exists`). A destination that is already byte-identical to
+its backup is reported as `already_present` and left untouched — it counts
+toward neither `eligible_count` nor `restored_count`, so a plan run after a
+successful restore no longer offers the same file again. Symlinked backup
+entries are skipped outright rather than followed (`skipped_unsafe_path`). A
+single unwritable entry is reported and the remaining entries still restore.
 
 ---
 
@@ -1255,21 +1411,28 @@ Diagnose and configure the worktree fork base used by Claude Code's `isolation="
 # Returns JSON: { shouldDegrade, reason, message, headSha, forkRef, forkSha }
 node gsd-tools.cjs worktree base-check
 
+# Same check, but against the fork base a worktree this host created was
+# actually observed to have (git rev-parse HEAD inside it, before any commit).
+node gsd-tools.cjs worktree base-check --observed-fork-base <sha>
+
 # Write worktree.baseRef:"head" into .claude/settings.local.json (no-clobber).
 # Returns JSON: { changed, skipped, previous, baseRef, file }
 node gsd-tools.cjs worktree set-baseref
 ```
 
-**`worktree base-check`** reads `worktree.baseRef` from a three-layer cascade — `.claude/settings.local.json`, then `.claude/settings.json`, then the user/global `settings.json` under `CLAUDE_CONFIG_DIR` (or `~/.claude`) — and compares the current `HEAD` SHA against `origin/HEAD`. Project-level settings take precedence over the user/global layer, so a machine-wide `worktree.baseRef:"head"` set via `/config` is honored when no project override exists. The `shouldDegrade` field is `true` when the execute-phase orchestrator will fall back to sequential execution. `--mode` declares who creates the isolated worktree (#3659): `harness-worktree` (the default — the runtime harness forks it and does **not** read project-settings `baseRef`, #48) or `orchestrator-worktree` (GSD itself runs `git worktree add` with an explicit start-point and honors `"head"`); invalid values fail closed with an error. Possible `reason` values:
+**`worktree base-check`** reads `worktree.baseRef` from a three-layer cascade — `.claude/settings.local.json`, then `.claude/settings.json`, then the user/global `settings.json` under `CLAUDE_CONFIG_DIR` (or `~/.claude`) — and compares the current `HEAD` SHA against `origin/HEAD`. Project-level settings take precedence over the user/global layer, so a machine-wide `worktree.baseRef:"head"` set via `/config` is honored when no project override exists. The `shouldDegrade` field is `true` when the execute-phase orchestrator will fall back to sequential execution. `--mode` declares who creates the isolated worktree (#3659): `harness-worktree` (the default — the runtime harness forks it) or `orchestrator-worktree` (GSD itself runs `git worktree add` with an explicit start-point). `worktree.baseRef:"head"` is honored by the orchestrator by construction and by the Claude Code harness as measured from all three settings layers (#4588; the #48 finding that the harness did not read the setting predates upstream claude-code#54940); Cursor, the other `harness-worktree` host, is unmeasured. With `"head"` set the check does not compare in either mode unless `--observed-fork-base` is given (below), with one further exception under `harness-worktree` and no observation: when a Claude Code `WorktreeCreate` hook is configured in any of the same three settings files, or one of them does not parse, the hook creates the agent worktree and Claude Code does not apply `worktree.baseRef` to it, so the check compares `HEAD` against `origin/HEAD` as if the setting were absent (#4588). The #4868 prior-worktree observation is **not** consulted on that path: a worktree sitting at `HEAD` records nothing about which creator made it, so one the plain harness left there before the hook was configured would read as evidence for the hook (#4881). Pass `--observed-fork-base` for a trusted verdict on a hook host. Hooks from managed policy settings, a `--settings` file, plugins, agent frontmatter or SDK registrations are not visible to the check; the exit-42 guard remains the backstop for those. `--observed-fork-base <sha>` supplies the fork base a worktree created for a dispatch was actually measured to have (`git rev-parse HEAD` inside it, before any commit — a full 40- or 64-hex sha, case-insensitive; abbreviations are refused because the comparison is exact); when given, it replaces the `origin/HEAD` inference as the fork side of the comparison and `"head"` no longer short-circuits — the verdict then reports a measurement, and a mismatch under `"head"` means the worktree was not forked from HEAD despite the setting. Invalid values for either flag fail closed with an error. Possible `reason` values:
 
 | `reason` | `shouldDegrade` | Meaning |
 |---|---|---|
-| `baseref-head` | `false` | `worktree.baseRef:"head"` is set and `--mode orchestrator-worktree` declares GSD-managed worktrees — the fork base is the orchestrator HEAD by construction |
-| `baseref-head-ignored-by-harness` | `true` | `worktree.baseRef:"head"` is set but HEAD differs from `origin/HEAD` in harness (default) mode — the harness does not read the setting (#48), so the run degrades to sequential (#3659) |
-| `head-matches-fork` | `false` | HEAD and `origin/HEAD` are the same commit |
-| `head-diverged-from-fork` | `true` | Branch is ahead of or diverged from `origin/HEAD` |
+| `baseref-head-bypassed-by-hook` | `true` | `worktree.baseRef:"head"` is set under `harness-worktree` with no fork base observed, but a Claude Code `WorktreeCreate` hook is configured in one of the three settings files (or one of them does not parse, so a hook cannot be ruled out), and `HEAD` differs from the inferred fork base. The hook creates the agent worktree and Claude Code does not apply `worktree.baseRef` to it, so the setting is not trusted; `message` names the file (#4588). The #4868 prior-worktree observation does **not** lift it: a worktree sitting at `HEAD` carries no record of which creator left it there, so one the plain harness created before the hook was configured is indistinguishable from one the hook created (#4881). Only `--observed-fork-base` restores a trusted verdict here. The fallback comparison is not a measurement of the hook: when `HEAD` matches the inferred fork base the check does not degrade, and the exit-42 guard remains the backstop. `--observed-fork-base` gives a measured verdict |
+| `baseref-head` | `false` | `worktree.baseRef:"head"` is set and no fork base was observed (and, under `harness-worktree`, no `WorktreeCreate` hook was found in the settings files) — the fork base is the orchestrator HEAD in either mode (by construction under `orchestrator-worktree`; under `harness-worktree` as measured on Claude Code, #4588 — Cursor is unmeasured). The spawn-time `worktree-branch-check` exit-42 guard remains the backstop on a host that does not honor it |
+| `baseref-head-ignored-by-harness` | `true` | `worktree.baseRef:"head"` is set but the fork base passed via `--observed-fork-base` differs from HEAD — the worktree was not forked from HEAD despite the setting (in either mode), so the run degrades to sequential (#3659, #4588) |
+| `observed-fork-matches-head` | `false` | The fork base passed via `--observed-fork-base` equals HEAD (#4588) |
+| `fork-from-head-observed` | `false` | Under `harness-worktree` with no `--observed-fork-base`, a clean linked worktree under `.claude/worktrees/agent-*` sits at the current `HEAD` — positive evidence that this host's worktree creator forks from `HEAD` (#4868). Reached only when `"head"` is absent or not `"head"` — with the setting trusted the check returns `baseref-head` first, and under a `WorktreeCreate` hook with `"head"` set the observation is withheld rather than consulted, because it cannot be attributed to the hook (#4881). Cached per `HEAD` in `.gsd/harness-fork-probe.json`; a dirty worktree, one at another commit, none at all, or a git failure is inconclusive and falls through |
+| `head-matches-fork` | `false` | HEAD and the inferred fork base (`origin/HEAD`, or its symbolic-ref fallback such as `origin/next` — reported in `forkRef`) are the same commit |
+| `head-diverged-from-fork` | `true` | Branch is ahead of or diverged from the fork base — the inferred `origin/HEAD` (or its fallback), or the `--observed-fork-base` value when one was given (`forkRef: "observed"`) |
 | `fork-ref-unknown` | `true` | `origin/HEAD` could not be resolved |
-| `no-head` | `false` | Not in a git repo (no `HEAD`) — `git rev-parse HEAD` exited 128 (definitive), or exited 0 with empty stdout |
+| `no-head` | `true` for exit 128, `false` for exit 0 with empty stdout | Exit 128 is git's definitive "no resolvable HEAD here" answer — not a git repository, or a repository with no commits; no harness worktree can be created, so the check degrades to sequential (#4734), with a `message` explaining why. Exit 0 with empty stdout is ambiguous (git completed without a definitive answer) and stays non-degrading (`headAbsenceVerified` distinguishes the two: `true` / `false`) |
 | `head-unresolvable` | `true` | `git rev-parse HEAD` did not return a definitive answer (timed out, `git` missing, or any other non-128 failure) — fails closed rather than being treated as `no-head` |
 
 **`worktree set-baseref`** applies a no-clobber write of `worktree.baseRef:"head"` to `.claude/settings.local.json`. If the file already contains an explicit `baseRef` value other than `"head"`, the existing value is preserved and `skipped:"explicit-other"` is returned. Malformed JSON causes an error rather than a silent overwrite. Both fresh installs and upgrades of GSD Core run this automatically when `workflow.use_worktrees` is enabled (the default); the command is also available for manual use — for example, to apply the setting when worktrees were toggled on after installation, or to re-apply it after a settings change.
@@ -1332,6 +1495,18 @@ When a manifest entry carries a declared `files_modified`, `cleanup-wave` compar
 This is advisory: it does not change `ok`, `reason`, the per-entry `status`, or the exit code, and the merge proceeds either way. Promotion to a hard gate would be a separate, disclosed change.
 
 Two deliberate limits keep it from crying wolf. `.planning/**/*SUMMARY.md` paths are always exempt — the executor writes a SUMMARY by orchestration contract and no plan declares it. Glob patterns are matched by their literal prefix only, so `src/**/*.ts` covers everything under `src/`, and a pattern with no literal prefix (`*.md`) suppresses warnings for that entry rather than reporting every file.
+
+**Merge timeout and a killed merge's residue (#4721)**
+
+The merge step is the one git call in `cleanup-wave` that runs the commit-family hooks (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`, `post-merge`), so it runs under its own budget — 10 minutes by default (`DEFAULT_MERGE_TIMEOUT_MS`; `deps.mergeTimeoutMs` for callers of the module) — rather than the 10-second timeout every other git call in the wave keeps. (`worktree add` runs `post-checkout` and every ref update runs `reference-transaction`; those are plumbing-cheap and stay on the default.) A repo whose pre-merge hook is a test-suite gate therefore merges instead of being killed mid-hook.
+
+When the merge does exceed its budget the entry blocks on `reason: "merge_timed_out"`, and its `stderr` names the budget, says the hook may still be running, and labels whatever the hook had printed as output before the kill — instead of the old `merge_failed`, which carried that partial output as though it were git's own error. `merge_failed` is otherwise unchanged — a merge git refused, one that conflicted, or one killed by a signal from outside (which the seam reports with the signal, not as a timeout; that case still takes the restore below).
+
+A merge killed while its hook runs has already staged the merged tree into the primary checkout's index but never wrote `MERGE_HEAD`, so `git merge --abort` finds nothing and the mid-merge check (#2852) reads the primary as clean. Left there, a plain `git commit` from the primary would squash the executor's history into a single-parent commit. After a merge that was **killed** — at its budget, or by a signal from outside — and only then, `cleanup-wave` reads the index, runs `git reset --merge` (which restores exactly the paths the merge staged and keeps unrelated unstaged edits), and re-reads it. Each restored path is reported as a `code: "merge_residue_restored"` warning and the wave continues. If the index is still dirty afterwards, or cannot be read at all, each remaining path (or a single `path: null` when the read itself failed) is reported as `code: "merge_residue_left_staged"` and the remaining entries are moved to `pending` — the same repo-level halt an unfinished merge triggers, because every later merge would run against that dirty index.
+
+The kill gate is what makes the staged set attributable to the merge. A merge git *refuses* (`error: Your local changes to the following files would be overwritten by merge`) is the immediate exit a pre-existing dirty index earns, and it leaves that index untouched; on that path nothing is read or reset, because anything staged is your own work. The one exception is `merge.autoStash`: git then parks your staged work in `MERGE_AUTOSTASH` and starts anyway, and a merge killed before `MERGE_HEAD` exists never re-applies it. `git reset --merge` moves that autostash into the stash list, and `cleanup-wave` then runs `git stash pop --index` to put it back with its staged state intact. If the pop fails, or the autostash state could not be determined, the entry carries a `code: "merge_autostash_unrestored"` warning (`path: null`) and your work stays in `git stash list`; the index is then re-read, and the wave continues only if it is clean — a pop that left conflict entries behind halts the remaining entries as `merge_residue_left_staged`, since the next merge would fail on unmerged files. A kill that lands once `MERGE_HEAD` exists (inside `commit-msg`, say) is the ordinary abort path: `git merge --abort` restores the tree and re-applies an autostash itself — unstaged, as git does for any aborted autostashed merge — and the residue step finds nothing to do.
+
+Known limit: the kill terminates `git`, not the hook process it spawned. A hook that keeps running and itself stages files after the wave has verified the index clean can re-dirty the primary; the `merge_timed_out` detail says so, and a hook that takes minutes belongs under a larger `mergeTimeoutMs`, not under this recovery.
 
 ---
 
@@ -1398,7 +1573,7 @@ User-facing entry point: `/gsd-graphify` (see [Command Reference](COMMANDS.md#gs
 
 ```bash
 node gsd-tools.cjs config-set review.models.codex    "gpt-5"
-node gsd-tools.cjs config-set review.models.gemini   "gemini-2.5-pro"
+node gsd-tools.cjs config-set review.models.agy      "gemini-3.1-pro-preview"
 node gsd-tools.cjs config-set review.models.opencode "claude-sonnet-4"
 node gsd-tools.cjs config-set review.models.claude   ""   # clear — fall back to session model
 ```

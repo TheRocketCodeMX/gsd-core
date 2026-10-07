@@ -18,6 +18,8 @@ import fs from 'node:fs';
 // at load time and become un-mockable.
 import childProcess from 'node:child_process';
 import { escapeRegex } from './pattern.cjs';
+import { locateFrontmatterFence } from './frontmatter-fence.cjs';
+import { hostBehaviorsFor } from './runtime-name-policy.cjs';
 
 /**
  * Convert a filesystem path to POSIX form (forward slashes) by translating the
@@ -107,7 +109,10 @@ export function formatHookCommandForRuntime(command: string, opts: { platform?: 
 // path missed this guard and reintroduced the #166/#377 failure (#580).
 export function shellHookOmitsBashRunner({ platform, runtime = 'generic', isShellHook = false }: { platform?: string; runtime?: string; isShellHook?: boolean } = {}): boolean {
   const p = platform ?? process.platform;
-  return p === 'win32' && runtime === 'claude' && isShellHook;
+  // #5169: descriptor-declared (`hostBehaviors.omitBashRunnerOnWindows`). The
+  // `'generic'` default and any other non-registered label declares nothing, so
+  // it never omits the runner, exactly as before.
+  return p === 'win32' && isShellHook && hostBehaviorsFor(runtime).omitBashRunnerOnWindows === true;
 }
 
 // Builds the command string for a local-install managed `.sh` hook. Mirrors the
@@ -265,6 +270,7 @@ const MANAGED_HOOK_COMMAND_BASENAMES_BY_SURFACE: Record<string, Set<string>> = {
     'gsd-session-state.sh',
     'gsd-validate-commit.sh',
     'gsd-phase-boundary.sh',
+    'gsd-graphify-update.sh',
     // #3662: same three guards as MANAGED_HOOK_BASENAMES_BY_SURFACE above —
     // their absence here meant isManagedHookCommand never recognized them, so
     // the settings.json→settings.local.json migration filter (and uninstall
@@ -1140,15 +1146,38 @@ export function probeTty(opts: { platform?: string } = {}): string | null {
 
 // ─── Platform file I/O ────────────────────────────────────────────────────────
 
+/**
+ * How many leading lines of LF-only `text` are its closed YAML frontmatter block (opening
+ * fence through closing fence), or 0 when there is none (an unterminated block is not
+ * frontmatter). The fence is `locateFrontmatterFence`'s — the one owner the frontmatter reader
+ * and writer (`frontmatter.cts`) also read — so the normalizer skips exactly the block every
+ * reader sees (found while implementing #5105: this was a private mirror of the reader's
+ * fence rule, because `frontmatter.cts` imports this module, and the two drifted).
+ */
+function leadingFrontmatterLineCount(text: string): number {
+  const fence = locateFrontmatterFence(text);
+  if (!fence || !fence.closed) return 0;
+  // The lines before the closing fence, plus the closing fence line itself.
+  return text.slice(0, fence.closingStart).split('\n').length;
+}
+
 function _normalizeMd(content: string): string {
   if (!content || typeof content !== 'string') return content;
   let text = content.replace(/\r\n/g, '\n');
   const lines = text.split('\n');
+  // The frontmatter block is YAML, not markdown: its lines are published exactly as written.
+  // A `# comment` is not a heading, and a blank line inserted into a multi-line quoted scalar
+  // or removed from a block scalar changes the value (found while implementing #5105).
+  const frontmatterLines = leadingFrontmatterLineCount(text);
   const result: string[] = [];
   const fenceRegex = /^```/;
   const insideFence = new Array<boolean>(lines.length);
   let fenceOpen = false;
   for (let i = 0; i < lines.length; i++) {
+    if (i < frontmatterLines) {
+      insideFence[i] = false;
+      continue;
+    }
     if (fenceRegex.test(lines[i].trimEnd())) {
       if (fenceOpen) {
         insideFence[i] = false;
@@ -1163,6 +1192,10 @@ function _normalizeMd(content: string): string {
   }
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (i < frontmatterLines) {
+      result.push(line);
+      continue;
+    }
     const prev = i > 0 ? lines[i - 1] : '';
     const prevTrimmed = prev.trimEnd();
     const trimmed = line.trimEnd();
@@ -1171,11 +1204,15 @@ function _normalizeMd(content: string): string {
     if (isFenceLine && i > 0 && prevTrimmed !== '' && !insideFence[i] && (i === 0 || !insideFence[i - 1] || isFenceLine)) {
       if (i === 0 || !insideFence[i - 1]) result.push('');
     }
-    // #3854: the `!/^\s/.test(prev)` guard mirrors the after-a-bullet rule below —
-    // an indented non-bullet line is a CONTINUATION of the previous list item, not a
-    // preceding paragraph, so no separating blank may be injected before this bullet
-    // (that injection converted every tight multi-line list to a loose one on write).
-    if (/^(\s*[-*+]\s|\s*\d+\.\s)/.test(line) && i > 0 && prevTrimmed !== '' && !/^(\s*[-*+]\s|\s*\d+\.\s)/.test(prev) && !/^\s/.test(prev) && prevTrimmed !== '---') result.push('');
+    // No "separate a list from a preceding paragraph" rule (#3854, #4725).
+    // This pass re-normalizes the ENTIRE document on every .md write, so an
+    // inserted blank before a bullet whose previous line is ordinary prose
+    // reflowed text the command never touched (converting tight lists to
+    // loose ones); #3854 first guarded the indented-continuation predecessor,
+    // #4725 removed the rule outright. A paragraph→list transition stays
+    // exactly as the author wrote it; a heading→list separation still comes
+    // from the after-heading rule below. The after-a-bullet rule at the end
+    // of this loop is a different transition (list→prose) and is unaffected.
     result.push(line);
     if (/^#{1,6}\s/.test(trimmed) && i < lines.length - 1 && (lines[i + 1] ?? '').trimEnd() !== '') result.push('');
     if (/^```\s*$/.test(trimmed) && i > 0 && insideFence[i - 1] && i < lines.length - 1 && (lines[i + 1] ?? '').trimEnd() !== '') result.push('');
@@ -1184,8 +1221,11 @@ function _normalizeMd(content: string): string {
       if (next !== undefined && next.trimEnd() !== '' && !/^(\s*[-*+]\s|\s*\d+\.\s)/.test(next) && !/^\s/.test(next)) result.push('');
     }
   }
+  // The frontmatter lines are `result`'s first entries, unchanged; the blank-run collapse
+  // applies from the line ending that closes the block onward.
+  const head = result.slice(0, frontmatterLines).join('\n');
   text = result.join('\n');
-  text = text.replace(/\n{3,}/g, '\n\n');
+  text = head + text.slice(head.length).replace(/\n{3,}/g, '\n\n');
   text = text.replace(/\n*$/, '\n');
   return text;
 }

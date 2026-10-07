@@ -34,7 +34,20 @@ const { runNode } = require('./helpers/process-seam.cjs');
 const pkg = require('../package.json');
 
 // #3145: class-norm timeout, not a per-suite value — see helpers/timeouts.cjs.
-const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+const { PROBE_TIMEOUT_MS, QUICK_SPAWN_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+
+// Fixture-JSON value (seconds, not ms) simulating the PRE-migration legacy
+// settings.json hook-entry timeout under test (#3981-style migration test).
+// Deliberately a different value than the shared FIXTURE_HOOK_TIMEOUT_SECONDS
+// constant (5) since this site tests the old value specifically (batch #4515,
+// epic #4445).
+const FIXTURE_LEGACY_HOOK_TIMEOUT_SECONDS = 10;
+
+// Bounds an `install.js --dry-run` run (no file writes) — a lighter shape than
+// the shared full-write INSTALL_TIMEOUT_MS class (120000ms), kept separate
+// rather than raised. Shared by both dry-run sites in this file (batch #4515,
+// epic #4445).
+const DRY_RUN_INSTALL_TIMEOUT_MS = 30_000;
 
 const {
   getConfigDirFromHome,
@@ -550,13 +563,16 @@ describe('install/uninstall — trae (nested skills/gsd-<router>/skills/<stem>/ 
     const result = install(false, 'trae');
     const targetDir = path.join(tmpDir, '.trae');
 
-    assert.deepStrictEqual(result, {
+    assert.equal(typeof result.rollbackInstallerMigrations, 'function');
+    const { rollbackInstallerMigrations: _rollbackInstallerMigrations, ...resultWithoutRollback } = result;
+    assert.deepStrictEqual(resultWithoutRollback, {
       settingsPath: null,
       settings: null,
       statuslineCommand: null,
       updateBannerCommand: null,
       runtime: 'trae',
       configDir: fs.realpathSync(targetDir),
+      configuredEntrypoints: [],
     });
 
     // trae nests: skills/gsd-<router>/skills/<stem>/SKILL.md
@@ -1138,7 +1154,7 @@ describe('install — fix-slash-commands.cjs lands at scripts/fix-slash-commands
     const result = spawnSync(
       process.execPath,
       [gsdToolsPath, 'query', 'init.new-project'],
-      { encoding: 'utf8', timeout: 15000 },
+      { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS },
     );
     assert.ok(
       !result.stderr.includes('MODULE_NOT_FOUND'),
@@ -1226,7 +1242,7 @@ describe('readCmdNames() — tolerates missing commands/gsd directory (#1223)', 
 
       const spawnResult = spawnSync(process.execPath, ['-e', script], {
         encoding: 'utf8',
-        timeout: 10000,
+        timeout: QUICK_SPAWN_TIMEOUT_MS,
         env: { ...process.env, GSD_TEST_MODE: '1' },
       });
       assert.ok(
@@ -2431,39 +2447,46 @@ describe('Bug #3181: normalizeNodePath — exported as a function', () => {
 
 describe('Bug #3181: normalizeNodePath — Intel Homebrew Cellar paths → /usr/local/bin/node', () => {
   test('simple versioned Intel Cellar path', () => {
-    const result = normalizeNodePath('/usr/local/Cellar/node/25.8.1/bin/node');
+    const result = normalizeNodePath('/usr/local/Cellar/node/25.8.1/bin/node',
+      { existsSync: p => p === '/usr/local/bin/node' });
     assert.equal(result, '/usr/local/bin/node');
   });
 
   test('Intel Cellar path with long semver', () => {
-    const result = normalizeNodePath('/usr/local/Cellar/node/20.11.0/bin/node');
+    const result = normalizeNodePath('/usr/local/Cellar/node/20.11.0/bin/node',
+      { existsSync: p => p === '/usr/local/bin/node' });
     assert.equal(result, '/usr/local/bin/node');
   });
 
   test('Intel Cellar path with prerelease version segment', () => {
-    const result = normalizeNodePath('/usr/local/Cellar/node/22.0.0-rc.1/bin/node');
+    const result = normalizeNodePath('/usr/local/Cellar/node/22.0.0-rc.1/bin/node',
+      { existsSync: p => p === '/usr/local/bin/node' });
     assert.equal(result, '/usr/local/bin/node');
   });
 
   test('Intel versioned formula Cellar path (node@20) maps to stable symlink', () => {
-    const result = normalizeNodePath('/usr/local/Cellar/node@20/20.11.0/bin/node');
+    const result = normalizeNodePath('/usr/local/Cellar/node@20/20.11.0/bin/node',
+      { existsSync: p => p === '/usr/local/bin/node' });
     assert.equal(result, '/usr/local/bin/node');
   });
 });
 
 describe('Bug #3181: normalizeNodePath — Apple Silicon Homebrew Cellar paths → /opt/homebrew/bin/node', () => {
   test('simple versioned Apple Silicon Cellar path', () => {
-    const result = normalizeNodePath('/opt/homebrew/Cellar/node/25.8.1/bin/node');
+    const result = normalizeNodePath('/opt/homebrew/Cellar/node/25.8.1/bin/node',
+      { existsSync: p => p === '/opt/homebrew/bin/node' });
     assert.equal(result, '/opt/homebrew/bin/node');
   });
 
   test('Apple Silicon Cellar path with another version', () => {
-    const result = normalizeNodePath('/opt/homebrew/Cellar/node/18.20.4/bin/node');
+    const result = normalizeNodePath('/opt/homebrew/Cellar/node/18.20.4/bin/node',
+      { existsSync: p => p === '/opt/homebrew/bin/node' });
     assert.equal(result, '/opt/homebrew/bin/node');
   });
 
   test('Apple Silicon versioned formula Cellar path (node@18) maps to stable symlink', () => {
-    const result = normalizeNodePath('/opt/homebrew/Cellar/node@18/18.20.4/bin/node');
+    const result = normalizeNodePath('/opt/homebrew/Cellar/node@18/18.20.4/bin/node',
+      { existsSync: p => p === '/opt/homebrew/bin/node' });
     assert.equal(result, '/opt/homebrew/bin/node');
   });
 });
@@ -2472,23 +2495,131 @@ describe('Bug #3181: normalizeNodePath — Apple Silicon Homebrew Cellar paths �
 // from the path itself, so one branch covers every Homebrew layout.
 describe('Bug #2185: normalizeNodePath — Linuxbrew + custom-prefix Cellar paths → <prefix>/bin/node', () => {
   test('Linuxbrew Cellar path maps to the stable linuxbrew symlink', () => {
-    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node/26.0.0/bin/node');
+    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node/26.0.0/bin/node',
+      { existsSync: p => p === '/home/linuxbrew/.linuxbrew/bin/node' });
     assert.equal(result, '/home/linuxbrew/.linuxbrew/bin/node');
   });
 
   test('Linuxbrew Cellar path after a version bump (26.5.0) maps to stable symlink', () => {
-    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node');
+    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node',
+      { existsSync: p => p === '/home/linuxbrew/.linuxbrew/bin/node' });
     assert.equal(result, '/home/linuxbrew/.linuxbrew/bin/node');
   });
 
   test('Linuxbrew versioned formula Cellar path (node@22) maps to stable symlink', () => {
-    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node@22/22.11.0/bin/node');
+    const result = normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node@22/22.11.0/bin/node',
+      { existsSync: p => p === '/home/linuxbrew/.linuxbrew/bin/node' });
     assert.equal(result, '/home/linuxbrew/.linuxbrew/bin/node');
   });
 
   test('custom HOMEBREW_PREFIX Cellar path maps to its stable symlink', () => {
-    const result = normalizeNodePath('/custom/brew/Cellar/node/25.8.1/bin/node');
+    const result = normalizeNodePath('/custom/brew/Cellar/node/25.8.1/bin/node',
+      { existsSync: p => p === '/custom/brew/bin/node' });
     assert.equal(result, '/custom/brew/bin/node');
+  });
+});
+
+// ─── normalizeNodePath — Homebrew keg-only Cellar path keeps execPath (#4137) ──
+//
+// Bug #4137: every other runtime branch in normalizeNodePath (fnm shim, fnm
+// versioned, mise, volta) probes its rewrite candidate with the injected
+// existsSync and falls back to the raw execPath on a miss. The Homebrew branch
+// alone returned `<prefix>/bin/node` unconditionally — a path that does not
+// exist when the formula is keg-only/versioned and not `brew link`ed (e.g.
+// `node@24` resolving through `<prefix>/opt/node@24/bin/node`). Every managed
+// hook command then failed at invocation with exit 127,
+// `/bin/sh: <prefix>/bin/node: No such file or directory`.
+//
+// Fix: existsSync-guard the Homebrew rewrite exactly as mise and volta do; on a
+// miss fall through to the unmodified execPath. A rewrite must never convert a
+// working path into a broken one.
+//
+// Hermetic: every case injects existsSync and grants existence to exactly ONE
+// candidate — the one its layout would really have (the fnm #3704 stub rule).
+describe('Bug #4137: normalizeNodePath — keg-only Homebrew Cellar path falls back to raw execPath', () => {
+  const ARM_KEG = '/opt/homebrew/Cellar/node@24/24.11.0/bin/node';
+  const INTEL_KEG = '/usr/local/Cellar/node@20/20.11.0/bin/node';
+  const LINUXBREW_KEG = '/home/linuxbrew/.linuxbrew/Cellar/node@22/22.11.0/bin/node';
+  const CUSTOM_KEG = '/custom/brew/Cellar/node@18/18.20.4/bin/node';
+
+  test('keg-only versioned Cellar path (the reported bug) → raw execPath unchanged', () => {
+    // Apple Silicon, node@24 keg-only: <prefix>/bin/node is absent.
+    assert.equal(normalizeNodePath(ARM_KEG, { existsSync: () => false }), ARM_KEG);
+  });
+
+  test('Intel versioned keg-only Cellar path → raw execPath unchanged', () => {
+    assert.equal(normalizeNodePath(INTEL_KEG, { existsSync: () => false }), INTEL_KEG);
+  });
+
+  test('Linuxbrew versioned keg-only Cellar path → raw execPath unchanged', () => {
+    assert.equal(normalizeNodePath(LINUXBREW_KEG, { existsSync: () => false }), LINUXBREW_KEG);
+  });
+
+  test('unversioned keg-only Cellar path (brew unlink node) → raw execPath unchanged', () => {
+    const keg = '/opt/homebrew/Cellar/node/24.11.0/bin/node';
+    assert.equal(normalizeNodePath(keg, { existsSync: () => false }), keg);
+  });
+
+  test('custom HOMEBREW_PREFIX keg-only Cellar path → raw execPath unchanged', () => {
+    assert.equal(normalizeNodePath(CUSTOM_KEG, { existsSync: () => false }), CUSTOM_KEG);
+  });
+
+  test('Windows-spelled keg-only Cellar path → raw execPath unchanged, .exe intact', () => {
+    const keg = 'C:/Program Files/brew/Cellar/node@24/24.11.0/bin/node.exe';
+    assert.equal(normalizeNodePath(keg, { existsSync: () => false }), keg);
+  });
+
+  test('guard miss must not leak into the mise/volta branches', () => {
+    // The decoy shim belongs to a sibling branch's candidate space; a Cellar
+    // path can never claim it, and the fallback must be the raw execPath.
+    const decoyShim = '/opt/homebrew/shims/node';
+    assert.equal(
+      normalizeNodePath(ARM_KEG, { existsSync: p => p === decoyShim }),
+      ARM_KEG);
+  });
+});
+
+// Negative space: the guard must be a no-op when <prefix>/bin/node DOES exist
+// (linked formula) — the #2185/#3181 rewrite survives exactly as before.
+describe('Bug #4137: normalizeNodePath — linked Homebrew Cellar path still rewrites (guard is a no-op)', () => {
+  test('linked versioned formula keg + stable symlink present → stable symlink', () => {
+    assert.equal(
+      normalizeNodePath('/opt/homebrew/Cellar/node@24/24.11.0/bin/node',
+        { existsSync: p => p === '/opt/homebrew/bin/node' }),
+      '/opt/homebrew/bin/node');
+  });
+
+  test('linked unversioned formula keg + stable symlink present → stable symlink', () => {
+    assert.equal(
+      normalizeNodePath('/usr/local/Cellar/node/25.8.1/bin/node',
+        { existsSync: p => p === '/usr/local/bin/node' }),
+      '/usr/local/bin/node');
+  });
+
+  test('Linuxbrew linked keg + stable symlink present → stable symlink', () => {
+    assert.equal(
+      normalizeNodePath('/home/linuxbrew/.linuxbrew/Cellar/node@22/22.11.0/bin/node',
+        { existsSync: p => p === '/home/linuxbrew/.linuxbrew/bin/node' }),
+      '/home/linuxbrew/.linuxbrew/bin/node');
+  });
+});
+
+// The seam callers bake into hook commands — the reported breakage surface.
+describe('Bug #4137: resolveNodeRunner — keg-only Cellar execPath stays raw when symlink absent', () => {
+  test('resolveNodeRunner keeps the keg path (quoted token) instead of the broken symlink', () => {
+    const keg = '/opt/homebrew/Cellar/node@24/24.11.0/bin/node';
+    assert.equal(
+      resolveNodeRunner({ execPath: keg, existsSync: () => false }),
+      JSON.stringify(keg));
+  });
+
+  test('resolveNodeRunner still maps a linked Cellar execPath to the stable symlink', () => {
+    assert.equal(
+      resolveNodeRunner({
+        execPath: '/opt/homebrew/Cellar/node@24/24.11.0/bin/node',
+        existsSync: p => p === '/opt/homebrew/bin/node',
+      }),
+      '"/opt/homebrew/bin/node"');
   });
 });
 
@@ -2534,7 +2665,7 @@ describe('Bug #3181: resolveNodeRunner — maps Cellar execPath to stable symlin
         value: '/usr/local/Cellar/node/25.8.1/bin/node',
         configurable: true,
       });
-      const runner = resolveNodeRunner();
+      const runner = resolveNodeRunner({ existsSync: p => p === '/usr/local/bin/node' });
       assert.equal(runner, '"/usr/local/bin/node"',
         `expected stable Intel symlink, got: ${runner}`);
     } finally {
@@ -2549,7 +2680,7 @@ describe('Bug #3181: resolveNodeRunner — maps Cellar execPath to stable symlin
         value: '/opt/homebrew/Cellar/node/25.8.1/bin/node',
         configurable: true,
       });
-      const runner = resolveNodeRunner();
+      const runner = resolveNodeRunner({ existsSync: p => p === '/opt/homebrew/bin/node' });
       assert.equal(runner, '"/opt/homebrew/bin/node"',
         `expected stable Apple Silicon symlink, got: ${runner}`);
     } finally {
@@ -2799,14 +2930,16 @@ describe('Bug #977: normalizeNodePath — non-fnm paths are unaffected (no regre
 
   test('Intel Homebrew Cellar path still maps to stable symlink', () => {
     assert.equal(
-      normalizeNodePath('/usr/local/Cellar/node/25.8.1/bin/node'),
+      normalizeNodePath('/usr/local/Cellar/node/25.8.1/bin/node',
+        { existsSync: p => p === '/usr/local/bin/node' }),
       '/usr/local/bin/node',
     );
   });
 
   test('Apple Silicon Homebrew Cellar path still maps to stable symlink', () => {
     assert.equal(
-      normalizeNodePath('/opt/homebrew/Cellar/node/25.8.1/bin/node'),
+      normalizeNodePath('/opt/homebrew/Cellar/node/25.8.1/bin/node',
+        { existsSync: p => p === '/opt/homebrew/bin/node' }),
       '/opt/homebrew/bin/node',
     );
   });
@@ -3686,8 +3819,8 @@ describe('bin/install.js compatibility export audit (#1559, retired by #2876)', 
       'convertClaudeToCursorMarkdown',
       'convertClaudeToCodexMarkdown',
       'transformContentToHyphen',
-      'claudeToGeminiTools',
-      'convertGeminiToolName',
+      'claudeToAntigravityTools',
+      'convertAntigravityToolName',
       'rewriteStagedSkillBodies',
       'rewriteStagedCommandBodies',
       '_computePathPrefix',
@@ -5435,6 +5568,36 @@ describe('#338 case 1: fresh local Claude install writes to settings.local.json'
       `install() must return settingsPath ending in settings.local.json for local Claude installs; got: ${result.settingsPath}`
     );
   });
+
+  // #4249 (agy adversarial review, round 8): every early-return branch of
+  // install() must still return the configuredEntrypoints/rollbackInstallerMigrations
+  // shape — rollbackFinalizedInstallerMigrations reads the latter unconditionally,
+  // so an omission here silently drops this runtime's rollback on a later
+  // finalize-stage failure.
+  test('malformed settings.local.json still returns configuredEntrypoints and a working rollbackInstallerMigrations', (t) => {
+    const origCwd = process.cwd();
+    t.after(() => { process.chdir(origCwd); });
+    process.chdir(tmpDir);
+
+    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.claude', 'settings.local.json'), '{ not valid json', 'utf-8');
+
+    const result = install(false, 'claude');
+    assert.deepStrictEqual(
+      result.configuredEntrypoints,
+      [],
+      'unparseable settings.local.json must still return configuredEntrypoints: []'
+    );
+    assert.strictEqual(
+      typeof result.rollbackInstallerMigrations,
+      'function',
+      'unparseable settings.local.json must still return a callable rollbackInstallerMigrations'
+    );
+    assert.doesNotThrow(
+      () => result.rollbackInstallerMigrations(),
+      'rollbackInstallerMigrations() must not throw when called on this early-return path'
+    );
+  });
 });
 
 // ─── Case 2: global Claude install (regression guard) ────────────────────────
@@ -5550,7 +5713,7 @@ describe('#338 case 3: migration of prior local install GSD entries from setting
               {
                 type: 'command',
                 command: `${process.execPath} ${path.join(claudeDir, 'hooks', 'gsd-context-monitor.js')}`,
-                timeout: 10,
+                timeout: FIXTURE_LEGACY_HOOK_TIMEOUT_SECONDS,
               }
             ]
           }
@@ -6852,8 +7015,13 @@ describe('#3024: gsd-tools query skills-root', () => {
   // dedicated branch (making it grok's true peer), this second assertion
   // would fail and force a conscious decision, instead of someone
   // reflexively adding it to LEGACY_NON_REGISTRY_RUNTIME_IDS.
-  test("gemini: rejected — because its bare resolution is claude's fallback, not because it is merely unregistered", () => {
-    const claudeSkillsRoot = path.join(os.homedir(), '.claude', 'skills');
+  // #4709 AC#1 inverted the second half of this test: gemini's bare
+  // resolution used to silently fall through to claude's skills root (the
+  // wrong-runtime bug this test used to pin); getGlobalSkillsBase now goes
+  // through getGlobalConfigDir's retired-runtime guard and refuses outright.
+  // The CLI-level rejection (isRegisteredRuntimeId) is unchanged and still
+  // asserted as before.
+  test("gemini: rejected by the CLI gate, and its underlying resolution now refuses too (not merely unregistered, and no longer claude's fallback)", () => {
     const result = runNode([TOOLS_PATH, 'query', 'skills-root', 'gemini', '--raw'], {
       env: { ...process.env, GSD_TEST_MODE: '1' },
     });
@@ -6861,13 +7029,15 @@ describe('#3024: gsd-tools query skills-root', () => {
     assert.notStrictEqual(result.exitCode, 0, 'gemini must be rejected by isRegisteredRuntimeId');
     assert.strictEqual(result.stdout.trim(), '', `stdout must not emit a path for rejected gemini; got: ${result.stdout}`);
 
-    // Prove the reason: gemini's underlying (ungated) resolution IS claude's
-    // wrong-runtime fallback — unlike grok's, which resolves to a real,
-    // distinct path (see the sibling grok test above).
+    // Prove the reason: gemini's underlying (ungated) resolution now refuses via
+    // RetiredRuntimeError — unlike grok's, which resolves to a real, distinct path
+    // (see the sibling grok test above), and unlike its own pre-#4709 behavior of
+    // silently falling through to claude's skills root.
     const { getGlobalSkillsBase } = require('../gsd-core/bin/lib/runtime-homes.cjs');
-    assert.strictEqual(
-      getGlobalSkillsBase('gemini'), claudeSkillsRoot,
-      "gemini's bare resolution must be claude's fallback path — this is the wrong-runtime bug that justifies keeping gemini rejected"
+    assert.throws(
+      () => getGlobalSkillsBase('gemini'),
+      /retired by #1928/,
+      "gemini's bare resolution must now refuse — it no longer silently resolves to claude's fallback path",
     );
   });
 });
@@ -7350,7 +7520,7 @@ function installAndRead(runtime) {
   const res = spawnSync(
     process.execPath,
     [INSTALL, `--${runtime}`, '--global', '--config-dir', dir],
-    { encoding: 'utf8', timeout: 120000, env: { ...process.env, HOME: dir, USERPROFILE: dir } },
+    { encoding: 'utf8', timeout: INSTALL_TIMEOUT_MS, env: { ...process.env, HOME: dir, USERPROFILE: dir } },
   );
   assert.strictEqual(res.status, 0, `install --${runtime} failed: ${res.stderr || res.stdout}`);
   const wf = path.join(dir, 'gsd-core', 'workflows', 'execute-phase.md');
@@ -7791,7 +7961,7 @@ describe('#3026: installer --help documents every accepted runtime flag', () => 
 
   test('every accepted runtime flag appears in --help output', () => {
     // Derive accepted flags behaviorally from the installer's argument parser.
-    const r = spawnSync(process.execPath, [INSTALL_PATH, '--help'], { encoding: 'utf-8', timeout: 10000 });
+    const r = spawnSync(process.execPath, [INSTALL_PATH, '--help'], { encoding: 'utf-8', timeout: QUICK_SPAWN_TIMEOUT_MS });
     const helpText = r.stdout;
 
     // The installer's getRuntimeArgs defines which --<runtime> flags it accepts.
@@ -7958,7 +8128,7 @@ describe('#607 --dry-run flag: spawned installer exits 0 and mutates nothing', (
         },
         cwd: REPO_ROOT,
         encoding: 'utf8',
-        timeout: 30_000,
+        timeout: DRY_RUN_INSTALL_TIMEOUT_MS,
       }
     );
 
@@ -8033,7 +8203,7 @@ describe('#607 --dry-run flag: spawned installer exits 0 and mutates nothing', (
         },
         cwd: REPO_ROOT,
         encoding: 'utf8',
-        timeout: 30_000,
+        timeout: DRY_RUN_INSTALL_TIMEOUT_MS,
       }
     );
 
@@ -8166,6 +8336,226 @@ describe('#607 cleanupLegacyGsdCc: exported helper unit tests', () => {
 });
   });
 }
+
+// ---------------------------------------------------------------------------
+// #4377 — --relative-includes: a local install must not bake the checkout path
+// ---------------------------------------------------------------------------
+//
+// The unit arms in tests/install-runtime-artifacts.test.cjs pin
+// _computePathPrefix itself. This is the end-to-end proof: the prefix has to
+// travel from the CLI flag, through the install engine, through the rewrite
+// pass, and land in the bytes on disk. A pure-function test alone would pass
+// happily while any one of those six seams kept computing the absolute form.
+describe('#4377: --relative-includes emits project-relative @ includes for a local install', () => {
+  // `before`/`after` are not in this file's tail scope (the earlier folds each
+  // bring their own); pull them from node:test directly rather than relying on
+  // whatever binding happens to be visible here.
+  const { before: beforeAll, after: afterAll } = require('node:test');
+  const { installSpawnEnv } = require('./helpers.cjs');
+  const { throwIfFailed } = require('./helpers/git-fixture.cjs');
+  const { INSTALL_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+  const installPath = path.join(__dirname, '..', 'bin', 'install.js');
+
+  // Two independent reasons the raw temp root does not appear in emitted
+  // content, both of which would make the negative arms pass VACUOUSLY —
+  // "nothing references the checkout" is trivially true when the string being
+  // searched for cannot occur:
+  //
+  //   1. The emitted prefix is POSIX-normalized by design, because it is
+  //      substituted into markdown @-references, which use forward slashes
+  //      universally; a backslash there would leak into shipped content
+  //      (#1615). On Windows the roots arrive as `D:\a\...`.
+  //   2. On macOS `os.tmpdir()` yields `/var/folders/...`, but `/var` is a
+  //      symlink to `/private/var`, and the installer resolves it — so the
+  //      emitted content carries `/private/var/folders/...` while
+  //      `fs.mkdtempSync` handed us the unresolved spelling.
+  //
+  // Every comparison therefore goes through both spellings.
+  const toPosix = (p2) => p2.replace(/\\/g, '/');
+  //
+  // LONGEST FIRST, and that ordering is load-bearing. `/var/folders/…/X` is a
+  // SUBSTRING of `/private/var/folders/…/X`, so stripping the short spelling
+  // first matches inside the long one and leaves the `/private` prefix glued
+  // to what followed it: `@/private/var/…/X/.claude/gsd-core/…` normalizes to
+  // `@/private.claude/gsd-core/…`, a string that appears in neither install.
+  // Removing the long form first consumes the whole occurrence, and the short
+  // form then has nothing left to match.
+  const rootSpellings = (root) => {
+    const forms = new Set([toPosix(root)]);
+    try { forms.add(toPosix(fs.realpathSync(root))); } catch { /* root already gone */ }
+    return [...forms].sort((a, b) => b.length - a.length);
+  };
+  const mentionsRoot = (content, root) => rootSpellings(root).some((r) => content.includes(r));
+
+  // Self-contained runner: the file's other runInstall helpers live inside
+  // folded blocks and are not in scope here. #3156's sandboxed HOME still
+  // applies — the installer writes <home>/.gsd/defaults.json via os.homedir()
+  // directly, which no env scrub reaches.
+  const install = (cwd, args) => {
+    const env = installSpawnEnv();
+    delete env.GSD_TEST_MODE;
+    // The relative-includes opt-in is dual-sourced (flag OR env), so an
+    // ambient GSD_RELATIVE_INCLUDES would silently opt the CONTROL arm in and
+    // make this suite prove nothing. Scrub it and let the flag speak.
+    delete env.GSD_RELATIVE_INCLUDES;
+    const r = runNode([installPath, ...args], {
+      cwd, env, timeoutMs: INSTALL_TIMEOUT_MS,
+    });
+    throwIfFailed(r, `node ${installPath} ${args.join(' ')}`);
+  };
+
+  let absDir;
+  let relDir;
+
+  beforeAll(() => {
+    absDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-4377-abs-'));
+    relDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-4377-rel-'));
+    install(absDir, ['--claude', '--local', '--no-sdk']);
+    install(relDir, ['--claude', '--local', '--no-sdk', '--relative-includes']);
+  });
+
+  afterAll(() => {
+    cleanup(absDir);
+    cleanup(relDir);
+  });
+
+  // Walk the WHOLE installed tree, not just commands/. The issue measured 145
+  // affected files across commands, workflows and references on a real repo —
+  // a commands-only assertion would have called this fixed while 124 workflow
+  // and reference files still carried the baked path.
+  const allBodies = (root, base = path.join(root, '.claude')) => {
+    const out = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        if (!entry.isFile()) continue;
+        out.push({ rel: path.relative(base, full), content: fs.readFileSync(full, 'utf-8') });
+      }
+    };
+    if (fs.existsSync(base)) walk(base);
+    return out;
+  };
+
+  test('the default install still bakes the absolute checkout path (unchanged behavior)', () => {
+    // The control. Without it, a change that broke the absolute form entirely
+    // would satisfy every assertion below and look like a fix.
+    const carriers = allBodies(absDir).filter((f) => mentionsRoot(f.content, absDir));
+    assert.ok(
+      carriers.length > 0,
+      '#4377 is opt-in: the default local install must keep emitting absolute includes',
+    );
+  });
+
+  test('with the flag, NOTHING in the installed tree references the checkout it came from', () => {
+    const offenders = allBodies(relDir).filter((f) => mentionsRoot(f.content, relDir)).map((f) => f.rel);
+    assert.deepEqual(offenders, [], 'no installed file may reference the checkout it was installed from');
+  });
+
+  test('with the flag, the includes are project-relative and still resolve to gsd-core', () => {
+    // Not merely "absent" — an implementation that stripped the prefix would
+    // pass the arm above while shipping includes that point nowhere.
+    const withRelative = allBodies(relDir).filter((f) => f.content.includes('@.claude/gsd-core/'));
+    assert.ok(withRelative.length > 0, 'expected @.claude/gsd-core/ includes in the relative install');
+  });
+
+  test('the local install manifest persists the relative style for a later surface apply', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(relDir, '.claude', 'gsd-file-manifest.json'), 'utf8'));
+    assert.equal(manifest.relativeIncludePrefix, '.claude/');
+  });
+
+  test('a project-root runtime falls back to absolute includes instead of inventing its descriptor directory', (t) => {
+    // Cline declares localTargetIsProjectRoot: local agents live in `agents/`,
+    // not `.cline/agents/`.  A relative `.cline/` prefix would therefore point
+    // at a directory the install never creates.  This crosses the real install
+    // plan and agent-rewrite seam; testing _localIncludeDirName alone would not
+    // prove every production consumer uses the guard.
+    const clineDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-4377-cline-'));
+    t.after(() => cleanup(clineDir));
+    install(clineDir, ['--cline', '--local', '--no-sdk', '--relative-includes']);
+
+    const agents = allBodies(clineDir, path.join(clineDir, 'agents'));
+    assert.ok(agents.length > 0, 'the local Cline install must emit agents at the project root');
+    const descriptorRelative = agents.filter((f) => f.content.includes('@.cline/gsd-core/')).map((f) => f.rel);
+    assert.deepEqual(descriptorRelative, [], 'Cline has no .cline/ local target, so its includes must not use one');
+    const absoluteFallback = agents.filter((f) => rootSpellings(clineDir)
+      .some((root) => f.content.includes(`@${root}/gsd-core/`)));
+    assert.ok(absoluteFallback.length > 0, 'an unrepresentable project-relative target must retain the safe absolute prefix');
+  });
+
+  test('the launcher shim keeps ABSOLUTE shell defaults even with the flag', () => {
+    // The one place a relative prefix would make things worse. The runtime
+    // launcher probes gsd-tools through `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`;
+    // that is a shell word expansion, not an @ include, and a bare `.claude`
+    // there resolves against the shell's cwd rather than the project. Trading
+    // an include that points at the wrong checkout for a path that points at
+    // nothing would not be a fix.
+    const carriers = allBodies(relDir).filter((f) => f.content.includes('CLAUDE_CONFIG_DIR:-'));
+    assert.ok(carriers.length > 0, 'expected the launcher snippet in the installed tree');
+    const offenders = carriers
+      .filter((f) => !/CLAUDE_CONFIG_DIR:-\$HOME\/\.claude\}/.test(f.content))
+      .map((f) => f.rel);
+    assert.deepEqual(offenders, [], 'the launcher fallback must stay $HOME-absolute');
+  });
+
+  test('no masking sentinel survives into the installed tree', () => {
+    // The shell-default guard masks with a literal token before rewriting and
+    // restores after. A restore that missed would ship that token as content.
+    // gsd-core/bin/lib/ carries the implementation itself, so exclude it.
+    const leaked = allBodies(relDir)
+      .filter((f) => !f.rel.startsWith(path.join('gsd-core', 'bin', 'lib')))
+      .filter((f) => f.content.includes('@@GSD4377:'))
+      .map((f) => f.rel);
+    assert.deepEqual(leaked, [], 'the shell-default mask must be fully restored');
+  });
+
+  test('the two installs differ ONLY where the flag is meant to change things', () => {
+    // The strongest arm. Normalize the absolute install into what the relative
+    // one should be — undo the two deliberate differences — and the trees must
+    // then be byte-identical. Anything ELSE the flag touched surfaces here
+    // instead of going unnoticed.
+    const abs = allBodies(absDir);
+    const rel = new Map(allBodies(relDir).map((f) => [f.rel, f.content]));
+    assert.ok(abs.length > 0, 'the control install must produce files');
+    const mismatched = [];
+    for (const { rel: name, content } of abs) {
+      if (!rel.has(name)) { mismatched.push(`${name} (missing from relative install)`); continue; }
+      // Both manifests record per-file absolute paths, which legitimately
+      // differ between two different install roots.
+      if (name === 'gsd-file-manifest.json' || name === 'gsd-install-state.json') continue;
+      let normalized = content;
+      for (const absRoot of rootSpellings(absDir)) {
+        normalized = normalized
+          // (1) shell defaults: the absolute install rewrote them to its own
+          //     root; the relative install left them at $HOME.
+          .split(`:-${absRoot}/.claude}`).join(':-$HOME/.claude}')
+          // (2) the include prefix itself, both the slash form and the bare
+          //     trailing form the word-boundary passes emit.
+          .split(`${absRoot}/.claude/`).join('.claude/')
+          .split(`${absRoot}/.claude`).join('.claude');
+      }
+      if (normalized !== rel.get(name)) mismatched.push({ name, normalized, actual: rel.get(name) });
+    }
+    // Report the FIRST divergence as text, not just a list of filenames. A
+    // bare file list says a difference exists somewhere in 236 files and
+    // leaves the reader to guess which bytes — and on a platform I cannot
+    // reproduce locally, guessing is what turns one CI round-trip into four.
+    const detail = mismatched.length === 0 ? '' : (() => {
+      const { name, normalized, actual } = mismatched[0];
+      let at = 0;
+      while (at < normalized.length && at < actual.length && normalized[at] === actual[at]) at += 1;
+      const from = Math.max(0, at - 60);
+      return `\nfirst divergence in ${name} at offset ${at}:\n`
+        + `  absolute(normalized): ${JSON.stringify(normalized.slice(from, at + 120))}\n`
+        + `  relative(actual):     ${JSON.stringify(actual.slice(from, at + 120))}\n`
+        + `(${mismatched.length} file(s) differ: ${mismatched.slice(0, 8).map((m) => m.name).join(', ')}${mismatched.length > 8 ? ', …' : ''})`;
+    })();
+    assert.deepEqual(
+      mismatched.map((m) => m.name), [],
+      `the flag must change the include prefix, and nothing beyond it${detail}`,
+    );
+  });
+});
 
 
 // ────────────────────────────────────────────────────────────────────────

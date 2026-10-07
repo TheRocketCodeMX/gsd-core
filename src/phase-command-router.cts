@@ -23,10 +23,12 @@ import commandRoutingHub = require('./command-routing-hub.cjs');
 const { createHub, ERROR_KINDS, makeInvalidArgs } = commandRoutingHub;
 // #2620 (ADR-0174 §6): inject the reference DispatchLogger on the live phase
 // dispatch path, but only when observability is opt-in enabled; otherwise the
-// Hub stays byte-for-byte silent via its no-op fallback.
+// Hub stays byte-for-byte silent via its no-op fallback. #4975: the opt-in is
+// GSD_AUDIT=1 or `audit.enabled` in the project config — resolveDispatchLogger
+// owns that whole decision for every live seam.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import observabilityLogger = require('./observability/logger.cjs');
-const { createDefaultLogger, isAuditEnabled } = observabilityLogger;
+const { resolveDispatchLogger } = observabilityLogger;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,10 +38,16 @@ interface PhaseHandlers {
   cmdPhaseNextDecimal: (cwd: string, arg: string | undefined, raw: boolean) => void;
   cmdPhaseAdd: (cwd: string, desc: string, raw: boolean, customId: string | null) => void;
   cmdPhaseAddBatch: (cwd: string, descriptions: string[], raw: boolean) => void;
-  cmdPhaseInsert: (cwd: string, pos: string | undefined, desc: string, raw: boolean) => void;
+  cmdPhaseInsert: (
+    cwd: string,
+    pos: string | undefined,
+    desc: string,
+    raw: boolean,
+    allocation?: 'nested' | 'sibling',
+  ) => void;
   cmdPhaseRemove: (cwd: string, phaseNum: string, opts: { force: boolean }, raw: boolean) => void;
   cmdPhaseComplete: (cwd: string, phaseNum: string | undefined, raw: boolean) => void;
-  cmdPhaseUatPassed: (cwd: string, phaseNum: string | undefined, raw: boolean, opts?: { policy?: { requireVerification?: boolean } }) => void;
+  cmdPhaseUatPassed: (cwd: string, phaseNum: string | undefined, raw: boolean, opts?: { policy?: { requireVerification?: boolean; uatOnly?: boolean } }) => void;
   cmdPhaseListPlans: (cwd: string, phaseNum: string | undefined, raw: boolean) => void;
 }
 
@@ -48,7 +56,7 @@ interface RoutePhaseCommandOptions {
   args: string[];
   cwd: string;
   raw: boolean;
-  error: (message: string) => void;
+  error: (message: string, reason?: string) => void;
 }
 
 // ─── Implementation ───────────────────────────────────────────────────────────
@@ -154,7 +162,19 @@ function routePhaseCommand({ phase, args, cwd, raw, error }: RoutePhaseCommandOp
         if (args.includes('--dry-run')) {
           return makeInvalidArgs('--dry-run', 'phase insert does not support --dry-run');
         }
-        phase.cmdPhaseInsert(cwd, args[2], args.slice(3).join(' '), raw);
+        // #4569: --sibling opts into joining afterPhase's parent decimal level
+        // instead of nesting one level deeper. Filtered out like other
+        // boolean flags (see `remove`'s --force handling above) so it never
+        // leaks into the free-text description.
+        const sibling = args.includes('--sibling');
+        const insertArgs = args.slice(2).filter(token => token !== '--sibling');
+        phase.cmdPhaseInsert(
+          cwd,
+          insertArgs[0],
+          insertArgs.slice(1).join(' '),
+          raw,
+          sibling ? 'sibling' : 'nested',
+        );
         return { ok: true as const, data: null };
       },
       remove: (_ctx: Record<string, unknown>) => {
@@ -204,10 +224,14 @@ function routePhaseCommand({ phase, args, cwd, raw, error }: RoutePhaseCommandOp
       },
       'uat-passed': (_ctx: Record<string, unknown>): { ok: true; data: null } => {
         let requireVerification = false;
+        let uatOnly = false;
         const positional: string[] = [];
         for (const token of args.slice(2)) {
           if (token === '--require-verification') {
             requireVerification = true;
+          } else if (token === '--uat-only') {
+            // #4663: evaluate UAT rows only (verification-status blockers skipped).
+            uatOnly = true;
           } else if (token === '--raw') {
             // --raw is handled by the outer CLI layer; accepted here silently
           } else if (token.startsWith('--')) {
@@ -216,7 +240,13 @@ function routePhaseCommand({ phase, args, cwd, raw, error }: RoutePhaseCommandOp
             positional.push(token);
           }
         }
-        phase.cmdPhaseUatPassed(cwd, positional[0], raw, { policy: { requireVerification } });
+        if (requireVerification && uatOnly) {
+          return makeInvalidArgs(
+            '--uat-only',
+            '--uat-only and --require-verification are mutually exclusive',
+          ) as never;
+        }
+        phase.cmdPhaseUatPassed(cwd, positional[0], raw, { policy: { requireVerification, uatOnly } });
         return { ok: true as const, data: null };
       },
       // #1437 — list plan files for a phase
@@ -263,8 +293,8 @@ function routePhaseCommand({ phase, args, cwd, raw, error }: RoutePhaseCommandOp
   // #175: Hub is CJS-only — no mode param, no sdkLoader.
   // #2620: wire the reference logger (ADR-0174 §6) only when observability is
   // opt-in enabled; otherwise leave it unset so the Hub stays byte-for-byte
-  // silent via its no-op fallback.
-  const hub = createHub({ cjsRegistry, manifest, logger: isAuditEnabled() ? createDefaultLogger({ cwd }) : undefined });
+  // silent via its no-op fallback. #4975: GSD_AUDIT=1 or `audit.enabled`.
+  const hub = createHub({ cjsRegistry, manifest, logger: resolveDispatchLogger(cwd) });
 
   // ── Dispatch ────────────────────────────────────────────────────────────────
   const result = hub.dispatch({
@@ -287,6 +317,11 @@ function routePhaseCommand({ phase, args, cwd, raw, error }: RoutePhaseCommandOp
     if (result.kind === ERROR_KINDS.InvalidArgs || result.kind === ERROR_KINDS.HandlerRefusal) {
       // #176: typed payload — reason holds the human-readable message
       error(result.reason);
+      return;
+    }
+    if (result.kind === ERROR_KINDS.VerificationStatusInvalid) {
+      // #5118: typed reason survives to the CLI surface
+      error(result.message, result.reason);
       return;
     }
     // HandlerFailure: message field

@@ -121,6 +121,17 @@ layers:
 |---|---|---|
 | **Differential attribution size ratchet** (primary, #2724 / ADR-2719 §4) | The same computed-attribution check that replaced the golden-install-parity fixtures also reports growth in any `gsd-core/workflows/*.md` or `agents/gsd-*.md` file, with the exact byte delta, comparing PR HEAD against `next`. Unacknowledged growth is a hard failure; shrinkage needs no acknowledgment. No committed snapshot — nothing to regenerate by hand. | `tests/emitted-attribution.test.cjs` (real-tree test) via `tests/helpers/emitted-diff.cjs` |
 | **Loose tier hard caps** (backstop) | Absolute outer red lines per tier — workflows: `XL ≤ 98304`, `LARGE ≤ 61440`, `DEFAULT ≤ 40960` bytes; agents: `XL ≤ 57344`, `LARGE ≤ 49152`, `DEFAULT ≤ 24576` bytes. A cap is **never raised** when a file approaches it: crossing it means *extract*, not bump. Independent of the ratchet above — unaffected by #2724. | `XL/LARGE/DEFAULT_CAP` in each guard file |
+| **Headroom census + reserved margin** (visibility, [#4261](https://github.com/TheRocketCodeMX/gsd-core/issues/4261)) | Every run prints each capped file's remaining bytes and percentage used — green runs included — sorted least-headroom-first, and appends a table of the files past a **95% reserved margin** to the GitHub job summary. The margin **reports, it does not fail**: a file at 96% is not broken, it is a file whose next contributor should extract before adding. Nothing here raises or relaxes a cap. | `buildHeadroomRows` / `marginFor` in `scripts/workflow-size.cjs` |
+
+Why the census exists: each PR's CI measures only its own base plus its own
+diff, so two PRs that are individually under a cap can be jointly over it, and
+no run either of them produces can show that. The census does not solve that
+directly — measuring on the merge result would, and was deliberately left out
+of #4261's approved scope — but it makes the density that causes it legible
+before the collision, which a passing run previously did not. It also replaces
+the hand-written per-tier high-water comments in both guard files, which had
+gone stale by several kilobytes and were themselves the reason the shrinking
+margin went unnoticed.
 
 `discuss-phase.md` additionally has a thin-dispatcher target of `< 32000` bytes
 (the discuss-phase progressive-disclosure split, #717). A net-new agent is
@@ -278,6 +289,68 @@ shrinks: growth happens by adding an acknowledgment carrying a real issue
 number (a reviewable diff), never by widening the generator's tolerance and
 never by prose alone.
 
+## The gate positive-control ratchet
+
+A gate that has never been seen to fail cannot be trusted to pass. Every gate
+module has a **positive control**: a test that drives the gate, through its real
+`evaluate*` export, to the verdict that makes it fail and to a different one
+(ADR-5057 §4, #5204). `scripts/lint-gate-positive-control.cjs` (part of
+`npm run lint:ci`) fails when a gate has none.
+
+### Reference
+
+- **What counts as a gate.** A module `src/gate-<id>.cts` that exports an
+  `evaluate*` function declared to return `GateResult` (a function declaration,
+  a `const` arrow or function expression, or an `export { … }` re-export). Gates
+  are discovered, never listed, so a new gate is covered without editing the
+  lint. The verb entries outside gate modules (`phase uat-passed`, `verify
+  artifacts`) are covered by the exit guard (`lint-gate-evidence-drift`), not by
+  this ratchet.
+- **The control.** `gateControl({ gate, module, fn, red, expectRed, redScenario,
+  greenScenario })` from `tests/helpers/gate-positive-control.cjs`, as a top-level
+  statement of a `tests/**/*.test.cjs` file (by convention
+  `tests/gate-positive-control.test.cjs`) with `gateControl` bound from that
+  helper (a single top-level `const`, resolved against the file, never rebound or
+  redeclared); an inert call (a local function of that name, a nested call, a
+  reassigned binding, a file that exits or throws before the call, a file the
+  runner does not execute) does not count. Each scenario runs in a fresh temp
+  project (`git: true` for a git repository); `setup(dir)` may return a restore
+  function for a monkeypatched `fs` method (never a `chmod`: root bypasses mode
+  bits). `expectRed` pins the red verdict to the arm the control is about
+  (`outcome` and/or payload keys), so a scenario that fails for an unrelated
+  reason does not count. A misspelled option key is rejected.
+- **`red` is derived, not chosen.** From the exported `evaluate*` and the
+  same-file functions it reaches: `block` when some `gateVerdict` or
+  `gateUnreadable` call's block argument is anything but the literal `false`
+  (the red verdict carries `block: true`, the green one `block: false`);
+  `unreadable` for a gate that can never block (the red verdict is the typed
+  `unreadable` outcome, the green one any other). A control that declares the
+  other value is `wrong-red`, so a control cannot dodge a blocking arm.
+- **Rules.** `no-control`, `duplicate-control`, `wrong-red`,
+  `no-failing-verdict` (a gate that can neither block nor reach `unreadable`),
+  `wrong-module` (the `module` must resolve to `gsd-core/bin/lib/gate-<id>.cjs`),
+  `wrong-fn`, `malformed-control` (a field the lint cannot read as a literal, a
+  call that is not a top-level statement, or a `gateControl` not bound from the
+  helper), `orphan-control`, `unclassified-evaluate` (an exported `evaluate*`
+  with no `GateResult` return, one that cannot be resolved, or a gate file using
+  `export default`, `export * from` or an `evaluate*` class/object member, shapes
+  the lint does not read), `multiple-evaluates` (one gate module, one gate).
+  The allowlist is empty by decision and a stale entry is itself a problem.
+- **Fail-closed.** Zero discovered gates, a `gate-*.cts` file whose name the lint
+  cannot read, or a source the parser cannot read, is a violation: an inert scan
+  does not report a clean tree.
+
+### How-to: you added a gate and `lint:ci` reports `no-control`
+
+1. Add a `gateControl({...})` call to `tests/gate-positive-control.test.cjs`
+   naming your gate, its module and its `evaluate*` function.
+   `expectRed` names the arm the red scenario reaches.
+2. Take `red` from the lint's message (`wrong-red` states what the gate reaches).
+3. Write the red scenario from the input that makes the gate fail, and the green
+   scenario from the nearest input that does not. Reuse the cases in your gate's
+   own unit test; the control asserts the pair through one harness.
+4. Run `npm run lint:gate-positive-control`.
+
 ## Running suites locally
 
 ```bash
@@ -392,8 +465,8 @@ Two properties are load-bearing and easy to break:
   running* — gating on it self-deadlocks the pipeline. It is read for the
   failure message only.
 
-Gated: `test.yml` (`lint-tests`, `test`, `test-inert`, `test-full`,
-`coverage-gate`, `qa-loop-walk`, `required-tests`), `install-smoke.yml`,
+Gated: `test.yml` (`lint-tests`, `test`, `test-inert`,
+`test-conformance`, `coverage-gate`, `qa-loop-walk`, `required-tests`), `install-smoke.yml`,
 `mutation.yml`, `security-scan.yml`, `docs-required.yml`,
 `changeset-required.yml`, `default-flip-documentation.yml`, `branch-naming.yml`.
 
@@ -446,43 +519,33 @@ sha, which invalidates any prior remote-runner verification. Rebase *last*.
 
 ## CI matrix
 
-The `Tests` workflow runs every PR through a scoped gate generated by
-`scripts/ci-test-scope.cjs`.
+The `Tests` workflow (`.github/workflows/test.yml`) runs every PR through a scope
+computed by `scripts/ci-test-scope.cjs`'s `classify()`, which sets two flags —
+`product_changed` and `full_matrix` — from the changed-file list.
 
 All lanes run on **Node 24** — the `engines.node` floor (`>=24.0.0`) and the
 only supported runtime.
 
-| Lane | Scope |
-|---|---|
-| `ubuntu-latest` (scoped) | scoped tests — fast PR signal |
-| `ubuntu-latest` (full, sharded) | unit + integration + security |
-| `windows-latest` | scoped Windows/path/shell tests |
-| `macos-latest` | full parity when required |
+| Job | Lanes | Gated on | Purpose |
+|---|---|---|---|
+| `test` | `ubuntu-latest` (1 targeted + 3-shard full) | `product_changed == 'true'` | The default, always-scoped PR signal — the full `unit`/`integration`/`security` suites run once, sharded, on Linux. **Linux only**: its three `scope: windows` shards were deleted in #4641 (ADR-4641), which found them a second, redundant Windows selector alongside `test-conformance` |
+| `test-inert` | `ubuntu-latest` | `code_changed == 'true' && product_changed != 'true'` | A lightweight lane for PRs that touch only administrative/policy workflow files (code changed, but nothing that needs the real matrix) |
+| `test-conformance` | `windows-latest` (3-shard) + `macos-latest` (unsharded) | `code_changed == 'true' && full_matrix == 'true'` | Runs only the **platform-conformance-tier** file list (`scripts/lib/platform-conformance-tier.generated.cjs`, epic #4589 Phase 2/#4591) on real Windows/macOS — since #4641 the **sole** Windows and macOS selector in CI, not merely the sole gating one. Retired the parallel legacy full-suite matrix in #4603; #4641 removed the second Windows selector in `test` and narrowed the tier from 548 to 266 of 932 eligible unit-suite files (58.8% → 28.5%, measured 2026-09-11; the absolute counts track `next`'s test count, the percentages are what the ceiling test binds on). |
+| `coverage-gate` | `ubuntu-latest` | `product_changed == 'true' && test.result == 'success'` | Merges every `test` shard's coverage dumps and evaluates the threshold once (sharding moved this out of the `test` job itself — #2952) |
+| `qa-loop-walk` | `ubuntu-latest` | `product_changed == 'true'` | The QA smell-ratchet scenario walk (see "The QA smell ratchet" below) |
+| `required-tests` | `ubuntu-latest` | `always()` | Aggregates every job above into the one branch-protection-required check |
 
-- **Scoped tests** are selected from the changed paths, plus a small CLI/package
-  smoke set. They are for confidence on the affected surface, not for counting
-  tests.
+`full_matrix` fires on any changed `tests/**/*.test.cjs` file unconditionally (restored
+by #4421 after #962's narrowing let a real regression through undetected), plus a
+handful of curated `RULES` (workflow/installer/hooks/env-gate changes) — see
+`scripts/ci-test-scope.cjs`'s own `classify()` for the exact, current rule set; this
+doc intentionally does not restate it in full, to avoid drifting out of sync with it.
 
-The default PR gate runs the broad `unit` (under the c8 coverage gate),
-`integration`, and `security` suites once on Ubuntu / Node 24, scoped tests on
-a second Ubuntu / Node 24 lane, and scoped tests on Windows / Node 24.
-"Scoped" means the diff-selected list from the rule table — not the full suite
-and not a fixed smoke set (the fixed smoke list is only the empty-selection
-fallback). The Windows lane's list is the Windows-sensitive subset of the
-selection, plus **every changed test file, unconditionally** (the #494
-invariant, narrowed): a modified test is exercised on the divergent OS before
-merge at per-file cost, without paying for the three full parity lanes.
-
-PRs touching workflow, package, test-runner, install, release, or
-Windows-sensitive surfaces also run the full parity matrix on macOS and the
-older Windows runtime, plus `install` and `slow` on the primary Ubuntu lane.
-Everything (including the full parity matrix) runs on every push to `next`,
-which covers the residual macOS / Windows cross-product for scoped PRs.
-
-Coverage runs inside the Ubuntu / Node 24 full lane (not a separate job — that
-duplicated the entire unit run) and stays single-lane because multiplying
-coverage across OS/runtime lanes adds cost without improving the threshold
-signal. Note the gate's deliberate blind spot: it measures
+Coverage is evaluated by the dedicated `coverage-gate` job (moved out of the `test`
+job by #2952, once sharding meant no single `test` runner saw the whole picture) and
+stays single-lane (Ubuntu / Node 24 only) because multiplying coverage across
+OS/runtime lanes adds cost without improving the threshold signal. Note the gate's
+deliberate blind spot: it measures
 `gsd-core/bin/lib/*.cjs` only — `scripts/`, `hooks/`, and `bin/` are
 unenforced, and `stryker.config.mjs` additionally excludes ~48% of lib lines
 from mutation testing (see the UNMUTATED list there). Widening either gate is
@@ -514,32 +577,92 @@ mis-ranked files badly enough that the slowest chunk ran ~3.9x the lightest.
 
 | Knob | Default | Meaning |
 |---|---|---|
-| `RUN_TESTS_MAX_FILES_PER_CHUNK` | `60` | Per-chunk weight budget. Weights are normalized so an **average-cost** file weighs 1, so this still reads as "about 60 average files". |
+| `RUN_TESTS_MAX_FILES_PER_CHUNK` | `60` (`22` on win32) | Per-chunk weight budget. Weights are normalized so an **average-cost** file weighs 1, so this still reads as "about 60 average files" (about 22 on win32). Windows gets a lower cap than Linux/macOS because the weight table's calibration does not transfer 1:1 to the Windows runner for install/subprocess-heavy work — see the derivation comment above `DEFAULT_MAX_FILES_PER_CHUNK` in `scripts/run-tests.cjs`. |
 | `RUN_TESTS_MAX_CMDLINE_CHARS` | `28000` | argv ceiling per chunk, with headroom under the Windows 32,767 limit. |
 | `RUN_TESTS_TIMINGS_FILE` | `tests/test-timings.json` | Path to the timing table. Tests override it to inject a synthetic cost profile. |
-| `RUN_TESTS_CHUNK_TIMEOUT_MS` | `600000` | Per-chunk timeout. |
+| `RUN_TESTS_PLATFORM_TIMINGS_FILE` | `tests/test-timings.<platform>.json` | Path to the table measured on the platform the runner is on (`process.platform` spelling: `win32`, `darwin`, `linux`). Only `tests/test-timings.win32.json` is committed. When `RUN_TESTS_TIMINGS_FILE` is overridden and this variable is not, no platform table is loaded, so an injected cost profile is used exactly as given. |
+| `RUN_TESTS_TIMING_EVENTS_FILE` | unset | When set, every chunk appends its per-file `test:summary` durations to this file (the input `gen-test-timings.cjs` reads). Written after every chunk, including failed and killed ones. The runner removes the variable from its own environment before spawning chunks, so a nested `run-tests.cjs` never writes to it. A write failure prints one warning and never changes the exit code. |
+| `RUN_TESTS_CHUNK_TIMEOUT_MS` | `600000` | Per-chunk timeout. When it fires, the runner kills the chunk (on Windows it first attempts a whole-tree kill) and prints the in-flight-file diagnostic immediately, without waiting for the child's exit to be reported. |
+| `RUN_TESTS_CHUNK_KILL_GRACE_MS` | `30000` | Once a chunk times out, how long the runner waits for the child's exit to be observed before it stops waiting, reports that the exit was never confirmed, and aborts the remaining chunks. |
 
 The timing table is **advisory and deliberately un-gated**. There is no `--check`
 mode and no CI lint that fails on staleness, because timing data legitimately
-varies run to run. A file missing from the table falls back to the table's median
-weight, and a missing or unparseable table falls back to uniform weight — so
+varies run to run. A file missing from the table falls back to the table's mean
+weight (1), and a missing or unparseable table falls back to uniform weight — so
 drift costs chunk *balance*, never a red build. A count-based floor additionally
 guarantees the packer never produces fewer chunks than plain count-based packing
 would, so a badly stale table cannot collapse the suite into a few fat chunks.
 
+### Platform-measured timings (win32)
+
+`tests/test-timings.json` is measured in Linux containers. Windows runs the same
+files at a different, and differently *ordered*, cost, so on `win32` the runner
+also loads `tests/test-timings.win32.json` (#5071) and weighs each file this way:
+
+| File is in… | Weight on win32 |
+|---|---|
+| the win32 table | its Windows duration, converted into Linux-table weight units |
+| only the Linux table | its Linux weight (unchanged) |
+| neither table | `2.2` (`WINDOWS_UNMEASURED_COST_MULTIPLIER`, #4434) |
+
+The conversion keeps the weight *unit* unchanged. It scales Windows milliseconds
+so that the files both tables measured keep their combined Linux weight. The
+total pool weight, and so the chunk count, `RUN_TESTS_MAX_FILES_PER_CHUNK`, the
+isolation threshold and `RUN_TESTS_SHARD_RESERVE`, all keep their meaning. Only
+the distribution of weight across files changes, to follow what each file really
+costs on Windows. With no file in common, Windows durations are divided by the
+win32 table's own mean.
+
+A file present in the win32 table counts as measured for the unmeasured-files
+chunk cap, even when the Linux table has never seen it. A missing Linux table
+still means uniform weight 1 on every platform.
+
+Each shard prints a second line after its `run-tests: shard=` line, reporting how
+many of its files the win32 table priced:
+
+```text
+run-tests: platform-timings=win32 weighed=91/94
+```
+
+No line means no win32 table loaded, and the shard was packed from Linux weights
+exactly as before.
+
 ### CI job timeout budgets: report + near-cap warning (#4036)
 
-Every matrixed job — `test` and `test-full` in `test.yml`, `mutate` in
+Every matrixed job — `test` in `test.yml`, `mutate` in
 `mutation.yml`, `smoke` in `install-smoke.yml` — declares a `timeout-minutes`
 cap. `tests/ci-test-job-timeout-budget.test.cjs` enforces that each checked-in
 cap stays at least the **headroom factor** (1.5x) above a documented,
-hand-measured cost for that job — now all four of the jobs above, not just
-`test`/`test-full`/`coverage-gate`/`test-inert` as before.
+hand-measured cost for that job — now all three of the jobs above, not just
+`test`/`coverage-gate`/`test-inert` as before.
+
+`test-conformance` in `test.yml` (#4591, epic #4589 Phase 2) runs the
+`scripts/lib/platform-conformance-tier.generated.cjs` file list on
+`windows-latest` (sharded three ways) and `macos-latest` (unsharded) — the
+sole gating signal for real-OS coverage (#4603 retired the parallel
+legacy full-matrix safety-net job). It
+also declares a `timeout-minutes` cap and runs the same in-job near-cap check
+described below, but it has no `LANE_COSTS` entry in
+`tests/ci-test-job-timeout-budget.test.cjs` yet — no real, completed
+(non-cancelled) per-shard measurement exists — so the headroom-factor gate
+does not cover it until one lands.
+
+**`.platform.test.cjs` siblings (#5074).** The tier selects whole files, so a large file whose
+platform signal sits in a few tests can be split: those tests move to
+`tests/<name>.platform.test.cjs`, which the tier selects, and `tests/<name>.test.cjs` runs on
+Linux only. A sibling is a unit-suite file (`suiteOf` returns `null`), so Linux shards run both
+halves. `gen-platform-conformance-tier.cjs` fails with `platform split invariant violated` when a
+split base regains a platform signal (`base-has-signal`), a sibling carries none
+(`sibling-without-signal`), or a split base is listed in `ALWAYS_REAL_OS`
+(`base-always-real-os`). Split so far: `state`, `commands`, `phase`, `config` (`init` needed no
+sibling — its residual matches were fixture idioms and comments). See
+[Split platform-sensitive tests](how-to/split-platform-sensitive-tests.md) and the #5074 amendment
+to [ADR-4641](adr/4641-windows-selector-consolidation.md).
 
 Two runtime mechanisms sit on top of that static gate, both new in #4036:
 
 - **In-job near-cap check** (`scripts/ci-check-job-near-cap.cjs`) — the last
-  step of each of the four jobs computes elapsed-vs-cap from a start-time
+  step of each of the three jobs computes elapsed-vs-cap from a start-time
   marker recorded as that job's first step. At >=90% of budget it emits a
   `::warning::` annotation (visible in the PR Checks UI) and a
   `$GITHUB_STEP_SUMMARY` block. Advisory only — it never fails the job. Known
@@ -550,15 +673,20 @@ Two runtime mechanisms sit on top of that static gate, both new in #4036:
   `scripts/ci-timeout-report.cjs`) — runs daily and on `workflow_dispatch`. It
   polls GitHub's Actions REST API for recently completed jobs across
   `test.yml`, `mutation.yml`, and `install-smoke.yml`, resolves each job's
-  declared cap (a literal `timeout-minutes` for `test`/`test-full`/`smoke`, or
+  declared cap (a literal `timeout-minutes` for `test`/`test-conformance`/`smoke`, or
   `scripts/mutation-matrix.cjs`'s `COVERED[<module>].timeoutMinutes` for
   `mutate`'s per-module shards), and appends any new `(runId, jobName)`
   records to `tests/ci-timeout-budget-history.jsonl`. Unlike the in-job check,
   this also catches jobs killed by an actual timeout breach — GitHub's Jobs
-  API still reports `started_at`/`completed_at` for a cancelled job. Each run
-  opens a small, data-only PR carrying that run's new rows, since `next` is a
+  API still reports `started_at`/`completed_at` for a cancelled job. The new
+  rows travel in one rolling, data-only PR (branch `chore/4036-ci-timeout-budget-history`,
+  titled `chore(#4036): CI timeout budget history update`), since `next` is a
   protected branch and nothing pushes to it directly — the same constraint
-  `auto-backmerge.yml` already works within.
+  `auto-backmerge.yml` already works within. Each run rebuilds that branch on
+  the current `next` tip with every pending row; the workflow approves the PR
+  when it is provably its own data-only PR, then auto-merges it once required
+  checks pass. Until the org allows GitHub Actions to approve PRs, it waits for
+  one human approval (the run logs a warning).
 
 This does not retune any `timeout-minutes` value, rebalance shard composition,
 or trim what runs in shard 1 — those stay maintainer policy calls made from
@@ -580,6 +708,10 @@ Pass every lane you have. A file's recorded time is the **max** across the
 supplied streams, not the mean: the packer exists to keep the *slowest* lane's
 slowest chunk away from the timeout, so the conservative bound is the right one.
 Keys are sorted so a regeneration diff shows only the files whose cost moved.
+
+### How-to: regenerate the win32 timing table
+
+See [Regenerate the win32 timing table](how-to/regenerate-the-win32-timing-table.md).
 
 ## Best practices for forward-compat (Node 24/26)
 

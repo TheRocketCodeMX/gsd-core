@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { locateFrontmatterFence } from './frontmatter-fence.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- io.cjs is an export= CommonJS module
 import ioMod = require('./io.cjs');
 const { output, error, ERROR_REASON, formatDiagnosticToken } = ioMod;
@@ -37,7 +38,7 @@ import coreUtilsMod = require('./core-utils.cjs');
 // drift and no parity test needed to police one.
 const {
   toPosixPath, generateSlugInternal, readSubdirectories, extractCanonicalPlanId,
-  findUnsummarizedPlans, normalizeLineEndings,
+  findUnsummarizedPlans,
 } = coreUtilsMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-id.cjs is an export= CommonJS module
 import phaseIdMod = require('./phase-id.cjs');
@@ -51,14 +52,28 @@ const {
   OPTIONAL_PROJECT_CODE_PREFIX_SOURCE,
   OPTIONAL_PHASE_TAG_SOURCE,
   PHASE_NUMBER_TOKEN_SOURCE,
+  phaseHeadingPrefixSrcFor,
+  PHASE_HEADING_BASELINE,
+  buildPhaseHeadingScanRegex,
 } = phaseIdMod;
 import { escapeRegex } from './pattern.cjs';
+import { declareGateExit } from './gate-exit.cjs';
+import { gateVerdict } from './gate-verdict.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-locator.cjs is an export= CommonJS module
 import phaseLocatorMod = require('./phase-locator.cjs');
-const { findPhaseInternal, getArchivedPhaseDirs, listMilestonePhaseDirs } = phaseLocatorMod;
+const { findPhaseInternal, getArchivedPhaseDirs, listMilestonePhaseDirs, listAllPhaseDirs } = phaseLocatorMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- planning-scope.cjs is an export= CommonJS module
+import planningScopeMod = require('./planning-scope.cjs');
+const { SCOPE } = planningScopeMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- roadmap-parser.cjs is an export= CommonJS module
 import roadmapParserMod = require('./roadmap-parser.cjs');
 const { stripShippedMilestones, extractCurrentMilestone, currentMilestoneRawRanges, withPhaseSection, findMilestoneScopeHeadingLines } = roadmapParserMod;
+// #4129: the single owner of "count the ROADMAP's milestone Complete rows"
+// (pure computation, no I/O — no cycle on this path) for the intent-first
+// progress counters the phase-complete transaction passes downstream.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-lifecycle.cjs is an export= CommonJS module
+import phaseLifecycleMod = require('./phase-lifecycle.cjs');
+const { deriveProgressFromRoadmap: deriveProgressFromRoadmapForIntent, clampPercent: clampPercentForIntent } = phaseLifecycleMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- planning-workspace.cjs is an export= CommonJS module
 import planningWorkspace = require('./planning-workspace.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- frontmatter.cjs is an export= CommonJS module
@@ -66,11 +81,17 @@ import frontmatterMod = require('./frontmatter.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- state.cjs is an export= CommonJS module
 import stateMod = require('./state.cjs');
 import { platformWriteSync, platformReadSync, platformEnsureDir, retryRenameSync, contentChangedAfterNormalize } from './shell-command-projection.cjs';
+import { parsePlanningDoc, findField, readNode, setFieldValue, serialize } from './planning-document.cjs';
 import { formatGsdSlash, resolveRuntime } from './runtime-slash.cjs';
 import { realClock } from './clock.cjs';
 import { transitionCore } from './state-transition.cjs';
 import { updateTableCell, deleteTableRow, escapeCell } from './markdown-table.cjs';
-import { deleteSection, updateBullet } from './markdown-sectionizer.cjs';
+// #5060: the Phase Status Module owns the ROADMAP Status-cell token vocabulary.
+import { PHASE_STATUS, toRoadmapStatusCell } from './phase-status.cjs';
+import { deleteSection, updateBullet, tokenizeHeadings } from './markdown-sectionizer.cjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- roadmap.cjs is an export= CommonJS module
+import roadmapMod = require('./roadmap.cjs');
+const { buildPhaseHeadingRegex } = roadmapMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- uat-predicate.cjs is an export= CommonJS module
 import uatPredicate = require('./uat-predicate.cjs');
 const { evaluateUatPassed } = uatPredicate;
@@ -81,7 +102,7 @@ import verificationMod = require('./verification.cjs');
 // cycle (the reverse edge, `state.cts → verify.cjs`, would).
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- verify.cjs is an export= CommonJS module
 import verifyMod = require('./verify.cjs');
-const { readVerificationStatus } = verificationMod;
+const { readVerificationStatus, VERIFICATION_STATUS, findVerificationStatusError } = verificationMod;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- plan-dependency-graph.cjs is an export= CommonJS module
 import planDependencyGraphMod = require('./plan-dependency-graph.cjs');
 const { computeHaltPropagation, buildSummaryFileIndex, isSummaryFileHalted, isSummaryFileBlocked } = planDependencyGraphMod;
@@ -91,19 +112,19 @@ const { computeHaltPropagation, buildSummaryFileIndex, isSummaryFileHalted, isSu
 const {
   planningDir, withPlanningLock, listAvailableWorkstreams,
   peekActiveWorkstream, diagnoseUnresolvedActiveWorkstream, describeUnresolvedWorkstreamReason,
-  resolvePhaseIdConvention,
+  resolveEnvWorkstream, resolvePhaseIdConvention,
 } = planningWorkspace;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- milestone-lock.cjs is an export= CommonJS module
 import milestoneLockMod = require('./milestone-lock.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planDocumentMod = require('./plan-document.cjs');
 const { parsePlanDocument, planIdFromFile } = planDocumentMod;
-const { extractFrontmatter } = frontmatterMod;
 const {
   readModifyWriteStateMd,
   stateExtractField,
   stateReplaceField,
   syncAndPreserveStateMd,
+  assertVerificationReportsReadable,
   withStateLock,
   updatePerformanceMetricsSection,
 } = stateMod;
@@ -332,28 +353,25 @@ function cmdPhaseNextDecimal(cwd: string, basePhase: string, raw: boolean): void
       const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
       const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
       baseExists = matchPhaseDirs(dirs, normalized).matches.length > 0;
-
-      const dirPattern = new RegExp(`^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}${escapeRegex(normalized)}\\.(\\d+)`);
-      for (const dir of dirs) {
-        const match = dir.match(dirPattern);
-        if (match) decimalSet.add(parseInt(match[1], 10));
-      }
     }
 
     const roadmapPath = path.join(planningDir(cwd), 'ROADMAP.md');
     if (fs.existsSync(roadmapPath)) {
       try {
         const roadmapContent = fs.readFileSync(roadmapPath, 'utf-8');
-        const phasePattern = new RegExp(
-          `#{2,4}\\s*Phase\\s+${phaseMarkdownRegexSource(normalized)}\\.(\\d+)${OPTIONAL_PHASE_TAG_SOURCE}\\s*:`,
-          'gi',
-        );
-        let pm: RegExpExecArray | null;
-        while ((pm = phasePattern.exec(roadmapContent)) !== null) {
-          decimalSet.add(parseInt(pm[1], 10));
+        for (const n of scanExistingDecimalPhaseNumbers(phasesDir, roadmapContent, normalized)) {
+          decimalSet.add(n);
         }
       } catch {
-        /* ROADMAP.md read failure is non-fatal */
+        // ROADMAP.md read failure is non-fatal — fall back to the directory-only
+        // scan (empty rawContent) so on-disk decimal directories are still counted.
+        for (const n of scanExistingDecimalPhaseNumbers(phasesDir, '', normalized)) {
+          decimalSet.add(n);
+        }
+      }
+    } else {
+      for (const n of scanExistingDecimalPhaseNumbers(phasesDir, '', normalized)) {
+        decimalSet.add(n);
       }
     }
 
@@ -392,17 +410,27 @@ function getRoadmapModeForPhase(cwd: string, phaseNum: string): string | null {
   const milestoneContent = extractCurrentMilestone(rawContent, cwd);
   const fullContent = stripShippedMilestones(rawContent);
   const escapedPhase = phaseMarkdownRegexSource(phaseNum);
-  const phaseHeader = new RegExp(`#{2,4}\\s*Phase\\s+${escapedPhase}${OPTIONAL_PHASE_TAG_SOURCE}\\s*:`, 'i');
+  // #5007 (Phase 6 / ADR-4910 §8): buildPhaseHeadingRegex (src/roadmap.cts) is
+  // anchored `^...$` with no 'm' flag — it is designed to test ONE
+  // already-tokenized heading LINE (mirroring searchPhaseInContent's own
+  // usage), not to `.match()` against multi-line content directly. Routing
+  // through tokenizeHeadings first is therefore required here, not a pure
+  // regex-literal swap (the design doc's "direct swap" plan does not hold
+  // once the anchor is accounted for).
+  const phaseHeader = buildPhaseHeadingRegex(escapedPhase);
 
   for (const content of [milestoneContent, fullContent]) {
-    const headerMatch = content.match(phaseHeader);
-    if (!headerMatch || headerMatch.index === undefined) continue;
+    const heading = tokenizeHeadings(content).find((h) => phaseHeader.test(h.text));
+    if (!heading) continue;
+    const headingLineEnd = content.indexOf('\n', heading.offset);
+    const headerMatchLength =
+      (headingLineEnd === -1 ? content.length : headingLineEnd) - heading.offset;
 
-    const sectionStart = headerMatch.index;
+    const sectionStart = heading.offset;
     const rest = content.slice(sectionStart);
-    const nextHeader = rest.slice(headerMatch[0].length).match(/\n#{2,4}\s+Phase\s+\S/i);
+    const nextHeader = rest.slice(headerMatchLength).match(/\n#{2,4}\s+Phase\s+\S/i);
     const sectionEnd = nextHeader
-      ? sectionStart + headerMatch[0].length + (nextHeader.index as number)
+      ? sectionStart + headerMatchLength + (nextHeader.index as number)
       : content.length;
     const section = content.slice(sectionStart, sectionEnd);
     const modeMatch = section.match(/\*\*Mode(?::\*\*|\*\*:)\s*([^\n]+)/i);
@@ -663,6 +691,8 @@ interface RawPlan {
   halted: boolean;
   /** #1689: optional per-plan specialist executor hint (frontmatter `agent_hint:`). null when unset. */
   agentHint: string | null;
+  /** #4924: frontmatter `gap_closure: true` — the field execute-phase `--gaps-only` selects on. */
+  gapClosure: boolean;
 }
 
 /**
@@ -683,13 +713,22 @@ interface RawPlan {
  * none left in this file) degrades to the pre-#3897 two-tier behavior rather
  * than throwing on a missing argument.
  */
+/**
+ * The dependency resolver's one comparison normalization. Callers that must
+ * predict whether a token names a plan reuse this seam instead of copying its
+ * case-folding rule.
+ */
+function normalizeDependencyToken(token: unknown): string {
+  return String(token).toLowerCase();
+}
+
 function resolveDependencyId(
   dep: string,
   planMap: Map<string, RawPlan>,
   canonicalToId: Map<string, string>,
   shortFormToId?: Map<string, string>,
 ): string | null {
-  const lower = dep.toLowerCase();
+  const lower = normalizeDependencyToken(dep);
   if (planMap.has(lower)) return (planMap.get(lower) as RawPlan).id;
   if (canonicalToId.has(lower)) return canonicalToId.get(lower) as string;
   return shortFormToId?.get(lower) ?? null;
@@ -729,7 +768,7 @@ function buildShortFormToId(rawPlans: RawPlan[]): Map<string, string> {
     const canonical = extractCanonicalPlanId(p.id);
     const lastDash = canonical.lastIndexOf('-');
     if (lastDash > 0 && lastDash < canonical.length - 1) {
-      const shortForm = canonical.slice(lastDash + 1).toLowerCase();
+      const shortForm = normalizeDependencyToken(canonical.slice(lastDash + 1));
       if (/^\d+$/.test(shortForm) && !shortFormToId.has(shortForm)) {
         shortFormToId.set(shortForm, p.id);
       }
@@ -849,7 +888,7 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
         phase: normalized,
         error: `Phase ${normalized} is ambiguous: ${ambiguousMatches.length} directories match (${ambiguousMatches.map((m) => `"${m}"`).join(', ')}).`,
         ambiguous_matches: ambiguousMatches,
-        plans: [], waves: {}, incomplete: [], has_checkpoints: false,
+        plans: [], waves: {}, incomplete: [], runnable: [], ready_plans: [], has_checkpoints: false,
       },
       raw,
     );
@@ -858,7 +897,7 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
 
   if (!phaseDir) {
     output(
-      { phase: normalized, error: 'Phase not found', plans: [], waves: {}, incomplete: [], runnable: [], has_checkpoints: false },
+      { phase: normalized, error: 'Phase not found', plans: [], waves: {}, incomplete: [], runnable: [], ready_plans: [], has_checkpoints: false },
       raw,
     );
     return;
@@ -961,6 +1000,7 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
       filesModified: planDoc.filesModified,
       filesDeleted: planDoc.filesDeleted,
       agentHint: planDoc.agentHint,
+      gapClosure: planDoc.gapClosure,
       taskCount: planDoc.taskCount,
       hasSummary,
       halted,
@@ -971,7 +1011,7 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
 
   const seenLower = new Map<string, string>();
   for (const p of rawPlans) {
-    const lower = p.id.toLowerCase();
+    const lower = normalizeDependencyToken(p.id);
     const existing = seenLower.get(lower);
     if (existing !== undefined) {
       error(
@@ -982,9 +1022,9 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
     seenLower.set(lower, p.id);
   }
 
-  const planMap = new Map(rawPlans.map((p) => [p.id.toLowerCase(), p]));
+  const planMap = new Map(rawPlans.map((p) => [normalizeDependencyToken(p.id), p]));
   const canonicalToId = new Map(
-    rawPlans.map((p) => [extractCanonicalPlanId(p.id).toLowerCase(), p.id]),
+    rawPlans.map((p) => [normalizeDependencyToken(extractCanonicalPlanId(p.id)), p.id]),
   );
   // #3897 rung 4 (ADR-3473 §8.9) — the third depends_on resolution tier.
   // Resolves a bare in-phase plan-number short form (e.g. "01") to its owning
@@ -1028,6 +1068,10 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
   const waves: Record<string, string[]> = {};
   const incomplete: string[] = [];
   const runnable: string[] = [];
+  // #4628: DAG-ready view — see the per-plan emission below. Keyed by id so
+  // the per-plan pass can resolve each plan's dependency edges.
+  const resolvedDepsByPlan = new Map(haltNodes.map((n) => [n.id, n.resolvedDependsOn]));
+  const readyPlans: string[] = [];
   let hasCheckpoints = false;
   const warnings: string[] = [];
 
@@ -1038,8 +1082,12 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
   // plan with no dropped edges and a genuinely wrong `wave:` still warns
   // (N3, D6, T25).
   const plansWithUnresolvedTokens = new Set<string>();
+  const unresolvedTokensByPlan = new Map<string, string[]>();
   for (const { plan, token } of unresolved) {
     plansWithUnresolvedTokens.add(plan);
+    const tokens = unresolvedTokensByPlan.get(plan) ?? [];
+    tokens.push(formatDiagnosticToken(token));
+    unresolvedTokensByPlan.set(plan, tokens);
     warnings.push(
       `Plan ${plan}: depends_on token ${formatDiagnosticToken(token)} does not resolve to any plan in this phase — edge dropped, wave placement for this plan may be unreliable`,
     );
@@ -1050,13 +1098,33 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
       hasCheckpoints = true;
     }
     const blockedByIds = blockedBy.get(rawPlan.id) ?? [];
+    // #4628: readiness fails closed — every resolved dependency must have
+    // completion evidence (has_summary), and a depends_on edge that never
+    // resolved (#3427 — a dropped edge) carries no evidence to check. A
+    // single evaluation feeds both the ready_plans list and the per-plan
+    // `ready` / `unresolved_dependencies` fields below.
+    // Case-fold the dep before the planMap lookup: planMap is lowercase-keyed
+    // (#2237) while resolveDependencyId returns the raw id — a mixed-case id
+    // must not read as 'no evidence' (over-blocking a ready plan).
+    const missingEvidence = (resolvedDepsByPlan.get(rawPlan.id) ?? [])
+      .filter((dep) => planMap.get(dep.toLowerCase())?.hasSummary !== true);
+    if (plansWithUnresolvedTokens.has(rawPlan.id)) {
+      missingEvidence.push(...(unresolvedTokensByPlan.get(rawPlan.id) ?? []));
+    }
+    const isReady = blockedByIds.length === 0 && missingEvidence.length === 0;
     if (!rawPlan.hasSummary) {
       incomplete.push(rawPlan.id);
       // #2830: the runnable-only view — incomplete AND not transitively
       // blocked by a halted upstream plan. Additive alongside `incomplete`,
       // which keeps its existing "no SUMMARY yet" meaning unchanged.
+      // #4628: runnable says NOTHING about completion evidence — a runnable
+      // plan whose dependencies lack a SUMMARY is not DAG-ready. Consumers
+      // dispatch from `ready_plans`.
       if (blockedByIds.length === 0) {
         runnable.push(rawPlan.id);
+      }
+      if (isReady) {
+        readyPlans.push(rawPlan.id);
       }
     }
 
@@ -1093,6 +1161,10 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
         return planMap.has(lower) ? (planMap.get(lower) as RawPlan).id : dep;
       }),
       autonomous: rawPlan.autonomous,
+      // #4924: execute-phase's `--gaps-only` filter reads this field off the
+      // index. Before it was emitted, every plan read as non-gap-closure and the
+      // filter selected nothing — a silent, successful-looking empty run.
+      gap_closure: rawPlan.gapClosure,
       objective: rawPlan.objective,
       files_modified: rawPlan.filesModified,
       files_deleted: rawPlan.filesDeleted,
@@ -1105,6 +1177,14 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
       halted: rawPlan.halted,
       blocked_by: blockedByIds,
     };
+    if (!rawPlan.hasSummary) {
+      // #4628: readiness is a property of INCOMPLETE plans (a summarized plan
+      // is filtered by has_summary before readiness is ever consulted). The
+      // unresolved_dependencies list names exactly which predecessors lack
+      // completion evidence, for the named-skip report.
+      plan['ready'] = isReady;
+      if (missingEvidence.length > 0) plan['unresolved_dependencies'] = missingEvidence;
+    }
 
     plans.push(plan);
 
@@ -1121,6 +1201,7 @@ function cmdPhasePlanIndex(cwd: string, phase: string, raw: boolean): void {
     waves,
     incomplete,
     runnable,
+    ready_plans: readyPlans,
     has_checkpoints: hasCheckpoints,
   };
   if (planNamingWarning) result['warning'] = planNamingWarning;
@@ -1229,12 +1310,24 @@ function assertDescriptionPreservesMilestoneScope(cwd: string, description: stri
  * before any directory does; milestone-scoping is wrong here because a number
  * used under any milestone on another branch is still taken).
  *
+ * #4225 — the horizon must track the ALLOCATION scope. When the allocation is
+ * workstream-scoped (`--ws`/`GSD_WORKSTREAM`, resolved into the env before
+ * dispatch), the sibling's copy of the SAME workstream is what carries that
+ * scope's independent numbering; the sibling's ROOT roadmap and phases/
+ * belong to a different numbering universe (docs/FEATURES.md §51 REQ-WS-01 —
+ * workstream state is isolated in `.planning/workstreams/{name}/`) and must
+ * not contribute. `planningDir(wt, ws)` reuses the canonical resolver, so the
+ * sibling scope matches the local scope's own resolution (env workstream plus
+ * env project segment) by construction; `ws === null` (no workstream active)
+ * keeps the #3849 root-scope horizon byte-for-byte.
+ *
  * Widen, never refuse: a missing `.planning/`, an unreadable sibling, a
  * non-git cwd, or an unavailable git binary each leave `used` untouched —
  * allocation then behaves exactly as it did before this horizon existed.
- * Sentinels reuse the canonical `isSentinelPhaseId`; the dir pattern is the
- * same one the on-disk scan uses, so decimal sub-phases (`411.1-foo`) are
- * correctly not integers.
+ * A sibling that simply lacks the active workstream's directory is the same
+ * fail-open case: it contributes nothing. Sentinels reuse the canonical
+ * `isSentinelPhaseId`; the dir pattern is the same one the on-disk scan uses,
+ * so decimal sub-phases (`411.1-foo`) are correctly not integers.
  */
 function collectSiblingWorktreePhaseNums(cwd: string, used: Set<number>): void {
   let porcelain: string;
@@ -1251,33 +1344,48 @@ function collectSiblingWorktreePhaseNums(cwd: string, used: Set<number>): void {
   } catch {
     return; // not a git repo / git unavailable — unchanged behavior
   }
+  // #4225: the env workstream, read once with planningDir's own discriminator
+  // (`?? null` = deliberately no workstream — never re-derived per sibling).
+  // A poisoned value would already have thrown at the local `planningDir(cwd)`
+  // call every allocator makes before reaching this horizon; the per-sibling
+  // try/catch below still keeps any resolution failure fail-open.
+  const ws = process.env['GSD_WORKSTREAM'] ?? null;
+  const siblingPlanningDir = (wt: string): string => planningDir(wt, ws);
   const dirNumPattern = /^(?:[A-Z][A-Z0-9]*-)?(\d+)-/;
   // Same header shape the allocators scan locally (#1729 tag tolerance).
-  const headerPattern = /#{2,4}\s*Phase\s+(\d+)[A-Z]?(?:\.\d+)*(?:\s*\([^)\n]{0,200}\))?:/gi;
+  // #5007 (Phase 6 / ADR-4910 §8): migrated onto buildPhaseHeadingScanRegex
+  // (src/phase-id.cjs), the shared "which phases exist in this content" scan
+  // owner. LABEL_ONLY baseline with no convention argument reproduces the
+  // prior literal `Phase\s+` (no bracket tolerance) byte-for-byte — this is a
+  // counter, matching the LABEL_ONLY docstring guidance exactly, so it is
+  // deliberately NOT widened onto the bracket grammar the way the real-heading
+  // readers (getRoadmapModeForPhase, phaseDisplayNameFromRoadmap) are.
+  const { regex: headerPattern, phaseNumGroup } =
+    buildPhaseHeadingScanRegex(PHASE_HEADING_BASELINE.LABEL_ONLY);
   for (const line of porcelain.split('\n')) {
     if (!line.startsWith('worktree ')) continue;
     const wt = line.slice('worktree '.length).trim();
     if (!wt || path.resolve(wt) === path.resolve(cwd)) continue;
     try {
-      for (const entry of fs.readdirSync(path.join(wt, '.planning', 'phases'))) {
+      for (const entry of fs.readdirSync(path.join(siblingPlanningDir(wt), 'phases'))) {
         const match = entry.match(dirNumPattern);
         if (!match) continue;
         const num = parseInt(match[1], 10);
         if (!isSentinelPhaseId(num)) used.add(num);
       }
     } catch {
-      /* worktree has no .planning — normal, contributes nothing */
+      /* worktree has no .planning (or no copy of this scope) — normal, contributes nothing */
     }
     try {
-      const content = fs.readFileSync(path.join(wt, '.planning', 'ROADMAP.md'), 'utf-8');
+      const content = fs.readFileSync(path.join(siblingPlanningDir(wt), 'ROADMAP.md'), 'utf-8');
       let m: RegExpExecArray | null;
       headerPattern.lastIndex = 0;
       while ((m = headerPattern.exec(content)) !== null) {
-        const num = parseInt(m[1], 10);
+        const num = parseInt(m[phaseNumGroup], 10);
         if (!isSentinelPhaseId(num)) used.add(num);
       }
     } catch {
-      /* no roadmap in that worktree — normal, contributes nothing */
+      /* no roadmap in that worktree (or scope) — normal, contributes nothing */
     }
   }
 }
@@ -1317,7 +1425,14 @@ function cmdPhaseAdd(cwd: string, description: string, raw: boolean, customId?: 
 
       // 1) Section headers: ### Phase N: / ## Phase N: / #### Phase N:
       // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
-      const headerPattern = /#{2,4}\s*Phase\s+(\d+)[A-Z]?(?:\.\d+)*(?:\s*\([^)\n]{0,200}\))?:/gi;
+      // #5007 (Phase 6 / ADR-4910 §8): migrated onto buildPhaseHeadingScanRegex
+      // (src/phase-id.cjs) with the LABEL_ONLY baseline and no convention
+      // argument — a counter site, matching phase-id.cts's own LABEL_ONLY
+      // docstring guidance, reproducing the prior `Phase\s+` literal (no
+      // bracket tolerance) byte-for-byte. See collectSiblingWorktreePhaseNums
+      // (above) for the identical migration on the same regex shape.
+      const { regex: headerPattern, phaseNumGroup } =
+        buildPhaseHeadingScanRegex(PHASE_HEADING_BASELINE.LABEL_ONLY);
       // 2) Roadmap bullet entries: - [ ] **Phase N: ...** (all checkbox variants)
       // The lookahead accepts colon, decimal-dot, whitespace, bold-close asterisk,
       // or end-of-line so titleless forms ("- [ ] **Phase 11**", "- [ ] Phase 11")
@@ -1328,7 +1443,7 @@ function cmdPhaseAdd(cwd: string, description: string, raw: boolean, customId?: 
       let m: RegExpExecArray | null;
 
       while ((m = headerPattern.exec(content)) !== null) {
-        const num = parseInt(m[1], 10);
+        const num = parseInt(m[phaseNumGroup], 10);
         // #3185: canonical sentinel predicate (SENTINEL_RANGES [0,999]) — this was a local 999-only literal that admitted Phase 0.
         if (!isSentinelPhaseId(num)) usedPhaseNums.add(num);
       }
@@ -1440,11 +1555,16 @@ function cmdPhaseAddBatch(cwd: string, descriptions: string[], raw: boolean): vo
       // bullets, on-disk dirs. The bullet scan was missing here — a bullet-only
       // `Phase N` row was invisible to batch allocation (#3849 secondary).
       // #1729: `(?:\s*\([^)\n]{0,200}\))?` tolerates a pre-colon ( ) tag (literal mirror of OPTIONAL_PHASE_TAG_SOURCE).
-      const phasePattern = /#{2,4}\s*Phase\s+(\d+)[A-Z]?(?:\.\d+)*(?:\s*\([^)\n]{0,200}\))?:/gi;
+      // #5007 (Phase 6 / ADR-4910 §8): migrated onto buildPhaseHeadingScanRegex
+      // (src/phase-id.cjs) with the LABEL_ONLY baseline and no convention
+      // argument — same counter-site migration as cmdPhaseAdd's identical
+      // regex above.
+      const { regex: phasePattern, phaseNumGroup } =
+        buildPhaseHeadingScanRegex(PHASE_HEADING_BASELINE.LABEL_ONLY);
       const bulletPattern = /^[ \t]*-[ \t]*\[[^\]]{0,200}\][ \t]*\*{0,2}Phase[ \t]+(\d+)(?=[:.\s*]|$)/gim;
       let m: RegExpExecArray | null;
       while ((m = phasePattern.exec(content)) !== null) {
-        const num = parseInt(m[1], 10);
+        const num = parseInt(m[phaseNumGroup], 10);
         // #3185: canonical sentinel predicate (SENTINEL_RANGES [0,999]) — this was a local 999-only literal that admitted Phase 0.
         if (isSentinelPhaseId(num)) continue;
         if (num > maxPhase) maxPhase = num;
@@ -1520,7 +1640,91 @@ function cmdPhaseAddBatch(cwd: string, descriptions: string[], raw: boolean): vo
   publishStateContract(cwd);
 }
 
-function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, raw: boolean): void {
+// #4569: scans all three representations of an existing decimal sub-phase
+// under `base` — on-disk `phases/` directories, `### Phase BASE.N:` headings,
+// and `- [ ] Phase BASE.N:` roadmap SUMMARY CHECKLIST bullets. A bullet-only
+// roadmap with no heading yet and no on-disk directory yet must still be
+// seen, or an allocator can silently reallocate an already-used decimal
+// number. Shared by `cmdPhaseInsert`'s normalized-base scan and its
+// sibling-allocation parent-base scan so the two never drift apart.
+function scanExistingDecimalPhaseNumbers(phasesDir: string, rawContent: string, base: string): Set<number> {
+  const decimalSet = new Set<number>();
+
+  // #2245 audit: existsSync-guarded, mirroring cmdPhaseNextDecimal's identical
+  // scan above — a missing phasesDir (no decimal sub-phases yet) is the
+  // expected, silent case (empty decimalSet). A readdirSync failure once the
+  // dir is confirmed to EXIST is a genuine anomaly; swallowing it used to let
+  // `phase insert` proceed with an incomplete decimalSet and risk writing a
+  // decimal phase number that collides with an existing on-disk directory
+  // the scan simply never saw — surfaced loud instead, like the sibling.
+  //
+  // #4634 (lint-phase-enumeration-drift): routed through the canonical
+  // PHYSICAL-set owner (`listAllPhaseDirs`, phase-locator.cts) instead of a
+  // hand-rolled `readdirSync`. This scan — like its sibling `cmdPhaseNextDecimal`
+  // and its caller `cmdPhaseInsert` (both exempted in the drift guard for the
+  // same reason) — must see EVERY on-disk decimal sub-phase directory
+  // regardless of the current milestone window, so `listMilestonePhaseDirs`
+  // (windowed) is the wrong owner here; `includeSentinels: true` preserves this
+  // function's pre-existing behavior of never sentinel-filtering (the decimal
+  // regex below only ever matches `base.N`-shaped names, so sentinel inclusion
+  // is a no-op either way).
+  if (fs.existsSync(phasesDir)) {
+    const { value: dirs, scope } = listAllPhaseDirs(phasesDir, { includeSentinels: true });
+    if (scope === SCOPE.UNREADABLE) {
+      // The dir EXISTS but could not be read (EACCES/EIO) — a genuine anomaly,
+      // not the expected empty-decimalSet case above. Surfaced loud, matching
+      // this function's pre-migration `readdirSync` catch: swallowing it would
+      // let `phase insert` proceed with an incomplete decimalSet and collide
+      // with an existing on-disk decimal directory the scan never saw.
+      error(`Failed to scan phase directories for existing decimal phases: unable to read ${phasesDir}`);
+    }
+    const decimalPattern = new RegExp(`^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}${escapeRegex(base)}\\.(\\d+)`);
+    for (const dir of dirs) {
+      const dm = dir.match(decimalPattern);
+      if (dm) decimalSet.add(parseInt(dm[1], 10));
+    }
+  }
+
+  // #5007 (Phase 6 / ADR-4910 §8): composes phaseHeadingPrefixSrcFor directly
+  // rather than routing through buildPhaseHeadingScanRegex — the owner has no
+  // decimal-subphase capture group. The design doc's suggested composition
+  // passed `capturing=true` to phaseHeadingPrefixSrcFor, but this site has no
+  // use for the bracket-id capture it would add, and doing so would silently
+  // shift `rmMatch[1]` (the decimal digits) to group 2 — a real correctness
+  // hazard. `capturing` is left at its default (false), and the `#{2,4}\s*`
+  // heading marker (also omitted from the design's snippet) is kept explicit,
+  // since phaseHeadingPrefixSrcFor never includes it — callers always add it
+  // themselves (see buildPhaseHeadingScanRegex's own usage). No convention
+  // argument: LABEL_ONLY with convention=undefined reproduces the prior
+  // `Phase\s+` literal byte-for-byte.
+  const rmPhasePattern = new RegExp(
+    `#{2,4}\\s*${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY)}${phaseMarkdownRegexSource(base)}\\.(\\d+)${OPTIONAL_PHASE_TAG_SOURCE}\\s*:`,
+    'gi',
+  );
+  let rmMatch: RegExpExecArray | null;
+  while ((rmMatch = rmPhasePattern.exec(rawContent)) !== null) {
+    decimalSet.add(parseInt(rmMatch[1], 10));
+  }
+
+  const checklistDecimalPattern = new RegExp(
+    `-\\s*\\[[ x]\\]\\s*(?:\\*\\*)?Phase\\s+${phaseMarkdownRegexSource(base)}\\.(\\d+)${OPTIONAL_PHASE_TAG_SOURCE}[:\\s]`,
+    'gi',
+  );
+  let clMatch: RegExpExecArray | null;
+  while ((clMatch = checklistDecimalPattern.exec(rawContent)) !== null) {
+    decimalSet.add(parseInt(clMatch[1], 10));
+  }
+
+  return decimalSet;
+}
+
+function cmdPhaseInsert(
+  cwd: string,
+  afterPhase: string,
+  description: string,
+  raw: boolean,
+  allocation: 'nested' | 'sibling' = 'nested',
+): void {
   if (!afterPhase || !description) {
     error('after-phase and description required for phase insert');
   }
@@ -1539,14 +1743,34 @@ function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, ra
 
     const normalizedAfter = normalizePhaseName(afterPhase);
     const afterPhaseEscaped = phaseMarkdownRegexSource(normalizedAfter);
-    const targetPattern = new RegExp(`#{2,4}\\s*Phase\\s+${afterPhaseEscaped}${OPTIONAL_PHASE_TAG_SOURCE}:`, 'i');
-    const headingMatch = targetPattern.test(content);
+    const insertConvention = resolvePhaseIdConvention(cwd);
+    // #5007 (Phase 6 / ADR-4910 §8): buildPhaseHeadingRegex (src/roadmap.cts)
+    // is anchored `^...$` with no 'm' flag — designed to test ONE
+    // already-tokenized heading LINE, not to `.test()` against multi-line
+    // `content` directly (the design doc's "no anchoring change needed"
+    // claim for this site does not hold once the anchor is accounted for —
+    // same discrepancy as getRoadmapModeForPhase and phaseDisplayNameFromRoadmap
+    // above/below). Routed through tokenizeHeadings, mirroring
+    // searchPhaseInContent's own usage.
+    const targetPattern = buildPhaseHeadingRegex(afterPhaseEscaped, insertConvention);
+    const headingMatch = tokenizeHeadings(content).some((h) => targetPattern.test(h.text));
 
     const bulletPattern = new RegExp(
       `-\\s*\\[[ x]\\]\\s*(?:\\*\\*)?Phase\\s+${afterPhaseEscaped}${OPTIONAL_PHASE_TAG_SOURCE}[:\\s]`,
       'i',
     );
-    const anyHeadingPattern = /#{2,4}\s*Phase\s+\d/i;
+    // #5007 (Phase 6 / ADR-4910 §8): a pure "does ANY phase heading exist"
+    // boolean — neither shared owner exposes this shape (buildPhaseHeadingRegex
+    // is phase-N-specific; buildPhaseHeadingScanRegex always captures a phase
+    // number). Composed directly from phaseHeadingPrefixSrcFor with the
+    // `#{2,4}\s*` marker kept explicit (phaseHeadingPrefixSrcFor never
+    // includes it). Unanchored `.test()` on multi-line content, same as the
+    // pre-migration literal — no tokenize-first refactor needed here since
+    // there is no anchor in this source.
+    const anyHeadingPattern = new RegExp(
+      `#{2,4}\\s*${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY, insertConvention)}\\d`,
+      'i',
+    );
     const roadmapHasHeadingPhases = anyHeadingPattern.test(content);
     const isBulletStyle = !headingMatch && bulletPattern.test(content) && !roadmapHasHeadingPhases;
 
@@ -1565,49 +1789,22 @@ function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, ra
 
     const phasesDir = path.join(planningDir(cwd), 'phases');
     const normalizedBase = normalizePhaseName(afterPhase);
-    const decimalSet = new Set<number>();
-
-    // #2245 audit: existsSync-guarded, mirroring cmdPhaseNextDecimal's identical
-    // scan above — a missing phasesDir (no decimal sub-phases yet) is the
-    // expected, silent case (empty decimalSet). A readdirSync failure once the
-    // dir is confirmed to EXIST is a genuine anomaly; swallowing it used to let
-    // `phase insert` proceed with an incomplete decimalSet and risk writing a
-    // decimal phase number that collides with an existing on-disk directory
-    // the scan simply never saw — surfaced loud instead, like the sibling.
-    if (fs.existsSync(phasesDir)) {
-      // Initialized (not just declared) so TS's definite-assignment check is
-      // satisfied without relying on control-flow narrowing through error()'s
-      // `never` return, which TS does not propagate through a destructured
-      // module-property function reference — error() still halts the process
-      // before `dirs` below is ever computed from this placeholder value.
-      let entries: fs.Dirent[] = [];
-      try {
-        entries = fs.readdirSync(phasesDir, { withFileTypes: true });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        error(`Failed to scan phase directories for existing decimal phases: ${msg}`);
-      }
-      const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-      const decimalPattern = new RegExp(
-        `^${OPTIONAL_PROJECT_CODE_PREFIX_SOURCE}${escapeRegex(normalizedBase)}\\.(\\d+)`,
-      );
-      for (const dir of dirs) {
-        const dm = dir.match(decimalPattern);
-        if (dm) decimalSet.add(parseInt(dm[1], 10));
-      }
-    }
-
-    const rmPhasePattern = new RegExp(
-      `#{2,4}\\s*Phase\\s+${phaseMarkdownRegexSource(normalizedBase)}\\.(\\d+)${OPTIONAL_PHASE_TAG_SOURCE}\\s*:`,
-      'gi',
-    );
-    let rmMatch: RegExpExecArray | null;
-    while ((rmMatch = rmPhasePattern.exec(rawContent)) !== null) {
-      decimalSet.add(parseInt(rmMatch[1], 10));
-    }
+    const decimalSet = scanExistingDecimalPhaseNumbers(phasesDir, rawContent, normalizedBase);
 
     const nextDecimal = decimalSet.size === 0 ? 1 : Math.max(...decimalSet) + 1;
-    const _decimalPhase = `${normalizedBase}.${nextDecimal}`;
+    let _decimalPhase = `${normalizedBase}.${nextDecimal}`;
+
+    // #4569: sibling allocation joins afterPhase's PARENT level instead of nesting
+    // one level deeper under afterPhase itself. A top-level phase (no existing
+    // decimal segment) has no sibling level to join; nested is the only sensible
+    // allocation, so we silently fall back for that case.
+    const lastDotIndex = normalizedBase.lastIndexOf('.');
+    if (allocation === 'sibling' && lastDotIndex !== -1) {
+      const parentBase = normalizedBase.slice(0, lastDotIndex);
+      const siblingDecimalSet = scanExistingDecimalPhaseNumbers(phasesDir, rawContent, parentBase);
+      const siblingNextDecimal = siblingDecimalSet.size === 0 ? 1 : Math.max(...siblingDecimalSet) + 1;
+      _decimalPhase = `${parentBase}.${siblingNextDecimal}`;
+    }
     const insertConfig = loadConfig(cwd);
     const projectCode = (insertConfig.project_code as string) || '';
     const pfx = projectCode ? `${projectCode}-` : '';
@@ -1672,8 +1869,16 @@ function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, ra
       const phaseEntry =
         `\n### Phase ${_decimalPhase}: ${description} (INSERTED)\n\n**Goal:** [Urgent work - to be planned]\n**Requirements**: TBD\n**Depends on:** Phase ${afterPhase}\n**Plans:** 0 plans\n\nPlans:\n- [ ] TBD (run ${formatGsdSlash('plan-phase', resolveRuntime(cwd)) as string} ${_decimalPhase} to break down)\n`;
 
+      // #5007 (Phase 6 / ADR-4910 §8): this site needs the WHOLE matched
+      // heading line plus its trailing newline (for splicing the new entry
+      // in immediately after it) — neither shared owner returns that shape
+      // (buildPhaseHeadingRegex captures only the title). Composed directly
+      // from phaseHeadingPrefixSrcFor, keeping this site's own full-line
+      // capture; audited together with the targetPattern/anyHeadingPattern
+      // migration above (same describe block, same afterPhaseEscaped/
+      // insertConvention inputs).
       const headerPattern = new RegExp(
-        `(#{2,4}\\s*Phase\\s+${afterPhaseEscaped}${OPTIONAL_PHASE_TAG_SOURCE}:[^\\n]*\\n)`,
+        `(#{2,4}\\s*${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY, insertConvention)}${afterPhaseEscaped}${OPTIONAL_PHASE_TAG_SOURCE}:[^\\n]*\\n)`,
         'i',
       );
       const headerMatch = rawContent.match(headerPattern);
@@ -1683,7 +1888,27 @@ function cmdPhaseInsert(cwd: string, afterPhase: string, description: string, ra
 
       const headerIdx = rawContent.indexOf(headerMatch![0]);
       const afterHeader = rawContent.slice(headerIdx + headerMatch![0].length);
-      const nextPhaseMatch = afterHeader.match(/\r?\n#{2,4}\s+Phase\s+\d[\d.]*/i);
+      // #5007 (Phase 6 / ADR-4910 §8): this next-phase-boundary lookup was NOT
+      // one of the 15 originally-marked grandfathered sites, but it hand-rolls
+      // the identical `#{2,4}...Phase\s+` heading-marker shape and sits right
+      // next to headerPattern above, which this same commit series just
+      // widened (via insertConvention) to recognize a bracket-tagged target
+      // heading. Left bracket-blind, this regex would silently defeat that
+      // widening: under the bracket convention a freshly-recognized
+      // bracket-tagged target could still fail to find the NEXT heading as a
+      // boundary (`[CODE.MM] Phase N+1:` never matches a bare `Phase\s+`
+      // literal), so the newly inserted entry falls through to the
+      // rawContent.length branch and lands appended at end-of-file instead of
+      // directly after the target section. Found while migrating the
+      // neighboring sites, not deferred: this is the same defect class the
+      // whole Phase 6 effort exists to drain, just an unmarked instance of it.
+      // Composed with the SAME baseline/convention as headerPattern above so
+      // target-discovery and next-boundary-discovery agree. The base
+      // `#{2,4}\s+` (mandatory whitespace after the hashes, not `\s*`) is
+      // preserved exactly as the prior literal had it — a pre-existing,
+      // deliberately-unchanged asymmetry with the other sites in this file.
+      const nextPhaseHeadingPrefix = `#{2,4}\\s+${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY, insertConvention)}`;
+      const nextPhaseMatch = afterHeader.match(new RegExp(`\\r?\\n${nextPhaseHeadingPrefix}\\d[\\d.]*`, 'i'));
 
       let insertIdx: number;
       if (nextPhaseMatch) {
@@ -2059,8 +2284,34 @@ function updateRoadmapAfterPhaseRemoval(
     if (!isDecimal) {
       // #1729: fold an optional pre-colon ( ) tag into the suffix capture so it
       // is re-emitted verbatim — a tagged later phase still gets renumbered.
+      // #5007 (Phase 6 / ADR-4910 §8): composes phaseHeadingPrefixSrcFor
+      // directly (needs prefix/number/suffix as three separate capture groups
+      // for a verbatim in-place rewrite — neither shared owner returns that
+      // shape). Two deliberate departures from the design doc's suggested
+      // composition, both kept for zero behavior change on this
+      // highest-blast-radius site (feeds phase remove's renumber path):
+      //   1. The `#{2,4}\s*` heading marker is kept explicit and folded INTO
+      //      the prefix capture group — the design's snippet omitted it
+      //      entirely (phaseHeadingPrefixSrcFor never includes it; every
+      //      caller adds it, e.g. buildPhaseHeadingScanRegex), and the
+      //      original group 1 here captured the marker too.
+      //   2. No convention argument is threaded (LABEL_ONLY with
+      //      convention=undefined), even though phaseHeadingPrefixSrcFor
+      //      COULD accept one — this keeps the composed source byte-identical
+      //      to the prior `Phase\s+` literal, a deliberate non-widening for
+      //      this specific site (unlike cmdPhaseInsert's targetPattern).
+      // The number group widens from `\d+(?:\.\d+)?` to the full
+      // PHASE_NUMBER_TOKEN_SOURCE (letter suffix + multi-segment decimals) —
+      // this is SAFE, not a behavior change: decrementRoadmapPhaseToken's own
+      // regex (`^(\d+)(\.\d+)?$`) rejects anything wider and returns the
+      // token unchanged, so a heading this widening newly matches (e.g.
+      // "Phase 12A:") is written back byte-for-byte unchanged, identical to
+      // the pre-migration outcome of the whole regex simply not matching it.
       content = content.replace(
-        /(#{2,4}\s*Phase\s+)(\d+(?:\.\d+)?)((?:\s*\([^)\r\n]{0,200}\))?\s*:)/gi,
+        new RegExp(
+          `(#{2,4}\\s*${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY)})(${PHASE_NUMBER_TOKEN_SOURCE})(${OPTIONAL_PHASE_TAG_SOURCE}\\s*:)`,
+          'gi',
+        ),
         (_match, prefix: string, num: string, suffix: string) =>
           `${prefix}${decrementRoadmapPhaseToken(num, removedInt)}${suffix}`,
       );
@@ -2166,16 +2417,48 @@ function updateRoadmapAfterPhaseRemoval(
         (_match, phaseNum: string, planNum: string) =>
           `${decrementRoadmapPaddedPhaseNumber(phaseNum, removedInt)}-${planNum}`,
       );
-      content = content.replace(
-        /(\*\*Depends on\*\*\s*:\s*Phase\s+)(\d+(?:\.\d+)?)\b/gi,
-        (_match, prefix: string, num: string) =>
-          `${prefix}${decrementRoadmapPhaseToken(num, removedInt)}`,
-      );
-      content = content.replace(
-        /(Depends on:\*\*\s*Phase\s+)(\d+(?:\.\d+)?)\b/gi,
-        (_match, prefix: string, num: string) =>
-          `${prefix}${decrementRoadmapPhaseToken(num, removedInt)}`,
-      );
+      // #5007 (Phase 6 / ADR-4910): migrated the "Depends on" bold-field
+      // decrement off two hand-rolled regexes — one per bold-placement
+      // variant, `**Depends on**: Phase N` and `**Depends on:** Phase N` —
+      // onto the PlanningDoc `boldField` read/write seam (`writePlansField`
+      // above is the established precedent for this migration shape).
+      // `BOLD_FIELD_RE` (planning-document.cts) recognizes BOTH placements
+      // as the SAME field label ("Depends on") — `parseBoldFieldLine` strips
+      // the token down to its inner text regardless of which side of `**`
+      // the colon lands on — so this single loop naturally replaces both
+      // regexes with one call site; no variant-specific branching remains.
+      // Unlike `writePlansField`'s single `findField` lookup (scoped to one
+      // already-isolated phase section), a whole ROADMAP.md can carry a
+      // "Depends on" field in EVERY phase's detail section, so this walks
+      // every `boldField` node in the whole parsed document whose label is
+      // "Depends on" and rewrites each one independently — a
+      // representability refusal or absent match on one field leaves that
+      // field untouched and never blocks any other field, mirroring the
+      // prior regexes' per-occurrence independence. A parse failure or an
+      // unreadable-nodes refusal on `serialize` leaves `content` byte-for-
+      // byte untouched, the same silent no-op the prior regexes had for any
+      // input they didn't match (neither ever threw or warned).
+      const dependsOnParsed = parsePlanningDoc(content, 'ROADMAP.md');
+      if (dependsOnParsed.ok) {
+        let dependsOnDoc = dependsOnParsed.value;
+        const dependsOnFieldIds = dependsOnDoc.nodes
+          .filter((n) => n.kind === 'boldField' && n.label === 'Depends on')
+          .map((n) => n.id);
+        for (const fieldId of dependsOnFieldIds) {
+          const currentRead = readNode(dependsOnDoc, fieldId);
+          if (!currentRead.ok) continue;
+          const depMatch = /^(Phase\s+)(\d+(?:\.\d+)?)\b/i.exec(currentRead.value);
+          if (!depMatch) continue;
+          const [wholeMatch, prefix, num] = depMatch;
+          const newValue =
+            `${prefix}${decrementRoadmapPhaseToken(num, removedInt)}` + currentRead.value.slice(wholeMatch.length);
+          if (newValue === currentRead.value) continue;
+          const staged = setFieldValue(dependsOnDoc, fieldId, newValue);
+          if (staged.ok) dependsOnDoc = staged.value;
+        }
+        const dependsOnOut = serialize(dependsOnDoc);
+        if (dependsOnOut.ok) content = dependsOnOut.value;
+      }
     }
 
     platformWriteSync(roadmapPath, content);
@@ -2205,21 +2488,22 @@ interface PhaseRemoveOptions {
  * phase, a stray 'Total Phases: 0' between fences). A file with no leading
  * frontmatter is all body: the field goes to content start, preserving the
  * former behavior for that shape.
+ *
+ * The block is the one `locateFrontmatterFence` finds (the one fence owner), so this writer
+ * and every STATE.md reader agree on where the body starts. The blank line and the field go
+ * right after the closing fence line, ended by that line's own line ending — so a CRLF file
+ * gains CRLF lines only (#3572 review: a blanket re-join on '\r\n' doubled every carriage
+ * return; joining the new lines on a bare '\n' mixed line endings).
  */
 function insertStateBodyFieldAtTop(content: string, fieldLine: string): string {
-  // Split AND join on bare '\n' so CRLF line endings stay attached to their
-  // own lines — each '\r' remains the tail of the line it terminated, where
-  // the trimmed fence compare still matches it. (#3572 review: splitting on
-  // '\n' but re-joining on a detected '\r\n' doubled every carriage return.)
-  const lines = content.split('\n');
-  if ((lines[0] ?? '').trim() === '---') {
-    const closeIdx = lines.findIndex((l: string, i: number) => i > 0 && l.trim() === '---');
-    if (closeIdx !== -1) {
-      lines.splice(closeIdx + 1, 0, '', fieldLine);
-      return lines.join('\n');
-    }
+  const fence = locateFrontmatterFence(content);
+  if (fence?.closed) {
+    const nl = content[fence.closingFenceEnd] === '\r' ? '\r\n' : '\n';
+    return `${content.slice(0, fence.closingFenceEnd)}${nl}${nl}${fieldLine}${content.slice(fence.closingFenceEnd)}`;
   }
-  return fieldLine + '\n' + content;
+  // All body: the field is the new first line, ended like the document's first line.
+  const firstNewline = content.indexOf('\n');
+  return fieldLine + (firstNewline > 0 && content[firstNewline - 1] === '\r' ? '\r\n' : '\n') + content;
 }
 
 function cmdPhaseRemove(
@@ -2278,6 +2562,24 @@ function cmdPhaseRemove(
         `Phase ${targetPhase} has ${summaryCount} executed plan(s). Use --force to remove anyway.`,
       );
     }
+  }
+
+  // #5118 (no write before the error): the STATE.md rewrite below rebuilds the
+  // frontmatter from EVERY surviving phase's report (buildStateFrontmatter →
+  // isPhaseComplete), and it runs AFTER the directory removal, the sibling
+  // renames and the ROADMAP rewrite. Validate every surviving phase's report
+  // here, BEFORE the first write, so a report whose `status` is outside the
+  // closed set fails this command having written nothing (the removed phase's
+  // own report is not read afterwards — it is excluded). The set is the one the
+  // rebuild scans (`statePhaseDirsToScan`: milestone-scoped, deduped), so a
+  // survivor OUTSIDE that set — another milestone's phase directory — does not
+  // block the remove.
+  if (fs.existsSync(path.join(planningDir(cwd), 'STATE.md'))) {
+    const survivorStatusError = findVerificationStatusError(
+      stateMod.statePhaseDirsToScan(cwd).filter((d: string) => d !== targetDir).map((d: string) => path.join(phasesDir, d)),
+      { convention: resolvePhaseIdConvention(cwd) },
+    );
+    if (survivorStatusError) throw survivorStatusError;
   }
 
   if (targetDir) fs.rmSync(path.join(phasesDir, targetDir), { recursive: true, force: true });
@@ -2469,7 +2771,19 @@ function writePlanningFileSet(writes: WriteSpec[]): number {
 function phaseDisplayNameFromRoadmap(roadmapContent: string | null, phaseNum: string | null): string | null {
   if (!roadmapContent || !phaseNum) return null;
   const phaseEscaped = phaseMarkdownRegexSource(phaseNum);
-  const heading = roadmapContent.match(new RegExp(`^#{2,4}\\s*Phase\\s+${phaseEscaped}${OPTIONAL_PHASE_TAG_SOURCE}\\s*:\\s*([^\\n]+)`, 'im'));
+  // #5007 (Phase 6 / ADR-4910 §8): buildPhaseHeadingRegex (src/roadmap.cts) is
+  // anchored `^...$` with no 'm' flag by design — it expects one
+  // already-tokenized heading LINE, not a `^`/`m` scan against multi-line
+  // content directly. Routed through tokenizeHeadings first (the same real
+  // refactor searchPhaseInContent's own usage already requires), not a pure
+  // regex-literal swap. Adopts buildPhaseHeadingRegex's ANY_BRACKET baseline —
+  // a deliberate widening, matching getRoadmapModeForPhase's identical choice
+  // above: this is a real-heading reader, so it inherits the same bracket-tag
+  // tolerance searchPhaseInContent already applies everywhere else.
+  const headingPattern = buildPhaseHeadingRegex(phaseEscaped);
+  const matchedHeading = tokenizeHeadings(roadmapContent).find((h) => headingPattern.test(h.text));
+  if (!matchedHeading) return null;
+  const heading = matchedHeading.text.match(headingPattern);
   if (!heading) return null;
   const name = heading[1].replace(/\(INSERTED\)/i, '').trim();
   return name || null;
@@ -3288,7 +3602,7 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
   // non-mutating peek so an unresolvable pointer isn't self-healed (cleared)
   // here and then found "absent" by diagnoseUnresolvedActiveWorkstream below,
   // which would misreport a present-but-bad marker as no marker at all.
-  const resolvedWorkstream = process.env['GSD_WORKSTREAM'] || peekActiveWorkstream(cwd);
+  const resolvedWorkstream = resolveEnvWorkstream() ?? peekActiveWorkstream(cwd);
   if (availableWorkstreams.length > 0 && !resolvedWorkstream) {
     // #3579: getActiveWorkstream now inherits a pointer-less session's read
     // from the shared .planning/active-workstream marker, so reaching this
@@ -3458,28 +3772,12 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
       if (/status: diagnosed/.test(content)) warnings.push(`${file}: has diagnosed gaps`);
     }
 
-    for (const file of scopeToPhase(
-      phaseFiles.filter((f) => f.includes('-VERIFICATION') && f.endsWith('.md')),
-      phaseFullDirBaseName,
-    )) {
-      const verificationFilePath = path.join(phaseFullDir, file);
-      // #3707-CR follow-up MINOR: normalize line endings at this read boundary
-      // (same fix as src/verification.cts's readVerificationStatus) so a
-      // lone-CR VERIFICATION.md's `---\r...\r---` frontmatter fence still
-      // matches extractFrontmatter's byte-0 check instead of silently
-      // dropping the human_needed/gaps_found advisory warning below.
-      const content = normalizeLineEndings(fs.readFileSync(verificationFilePath, 'utf-8'));
-      // #1159 (Defect A): read ONLY the frontmatter `status` key to avoid false positives
-      // from historical metadata in the file body (e.g. `previous_status: gaps_found`).
-      // A full-text regex like /status: gaps_found/ matches the substring inside
-      // `previous_status: gaps_found`, producing spurious warnings even when the
-      // current frontmatter status is `passed`.
-      const verFm = extractFrontmatter(content, verificationFilePath) as Record<string, unknown>;
-      // Normalise to lower-case so `status: Passed` (title-case) is not missed.
-      const verStatus = typeof verFm['status'] === 'string' ? verFm['status'].trim().toLowerCase() : '';
-      if (verStatus === 'human_needed') warnings.push(`${file}: needs human verification`);
-      if (verStatus === 'gaps_found') warnings.push(`${file}: has unresolved gaps`);
-    }
+    // #5118 (ADR-5057 Phase 4): the VERIFICATION report's `status` is no
+    // longer read here. This pre-scan used to read each report's frontmatter
+    // itself (case-folded, bypassing the owner) to warn on human_needed /
+    // gaps_found — but the completion GATE below (readVerificationStatus)
+    // already refuses those statuses and names the route, so the advisory
+    // could only ever duplicate the gate's own answer. One reader: the gate.
   } catch {
     /* best-effort (#2245 audit): this is an ADVISORY pre-scan of UAT/
      * VERIFICATION files for `warnings` in the phase-complete output — the
@@ -3570,7 +3868,13 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
     // #2617: pass the project's runtime so the blocked-completion error below
     // suggests the command surface this runtime actually installs
     // ($gsd-… on Codex) rather than a hard-coded Claude-style string.
-    const verificationStatus = readVerificationStatus(phaseFullDir, { runtime: resolveRuntime(cwd) });
+    // #5118: an out-of-set report status THROWS VerificationStatusError out
+    // of here; withPlanningLock releases the lock on the way out and the CLI
+    // seam reports `verification_status_invalid`.
+    const verificationStatus = readVerificationStatus(phaseFullDir, {
+      runtime: resolveRuntime(cwd),
+      convention: resolvePhaseIdConvention(cwd),
+    });
     // #3057 B3: the staleness check inside readVerificationStatus can itself
     // fail (fs / scanPhasePlans / clock error), in which case `status` above
     // was routed as if nothing were stale (unchanged fail-open routing) — but
@@ -3586,8 +3890,22 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
         `verification staleness check could not complete for phase ${phaseNum} — routed as not-stale, but this was not actually verified (#3057)`,
       );
     }
-    if (verificationStatus.status !== 'passed') {
+    if (verificationStatus.status !== VERIFICATION_STATUS.PASSED) {
       return verificationStatus;
+    }
+
+    // #5118 (no write before the error): the transaction below writes ROADMAP,
+    // REQUIREMENTS and STATE, and the STATE frontmatter rebuild reads EVERY
+    // phase's report (buildStateFrontmatter → isPhaseComplete). Validate it
+    // here, BEFORE the first write, over EXACTLY the set that rebuild scans
+    // (the milestone-scoped, deduped phase set — the owner runs
+    // buildStateFrontmatter itself, so `state sync` and this command refuse
+    // for the same phases), so a report whose `status` is outside the closed
+    // set fails this command having written nothing (withPlanningLock
+    // releases the lock).
+    const preflightStatePath = path.join(planningDir(cwd), 'STATE.md');
+    if (fs.existsSync(preflightStatePath)) {
+      assertVerificationReportsReadable(fs.readFileSync(preflightStatePath, 'utf-8'), cwd);
     }
 
     const runPhaseCompleteTransaction = () => {
@@ -3618,7 +3936,7 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
         // whole-slice `.replace()` onto the seam. Applied per single physical
         // line by updateBullet, so the pattern no longer needs the `m` flag
         // (it never sees more than one line at a time); see
-        // planCountBodyPattern below for the sites that were migrated onto
+        // writePlansField below for the sites that were migrated onto
         // withPhaseSection instead.
         //
         // #2245 review Fix 6: this is behaviour-preserving for GSD-GENERATED
@@ -3677,12 +3995,109 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
 
         // ADR-2143 §4: the plan-count write is now routed through
         // withPhaseSection (see mutateMilestonePhase below), which hands this
-        // pattern ONLY phase N's own detail-section body — so the pattern no
-        // longer needs its own `#{2,4}\s*Phase\s+N` anchor + skip-ahead-past-
-        // interior-headings lookahead; the section boundary itself confines
-        // the match (the #2067/#2200 boundary-crossing class is now
-        // structurally impossible for this site rather than regex-enforced).
-        const planCountBodyPattern = /(\*\*Plans:\*\*\s*)[^\n]+/i;
+        // seam call ONLY phase N's own detail-section body — the section
+        // boundary itself confines the write (the #2067/#2200 boundary-
+        // crossing class is structurally impossible for this site).
+        //
+        // #4906 Phase 2 (#4917/ADR-4910): migrated off the one-capture-group
+        // regex that replaced to end of line, dropping any hand-written
+        // trailing prose after the count (#4852) — onto the PlanningDoc
+        // `boldField` write seam, whose `valueSpan`/`trailingSpan` split
+        // never touches the trailing annotation.
+        const writePlansField = (body: string): string => {
+          const parsed = parsePlanningDoc(body, 'ROADMAP.md');
+          if (!parsed.ok) {
+            preservationWarnings.push({ field: 'Plans', reason: parsed.reason });
+            return body;
+          }
+          const fieldId = findField(parsed.value, 'Plans');
+          if (!fieldId) {
+            // #4906 regression (#1163 parity, caught by gsd-test against
+            // roadmap.cts's sibling site): a hand-edited or pre-template
+            // ROADMAP.md may carry a PLAIN (non-bold) `Plans:` line rather
+            // than the canonical `**Plans**:`/`**Plans:**` bold field.
+            // BOLD_FIELD_RE stays bold-only (widening it would register
+            // ordinary prose as a spurious field seam-wide) — this fallback
+            // mirrors roadmap.cts's identical one, kept in parity per
+            // Decision 2 rather than letting the two sites diverge on which
+            // legacy shapes they tolerate.
+            const plainMatch = body.match(/^([ \t]*)Plans:([ \t]*)([^\r\n]*)$/m);
+            if (!plainMatch) {
+              // No `**Plans:**`/`**Plans**:`/plain `Plans:` line in this
+              // phase's section — nothing to write; not a failure (mirrors
+              // the old regex's silent no-match no-op).
+              return body;
+            }
+            const [whole, indent, spacing, plainValue] = plainMatch;
+            const plainCountPrefixMatch = plainValue.match(
+              /^(?:\d+\s*\/\s*\d+\s+plans(?:\s+(?:complete|executed))?|\d+\s+plans?)/i,
+            );
+            const plainIsTemplatePlaceholder = /^\[\s*Number of plans\b[\s\S]*\]$/i.test(plainValue.trim());
+            if (!plainCountPrefixMatch && !plainIsTemplatePlaceholder) {
+              // Arm 3: freeform prose, TBD, a bracketed human annotation, or
+              // an empty value — leave the field exactly as it was.
+              return body;
+            }
+            const plainNewCountText = `${summaryCount}/${planCount} plans complete`;
+            const plainSuffix = plainCountPrefixMatch ? plainValue.slice(plainCountPrefixMatch[0].length) : '';
+            const newPlainLine = `${indent}Plans:${spacing}${plainNewCountText}${plainSuffix}`;
+            const start = plainMatch.index ?? body.indexOf(whole);
+            return body.slice(0, start) + newPlainLine + body.slice(start + whole.length);
+          }
+          // #4906 regression fix: PREFIX-match the existing value's count
+          // token and re-glue whatever follows it VERBATIM — a glued-on
+          // annotation with no ` — ` separator (e.g. a parenthetical like
+          // `0/1 plans executed (11-16 are gap closure from VERIFICATION)`)
+          // lives entirely inside `value` (`TRAILING_SEPARATOR_RE` in
+          // planning-document.cts only splits on ` — `, unchanged/correct),
+          // so overwriting `value` outright previously destroyed it.
+          //
+          // #4906 review finding (isolated adversarial pass): the prior
+          // version of this migration preserved this site's OLD
+          // unconditional-overwrite behavior for the no-count-prefix case,
+          // which clobbers arm 3 (freeform prose / TBD / a bracketed human
+          // annotation like `[Deferred pending re-scope]`) — a real
+          // regression against the design doc's own Behavior table row 4,
+          // not an accepted trade-off. Fixed here by adopting the SAME
+          // template-placeholder / arm-3-untouched classification
+          // roadmap.cts's sibling site already uses (isTemplatePlaceholder +
+          // "no count prefix and not a placeholder => leave untouched"),
+          // rather than letting the two migrated sites diverge on this.
+          const newCountText = `${summaryCount}/${planCount} plans complete`;
+          const current = readNode(parsed.value, fieldId);
+          if (!current.ok) {
+            return body;
+          }
+          const currentValue = current.value;
+          const countPrefixMatch = currentValue.match(
+            /^(?:\d+\s*\/\s*\d+\s+plans(?:\s+(?:complete|executed))?|\d+\s+plans?)/i,
+          );
+          const isTemplatePlaceholder = /^\[\s*Number of plans\b[\s\S]*\]$/i.test(currentValue.trim());
+          if (!countPrefixMatch && !isTemplatePlaceholder) {
+            // Arm 3: freeform prose, TBD, a bracketed human annotation, or an
+            // empty value — leave the field exactly as it was.
+            return body;
+          }
+          const newValueToWrite = countPrefixMatch
+            ? newCountText + currentValue.slice(countPrefixMatch[0].length)
+            : newCountText;
+          const staged = setFieldValue(parsed.value, fieldId, newValueToWrite);
+          if (!staged.ok) {
+            preservationWarnings.push({ field: 'Plans', reason: staged.reason });
+            return body;
+          }
+          const out = serialize(staged.value);
+          if (!out.ok) {
+            // `hasUnreadableNodes` refusal (ADR-4910 amendment) — a ragged
+            // SIBLING node elsewhere in this same section refuses the whole
+            // splice. Never throw / crash the phase-complete transaction over
+            // a node unrelated to this write; surface it and leave `body`
+            // unchanged, same as any other preservation warning.
+            preservationWarnings.push({ field: 'Plans', reason: out.reason });
+            return body;
+          }
+          return out.value;
+        };
 
         const phaseInfoSummaries = phaseInfo['summaries'] as string[];
 
@@ -3706,7 +4121,7 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
             const plansResult = updateTableCell(text, rowMatch, 'Plans Complete', ` ${summaryCount}/${planCount} `);
             if (plansResult.ok) text = plansResult.value;
 
-            const statusResult = updateTableCell(text, rowMatch, 'Status', ' Complete    ');
+            const statusResult = updateTableCell(text, rowMatch, 'Status', ` ${toRoadmapStatusCell(PHASE_STATUS.COMPLETE).padEnd(11)} `);
             if (statusResult.ok) text = statusResult.value;
 
             // Preserve only a valid ISO date (#1161: idempotent; self-heal
@@ -3729,16 +4144,24 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
           // section's body, so neither regex can escape into a sibling
           // phase's section, a shipped milestone, or a Backlog entry.
           s = withPhaseSection(s, phaseNum, (body) => {
-            let b = body.replace(planCountBodyPattern, `$1${summaryCount}/${planCount} plans complete`);
+            let b = writePlansField(body);
             for (const summaryFile of phaseInfoSummaries) {
               const planId = summaryFile.replace('-SUMMARY.md', '').replace('SUMMARY.md', '');
               if (!planId) continue;
               const planEscaped = escapeRegex(planId);
+              // ADR-5057 §6 (Phase 13, #5217): the per-plan flip is a bullet
+              // mutation, so it goes through `updateBullet` like the phase
+              // checkbox flip above — first matching bullet only, never a
+              // fenced line, never a mid-line occurrence.
               const planCheckboxPattern = new RegExp(
-                `(-\\s*\\[) (\\]\\s*(?:\\*\\*)?${planEscaped}(?:\\*\\*)?)`,
+                `^(\\s*-\\s*\\[) (\\]\\s*(?:\\*\\*)?${planEscaped}(?:\\*\\*)?)`,
                 'i',
               );
-              b = b.replace(planCheckboxPattern, '$1x$2');
+              b = updateBullet(
+                b,
+                (_bulletText, rawLine) => planCheckboxPattern.test(rawLine),
+                (rawLine) => rawLine.replace(planCheckboxPattern, '$1x$2'),
+              );
             }
             return b;
           });
@@ -3778,24 +4201,46 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
         if (fs.existsSync(reqPath)) {
           const phaseEsc = phaseMarkdownRegexSource(phaseNum);
           const currentMilestoneRoadmap = extractCurrentMilestone(roadmapContent, cwd);
+          // #5007 (Phase 6 / ADR-4910 §8): this site captures the entire
+          // section BODY through to the next heading (via its own
+          // `[\s\S]*?` lookahead-to-next-heading structure) — neither shared
+          // owner returns that shape, so phaseHeadingPrefixSrcFor is composed
+          // directly, keeping this site's own lookahead. The prior hand-rolled
+          // heading-marker-plus-label literal appeared TWICE in this source
+          // (the main capture prefix AND the lookahead) — both occurrences
+          // were the literal-drift detector's target
+          // (findPhaseHeadingScanLiteralDrift is a pure literal-text match,
+          // blind to what surrounds it), so both are replaced with the same
+          // composed prefix, built once via phaseHeadingPrefixSrcFor and
+          // reused, so the two halves cannot drift from each other. No
+          // convention argument: LABEL_ONLY with convention=undefined
+          // reproduces the prior `Phase\s+` literal byte-for-byte — this
+          // feeds cmdPhaseComplete, so no widening was introduced.
+          const phaseSectionHeadingPrefix = `#{2,4}\\s*${phaseHeadingPrefixSrcFor(PHASE_HEADING_BASELINE.LABEL_ONLY)}`;
           const phaseSectionMatch = currentMilestoneRoadmap.match(
             new RegExp(
-              `(#{2,4}\\s*Phase\\s+${phaseEsc}${OPTIONAL_PHASE_TAG_SOURCE}[:\\s][\\s\\S]*?)(?=#{2,4}\\s*Phase\\s+|$)`,
+              `(${phaseSectionHeadingPrefix}${phaseEsc}${OPTIONAL_PHASE_TAG_SOURCE}[:\\s][\\s\\S]*?)(?=${phaseSectionHeadingPrefix}|$)`,
               'i',
             ),
           );
 
           const sectionText = phaseSectionMatch ? phaseSectionMatch[1] : '';
-          const reqMatch = sectionText.match(
-            /\*\*Requirements:?\*\*[^\S\n]*:?[^\S\n]*([^\n]+)/i,
-          );
+          // #4731: multiline-aware — hard-wrapped Requirements read past the
+          // line break before the ID scan. The shared extractor also stops at
+          // headings and table rows, so a Requirements field followed by the
+          // Traceability table cannot bleed other phases' REQ-IDs into the
+          // citation scan (isolated-review MEDIUM on the inline lookahead,
+          // whose lazy capture swallowed everything to section end).
+          const reqLine = sectionText
+            ? roadmapParserMod.extractPhaseFieldMultiline(sectionText, 'Requirements')
+            : null;
 
           const originalReqContent = fs.readFileSync(reqPath, 'utf-8');
           let reqContent = originalReqContent;
 
           // #2316: `citedReqIds` — the REQ-IDs ROADMAP's own **Requirements:**
           // line for this phase actually cites — is hoisted out of the
-          // `if (reqMatch)` block (previously scoped only inside it) so the
+          // `if (reqLine)` block (previously scoped only inside it) so the
           // ghost-ID cross-check below (~#2316-1) can consult it. `TBD` is the
           // literal placeholder `phase.add`/`-batch`/`-insert` seed
           // (`**Requirements**: TBD`, src/phase.cts:833,920,1078) — never a
@@ -3808,18 +4253,18 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
           // `else`, discarding this fact silently instead of surfacing it.
           const traceabilityWriteMisses: string[] = [];
 
-          if (reqMatch) {
+          if (reqLine) {
             // #2334 HIGH 3 + #3697: selection and under-selection detection both
             // live in `analyzeRequirementsLine` (module scope, above), extracted in
             // round 3 so the parser is directly testable — a closure in here is
             // reachable only by spawning the CLI, which no fast-check property test
             // can do. `citedReqIds` is byte-identical to the expression that stood
             // here; nothing about what phase-complete MARKS has changed.
-            const reqLineAnalysis = analyzeRequirementsLine(reqMatch[1]);
+            const reqLineAnalysis = analyzeRequirementsLine(reqLine);
             citedReqIds = reqLineAnalysis.citedReqIds;
             const reqLineWarning = formatRequirementsLineWarning(
               phaseNum,
-              reqMatch[1],
+              reqLine,
               reqLineAnalysis,
             );
             if (reqLineWarning) {
@@ -4127,6 +4572,37 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
       let roadmapNextNum: string | null = null;
       let roadmapNextName: string | null = null;
 
+      // #4699: a phase whose roadmap checkbox is `[x]` is already complete and
+      // must never be selected as next_phase — out-of-order completion (a
+      // reopened phase finished after later phases shipped) otherwise persists
+      // the already-done phase as STATE.md current_phase. Collected from the
+      // same milestone-scoped text the roadmap scan walks; membership is
+      // comparePhaseNum-based so `02` and `2` dedupe. With no ROADMAP.md (or no
+      // parseable rows) the set is empty and the scans behave exactly as
+      // before.
+      const roadmapCompleteNums: string[] = [];
+      if (roadmapContent !== null) {
+        try {
+          const milestoneForComplete = extractCurrentMilestone(roadmapContent, cwd);
+          const completePattern = new RegExp(
+            `-\\s*\\[[xX]\\]\\s*(?:\\*\\*|__)?\\s*Phase\\s+(${PHASE_NUMBER_TOKEN_SOURCE})`,
+            'gi'
+          );
+          let cm: RegExpExecArray | null;
+          while ((cm = completePattern.exec(milestoneForComplete)) !== null) {
+            if (isSentinelPhaseId(cm[1])) continue;
+            if (!roadmapCompleteNums.some((n) => comparePhaseNum(cm![1], n) === 0)) {
+              roadmapCompleteNums.push(cm[1]);
+            }
+          }
+        } catch {
+          /* best-effort: an unreadable milestone section leaves the complete
+           * set empty — the scans then behave exactly as they did pre-#4699. */
+        }
+      }
+      const isCompletePhaseNum = (num: string): boolean =>
+        roadmapCompleteNums.some((n) => comparePhaseNum(num, n) === 0);
+
       try {
         // #3185 (ADR-3180 Decision 1): "which phase directories belong to
         // the CURRENT milestone" — routed through the canonical owner
@@ -4142,6 +4618,9 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
           if (dm) {
             // #3185: canonical sentinel predicate (SENTINEL_RANGES [0,999]) — this was a local 999-only literal that admitted Phase 0.
             if (isSentinelPhaseId(dm[1])) continue;
+            // #4699: an already-complete phase (roadmap checkbox [x]) is never
+            // a next_phase candidate — out-of-order completion must skip it.
+            if (roadmapContent !== null && isCompletePhaseNum(dm[1])) continue;
             // Numeric MINIMUM above N, not "first encountered". `listMilestonePhaseDirs`
             // does sort by `comparePhaseNum`, so a `break` on the first hit happens to be
             // correct today — but that makes this scan's correctness depend on an
@@ -4211,6 +4690,10 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
             // already skips sentinel dirs on disk via isSentinelPhaseId (#3185);
             // stage 2's heading scan must not advance into backlog headings either.
             if (isSentinelPhaseId(pmNum)) continue;
+            // #4699: skip complete phases — a `[x]` checkbox row and the
+            // `## Phase Details` heading of an already-done phase both name a
+            // phase that must never be next_phase.
+            if (roadmapContent !== null && isCompletePhaseNum(pmNum)) continue;
             // #3701 review: the numeric MINIMUM above N, not the first row above N in
             // DOCUMENT order. This scan walks raw roadmap text, and one global regex
             // sweeps both the `## Phases` checklist and the `## Phase Details`
@@ -4395,14 +4878,57 @@ function cmdPhaseComplete(cwd: string, phaseNum: string, raw: boolean): void {
         const bodyHasPhaseField =
           stateExtractField(fmBody, 'Current Phase') != null ||
           stateExtractField(fmBody, 'Phase') != null;
-        const authoritativeFm: Record<string, string> | undefined = nextPhaseDisplayName
-          ? bodyHasPhaseField || !nextPhaseNum
-            ? { current_phase_name: nextPhaseDisplayName }
-            : {
-                current_phase: String(nextPhaseNum),
-                current_phase_name: nextPhaseDisplayName,
-              }
-          : undefined;
+        // #4129: the POST-completion progress counters, derived from the very
+        // ROADMAP this transaction just mutated (still in memory — it hits disk
+        // only at writePlanningFileSet, AFTER this content was assembled).
+        // buildStateFrontmatter's disk scan inside syncAndPreserveStateMd
+        // reads the PRE-completion ROADMAP (and any stale-dated sibling
+        // verification), so without this intent the persisted counter failed
+        // to increment on the completing phase's own transaction. Routed
+        // through the #2736 authoritativeFm seam's object direction: the
+        // pre-preservation merge makes it the derived truth the ratchet
+        // compares, and the post-preservation re-assert (completedOnlyRaise)
+        // is a floor no preservation branch can drop below. clampPercent is
+        // completePhaseCore's own percent formula (state-transition.cts),
+        // reused so the frontmatter and the body `Progress:` line agree.
+        const postCompletionRoadmapScope = roadmapContent !== null
+          ? extractCurrentMilestone(roadmapContent, cwd)
+          : null;
+        const postCompletionRoadmapProgress = postCompletionRoadmapScope !== null
+          ? deriveProgressFromRoadmapForIntent(postCompletionRoadmapScope)
+          : null;
+        const authoritativeProgress: Record<string, number> | undefined =
+          postCompletionRoadmapProgress && postCompletionRoadmapProgress.completedPhases !== null
+            ? postCompletionRoadmapProgress.totalPhases !== null && postCompletionRoadmapProgress.totalPhases > 0
+              ? {
+                  completed_phases: postCompletionRoadmapProgress.completedPhases,
+                  percent: clampPercentForIntent(
+                    postCompletionRoadmapProgress.completedPhases,
+                    postCompletionRoadmapProgress.totalPhases,
+                  ),
+                }
+              : { completed_phases: postCompletionRoadmapProgress.completedPhases }
+            : undefined;
+        const authoritativeFm: Record<string, unknown> | undefined = authoritativeProgress
+          ? {
+              ...(nextPhaseDisplayName
+                ? bodyHasPhaseField || !nextPhaseNum
+                  ? { current_phase_name: nextPhaseDisplayName }
+                  : {
+                      current_phase: String(nextPhaseNum),
+                      current_phase_name: nextPhaseDisplayName,
+                    }
+                : {}),
+              progress: authoritativeProgress,
+            }
+          : nextPhaseDisplayName
+            ? bodyHasPhaseField || !nextPhaseNum
+              ? { current_phase_name: nextPhaseDisplayName }
+              : {
+                  current_phase: String(nextPhaseNum),
+                  current_phase_name: nextPhaseDisplayName,
+                }
+            : undefined;
         // ADR-3408 §8.3 / #3469: this deliberately bypasses
         // readModifyWriteStateMd (STATE.md is committed atomically with
         // ROADMAP/REQUIREMENTS), so it calls the single write-seam
@@ -4540,7 +5066,7 @@ function cmdPhaseUatPassed(
   cwd: string,
   phaseNum: string | undefined,
   raw: boolean,
-  opts: { policy?: { requireVerification?: boolean } } = {},
+  opts: { policy?: { requireVerification?: boolean; uatOnly?: boolean } } = {},
 ): void {
   if (!phaseNum) {
     error('phase number required for phase uat-passed');
@@ -4556,6 +5082,9 @@ function cmdPhaseUatPassed(
   const report = evaluateUatPassed(phaseFullDir, { policy: opts.policy });
 
   output({ phase: phaseNum, ...report }, raw);
+  // #5170: the exit status follows the verdict (status mode: a failing verdict is exit 1). Declared
+  // AFTER output(), which rewrites the pending-outcome cell. The JSON above is unchanged.
+  declareGateExit(gateVerdict(report.passed ? 'pass' : 'block', !report.passed, { phase: phaseNum, ...report }), 'status');
 }
 
 // #1437 — phase.list-plans: list plan files for a given phase number.
@@ -4611,4 +5140,5 @@ export = {
   cmdPhaseListPlans,
   computeDependencyLevels,
   buildShortFormToId,
+  normalizeDependencyToken,
 };

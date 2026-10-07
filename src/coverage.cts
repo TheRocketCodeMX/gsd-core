@@ -30,7 +30,8 @@ const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import coreUtils = require('./core-utils.cjs');
 const { toPosixPath } = coreUtils;
-import { requireSafePath, sanitizeForDisplay } from './security.cjs';
+import { requireSafePath, sanitizeForDisplay, PathAcceptance } from './security.cjs';
+import { locateFrontmatterFence } from './frontmatter-fence.cjs';
 
 // ─── Frozen typed-IR surface ────────────────────────────────────────────────
 
@@ -232,13 +233,10 @@ function setKey(obj: Record<string, unknown>, key: string, value: unknown): void
 
 // ─── Frontmatter region helpers ──────────────────────────────────────────────
 
+/** The closed frontmatter block's YAML text, as the one fence owner finds it, or null. */
 function getFrontmatterYaml(content: string): string | null {
-  const headerEnd = content.startsWith('---\r\n') ? 5 : content.startsWith('---\n') ? 4 : -1;
-  if (headerEnd === -1) return null;
-  const closingLineStart = content.indexOf('\n---', headerEnd);
-  if (closingLineStart === -1) return null;
-  const yamlEnd = content[closingLineStart - 1] === '\r' ? closingLineStart - 1 : closingLineStart;
-  return content.slice(headerEnd, yamlEnd);
+  const fence = locateFrontmatterFence(content);
+  return fence?.closed ? content.slice(fence.openEnd, fence.bodyEnd) : null;
 }
 
 /**
@@ -483,7 +481,7 @@ function cmdClassify(cwd: string, options: { summary?: string; file?: string } =
 
   let resolvedPath: string;
   try {
-    resolvedPath = requireSafePath(filePath, cwd, 'SUMMARY file', { allowAbsolute: true });
+    resolvedPath = requireSafePath(filePath, cwd, 'SUMMARY file', PathAcceptance.AbsoluteInsideRoot);
   } catch (e) {
     // Emit a structured command error instead of leaking a raw stack trace.
     error(`Invalid SUMMARY path: ${e instanceof Error ? e.message : 'unsafe path'}`);

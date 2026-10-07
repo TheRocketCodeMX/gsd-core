@@ -552,6 +552,108 @@ describe('roadmap-parser: extractCurrentMilestone', () => {
     assert.ok(result.includes('Phase 1: Alpha'), 'selected milestone phases retained');
   });
 
+  // #5007 (Phase 6 / ADR-4910 §8): the preamble strip's phase-number token was
+  // tightened from the generic `[\w][\w.-]*` to the real PHASE_NUMBER_TOKEN_SOURCE
+  // grammar (digits, optional trailing letter, dotted subphases) when the strip
+  // moved onto phaseHeadingPrefixSrcFor. Prove real phase-number shapes —
+  // plain digits and a decimal subphase — still match and strip correctly.
+  test('#5007 — preamble strip still removes a decimal-subphase heading after the token tightening', () => {
+    writeState(tmpDir, { milestone: 'v9.0' });
+    const content = [
+      '# ROADMAP',
+      '',
+      '## Preamble',
+      '',
+      '### Phase 04.1: DecimalGhost',
+      '',
+      '**Goal:** should be stripped',
+      '',
+      '## 🚧 v9.0 Current',
+      '',
+      '### Phase 1: Alpha',
+      '',
+      '**Goal:** do alpha',
+      '',
+    ].join('\n');
+    writeRoadmap(tmpDir, content);
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    const result = extractCurrentMilestone(roadmap, tmpDir);
+    assert.ok(!result.includes('DecimalGhost'), 'a decimal subphase (`04.1`) still matches PHASE_NUMBER_TOKEN_SOURCE and is stripped');
+    assert.ok(result.includes('Phase 1: Alpha'), 'selected milestone phases retained');
+  });
+
+  // #5007: the SAME strip regex is also reached from extractCurrentMilestoneScoped's
+  // <details>-fallback branch (no version-bearing heading anywhere in the document,
+  // the current milestone is identified only via a <summary> tag inside a <details>
+  // block) — no prior pinning test exercised this branch directly. Cover it here so
+  // the token-tightening is verified against BOTH call sites of the shared const,
+  // not just the preambleWithoutPhaseDetails site above.
+  test('#5007 — <details>-fallback branch strips preamble phase blocks (plain and decimal) after the token tightening', () => {
+    writeState(tmpDir, { milestone: 'v9.0' });
+    const content = [
+      '# ROADMAP',
+      '',
+      '## Preamble',
+      '',
+      '### Phase 3: PreambleGhost',
+      '',
+      '**Goal:** should be stripped',
+      '',
+      '### Phase 04.1: PreambleDecimalGhost',
+      '',
+      '**Goal:** should also be stripped',
+      '',
+      '<details>',
+      '<summary>v9.0 Archived</summary>',
+      '',
+      '### Phase 1: Alpha',
+      '',
+      '**Goal:** do alpha',
+      '',
+      '</details>',
+      '',
+    ].join('\n');
+    writeRoadmap(tmpDir, content);
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    const result = extractCurrentMilestone(roadmap, tmpDir);
+    assert.ok(!result.includes('PreambleGhost'), 'plain-digit preamble phase block is stripped on the <details>-fallback branch');
+    assert.ok(!result.includes('PreambleDecimalGhost'), 'decimal-subphase preamble phase block is stripped on the <details>-fallback branch');
+    assert.ok(result.includes('Phase 1: Alpha'), 'the archived phase inside the located <details> block is retained');
+    assert.ok(result.includes('<summary>v9.0 Archived</summary>'), 'the summary tag that located the block is retained');
+  });
+
+  // #5007 (Phase 6 / ADR-4910 §8): currentSectionHasPhaseDetails (the boolean
+  // gate deciding whether the preamble strip runs at all) migrated off its own
+  // hand-rolled `#{2,4}\s*Phase\s+\S` literal. The #3235 tests above already
+  // pin the TRUE branch (current section has its own phase details, preamble
+  // is stripped); this pins the FALSE branch directly via extractCurrentMilestone
+  // (the #2947 test elsewhere in this file exercises the same false branch
+  // only indirectly, through the CLI's phase_count assertion).
+  test('#5007 — currentSectionHasPhaseDetails false branch: preamble phases preserved when the current section has none of its own', () => {
+    writeState(tmpDir, { milestone: 'v9.0' });
+    const content = [
+      '# ROADMAP',
+      '',
+      '## Phases',
+      '',
+      '### Phase 1: Alpha',
+      '',
+      '**Goal:** do alpha',
+      '',
+      '## v9.0 Progress',
+      '',
+      '### v9.0 phase progress',
+      '',
+      '| Phase | Status |',
+      '|-------|--------|',
+      '| 1     | Planned |',
+    ].join('\n');
+    writeRoadmap(tmpDir, content);
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    const result = extractCurrentMilestone(roadmap, tmpDir);
+    assert.ok(result.includes('Phase 1: Alpha'), 'preamble phase details survive when the selected section has none of its own');
+  });
+
   // The fixture below carries its own `## Phase Details` heading in the preamble.
   // The LF-only sibling test above can't catch a CRLF-specific regression in the
   // `[^\n]*` / `\n?` tail of the Phase Details strip regex — those tail tokens are
@@ -946,6 +1048,240 @@ describe('roadmap-parser: getMilestoneInfo #2135 — milestone_name clobber', ()
     const info = getMilestoneInfo(tmpDir);
     assert.strictEqual(info.scope, SCOPE.COMPLETE);
     assert.strictEqual(info.value.name, 'Real Name');
+  });
+});
+
+// ─── getMilestoneInfo — #4134 punctuation-fragment name refusal ───────────────
+// The §7.2 pinned rule takes everything AFTER the heading's own version token
+// as the name. For a name-then-version heading (`# Roadmap: Project — Name
+// (v1.13)` — the shape a first-ever ROADMAP.md drifts into, since nothing
+// templates its H1) that remainder is literally `)`, which the rule used to
+// return as a COMPLETE-scope "name". ADR-3180 §7.2 rule 6 is the floor this
+// violates: a version known but a name unresolvable is TRUNCATED carrying
+// `name: null` — a punctuation-only remainder is heading structure, not a
+// curated name (#4134).
+
+describe('roadmap-parser: getMilestoneInfo #4134 — name-then-version heading', () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('#4134 — name-then-version H1 never yields a punctuation-fragment name (rule 6: TRUNCATED, name null)', () => {
+    writeState(tmpDir, { milestone: 'v1.13' });
+    writeRoadmap(tmpDir, [
+      '# Roadmap: GSD Core — Native OMP Runtime Support (v1.13)',
+      '',
+      '### Phase 1: Runtime Adapter Interface',
+    ].join('\n'));
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.TRUNCATED, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v1.13');
+    assert.strictEqual(info.value.name, null);
+  });
+
+  test('#4134 — ROADMAP-only fallback path also refuses the ")" fragment', () => {
+    // No STATE.md: the first open milestone heading supplies the version.
+    writeRoadmap(tmpDir, [
+      '# Roadmap: GSD Core — Native OMP Runtime Support (v1.13)',
+      '',
+      '### Phase 1: Runtime Adapter Interface',
+    ].join('\n'));
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.TRUNCATED, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v1.13');
+    assert.strictEqual(info.value.name, null);
+  });
+
+  test('#4134 — the refusal is level-agnostic (H2/H3 carry the same fragment)', () => {
+    for (const [level, heading] of [
+      [2, '## Native OMP Runtime Support (v1.13)'],
+      [3, '### Native OMP Runtime Support (v1.13)'],
+    ]) {
+      writeState(tmpDir, { milestone: 'v1.13' });
+      writeRoadmap(tmpDir, `${heading}\n\n### Phase 1: Setup\n`);
+      const info = getMilestoneInfo(tmpDir);
+      assert.strictEqual(info.scope, SCOPE.TRUNCATED, `H${level}: ${JSON.stringify(info)}`);
+      assert.strictEqual(info.value.version, 'v1.13');
+      assert.strictEqual(info.value.name, null);
+    }
+  });
+
+  test('#4134 — every punctuation-only remainder is refused (garbage family)', () => {
+    // Each fragment survives stripLeadingDelimiter (it does not START with a
+    // delimiter char) and carries no letter or digit anywhere — the exact
+    // shape that used to be returned as a "name".
+    const fragments = [')', '()', '**', '.,;:', ']}', '🎉'];
+    for (const fragment of fragments) {
+      writeState(tmpDir, { milestone: 'v1.2' });
+      writeRoadmap(tmpDir, `## v1.2 — ${fragment}\n\n### Phase 1: Setup\n`);
+      const info = getMilestoneInfo(tmpDir);
+      assert.strictEqual(info.scope, SCOPE.TRUNCATED, `fragment ${JSON.stringify(fragment)}: ${JSON.stringify(info)}`);
+      assert.strictEqual(info.value.version, 'v1.2');
+      assert.strictEqual(info.value.name, null, `fragment ${JSON.stringify(fragment)} must not become a name`);
+    }
+  });
+
+  test('#4134 control — version-last without parens was already name:null and stays so', () => {
+    writeState(tmpDir, { milestone: 'v1.2.3' });
+    writeRoadmap(tmpDir, '# Milestone Name v1.2.3\n\n### Phase 1: Setup\n');
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.value.version, 'v1.2.3');
+    assert.strictEqual(info.value.name, null);
+    assert.strictEqual(info.scope, SCOPE.TRUNCATED);
+  });
+
+  test('#4134 negative space — canonical delimiter forms parse identically', () => {
+    const cases = [
+      ['## v2.0: The Big Launch', 'The Big Launch'],
+      ['## v2.5 — Galaxy Release', 'Galaxy Release'],
+      ['## v2.6 – En Dash Form', 'En Dash Form'],
+      ['## v2.7 - Hyphen Form', 'Hyphen Form'],
+      ['## v2.8 Space Only Form', 'Space Only Form'],
+    ];
+    for (const [heading, expected] of cases) {
+      writeState(tmpDir, { milestone: heading.match(/v\d+(?:\.\d+)*/)[0] });
+      writeRoadmap(tmpDir, `${heading}\n\n### Phase 1: Setup\n`);
+      const info = getMilestoneInfo(tmpDir);
+      assert.strictEqual(info.scope, SCOPE.COMPLETE, `${heading}: ${JSON.stringify(info)}`);
+      assert.strictEqual(info.value.name, expected, `${heading}: ${JSON.stringify(info.value)}`);
+    }
+  });
+
+  test('#4134 negative space — parenthetical names are retained (#3171)', () => {
+    writeState(tmpDir, { milestone: 'v1.2' });
+    writeRoadmap(tmpDir, '## v1.2 — Name (Part 2)\n\n### Phase 1: Setup\n');
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE);
+    assert.strictEqual(info.value.name, 'Name (Part 2)');
+  });
+
+  test('#4134 negative space — markers, digit-only names, CRLF headings unchanged', () => {
+    // Trailing status marker still stripped, not treated as a "name" (a ✅
+    // TRAILING marker would make the heading closed and skipped — 📋 does not).
+    writeState(tmpDir, { milestone: 'v3.0' });
+    writeRoadmap(tmpDir, '## v3.0 — Planned 📋\n\n### Phase 1: Setup\n');
+    let info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE);
+    assert.strictEqual(info.value.name, 'Planned');
+
+    // A digit-only name IS a name (\p{N} counts as a word character).
+    writeState(tmpDir, { milestone: 'v4.0' });
+    writeRoadmap(tmpDir, '## v4.0 — 42\n\n### Phase 1: Setup\n');
+    info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE);
+    assert.strictEqual(info.value.name, '42');
+
+    // CRLF heading: the trailing \r must never become part of the verdict.
+    writeState(tmpDir, { milestone: 'v2.0' });
+    writeRoadmap(tmpDir, '## v2.0 — CRLF Name\r\n\r\n### Phase 1: Setup\r\n');
+    info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE);
+    assert.strictEqual(info.value.name, 'CRLF Name');
+  });
+
+  test('#4134 — property: a word-char remainder is always a name, a punctuation-only remainder never is', () => {
+    // Document-shaped generator (#2371): fixed literal token alphabets, NOT
+    // derived from the parser's own regexes. Fragments are token lists joined
+    // with single spaces, so no token can glue onto the version token and
+    // trigger the sub-milestone continuation grammar (`v1.3-B`).
+    const WORD = fc.constantFrom('Alpha', 'Beta', 'R2D2', '42', '名称', 'küche');
+    const PUNCT = fc.constantFrom(')', '(', '—', ':', '.', '**', ']');
+    const minor = fc.integer({ min: 0, max: 9 });
+    const tokens = fc.array(fc.oneof(WORD, PUNCT), { minLength: 1, maxLength: 6 });
+
+    const prop = fc.property(minor, tokens, (m, toks) => {
+      const version = `v1.${m}`;
+      const fragment = toks.join(' ').trim();
+      const hasWordChar = /[\p{L}\p{N}]/u.test(fragment);
+      const out = roadmapParser.listMilestoneHeadings(`## ${version} ${fragment}\n`);
+      assert.strictEqual(out.length, 1, `heading not enumerated: ${version} ${fragment}`);
+      assert.strictEqual(out[0].version, version, `continuation grammar leaked into the version: ${JSON.stringify(out[0])}`);
+      // The biconditional IS the #4134 contract: a remainder with at least one
+      // letter/digit is a curated name; one with none is heading structure.
+      assert.strictEqual(
+        out[0].name !== null,
+        hasWordChar,
+        `fragment ${JSON.stringify(fragment)} (hasWordChar=${hasWordChar}) yielded name ${JSON.stringify(out[0].name)}`,
+      );
+    });
+
+    const result = fc.check(prop, { seed: 20260905, numRuns: 300 });
+    if (result.failed) {
+      assert.fail(`#4134 property violated (replay seed=20260905): ${JSON.stringify(result.counterexample)}`);
+    }
+  });
+});
+
+// ─── getMilestoneInfo — #4433 name-validity guard on bullet captures ──────────
+// `hasNameableContent` (the #4134 name-validity predicate) is not exported
+// from roadmap-parser.cjs; these tests exercise it indirectly through
+// getMilestoneInfo's two bullet-capture sites (the STATE-anchored 🚧 bullet
+// and the no-STATE.md in-progress 🚧 bullet), which #4433 found had skipped
+// straight to a bare truthiness check.
+
+describe('roadmap-parser: getMilestoneInfo #4433 — name-validity guard on bullet captures', () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('#4433 — punctuation-only 🚧-bullet name (STATE.md version known) falls through to TRUNCATED, not the bullet fragment', () => {
+    writeState(tmpDir, { milestone: 'v3.3' });
+    writeRoadmap(tmpDir, [
+      '🚧 **v3.3** !!!',
+      '',
+      '## v3.4: Something Else',
+      '### Phase 1: Setup',
+    ].join('\n'));
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.TRUNCATED, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v3.3');
+    assert.notStrictEqual(info.value.name, '!!!');
+    assert.strictEqual(info.value.name, null);
+  });
+
+  test('#4433 — real, non-punctuation 🚧-bullet name (STATE.md version known) still resolves COMPLETE (regression control)', () => {
+    writeState(tmpDir, { milestone: 'v3.3' });
+    writeRoadmap(tmpDir, [
+      '🚧 **v3.3** Real Feature Name',
+      '',
+      '## v3.4: Something Else',
+      '### Phase 1: Setup',
+    ].join('\n'));
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v3.3');
+    assert.match(info.value.name, /Real Feature Name/);
+  });
+
+  test('#4433 — punctuation-only in-progress 🚧-bullet (no STATE.md) is not returned as COMPLETE with the punctuation as name', () => {
+    writeRoadmap(tmpDir, '🚧 **v3.3 !!!**\n### Phase 1: Setup\n');
+    const info = getMilestoneInfo(tmpDir);
+    assert.notStrictEqual(info.value.name, '!!!');
+    if (info.scope === SCOPE.COMPLETE) {
+      assert.fail(`punctuation-only in-progress bullet name leaked through as COMPLETE: ${JSON.stringify(info)}`);
+    }
+    assert.strictEqual(info.scope, SCOPE.TRUNCATED, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v3.3');
+    assert.strictEqual(info.value.name, null);
+  });
+
+  test('#4433 — real in-progress 🚧-bullet name (no STATE.md) still resolves COMPLETE (regression control)', () => {
+    writeRoadmap(tmpDir, '🚧 **v3.3 Some Real Name**\n### Phase 1: Setup\n');
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v3.3');
+    assert.match(info.value.name, /Some Real Name/);
+  });
+
+  test('#4433 — digits-only captured name is accepted (boundary: digits alone qualify)', () => {
+    writeState(tmpDir, { milestone: 'v4.0' });
+    writeRoadmap(tmpDir, '## v4.0 — 42\n### Phase 1: Setup\n');
+    const info = getMilestoneInfo(tmpDir);
+    assert.strictEqual(info.scope, SCOPE.COMPLETE, `scope: ${JSON.stringify(info)}`);
+    assert.strictEqual(info.value.version, 'v4.0');
+    assert.strictEqual(info.value.name, '42');
   });
 });
 
@@ -3418,7 +3754,7 @@ describe('#1881 unreadable ROADMAP vs absent ROADMAP', () => {
   const TABLE_ROADMAP = [
     '# Roadmap: Table Repro', '',
     '## Milestone v2.0', '',
-    '| Phase | Focus | Requirements | Success criteria (preview) |',
+    '| Phase | Name | Requirements | Success criteria (preview) |',
     '| --- | --- | --- | --- |',
     '| 20 | Alpha focus | R1 | Works |',
     '| 21 | Beta focus | R2 | Works too |',
@@ -3471,6 +3807,68 @@ describe('#1881 unreadable ROADMAP vs absent ROADMAP', () => {
       a3.ok(out.phases.some((p) => /Alpha focus/.test(p.phase_name || p.name || '')), 'phase 20 named from column 2');
     });
 
+    t3('#4480: table phase names are resolved by a recognized header', () => {
+      const nameRows = rp3.collectTablePhaseRows([
+        '| Phase | Status | Name |',
+        '| --- | --- | --- |',
+        '| 1 | done | First Thing |',
+      ].join('\n'));
+      const phaseNameRows = rp3.collectTablePhaseRows([
+        '| Phase | Phase Name | Status |',
+        '| --- | --- | --- |',
+        '| 2 | Second Thing | pending |',
+      ].join('\n'));
+      a3.deepStrictEqual(nameRows.map(({ id, name }) => ({ id, name })), [
+        { id: '1', name: 'First Thing' },
+      ]);
+      a3.deepStrictEqual(phaseNameRows.map(({ id, name }) => ({ id, name })), [
+        { id: '2', name: 'Second Thing' },
+      ]);
+    });
+
+    t3('#4480 property: the declared name column wins at every column position', () => {
+      const otherHeader = fc.constantFrom('Status', 'Goal', 'Plans', 'Owner');
+      fc.assert(fc.property(
+        fc.array(otherHeader, { maxLength: 4 }),
+        fc.array(otherHeader, { maxLength: 4 }),
+        fc.constantFrom('Name', 'Phase Name'),
+        fc.integer({ min: 1, max: 998 }),
+        fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9 ]{0,30}$/),
+        (before, after, nameHeader, phase, name) => {
+          const headers = ['Phase', ...before, nameHeader, ...after];
+          const values = [String(phase), ...before.map(() => 'x'), name, ...after.map(() => 'y')];
+          const delimiter = headers.map(() => '---');
+          const rows = rp3.collectTablePhaseRows([
+            `| ${headers.join(' | ')} |`,
+            `| ${delimiter.join(' | ')} |`,
+            `| ${values.join(' | ')} |`,
+          ].join('\n'));
+          a3.deepStrictEqual(rows.map(({ id, name: parsedName }) => ({ id, name: parsedName })), [
+            { id: String(phase), name: name.trim() },
+          ]);
+        },
+      ), { numRuns: 200 });
+    });
+
+    t3('#4480: a status table cannot hide missing phase details', () => {
+      writeRoadmap3(tmpDir, [
+        '# Roadmap', '',
+        '## Phases', '',
+        '- [x] **Phase 1: First Thing** — shipped',
+        '- [ ] **Phase 2: Second Thing** — not started', '',
+        '## Progress', '',
+        '| Phase | Status |',
+        '| --- | --- |',
+        '| 1 | done |',
+        '',
+      ].join('\n'));
+      const r = rgt3(['roadmap', 'analyze', 'json'], tmpDir);
+      a3.ok(r.success, `analyze failed: ${r.error}`);
+      const out = JSON.parse(r.output);
+      a3.strictEqual(out.phase_count, 0, `status rows are not declarations; got ${r.output}`);
+      a3.deepStrictEqual(out.missing_phase_details, ['1', '2']);
+    });
+
     t3('#3577: the canonical progress table is not a phase listing; fenced examples excluded', () => {
       writeRoadmap3(tmpDir, [
         '# Roadmap', '', '## v1.0', '',
@@ -3480,7 +3878,7 @@ describe('#1881 unreadable ROADMAP vs absent ROADMAP', () => {
         '| 3 | 1/2 | In Progress | |',
         '',
         '```md',
-        '| Phase | Focus |',
+        '| Phase | Name |',
         '| --- | --- |',
         '| 77 | fenced example |',
         '```',
@@ -3502,7 +3900,7 @@ describe('#1881 unreadable ROADMAP vs absent ROADMAP', () => {
       writeRoadmap3(tmpDir, [
         '# Roadmap', '', '## v1.0', '',
         '### Phase 1: Heading Form', '**Goal:** g', '',
-        '| Phase | Focus |',
+        '| Phase | Name |',
         '| --- | --- |',
         '| 1 | heading dup guard |',
         '| 2.5 | decimal row |',
@@ -3520,3 +3918,169 @@ describe('#1881 unreadable ROADMAP vs absent ROADMAP', () => {
     });
   });
 }
+
+// ─── #4837: extractPhaseFieldMultiline structural-boundary regressions ────────
+//
+// #4826 (#4731 follow-up) added continuation-scanning to extractPhaseFieldMultiline
+// but left four structural boundaries unguarded: list items, lowercase-first-letter
+// bold labels, an unanchored label match that an earlier field's own inline
+// `**mention**` could shadow, and fenced code blocks. Defect 1 (list items) is the
+// real corruption vector reported in #4837 — see the end-to-end regression in
+// tests/phase.test.cjs.
+describe('roadmap-parser: extractPhaseFieldMultiline — #4837 structural boundaries', () => {
+  const { extractPhaseFieldMultiline } = roadmapParser;
+
+  test('#4837 defect 1: a list item after the field stops the continuation scan', () => {
+    const section = '**Requirements**: REQ-01, REQ-02\n- Deferred to Phase 2: REQ-99\n';
+    const result = extractPhaseFieldMultiline(section, 'Requirements');
+    assert.strictEqual(result, 'REQ-01, REQ-02');
+    assert.ok(!/REQ-99/.test(result), `list item text must not be folded in, got: ${result}`);
+  });
+
+  test('#4837 defect 1b: a `*` or `+` list item also stops the continuation scan', () => {
+    assert.strictEqual(
+      extractPhaseFieldMultiline('**Goal**: Ship it\n* a bullet\n', 'Goal'),
+      'Ship it',
+    );
+    assert.strictEqual(
+      extractPhaseFieldMultiline('**Goal**: Ship it\n+ a bullet\n', 'Goal'),
+      'Ship it',
+    );
+  });
+
+  test('#4837 defect 2: a lowercase-first-letter bold label stops the continuation scan', () => {
+    const section = '**Requirements**: REQ-01, REQ-02\n**depends on**: Phase 0\n';
+    const result = extractPhaseFieldMultiline(section, 'Requirements');
+    assert.strictEqual(result, 'REQ-01, REQ-02');
+    assert.ok(!/depends on/.test(result), `lowercase label line must not be folded in, got: ${result}`);
+  });
+
+  test('#4837 defect 3: an anchored label match skips an earlier field\'s inline **mention**', () => {
+    const section = '**Goal:** Document `**Requirements**` handling end to end.\n\n**Requirements:** REQ-01, REQ-02\n';
+    const result = extractPhaseFieldMultiline(section, 'Requirements');
+    assert.strictEqual(result, 'REQ-01, REQ-02');
+  });
+
+  test('#4837 defect 4: a fenced code block opener stops the continuation scan', () => {
+    const section = '**Goal:** Do the thing\n```\n**Goal:** not this\n```\n';
+    const result = extractPhaseFieldMultiline(section, 'Goal');
+    assert.strictEqual(result, 'Do the thing');
+    assert.ok(!result.includes('```'), `fence marker must not be folded in, got: ${result}`);
+  });
+
+  test('#4837 defect 4b: a `~~~` fence opener also stops the continuation scan', () => {
+    const section = '**Goal:** Do the thing\n~~~\nnot this\n~~~\n';
+    const result = extractPhaseFieldMultiline(section, 'Goal');
+    assert.strictEqual(result, 'Do the thing');
+  });
+
+  test('#4837 defect 4c (isolated-review finding): a fence opening on the label\'s own line is caught too', () => {
+    // The continuation loop's fence-stop check only ever sees lines AFTER the
+    // label's own line -- a fence opener glued to the label itself
+    // (`**Requirements:** ```js`) was invisible to it, leaking one line of
+    // fence content before the closing fence coincidentally matched the same
+    // stop check.
+    const section = '**Requirements:** ```js\nfoo()\n```\nmore\n';
+    const result = extractPhaseFieldMultiline(section, 'Requirements');
+    assert.strictEqual(result, null, `a same-line fence opener must yield no content, got: ${JSON.stringify(result)}`);
+  });
+
+  test('#4837 regression guard: existing single-line and wrap behavior is unchanged', () => {
+    assert.strictEqual(
+      extractPhaseFieldMultiline('**Goal:** What this phase delivers\n', 'Goal'),
+      'What this phase delivers',
+    );
+    assert.strictEqual(
+      extractPhaseFieldMultiline('**Requirements**: REQ-01,\nREQ-02\n', 'Requirements'),
+      'REQ-01, REQ-02',
+    );
+    assert.strictEqual(extractPhaseFieldMultiline('no field here\n', 'Goal'), null);
+  });
+});
+
+// ─── classifyMilestoneScalar / explicit-null milestone (#5038) ─────────────────
+
+describe('roadmap-parser: classifyMilestoneScalar (#5038)', () => {
+  const { classifyMilestoneScalar } = roadmapParser;
+  const NULL_SPELLINGS = ['null', 'Null', 'NULL', '~'];
+  const pad = fc.string({ unit: fc.constantFrom(' ', '\t'), maxLength: 3 });
+
+  test('every null spelling, with optional quotes and a trailing comment, is an explicit null', () => {
+    fc.assert(fc.property(
+      fc.constantFrom(...NULL_SPELLINGS),
+      fc.constantFrom('', "'", '"'),
+      fc.option(fc.string({ unit: fc.constantFrom('a', 'b', ' ', '#', '1'), maxLength: 8 }), { nil: undefined }),
+      pad,
+      pad,
+      (spelling, quote, comment, lead, trail) => {
+        const raw = `${lead}${quote}${spelling}${quote}${comment === undefined ? '' : ` #${comment}`}${trail}`;
+        assert.deepStrictEqual(classifyMilestoneScalar(raw), { explicitNull: true, version: null });
+      },
+    ));
+  });
+
+  test('any other token is a version equal to the trimmed input', () => {
+    fc.assert(fc.property(
+      fc.string({ unit: fc.constantFrom('v', '1', '2', '.', '-', 'a', 'n', 'u', 'l', '#'), minLength: 1, maxLength: 10 }),
+      pad,
+      pad,
+      (token, lead, trail) => {
+        fc.pre(!NULL_SPELLINGS.includes(token));
+        // A `#` only starts a comment after whitespace, so none of these are null.
+        const result = classifyMilestoneScalar(`${lead}${token}${trail}`);
+        assert.deepStrictEqual(result, { explicitNull: false, version: token });
+      },
+    ));
+  });
+
+  test('`#` boundary: `null#x` is a version, `null #x` is null', () => {
+    assert.deepStrictEqual(classifyMilestoneScalar('null#x'), { explicitNull: false, version: 'null#x' });
+    assert.deepStrictEqual(classifyMilestoneScalar('null #x'), { explicitNull: true, version: null });
+  });
+
+  test('blank or non-string input is absent, not null', () => {
+    for (const raw of ['', '   ', undefined, null]) {
+      assert.deepStrictEqual(classifyMilestoneScalar(raw), { explicitNull: false, version: null });
+    }
+  });
+});
+
+describe('roadmap-parser: sectioned ROADMAP with explicit `milestone: null` (#5038)', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const sectioned = [
+    '# Roadmap',
+    '',
+    '- 🚧 **v1.1 Current** - in progress',
+    '',
+    '## v1.1 Current',
+    '',
+    '### Phase 2: Second',
+    '',
+    '## v1.0 Earlier',
+    '',
+    '### Phase 1: First',
+    '',
+  ].join('\n');
+
+  test('control: a bound milestone resolves a raw range', () => {
+    writeState(tmpDir, { milestone: 'v1.1' });
+    assert.ok(roadmapParser.currentMilestoneRawRanges(sectioned, tmpDir), 'bound milestone yields ranges');
+  });
+
+  test('explicit null does not fall back to the in-progress bullet (currentMilestoneRawRanges)', () => {
+    writeState(tmpDir, { milestone: 'null' });
+    assert.strictEqual(roadmapParser.currentMilestoneRawRanges(sectioned, tmpDir), null);
+  });
+
+  test('explicit null does not narrow extractCurrentMilestone to the bullet milestone', () => {
+    writeState(tmpDir, { milestone: 'v1.1' });
+    const bound = extractCurrentMilestone(sectioned, tmpDir);
+    writeState(tmpDir, { milestone: 'null' });
+    const unbound = extractCurrentMilestone(sectioned, tmpDir);
+    assert.ok(!bound.includes('Phase 1: First'), 'control narrows to v1.1');
+    assert.ok(unbound.includes('Phase 1: First'), 'explicit null leaves the whole document, not the v1.1 slice');
+  });
+});

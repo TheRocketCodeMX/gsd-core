@@ -24,6 +24,7 @@ const cp = require('node:child_process');
 const fc = require('fast-check');
 
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { LOOP_HOOK_POINT_CLI_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const {
@@ -166,6 +167,21 @@ describe('#3534 resolve-execution reports resolved AND effective effort', () => 
     const out = resolveExecution(dir, 'gsd-executor', [], { CLAUDE_CONFIG_DIR: home });
     assert.equal(out.effort_effective, 'xhigh');
     assert.equal(out.effort_effective_source, 'frontmatter');
+  });
+
+  test('#5105: a preambled agent file is not frontmatter to the runtime, so its block is not reported', (t) => {
+    // effort_effective is what the installed agent will actually run at, and the
+    // runtime only honors a frontmatter block at byte 0. A block behind a
+    // preamble (which effort-sync's allowPreamble fence still edits) is not
+    // frontmatter to the loader, so resolve-execution reports the resolved
+    // cascade value with source 'resolved' — never the preamble block's `low`.
+    const dir = projectWithEffort('high');
+    t.after(() => cleanup(dir));
+    const home = agentHome(t, 'Preamble line\n\n---\nname: gsd-executor\neffort: low\ndescription: x\n---\nBody.\n');
+    const out = resolveExecution(dir, 'gsd-executor', [], { CLAUDE_CONFIG_DIR: home });
+    assert.equal(out.effort, 'high', 'resolved cascade value unchanged');
+    assert.equal(out.effort_effective, 'high', 'echoes the resolved value, not the preamble block');
+    assert.equal(out.effort_effective_source, 'resolved');
   });
 
   test('10a: frontmatter-less agent file degrades to resolved', (t) => {
@@ -663,7 +679,7 @@ describe('#2481 review workflow resolves effort per reviewer', () => {
         {
           cwd: projectDir,
           encoding: 'utf8',
-          timeout: 60000,
+          timeout: LOOP_HOOK_POINT_CLI_TIMEOUT_MS,
           killSignal: 'SIGKILL',
           env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
         },

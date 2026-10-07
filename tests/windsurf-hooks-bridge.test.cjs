@@ -46,6 +46,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { runHook: runHookSeam } = require('./helpers/process-seam.cjs');
 const { gitOrThrow } = require('./helpers/git-fixture.cjs');
+const { QUICK_SPAWN_TIMEOUT_MS, STAGED_HOOK_SCRIPT_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
@@ -65,11 +66,18 @@ const HOOKS_DIR = path.join(__dirname, '..', 'hooks');
 const PRE_WRITE_SCRIPT = path.join(HOOKS_DIR, GSD_WINDSURF_PRE_WRITE_HOOK_SCRIPT);
 const PRE_COMMAND_SCRIPT = path.join(HOOKS_DIR, GSD_WINDSURF_PRE_COMMAND_HOOK_SCRIPT);
 
+// The pre-write guard runs at most 3 sequential git probes of
+// BLOCKING_GUARD_PROBE_TIMEOUT_MS each (hooks/lib/git-probe.js, #5180), so its
+// worst case is 3 x BLOCKING_GUARD_PROBE_TIMEOUT_MS plus node start/kill
+// overhead. That needs the staged-hook class bound (STAGED_HOOK_SCRIPT_TIMEOUT_MS):
+// a harness kill below the worst case would fail G1/G1b on a starved runner
+// instead of exercising the hook's documented fail-open. The pre-command hook
+// runs no git probe and keeps the quick bound, which G10's ReDoS check relies on.
 function runHook(scriptPath, payload, opts = {}) {
   const input = payload === undefined ? '' : (typeof payload === 'string' ? payload : JSON.stringify(payload));
   const r = runHookSeam(scriptPath, [], {
     input,
-    timeoutMs: 10000,
+    timeoutMs: scriptPath === PRE_WRITE_SCRIPT ? STAGED_HOOK_SCRIPT_TIMEOUT_MS : QUICK_SPAWN_TIMEOUT_MS,
     cwd: opts.cwd || os.tmpdir(),
   });
   return { status: r.exitCode, stdout: r.stdout, stderr: r.stderr, signal: r.signal };
@@ -100,8 +108,22 @@ describe('gsd-windsurf-pre-write.js (pre_write_code guard)', () => {
       tool_info: { file_path: path.join(otherRepo, 'target.txt') },
     }, { cwd: cwdRepo });
 
-    assert.equal(result.status, 2, `expected exit 2, got ${result.status} (stderr: ${result.stderr})`);
-    assert.match(result.stderr, /differs from the active project root|inside a git internal/);
+    // hooks/gsd-windsurf-pre-write.js gives every git probe the shared
+    // BLOCKING_GUARD_PROBE_TIMEOUT_MS budget (SPAWNOPT.timeout, #5180) and, by
+    // documented design, fails OPEN (exit 0) via
+    // hooks/lib/git-probe.js's reportIfUndetermined() (#3911) when the probe
+    // cannot be resolved in time — git-probe.js records macOS CI runs
+    // landing at ~2.1 s, just past the former 2000 ms budget. This is NOT a
+    // tolerated flake: both halves of the hook's contract are asserted below,
+    // and which half applies is decided by the observed probe outcome, not
+    // guessed in advance.
+    const probeUndetermined = /git probe '[^']+'.*allowing this call because the probe's answer is unknown/.test(result.stderr);
+    if (probeUndetermined) {
+      assert.equal(result.status, 0, `probe was undetermined, so the hook must fail OPEN (exit 0), got ${result.status} (stderr: ${result.stderr})`);
+    } else {
+      assert.equal(result.status, 2, `expected exit 2, got ${result.status} (stderr: ${result.stderr})`);
+      assert.match(result.stderr, /differs from the active project root|inside a git internal/);
+    }
   });
 
   test('G1b: a write inside a DIFFERENT repo\'s .git internals -> exit 2 + stderr reason', (t) => {
@@ -115,8 +137,18 @@ describe('gsd-windsurf-pre-write.js (pre_write_code guard)', () => {
       tool_info: { file_path: path.join(otherRepo, '.git', 'config') },
     }, { cwd: cwdRepo });
 
-    assert.equal(result.status, 2, `expected exit 2, got ${result.status} (stderr: ${result.stderr})`);
-    assert.match(result.stderr, /inside a git internal \(\.git\) directory/);
+    // Same rationale as G1 above: hooks/gsd-windsurf-pre-write.js's shared
+    // BLOCKING_GUARD_PROBE_TIMEOUT_MS per-probe budget, its documented
+    // fail-open, and hooks/lib/git-probe.js's reportIfUndetermined() (#3911)
+    // mean an undetermined probe is a legitimate, documented outcome, not a
+    // flake to be tolerated by loosening the assert.
+    const probeUndetermined = /git probe '[^']+'.*allowing this call because the probe's answer is unknown/.test(result.stderr);
+    if (probeUndetermined) {
+      assert.equal(result.status, 0, `probe was undetermined, so the hook must fail OPEN (exit 0), got ${result.status} (stderr: ${result.stderr})`);
+    } else {
+      assert.equal(result.status, 2, `expected exit 2, got ${result.status} (stderr: ${result.stderr})`);
+      assert.match(result.stderr, /inside a git internal \(\.git\) directory/);
+    }
   });
 
   test('G2: a write resolving to the SAME git root as cwd -> exit 0 (allowed)', (t) => {

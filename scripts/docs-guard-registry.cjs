@@ -9,8 +9,12 @@
  *
  * A prior version of this PR added a `docs guards` RULE to `RULES` in
  * scripts/ci-test-scope.cjs, on the theory that classify()'s `!codeChanged`
- * normalization (which zeroes fullMatrix/targeted_tests/windows_tests for
- * docs-only diffs) made the RULE inert to classify()'s scope decision.
+ * normalization (which at the time zeroed fullMatrix/targeted_tests/
+ * windows_tests for docs-only diffs) made the RULE inert to classify()'s
+ * scope decision. (#4641 later removed `windows_tests` from classify()'s
+ * output entirely; the normalization today only zeroes fullMatrix and
+ * targeted_tests. This paragraph is historical narration of a rejected
+ * design, not a description of current behaviour.)
  *
  * That is true for docs-ONLY diffs and FALSE for MIXED docs+code diffs:
  * `codeChanged` is true whenever ANY changed file is product/pipeline code,
@@ -172,6 +176,7 @@ const DOCS_GUARD_TESTS = {
   'tests/analyze-dependencies.test.cjs': ['docs/COMMANDS.md'],
   // FORK: auto-advance-endings.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
   'tests/auto-advance-endings.test.cjs': ['docs/FORK-DELTA.md'],
+  'tests/auto-select-attribute.test.cjs': ['docs/reference/plan-md.md'],
   'tests/autonomous-converge.test.cjs': [
     'docs/COMMANDS.md',
     'docs/how-to/run-phases-autonomously.md',
@@ -195,8 +200,12 @@ const DOCS_GUARD_TESTS = {
   // (commit-files-pathspec.test.cjs:1618) — cannot be resolved to specific
   // files without re-deriving the scan's own file-discovery logic.
   'tests/commit-files-pathspec.test.cjs': ['*'],
+  'tests/compact-content-4139.test.cjs': ['docs/CONFIGURATION.md'],
   'tests/config-field-docs.test.cjs': ['docs/CONFIGURATION.md'],
   'tests/config.test.cjs': ['docs/CONFIGURATION.md'],
+  // #4974: doc/workflow content-parity checks read docs/CONFIGURATION.md's
+  // Gate Settings section directly (see tests/gates-confirmation-toggle-config.test.cjs).
+  'tests/gates-confirmation-toggle-config.test.cjs': ['docs/CONFIGURATION.md'],
   'tests/context-index-sync.test.cjs': ['docs/CONTEXT-INDEX.json'],
   'tests/context-predicates-query.test.cjs': ['docs/contributor-standards.md'],
   // SCAN_DIRS includes 'docs' and recursively walks every .md file under it
@@ -271,6 +280,32 @@ const DOCS_GUARD_TESTS = {
   // seeding, so a content edit to any of them (e.g. renaming a landmark
   // heading/string a hostile-input test targets) can change this test's
   // fixture assumptions.
+  // #4728: pins the retirement of Gemini CLI prose from every localized
+  // how-to/ARCHITECTURE/USER-GUIDE/CONFIGURATION/context-monitor mirror, plus
+  // the PRESERVE (Antigravity) and MODEL-AXIS (Gemini 2.5 Pro) negative-space
+  // checks in the same locales.
+  'tests/gemini-runtime-removed.test.cjs': [
+    'docs/ja-JP/how-to/install-on-your-runtime.md',
+    'docs/ko-KR/how-to/install-on-your-runtime.md',
+    'docs/pt-BR/how-to/install-on-your-runtime.md',
+    'docs/zh-CN/how-to/install-on-your-runtime.md',
+    'docs/ja-JP/ARCHITECTURE.md',
+    'docs/ko-KR/ARCHITECTURE.md',
+    'docs/pt-BR/ARCHITECTURE.md',
+    'docs/zh-CN/ARCHITECTURE.md',
+    'docs/ja-JP/USER-GUIDE.md',
+    'docs/ko-KR/USER-GUIDE.md',
+    'docs/pt-BR/USER-GUIDE.md',
+    'docs/zh-CN/USER-GUIDE.md',
+    'docs/ja-JP/CONFIGURATION.md',
+    'docs/ko-KR/CONFIGURATION.md',
+    'docs/pt-BR/CONFIGURATION.md',
+    'docs/zh-CN/CONFIGURATION.md',
+    'docs/ja-JP/context-monitor.md',
+    'docs/ko-KR/context-monitor.md',
+    'docs/pt-BR/context-monitor.md',
+    'docs/zh-CN/context-monitor.md',
+  ],
   'tests/gen-state-md-docs.test.cjs': [
     'docs/reference/state-md.md',
     'docs/ja-JP/reference/state-md.md',
@@ -377,6 +412,7 @@ const DOCS_GUARD_TESTS = {
     'docs/how-to/plan-a-phase.md',
     'docs/AGENTS.md',
   ],
+  'tests/ui-interaction-capture.test.cjs': ['docs/CONFIGURATION.md'],
   'tests/ui-spec-inventory-provenance.test.cjs': [
     'docs/FEATURES.md',
     'docs/how-to/design-a-ui-phase.md',
@@ -391,6 +427,9 @@ const DOCS_GUARD_TESTS = {
   'tests/verifier-behavior-unverified.test.cjs': ['docs/reference/planning-artifacts.md'],
   'tests/verifier-coincidental-reliance.test.cjs': ['docs/AGENTS.md'],
   'tests/verify.test.cjs': ['docs/reference/plan-md.md'],
+  // #5118 V43: asserts the deleted execute-phase/steps/stale-reverification.md
+  // is absent from the generated inventory manifest.
+  'tests/verify-lifecycle-writes-e2e.test.cjs': ['docs/INVENTORY-MANIFEST.json'],
   'tests/workflow-fragments.test.cjs': ['docs/reference/workflow-fragments.md'],
 };
 

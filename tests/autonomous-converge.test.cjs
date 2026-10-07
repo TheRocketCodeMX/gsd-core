@@ -26,6 +26,7 @@ const STEP_FAIL_FAST_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'auton
 const STEP_DISPATCH_BG_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'autonomous', 'steps', 'converge-dispatch-bg.md');
 const STEP_DISPATCH_INLINE_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'autonomous', 'steps', 'converge-dispatch-inline.md');
 const STEP_LOOP_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'autonomous', 'steps', 'converge-loop.md');
+const CONVERGENCE_WORKFLOW_PATH = path.join(REPO_ROOT, 'gsd-core', 'workflows', 'plan-review-convergence.md');
 
 function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -56,27 +57,95 @@ describe('autonomous --converge flag (#711)', () => {
     assert.match(workflow, /converge\|cross-ai/, 'workflow should accept --converge and --cross-ai');
   });
 
-  test('workflow fails fast when convergence is requested but disabled', () => {
-    // #2994: this check lives in the converge-fail-fast step file now
+  test('explicit --converge overrides the config gate (#4600)', () => {
+    // #2994: this contract lives in the converge-fail-fast step file now
     // (state:plan-strategy-converge) — the host only carries the gated
     // conditional-read stub.
+    // #4600: an explicit `--converge`/`--cross-ai` (PLAN_STRATEGY=converge is
+    // set by nothing else) must WIN over `workflow.plan_review_convergence`
+    // — the config is the default for non-flag invocation, not a veto over an
+    // explicit operator request. The step must therefore not gate on the
+    // config at all, and must state the precedence so a runtime agent
+    // executes it as written.
     const workflow = read(WORKFLOW_PATH);
     const step = read(STEP_FAIL_FAST_PATH);
 
     assert.match(
       workflow,
       /gsd:section id="converge-fail-fast" when="state:plan-strategy-converge"/,
-      'workflow should gate the fail-fast check behind state:plan-strategy-converge',
+      'workflow should keep the step behind state:plan-strategy-converge',
     );
-    assert.match(
+    assert.doesNotMatch(
       step,
       /config-get workflow\.plan_review_convergence/,
-      'converge-fail-fast step should check workflow.plan_review_convergence before planning',
+      'the step must not gate an explicit flag on workflow.plan_review_convergence (#4600)',
+    );
+    assert.doesNotMatch(step, /exit 1/, 'the step must not stop an explicit-flag run');
+    assert.match(
+      step,
+      /OVERRIDES the `workflow\.plan_review_convergence` config gate/,
+      'the step must state that the explicit flag overrides the config gate',
     );
     assert.match(
       step,
-      /gsd config-set workflow\.plan_review_convergence true/,
-      'converge-fail-fast step should print the enable command instead of silently downgrading',
+      /invocation carries `--override-gate`/,
+      'the step must state that the dispatched convergence run carries the override flag (#4600)',
+    );
+    assert.match(
+      step,
+      /without the flag, `PLAN_STRATEGY` is `local`/,
+      'the step must state that the config is not consulted on the non-flag autonomous path',
+    );
+  });
+
+  test('the dispatched convergence run bypasses the config gate (#4600)', () => {
+    // End-to-end contract: the fail-fast step proceeding is not enough — the
+    // dispatched gsd-plan-review-convergence workflow has its own §1.5 gate
+    // that would veto the same run one step later. The autonomous dispatch
+    // must carry an explicit override the gate honors; the veto itself stays
+    // for standalone invocation, where the config gate is documented behavior.
+    const workflow = read(WORKFLOW_PATH);
+    const convergence = read(CONVERGENCE_WORKFLOW_PATH);
+    const howTo = read(HOW_TO_PATH);
+
+    assert.match(
+      workflow,
+      /--override-gate/,
+      'the autonomous converge dispatch must carry --override-gate so the dispatched run cannot be vetoed by the config gate (#4600)',
+    );
+    assert.match(
+      convergence,
+      /--override-gate/,
+      'plan-review-convergence must honor a --override-gate dispatch instead of failing fast (#4600)',
+    );
+    assert.match(
+      convergence,
+      /gsd-plan-review-convergence is disabled \(workflow\.plan_review_convergence=false\)/,
+      'the §1.5 veto must remain for standalone invocation, where the config gate decides (#4600)',
+    );
+    assert.doesNotMatch(
+      workflow,
+      /fail fast unless the existing convergence feature gate/,
+      'the host must not instruct a runtime agent to fail fast on the gate before the converge step (#4600)',
+    );
+    assert.match(
+      howTo,
+      /overrides the gate for that run/,
+      'the how-to must document that an explicit --converge overrides the gate on /gsd-autonomous (#4600)',
+    );
+    // Security-review constraint: the override must be appended conditionally on the converge
+    // strategy (never ride on local-strategy runs) and parsed token-anchored by §1.5.
+    // Search from the conditional: the host prose at the precedence sentence also names the
+    // flag, so a bare indexOf would resolve there and the ordering check could never pass.
+    const conditionalAt = workflow.indexOf('if [ "${PLAN_STRATEGY}" = "converge" ]; then');
+    const overrideAt = workflow.indexOf('--override-gate', conditionalAt);
+    assert.ok(
+      conditionalAt !== -1 && overrideAt !== -1,
+      'the PLAN_STRATEGY=converge conditional must exist and append --override-gate (#4600)',
+    );
+    assert.ok(
+      convergence.includes('(^|[[:space:]])--override-gate([[:space:]]|$)'),
+      '§1.5 must match --override-gate token-anchored so no other argument can carry it (#4600)',
     );
   });
 
@@ -119,7 +188,7 @@ describe('autonomous --converge flag (#711)', () => {
     // They must now be DERIVED at runtime via `gsd_run review-lane flags`, not listed.
     const formerlyHardcodedLaneFlags = [
       '--codex',
-      '--gemini',
+      '--qwen',
       '--claude',
       '--opencode',
       '--ollama',
@@ -243,8 +312,9 @@ describe('autonomous verification deferral contract', () => {
     // #2589: the verification read uses the native --pick flag (no jq dependency).
     // String-based check (not a regex literal) so the assertion stays robust to
     // shell metacharacters in the snippet and parses cleanly under espree.
+    // #5118: stderr kept, and a failed read is a blocker — never `|| true`.
     assert.ok(
-      section.includes('VERIFY_STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status 2>/dev/null || true)'),
+      section.includes('VERIFY_STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status) || VERIFY_ERROR=1'),
       'autonomous must route human validation through canonical verification.status via the native --pick flag',
     );
     assert.doesNotMatch(
@@ -263,26 +333,47 @@ describe('autonomous verification deferral contract', () => {
     const discoverStep = workflow.slice(discoverStart, discoverEnd);
     const iterateStep = workflow.slice(iterateStart, iterateEnd);
 
-    assert.match(discoverStep, /INIT_MANAGER=\$\(gsd_run query init\.manager\)/);
+    assert.match(discoverStep, /INIT_MANAGER=\$\(gsd_run query init\.manager[^)]*\)/);
     assert.ok(
       discoverStep.includes('if [[ "$INIT_MANAGER" == @file:* ]]; then INIT_MANAGER=$(cat "${INIT_MANAGER#@file:}"); fi'),
       'autonomous discovery must dereference large init.manager payloads before parsing',
     );
     assert.match(discoverStep, /phase_complete !== true/);
     assert.match(discoverStep, /verification_status !== "passed"/);
-    assert.match(discoverStep, /STATE_CONTENT=\$\(cat \.planning\/STATE\.md 2>\/dev\/null \|\| true\)/);
+    // #4455: STATE.md is read through the workstream-resolved path from
+    // init.manager (state_path), not a hardcoded .planning/STATE.md literal —
+    // a GSD_WORKSTREAM run must read its own workstream's STATE.md.
+    assert.ok(
+      discoverStep.includes('STATE_PATH=$(_gsd_field "$INIT_MANAGER" state_path)'),
+      'autonomous discovery must resolve STATE.md through init.manager, not a hardcoded path',
+    );
+    assert.match(discoverStep, /STATE_CONTENT=\$\(cat "\$STATE_PATH" 2>\/dev\/null \|\| true\)/);
+    assert.doesNotMatch(
+      discoverStep,
+      /STATE_CONTENT=\$\(cat \.planning\/STATE\.md 2>\/dev\/null \|\| true\)/,
+      'autonomous discovery must not regress to a hardcoded root .planning/STATE.md read (#4455)',
+    );
     assert.match(discoverStep, /drop any phase whose number appears in the deferred-phase map/);
     assert.doesNotMatch(discoverStep, /ROADMAP=\$\(gsd_run query roadmap\.analyze\)/);
     assert.doesNotMatch(discoverStep, /disk_status !== "complete"/);
 
-    assert.match(iterateStep, /INIT_MANAGER=\$\(gsd_run query init\.manager\)/);
+    assert.match(iterateStep, /INIT_MANAGER=\$\(gsd_run query init\.manager[^)]*\)/);
     assert.ok(
       iterateStep.includes('if [[ "$INIT_MANAGER" == @file:* ]]; then INIT_MANAGER=$(cat "${INIT_MANAGER#@file:}"); fi'),
       'autonomous iteration must dereference large init.manager payloads before parsing',
     );
     assert.match(iterateStep, /phase_complete !== true/);
     assert.match(iterateStep, /verification_status !== "passed"/);
-    assert.match(iterateStep, /STATE_CONTENT=\$\(cat \.planning\/STATE\.md 2>\/dev\/null \|\| true\)/);
+    assert.ok(
+      iterateStep.includes('STATE_PATH=$(_gsd_field "$INIT_MANAGER" state_path)'),
+      'autonomous iteration must resolve STATE.md through init.manager, not a hardcoded path',
+    );
+    assert.match(iterateStep, /STATE_CONTENT=\$\(cat "\$STATE_PATH" 2>\/dev\/null \|\| true\)/);
+    assert.doesNotMatch(
+      iterateStep,
+      /STATE_CONTENT=\$\(cat \.planning\/STATE\.md 2>\/dev\/null \|\| true\)/,
+      'autonomous iteration must not regress to a hardcoded root .planning/STATE.md read (#4455)',
+    );
     assert.match(iterateStep, /drop deferred phases from the autonomous queue/);
   });
 });

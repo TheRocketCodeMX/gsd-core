@@ -69,7 +69,8 @@ const { SCOPE } = planningScopeMod;
 type Scope = planningScopeMod.Scope;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import verificationMod = require('./verification.cjs');
-const { readVerificationStatus } = verificationMod;
+const { readVerificationStatus, VerificationStatusError, failOnVerificationStatusError } = verificationMod;
+type VerificationStatusErrorT = InstanceType<typeof VerificationStatusError>;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseIdMod = require('./phase-id.cjs');
 const { phaseKeyFromDir, phaseKeyFromToken, phaseMarkdownRegexSource } = phaseIdMod;
@@ -92,6 +93,9 @@ const { parseMarkdownTable, matchTableSchema } = markdownTable;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import coreUtilsMod = require('./core-utils.cjs');
 const { normalizeLineEndings } = coreUtilsMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import securityMod = require('./security.cjs');
+const { tryWithinRoot, PathAcceptance, isContainedIn } = securityMod;
 
 /**
  * The wire schema version. A consumer MUST reject any value other than this
@@ -212,32 +216,44 @@ function toPosix(value: string): string {
  * directory like `.planning-evil/` that merely shares a string prefix. Pure
  * string comparison, no I/O — callers own their own `fs.realpathSync` call
  * (and its own not-found/broken-symlink handling).
+ *
+ * NOT an independent containment implementation — it is the comparison step
+ * of one, and that comparison now comes from `security.cts`'s exported
+ * `isContainedIn` rather than being redeclared here. `readDocument` below
+ * realpaths target and root itself (to keep its own exists-vs-escaped
+ * tri-state) and calls `isContainedIn` directly; `isPathContained` gets its
+ * containment DECISION from the canonical `tryWithinRoot` predicate instead
+ * (ADR-4650 decision 6) and never called this comparison directly. Every
+ * caller owns its own resolution.
  */
-function isWithinRoot(resolvedTarget: string, resolvedRoot: string): boolean {
-  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + path.sep);
-}
 
 /**
- * Containment check for a path (file OR directory) that resolves its own
- * `fs.realpathSync`, then delegates the actual boundary comparison to
- * `isWithinRoot`. Used where the caller does not need to distinguish "target
- * vanished / broken symlink" from "target resolved but escapes root" — both
- * degrade the same way at every call site that uses this (an escaped or
- * unresolvable phase directory is treated identically to an unreadable one).
- * `readDocument` below needs that distinction for its own exists/readable
- * tri-state, so it keeps its own inline `realpathSync` calls and calls
- * `isWithinRoot` directly instead of this wrapper.
+ * Containment check for a path (file OR directory), used where the caller
+ * does not need to distinguish "target vanished / broken symlink" from
+ * "target resolved but escapes root" — both degrade the same way at every
+ * call site that uses this (an escaped or unresolvable phase directory is
+ * treated identically to an unreadable one). `readDocument` below needs
+ * that distinction for its own exists/readable tri-state, so it keeps its
+ * own inline `realpathSync` calls and calls `isContainedIn` directly instead
+ * of this wrapper.
+ *
+ * The containment DECISION comes from the canonical `tryWithinRoot`
+ * predicate (ADR-4650 decision 6: a wrapper may decide HOW to degrade,
+ * never WHETHER a path is contained). Must-exist stays this module's OWN
+ * degradation condition, applied after: `tryWithinRoot` deliberately accepts
+ * a not-yet-created path under the root (ancestor-walk realpath), but every
+ * caller of `isPathContained` guards an `fs` read that is about to happen
+ * against an already-existing directory, so a vanished/unresolvable path
+ * must still degrade the same as an escaped one.
  */
 function isPathContained(target: string, root: string): boolean {
-  let realTarget: string;
-  let realRoot: string;
+  if (tryWithinRoot(target, root, PathAcceptance.AbsoluteInsideRoot) === null) return false;
   try {
-    realTarget = fs.realpathSync(target);
-    realRoot = fs.realpathSync(root);
+    fs.realpathSync(target);
   } catch {
     return false;
   }
-  return isWithinRoot(realTarget, realRoot);
+  return true;
 }
 
 function readDocument(filePath: string, root: string): { text: string | null; exists: boolean; readable: boolean } {
@@ -261,7 +277,7 @@ function readDocument(filePath: string, root: string): { text: string | null; ex
     // here — the same non-answer `readDocument` already gives "not exists".
     return { text: null, exists: false, readable: false };
   }
-  if (!isWithinRoot(realTarget, realRoot)) {
+  if (!isContainedIn(realTarget, realRoot)) {
     return { text: null, exists: true, readable: false };
   }
 
@@ -303,7 +319,7 @@ function readDocument(filePath: string, root: string): { text: string | null; ex
 function containmentEnforcingVerificationFs(planningRoot: string): {
   readdirSync(dir: string): string[];
   readFileSync(filePath: string, encoding: 'utf-8'): string;
-  statSync(filePath: string): { mtimeMs: number; isFile(): boolean };
+  statSync(filePath: string): { mtimeMs: number; isFile(): boolean; isDirectory(): boolean };
 } {
   function assertContained(target: string): void {
     if (!isPathContained(target, planningRoot)) {
@@ -319,7 +335,9 @@ function containmentEnforcingVerificationFs(planningRoot: string): {
       assertContained(filePath);
       return fs.readFileSync(filePath, encoding);
     },
-    statSync(filePath: string): { mtimeMs: number; isFile(): boolean } {
+    statSync(filePath: string): { mtimeMs: number; isFile(): boolean; isDirectory(): boolean } {
+      // #5118: a code-less containment throw here is NOT "phase directory
+      // not found" — readVerificationStatus falls through to `missing`.
       assertContained(filePath);
       return fs.statSync(filePath);
     },
@@ -1044,7 +1062,23 @@ function extractGoalProse(sectionBody: string): string | null {
 function extractDependencyTokens(sectionBody: string): string[] {
   const m = DEPENDS_ON_LINE_RE.exec(sectionBody);
   if (!m) return [];
-  return sortedUnique([...m[1].matchAll(/\d+(?:\.\d+)*/g)].map((t) => t[0]));
+  // #4764: phase REFERENCES, not digit runs — the same prose-anchored grammar
+  // init.manager's dep_phases extraction uses (owner: phase-id.cts's
+  // PHASE_DEP_REF_SOURCE). The whole-field token scrape this replaces pulled
+  // calendar dates, git shas and ledger ids in as dependencies. The grammar's
+  // capture group 1 already excludes the "Phase(s)" anchor word, so no
+  // prefix-strip literal is needed here. Self-exclusion (init.manager drops
+  // the row's own number) is deliberately NOT applied: this reader has no row
+  // context at the extraction site and reports informationally, it does not
+  // gate.
+  const refRe = new RegExp(phaseIdMod.PHASE_DEP_REF_SOURCE, 'gi');
+  const tokenRe = new RegExp(phaseIdMod.PHASE_NUMBER_TOKEN_SOURCE, 'g');
+  const tokens: string[] = [];
+  let refMatch: RegExpExecArray | null;
+  while ((refMatch = refRe.exec(m[1])) !== null) {
+    for (const t of refMatch[1].matchAll(tokenRe)) tokens.push(t[0]);
+  }
+  return sortedUnique(tokens);
 }
 
 /**
@@ -1139,6 +1173,21 @@ function buildPhaseGoalAndDependencies(
 // ─── Entry points ─────────────────────────────────────────────────────────────
 
 function buildPlanningInspect(cwd: string): Record<string, unknown> {
+  return buildPlanningInspectResult(cwd).payload;
+}
+
+/**
+ * #5118: the inspect payload plus the first verification report whose
+ * `status` is outside the closed set (`statusError`, or `null`) — the
+ * aggregate CARRIES the owner's error in its own result, and `planning
+ * inspect` fails with it instead of printing an answer computed over a
+ * report the owner refused.
+ */
+function buildPlanningInspectResult(cwd: string): {
+  payload: Record<string, unknown>;
+  statusError: VerificationStatusErrorT | null;
+} {
+  let statusError: VerificationStatusErrorT | null = null;
   const diagnostics: Diagnostic[] = [];
   const paths = planningPaths(cwd);
   const planningExists = fs.existsSync(paths.planning);
@@ -1192,7 +1241,7 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
   const phaseSnapshots = snapshot.phases.value as {
     dir: string;
     complete: boolean;
-    verificationStatus: string;
+    verificationStatus: string | null;
     planCount: number;
     summaryCount: number;
     scope: Scope;
@@ -1216,8 +1265,8 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
     // GAP 2 (#2790 follow-up security review): `readVerificationStatus`
     // (`src/verification.cts`) is a shared owner with its own unguarded
     // `readFileSync` — a `*-VERIFICATION.md` symlinked outside the planning
-    // root would leak an unrecognized `status:` value verbatim via its
-    // "Unexpected verification status '<value>'" `next_action` string. Fixed
+    // root would leak its unrecognized `status:` value verbatim (today via
+    // the VerificationStatusError message, #5118). Fixed
     // from THIS consumer's side via the injectable `opts.fs` seam that
     // function already exposes, never by touching its signature — see
     // `containmentEnforcingVerificationFs`'s doc comment. This same seam's
@@ -1232,9 +1281,19 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
     // (`superseded`) rather than document text, and GAP 1's directory
     // containment check already covers the escaped-DIRECTORY case for it —
     // so it needs no fix of its own.
-    const verification = readVerificationStatus(phaseDir, {
-      fs: containmentEnforcingVerificationFs(paths.planning),
-    });
+    // #5118: an out-of-set report status is carried, not thrown past the
+    // other phases — the row reads `status: null` and the command fails with
+    // the first such error once the payload is built.
+    let verification: { status: string | null; next_action: string | null; route: string };
+    try {
+      verification = readVerificationStatus(phaseDir, {
+        fs: containmentEnforcingVerificationFs(paths.planning),
+      });
+    } catch (err) {
+      if (!(err instanceof VerificationStatusError)) throw err;
+      if (statusError === null) statusError = err;
+      verification = { status: null, next_action: err.message, route: '' };
+    }
 
     const token = /^(\d+(?:\.\d+)*)/.exec(phase.dir);
     const phaseId = token ? token[1] : null;
@@ -1270,6 +1329,8 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
       verification: {
         status: verification.status,
         next_action: verification.next_action ?? null,
+        // #5118: additive — the bare command the owner routes this status to.
+        route: verification.route,
       },
       roadmap_acceptance: {
         checkbox: checkboxByPhaseKey.has(phaseKeyFromDir(phase.dir))
@@ -1310,7 +1371,7 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
     diagnostics,
   );
 
-  return {
+  const payload = {
     schema_version: PLANNING_INSPECT_SCHEMA_VERSION,
     generated_from: {
       cwd: toPosix(cwd),
@@ -1338,6 +1399,7 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
     },
     diagnostics,
   };
+  return { payload, statusError };
 }
 
 /**
@@ -1348,7 +1410,11 @@ function buildPlanningInspect(cwd: string): Record<string, unknown> {
  * transparently on stdout. Bypassing `output()` would lose that for free.
  */
 function cmdPlanningInspect(cwd: string, raw: boolean): void {
-  output(buildPlanningInspect(cwd), raw);
+  const { payload, statusError } = buildPlanningInspectResult(cwd);
+  // #5118: a read-only aggregate over a refused report prints nothing and
+  // fails with the error's own reason (`verification_status_invalid`).
+  if (statusError) failOnVerificationStatusError(statusError);
+  output(payload, raw);
 }
 
 const planningInspect = {

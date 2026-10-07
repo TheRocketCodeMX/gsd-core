@@ -165,6 +165,13 @@ Phase-completion verbs never write `Milestone complete` (the overloaded bare val
 
 **Scene priority:** when both `active_phase` and `next_action` are populated, Scene 1 wins — an orchestrator is in flight, so a "next recommendation" would be misleading. This priority is enforced by check order in `formatGsdState()` and covered by the `"scene priority"` suite in `tests/gsd-statusline.test.cjs`.
 
+When `phase_id_convention` is exactly `"bracket"` and `project_code` is set,
+the full and compact renderers replace the legacy milestone/phase labels with
+the canonical identity: `[GSD.02] · [GSD.02] 05.03 executing`. They do not emit
+the `vX.Y`, `Phase`, or compact `P` labels on that gated path. Any other
+convention, or a bracket config missing the metadata needed to form an ID,
+falls back to the strings shown in the table above.
+
 The progress bar (`[██░░░░░░░░] 20%`) is appended to the milestone segment only when `progress.percent` is present in frontmatter; absent means no bar.
 
 ---
@@ -224,7 +231,7 @@ Updated after each plan completion.
 
 **Decisions** — a summary of recent decisions affecting current work (full log lives in `PROJECT.md`). Added via `gsd-tools state add-decision`.
 
-**Pending Todos** — count and reference to `.planning/todos/pending/`. Captured via `/gsd-capture`.
+**Pending Todos** — one bullet per pending todo (`- [date] [area] title — [todo file](repo-relative path) — Needs ...`, capped at 240 characters; repo-relative link keeps the cap independent of checkout path length). Captured via `/gsd-capture`.
 
 **Blockers/Concerns** — issues affecting future work, prefixed with the originating phase. Added via `gsd-tools state add-blocker`; resolved via `gsd-tools state resolve-blocker`.
 

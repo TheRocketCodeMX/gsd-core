@@ -786,15 +786,16 @@ describe('execute-phase: between-wave manifest reset (#1369, #3384)', () => {
 
   test('step 7c runs the mode-threaded base-check and does NOT re-assert set-baseref (#3659)', () => {
     // The former pin required the set-baseref re-assert, whose stated mechanism
-    // (#1369: "so the Claude Code harness re-reads the live HEAD") was fiction —
-    // the harness does not read project-settings baseRef (#48, verified 5/5;
-    // upstream claude-code#44965). Rewritten per the #3659 sanction: the
-    // between-wave re-check threads --mode and never re-asserts the dead call.
+    // (#1369: "so the Claude Code harness re-reads the live HEAD") was fiction at
+    // the time (#48; upstream claude-code#44965). The harness honors the setting
+    // now (#4588), but the re-assert stays dead for its own reason: a setting
+    // already in place needs no re-write between waves, and one deliberately
+    // absent must not be re-imposed. The between-wave re-check threads --mode.
     const content = fs.readFileSync(BETWEEN_WAVE_PATH, 'utf-8');
     assert.ok(content.includes('worktree.base-check --mode "$ISOLATION"'),
       'step 7c must thread the isolation mode through the base-check');
     assert.ok(!content.includes('worktree.set-baseref'),
-      'step 7c must not re-assert set-baseref — the harness never read it (#48/#3659)');
+      'step 7c must not re-assert set-baseref — a re-write between waves changes nothing (#3659/#4588)');
   });
 
   test('step 7c appears after step 7b and before step 8 in the wave loop', () => {
@@ -1108,7 +1109,11 @@ describe('execute-phase workflow: #3684 verified-unmarked resume', () => {
 
   test('verified-unmarked resume continues at update_roadmap', () => {
     const step = stepText();
-    const branch = step.slice(step.indexOf('VERIFY_STATUS` ≠ `missing` + `PHASE_MARKED` not `true`'));
+    // #5118: the arm is keyed on `passed` — the old `≠ missing` arm collapsed
+    // gaps_found / human_needed / unparseable into "verified" (#4765).
+    const anchor = 'VERIFY_STATUS == passed` + `PHASE_MARKED` not `true`';
+    assert.ok(step.includes(anchor), 'the verified-unmarked arm must be keyed on VERIFY_STATUS == passed');
+    const branch = step.slice(step.indexOf(anchor));
     assert.ok(
       branch.includes('update_roadmap'),
       'the unmarked-resume branch must continue at update_roadmap',
@@ -1302,6 +1307,91 @@ describe('execute-phase workflow: #3684 review findings — join normalization',
       const at = lines2.indexOf(line, i2);
       assert.ok(at !== -1, `re-run must not rewrite STATE content; missing after ${i2}: ${line}`);
       i2 = at + 1;
+    }
+  });
+});
+
+// ── #4218: a live executor must not be steered or cut short ──────────────────
+//
+// allow-test-rule: source-text-is-the-product (#4218) — the workflow .md IS
+// the instruction the orchestrator executes; its text is the artifact under test.
+//
+// Reported on Codex: an executor with recent RED/GREEN/REFACTOR commits and
+// passing verification had not yet written its SUMMARY because it was finishing
+// closeout. The parent saw no local OS test/build process, inferred an "idle
+// tail", and sent "Finalize immediately" into a working child. In CLI runs the
+// same inference interrupted an executor before GREEN, leaving a RED commit and
+// an uncommitted edit.
+//
+// The policy lives in a step fragment: execute-phase.md is 77 bytes under the
+// frozen #1168 ceiling, and "extract, not bump" is the repo's stated remedy.
+describe('execute-phase: stall surveillance must not steer a working executor (#4218)', () => {
+  const workflow = fs.readFileSync(WORKFLOW_PATH, 'utf-8');
+  const FRAGMENT_PATH = path.join(
+    __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'executor-progress-policy.md');
+  const fragment = fs.existsSync(FRAGMENT_PATH) ? fs.readFileSync(FRAGMENT_PATH, 'utf-8') : '';
+
+  test('the host routes to the policy before treating an executor as stalled', () => {
+    assert.match(workflow, /A working executor is never steered \(#4218\)/,
+      'the verdict must be visible where the orchestrator decides, not only in the fragment');
+    assert.match(workflow, /time WITHOUT\s{1,10}PROGRESS, not total runtime/,
+      'the threshold definition is the correction — it belongs in the host');
+    assert.match(workflow, /before sending it\s{1,10}any message/,
+      'the steering prohibition must be reachable before a message is sent, not after');
+    assert.match(workflow, /execute-phase\/steps\/executor-progress-policy\.md/,
+      'the host must point at the policy fragment');
+  });
+
+  test('the stall threshold is a period without progress, not a maximum runtime', () => {
+    assert.ok(fragment.length > 0, 'execute-phase/steps/executor-progress-policy.md must exist');
+    assert.match(fragment, /period \*\*without meaningful progress\*\*/,
+      'the threshold must be defined by absence of progress');
+    assert.match(fragment, /not a maximum\s{1,10}total runtime/,
+      'a long-but-progressing plan must not be treated as stalled');
+    assert.match(fragment, /from the LAST sign of progress, not from dispatch/,
+      'measuring from dispatch is what turns a slow plan into a false stall');
+  });
+
+  test('commits + missing SUMMARY + recent activity resolves to KEEP WAITING', () => {
+    assert.match(fragment, /KEEP\s{1,10}WAITING/, 'the verdict for a working executor must be explicit');
+    assert.match(fragment, /Do not steer it, do not interrupt it, do not re-dispatch it/,
+      'all three interventions the report describes must be named and forbidden');
+  });
+
+  test('urgency and finalization messages are forbidden outright', () => {
+    assert.match(fragment, /Never inject urgency or finalization instructions into a live executor/,
+      'the prohibition must be stated as a rule, not implied');
+    assert.match(fragment, /Finalize immediately/,
+      'the reported message must be named so it cannot be read as permitted');
+  });
+
+  test('a missing local OS process is not evidence of idleness', () => {
+    assert.match(fragment, /absence of a local OS test\/build process is NOT idleness/,
+      'the false signal the orchestrator acted on must be ruled out by name');
+    assert.match(fragment, /A process listing is not one of them/,
+      'the workflow must say which signals DO count, and that a process listing is not one');
+  });
+
+  test('the only sanctioned stop is the existing user-facing pause', () => {
+    assert.match(fragment, /the pause in step 3 is the only route/,
+      'stopping an executor must stay a user decision, not an orchestrator nudge');
+    assert.match(fragment, /`kill and retry` is a\s{1,10}clean restart — not a nudge/,
+      'the distinction between restarting and steering must be explicit');
+  });
+
+  test('the worktree-recovery arm moved with the policy, not left duplicated', () => {
+    assert.match(fragment, /If a stalled executor ran in an isolated worktree/,
+      'the recovery arm belongs with the stop policy it qualifies');
+    assert.match(fragment, /worktree-recovery-policy\.md/,
+      'it must still hand off to the worktree policy');
+    assert.ok(
+      !/kill and switch to inline execution` edits the primary checkout/.test(workflow),
+      'the host must not keep a second copy of the arm that moved',
+    );
+    // The #3212 recovery options themselves stay in the host — tests/config.test.cjs
+    // pins them there.
+    for (const option of ['continue waiting', 'kill and retry', 'kill and switch to inline execution']) {
+      assert.ok(workflow.includes(option), `the host must still offer "${option}"`);
     }
   });
 });

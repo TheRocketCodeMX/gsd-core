@@ -1906,11 +1906,16 @@ const KNOWN_HOST_BEHAVIORS = new Set([
   'attributionConfigResolver',
   'attributionSource',
   'authorsCanonicalWorkflow',
+  'bakedAgentFileExtensions',
+  'bakesStaticAgentModel',
+  'bareStemSkillsCleanup',
   'brandingRewrites',
+  'categoryContainerCleanup',
   'cleanupSkillSidecars',
   'clineRulesSurface',
   'combinedFamilyInstall',
   'commandBodyConverter',
+  'contentRewriteProfile',
   'doneBannerStyle',
   'flatCommandDir',
   'frontmatterDialect',
@@ -1923,6 +1928,7 @@ const KNOWN_HOST_BEHAVIORS = new Set([
   'legacyCommandsGsdInstallMigration',
   'legacyCommandsGsdUninstall',
   'legacyDevinSkillsCleanup',
+  'legacyFlatSkillsCleanup',
   'localCommandsViaRules',
   'localInstallDeferred',
   'localInstallStyle',
@@ -1933,29 +1939,43 @@ const KNOWN_HOST_BEHAVIORS = new Set([
   'nativeModelAliases',
   'nativePlugin',
   'noPathRewrite',
+  'omitBashRunnerOnWindows',
+  'opencodePathPrefix',
   'ownsClaudePaths',
   'permissionsSchema',
   'pluginOnlyInstall',
   'projectInstructionFile',
   'reapplyCommand',
+  'reclaimsKimiLegacyHooksRoot',
   'reportCommandsDir',
   'reportSkillsCount',
+  'requiresSubagentPair',
+  'restoreAtRefTildeInAgents',
+  'restoreAtRefTildeInSpecTree',
   'retiredArtifacts',
+  'rewriteClaudeAtIncludes',
   'settingsFileByScope',
   'sharedHooksDirName',
   'skillFrontmatterVersion',
   'skillPriorityFrontmatter',
   'skillsGlobalOnboarding',
   'skillsManifestPrefix',
-  'skipCodexSkillsManifest',
+  'skipCompactAgents',
   'skipHomePrefixSubstitution',
+  'skipRuntimeDefaultsStamp',
   'skipSettingsUi',
   'skipSharedHooksInstall',
   'skipUpdateBannerCommand',
   'soloStageMetadata',
   'sourceMarkerFile',
+  'specRootSkillPass',
   'tomlConfigInstall',
   'trackCategoryDescription',
+  // #2586: declares runtime-level feature axes GSD does not/cannot support on
+  // this host (e.g. Codex's `["context-warnings","phase-lifecycle-display"]`)
+  // — present-and-populated / absent-is-unsupported-empty convention, so
+  // omitting the key on every other runtime carries no inverted meaning.
+  'unsupportedFeatures',
   'verificationStyle',
   'writeCategoryDescription',
 ]);
@@ -2796,7 +2816,7 @@ function materializeHookFragments(cap, capDir) {
 
       const abs = path.resolve(capDir, fragment.path);
       const capRoot = path.resolve(capDir);
-      if (abs !== capRoot && !abs.startsWith(capRoot + path.sep)) {
+      if (abs !== capRoot && !abs.startsWith(capRoot + path.sep)) { // allow-handrolled-containment: committed pre-build .cjs; compiled security.cjs is untracked build output
         errors.push(
           cap.id + '/' + groupName + '[' + i + '].fragment.path escapes capability directory: ' +
           fragment.path,
@@ -2946,6 +2966,14 @@ function validateStep(step, prefix, declaredSkills, declaredAgents) {
 
   if (step.pointFrom !== undefined && typeof step.pointFrom !== 'string') {
     errors.push(prefix + '.pointFrom must be a string if present');
+  }
+
+  // #4209 DISP-02: strict optional boolean opt-in trait. Absent or false is
+  // inert; only a literal `true` reaches the projected active hook. Reject
+  // every other type (including truthy non-boolean values) so a typo can
+  // never silently opt a step into reviewer-lane dispatch.
+  if (step.supportsReviewerLanes !== undefined && typeof step.supportsReviewerLanes !== 'boolean') {
+    errors.push(prefix + '.supportsReviewerLanes must be a boolean if present');
   }
 
   if (step.fragment !== undefined) {

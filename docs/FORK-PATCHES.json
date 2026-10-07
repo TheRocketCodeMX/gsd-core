@@ -63,6 +63,16 @@
    ]
   },
   {
+   "path": "agents/gsd-code-reviewer.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Contract Conformance",
+    "engineering-standards\\.md"
+   ]
+  },
+  {
    "path": "agents/gsd-code-reviewer.md",
    "feature": "fidelity",
    "mode": "markers",
@@ -70,6 +80,16 @@
    "anchors": [
     "Contract Conformance",
     "engineering-standards\\.md"
+   ]
+  },
+  {
+   "path": "agents/gsd-codebase-mapper.compact.md",
+   "feature": "grounding",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "<source_grounding>",
+    "exploration-and-adaptability\\.md"
    ]
   },
   {
@@ -128,6 +148,16 @@
    ]
   },
   {
+   "path": "agents/gsd-integration-checker.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "fe-be-seam\\.md",
+    "DESIGN-INVENTORY\\.md"
+   ]
+  },
+  {
    "path": "agents/gsd-integration-checker.md",
    "feature": "fidelity",
    "mode": "markers",
@@ -138,12 +168,31 @@
    ]
   },
   {
+   "path": "agents/gsd-intel-updater.compact.md",
+   "feature": "grounding",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "<source_grounding>"
+   ]
+  },
+  {
    "path": "agents/gsd-intel-updater.md",
    "feature": "grounding",
    "mode": "markers",
    "markers": 1,
    "anchors": [
     "<source_grounding>"
+   ]
+  },
+  {
+   "path": "agents/gsd-pattern-mapper.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "vibe-coded-to-harden",
+    "engineering-standards\\.md"
    ]
   },
   {
@@ -197,6 +246,16 @@
    ]
   },
   {
+   "path": "agents/gsd-project-researcher.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "untrusted-input-boundary\\.md",
+    "Source grounding \\(before any web research\\)"
+   ]
+  },
+  {
    "path": "agents/gsd-project-researcher.md",
    "feature": "fidelity",
    "mode": "markers",
@@ -215,6 +274,17 @@
    ]
   },
   {
+   "path": "agents/gsd-roadmapper.compact.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 3,
+   "anchors": [
+    "CROSS-CUTTING",
+    "Elaborated against strategy",
+    "DESIGN-INVENTORY\\.md"
+   ]
+  },
+  {
    "path": "agents/gsd-roadmapper.md",
    "feature": "strategy",
    "mode": "markers",
@@ -223,6 +293,15 @@
     "CROSS-CUTTING",
     "Elaborated against strategy",
     "DESIGN-INVENTORY\\.md"
+   ]
+  },
+  {
+   "path": "agents/gsd-security-auditor.compact.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "SECURITY-STRATEGY\\.md"
    ]
   },
   {
@@ -235,6 +314,16 @@
    ]
   },
   {
+   "path": "agents/gsd-ui-checker.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "FRONTEND-ARCHITECTURE\\.md",
+    "Design-override principle"
+   ]
+  },
+  {
    "path": "agents/gsd-ui-checker.md",
    "feature": "fidelity",
    "mode": "markers",
@@ -242,6 +331,17 @@
    "anchors": [
     "FRONTEND-ARCHITECTURE\\.md",
     "Design-override principle"
+   ]
+  },
+  {
+   "path": "agents/gsd-ui-researcher.compact.md",
+   "feature": "fidelity",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "FRONTEND-ARCHITECTURE\\.md",
+    "design-ingestion\\.md",
+    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -282,7 +382,8 @@
    "anchors": [
     "settingsFilesToClean",
     "_uninstallScopedSettingsFile",
-    "hook-exit\\.js"
+    "hook-exit\\.js",
+    "filename-classification\\.js"
    ]
   },
   {
@@ -441,14 +542,6 @@
    ]
   },
   {
-   "path": "gsd-core/templates/claude-md.md",
-   "feature": "grounding",
-   "mode": "anchors-only",
-   "anchors": [
-    "sources of truth"
-   ]
-  },
-  {
    "path": "gsd-core/templates/phase-prompt.md",
    "feature": "grounding",
    "mode": "anchors-only",
@@ -482,6 +575,26 @@
    "mode": "anchors-only",
    "anchors": [
     "CROSS-CUTTING"
+   ]
+  },
+  {
+   "path": "gsd-core/templates/summary.compact.md",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "deviations:",
+    "structured mirror of ## Deviations from Plan"
+   ]
+  },
+  {
+   "path": "gsd-core/templates/summary.compact.md",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "kind: unit\\s+#[^\\n]*agentic_certification",
+    "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
+    "^suite-metrics:$",
+    "<suite_metrics_guidance>"
    ]
   },
   {
@@ -549,6 +662,15 @@
    ]
   },
   {
+   "path": "gsd-core/workflows/complete-milestone/detail/elaboration.md",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "Route each acknowledged deferral forward",
+    "-CAPSULE\\.md"
+   ]
+  },
+  {
    "path": "gsd-core/workflows/discuss-phase.md",
    "feature": "context",
    "mode": "markers",
@@ -582,10 +704,9 @@
    "path": "gsd-core/workflows/execute-phase.md",
    "feature": "context",
    "mode": "markers",
-   "markers": 2,
+   "markers": 1,
    "anchors": [
-    "Phase-Scoped Pitfalls",
-    "What Done Looks Like"
+    "Phase-Scoped Pitfalls"
    ]
   },
   {
@@ -595,8 +716,44 @@
    "anchors": [
     "execute-phase-wave-guard\\.md",
     "execute-phase-between-wave-reset\\.md",
-    "engineering-standards\\.md",
+    "engineering-standards\\.md"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/execute-phase/steps/verify-phase-goal.md",
+   "feature": "context",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "What Done Looks Like"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/execute-phase/steps/verify-phase-goal.md",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
     "DESIGN-INVENTORY\\.md"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.compact.md",
+   "feature": "learn",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "/gsd:learn"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.compact.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 3,
+   "anchors": [
+    "/gsd:model-domain",
+    "/gsd:cicd-strategy",
+    "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
    ]
   },
   {
@@ -949,6 +1106,14 @@
    ]
   },
   {
+   "path": "src/decision-coverage-support.cts",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "objective\\|grounding\\)"
+   ]
+  },
+  {
    "path": "src/init-command-router.cts",
    "feature": "strategy",
    "mode": "markers",
@@ -1095,6 +1260,14 @@
    "anchors": [
     "fork calm-hook semantics",
     "spawn-free calm hook has no Stop-time state"
+   ]
+  },
+  {
+   "path": "tests/fixtures/gate-cutover/check-unknown-verb.json",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gap-analysis-plan-post, grounding-plan, predicate"
    ]
   },
   {
@@ -1293,7 +1466,8 @@
     "source: agentic",
     "Certification re-entry — before the pending scan",
     "CERTIFICATION-RESULT\\.md",
-    "This step never overwrites"
+    "This step never overwrites",
+    "CERTIFICATION-BRIEF\\.md"
    ]
   },
   {
@@ -1403,23 +1577,6 @@
    ]
   },
   {
-   "path": "gsd-core/bin/shared/config-schema.manifest.json",
-   "feature": "config-gates-safety",
-   "mode": "anchors-only",
-   "anchors": [
-    "gates\\.confirm_transition",
-    "safety\\.always_confirm_destructive"
-   ]
-  },
-  {
-   "path": "tests/config-loader.test.cjs",
-   "feature": "config-gates-safety",
-   "mode": "anchors-only",
-   "anchors": [
-    "gates/safety are registered config sections"
-   ]
-  },
-  {
    "path": "gsd-core/workflows/execute-phase/steps/post-merge-gate.md",
    "feature": "gate-handoff",
    "mode": "anchors-only",
@@ -1521,7 +1678,8 @@
    "anchors": [
     "-UAT-superseded-",
     "\\[\\\\w-\\]\\+",
-    "UAT_CERTIFIER_RESULT"
+    "UAT_CERTIFIER_RESULT",
+    "certifierPending"
    ]
   },
   {
@@ -1538,14 +1696,6 @@
    "mode": "anchors-only",
    "anchors": [
     "-UAT-superseded-"
-   ]
-  },
-  {
-   "path": "src/config.cts",
-   "feature": "config-gates-safety",
-   "mode": "anchors-only",
-   "anchors": [
-    "gates\\.confirm_milestone_scope"
    ]
   },
   {
