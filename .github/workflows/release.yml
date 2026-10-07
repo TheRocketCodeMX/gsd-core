@@ -579,9 +579,9 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
-      - name: Update npm CLI (trusted publishing needs npm >= 11.5.1)
-        # FORK (release): pin the floor explicitly so a runner-image change cannot drop below the OIDC minimum.
-        run: npm install -g npm@latest && npm --version
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
 
       - name: Publish to npm (next)
         if: ${{ !inputs.dry_run }}
@@ -873,9 +873,9 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
-      - name: Update npm CLI (trusted publishing needs npm >= 11.5.1)
-        # FORK (release): pin the floor explicitly so a runner-image change cannot drop below the OIDC minimum.
-        run: npm install -g npm@latest && npm --version
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
 
       - name: Publish to npm (latest)
         if: ${{ !inputs.dry_run }}

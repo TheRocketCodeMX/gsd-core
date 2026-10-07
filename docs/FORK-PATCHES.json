@@ -10,7 +10,7 @@
    "anchors": [
     "FORK \\(release\\): 30, not upstream 20",
     "FORK \\(release\\): npm trusted publishing \\(OIDC",
-    "Update npm CLI \\(trusted publishing needs npm >= 11\\.5\\.1\\)"
+    "Check npm CLI supports trusted publishing \\(npm >= 11\\.5\\.1\\)"
    ]
   },
   {
