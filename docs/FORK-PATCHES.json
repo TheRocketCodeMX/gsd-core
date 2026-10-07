@@ -8,7 +8,9 @@
    "feature": "release",
    "mode": "anchors-only",
    "anchors": [
-    "NODE_AUTH_TOKEN"
+    "FORK \\(release\\): 30, not upstream 20",
+    "FORK \\(release\\): npm trusted publishing \\(OIDC",
+    "Check npm CLI supports trusted publishing \\(npm >= 11\\.5\\.1\\)"
    ]
   },
   {

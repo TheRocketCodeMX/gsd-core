@@ -364,7 +364,8 @@ jobs:
     # rc-coverage-gate merges all three before enforcing the threshold. 20m
     # gives each shard generous headroom over its ~1/3 share of the unsharded
     # run's measured cost.
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -556,8 +557,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run --tag next
 
       - name: Tag and push
@@ -579,11 +579,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
+
       - name: Publish to npm (next)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public --tag next
 
       - name: Create GitHub pre-release
@@ -667,7 +670,8 @@ jobs:
     # unit-coverage step, which is the one that actually hit the 30m cap
     # (run 33988966357: all tests passed, 0 failures, cancelled ~80s into the
     # post-test coverage merge).
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -817,8 +821,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run
 
       - name: Create PR to merge release back to main
@@ -870,11 +873,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
+
       - name: Publish to npm (latest)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public
 
       - name: Create GitHub Release
