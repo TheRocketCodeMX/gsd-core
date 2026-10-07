@@ -39,10 +39,16 @@ import io = require('./io.cjs');
 import commandRoutingHub = require('./command-routing-hub.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import cjsCommandRouterAdapter = require('./cjs-command-router-adapter.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import planningWorkspace = require('./planning-workspace.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import phaseLocator = require('./phase-locator.cjs');
 
 const { ERROR_REASON } = io;
 const { makeInvalidArgs } = commandRoutingHub;
 const { routeHubCommandFamily } = cjsCommandRouterAdapter;
+const { planningDir, planningPaths, resolvePhaseIdConvention } = planningWorkspace;
+const { findPhaseInternal, listAllPhaseDirs } = phaseLocator;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,50 +77,43 @@ const _defaultCore: CoreModule = { output: io.output };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Zero-pad the phase and glob `.planning/phases/<padded>-*` for `<padded>-CONTEXT.md`.
-function resolvePhaseCapsules(cwd: string, phase: string): string[] {
-  const padded = String(phase).padStart(2, '0');
-  const phasesDir = path.resolve(cwd, '.planning', 'phases');
-  let entries: string[] = [];
+// A phase capsule is `<phase-token>-CONTEXT.md` (`01-CONTEXT.md`, `02.1-CONTEXT.md`) inside its
+// phase directory — the directory name may be legacy (`01-foundation`) or bracket-migrated
+// (`CA.01-01-foundation`), but the capsule keeps its plain numeric token in both.
+const CAPSULE_RE = /^\d+(?:\.\d+)*-CONTEXT\.md$/;
+
+function capsulesIn(dir: string): string[] {
   try {
-    entries = fs.readdirSync(phasesDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name.startsWith(`${padded}-`))
-      .map((e) => e.name);
+    return fs.readdirSync(dir).filter((f) => CAPSULE_RE.test(f)).sort().map((f) => path.join(dir, f));
   } catch {
     return [];
   }
-  const out: string[] = [];
-  for (const name of entries) {
-    const capsule = path.join(phasesDir, name, `${padded}-CONTEXT.md`);
-    if (fs.existsSync(capsule)) out.push(capsule);
-  }
-  return out;
 }
 
-// `.planning/MASTER-CONTEXT.md` (if present) + every `NN-CONTEXT.md` under `.planning/phases/<dir>/`.
+// #93: resolve the phase directory through upstream's convention-aware phase locator — the
+// seam `find-phase`-style consumers (gate-phase-context, refactor-trigger) call — instead of a
+// hand-rolled `.planning/phases/<NN>-*` glob. findPhaseInternal reads the ACTIVE planning root
+// (`planningDir(cwd)`: GSD_WORKSTREAM / `--ws`), and resolvePhaseIdConvention supplies the
+// workstream->root-federated `phase_id_convention`, so a bracket-migrated phase
+// (`CA.01-01-foundation`) and a workstream phase (`workstreams/<ws>/phases/01-…`) resolve by
+// number exactly like a legacy one. An ambiguous or unknown phase resolves to nothing.
+function resolvePhaseCapsules(cwd: string, phase: string): string[] {
+  if (!phase) return [];
+  const found = findPhaseInternal(cwd, phase, resolvePhaseIdConvention(cwd));
+  if (!found || !found.found || !found.directory) return [];
+  return capsulesIn(path.resolve(cwd, found.directory));
+}
+
+// MASTER-CONTEXT.md (shared at the planning root, like PROJECT.md — `planningDir(cwd, null)`)
+// + every phase capsule under the ACTIVE planning root's phases dir (#93: workstream-aware via
+// planningPaths). The physical directory set comes from upstream's un-windowed phase-dir owner.
 function resolveMilestoneFiles(cwd: string): string[] {
   const out: string[] = [];
-  const master = path.resolve(cwd, '.planning', 'MASTER-CONTEXT.md');
+  const master = path.join(planningDir(cwd, null), 'MASTER-CONTEXT.md');
   if (fs.existsSync(master)) out.push(master);
-  const phasesDir = path.resolve(cwd, '.planning', 'phases');
-  let entries: string[] = [];
-  try {
-    entries = fs.readdirSync(phasesDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name);
-  } catch {
-    return out;
-  }
-  for (const name of entries) {
-    const dir = path.join(phasesDir, name);
-    let files: string[] = [];
-    try {
-      files = fs.readdirSync(dir).filter((f) => /^\d+-CONTEXT\.md$/.test(f));
-    } catch {
-      continue;
-    }
-    for (const f of files) out.push(path.join(dir, f));
-  }
+  const phasesDir = planningPaths(cwd).phases;
+  const { value: names } = listAllPhaseDirs(phasesDir, { includeSentinels: true });
+  for (const name of names) out.push(...capsulesIn(path.join(phasesDir, name)));
   return out;
 }
 
