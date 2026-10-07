@@ -685,7 +685,11 @@ function completeUatSession(
   // (verify-work.md complete_session: "a still-out CERT-2 handover … do NOT
   // mark complete"). parseUatItemsWithStats skips it as an item (audit-uat
   // must not show it as the human's work) but counts it here.
-  const status: 'complete' | 'partial' = (headingsSeen > 0 || hasBlockingRow || certifierPending > 0) ? 'partial' : 'complete';
+  // FORK (pre-ship matrix A/F2): a persisting `could-not-prove` verdict is an
+  // unproven checkpoint (agentic-certification.md: it reverts to `[pending]`), so
+  // it blocks completion exactly as 2.6.0's `uat_blockers` gate did.
+  const certifierUnproven = items.filter((item) => item.result.toLowerCase() === UAT_CERTIFIER_UNPROVEN_RESULT).length;
+  const status: 'complete' | 'partial' = (headingsSeen > 0 || hasBlockingRow || certifierPending > 0 || certifierUnproven > 0) ? 'partial' : 'complete';
 
   let candidate = setFrontmatterStatus(content, status);
   candidate = setCurrentTestComplete(candidate);
@@ -1278,6 +1282,8 @@ const UAT_PASS_RESULTS = new Set(['pass', 'passed']);
 // FORK: the certification token verify-work's agentic-certification step writes
 // (`result: [pending-certifier]`) — see the audit-uat skip in parseUatItems.
 const UAT_CERTIFIER_RESULT = 'pending-certifier';
+// FORK (pre-ship matrix A/F2): the certifier's "could not prove it" verdict.
+const UAT_CERTIFIER_UNPROVEN_RESULT = 'could-not-prove';
 
 /**
  * A fenced-code OPENER line at COLUMN 0 (``` or ~~~).

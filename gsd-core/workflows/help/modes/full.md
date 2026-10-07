@@ -74,7 +74,8 @@ Guide first-time onboarding for an existing codebase.
 
 Usage: `/gsd:onboard`
 
-**`/gsd:roadmap [--auto] [--milestone]`**
+<!-- FORK:strategy BEGIN -->
+**`/gsd:roadmap [--auto] [--milestone] [--ws <name>]`**
 Generate — or bring current — the project roadmap after the strategy chain, then hand off to the build loop.
 
 - Runs the roadmapper **once**, at the strategy-chain → build-loop transition, so the roadmap is born fully-informed by the locked strategy decisions
@@ -82,6 +83,7 @@ Generate — or bring current — the project roadmap after the strategy chain, 
 - Normally reached automatically at the end of the strategy chain; also usable standalone to regenerate a roadmap
 
 Usage: `/gsd:roadmap`
+<!-- FORK:strategy END -->
 
 **`/gsd:map-codebase [--fast] [--focus <area>] [--query <term>]`**
 Map an existing codebase for brownfield projects.
@@ -726,7 +728,7 @@ The commands above cover the most common day-to-day flows. Every command listed 
 
 These six skills exist primarily for the model to perform two-stage hierarchical routing across 60+ skills. You can invoke them directly when you want to browse a category interactively.
 
-- **`gsd-context` (router)** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace). Not to be confused with the `/gsd:context` knowledge-lifecycle command above.
+- **`gsd-ns-context` (router)** — Codebase intelligence routing (map, graphify, docs, learnings, mempalace). Not to be confused with the `/gsd:context` knowledge-lifecycle command above.
 - **`/gsd-ideate`** — Exploration / capture routing (explore, sketch, spike, spec, capture).
 - **`/gsd-manage`** — Configuration and workspace routing (workstreams, thread, update, ship, inbox).
 - **`/gsd-project`** — Project-lifecycle routing (milestones, audits, summary).

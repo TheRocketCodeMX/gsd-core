@@ -158,6 +158,10 @@ const REALIGNMENT_RESOLVED_FORK_LINES = {
   'execute-phase': [
     ['7. **Handle failures:** classify BEFORE branching (#3095) — read', 'superseded: the size-only step-7 extraction retired; upstream #4405/#4217 Step 7 is theirs inline'],
   ],
+  'new-project': [
+    ['- **If `NEXT_STRATEGY` is set:** auto-advance **into the strategy chain** — exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (the Skill tool, never a `SlashCommand` — an interpolated `/gsd:${…}` name', 'reworded (pre-ship matrix B/F8): the prose no longer spells an unconvertible colon token (#4324); same rule'],
+    ['/gsd:${NEXT_STRATEGY} — [one-line purpose]', 'pre-ship matrix B/F8: printed as `/gsd-${NEXT_STRATEGY}` (an interpolated colon-form name is invisible to the install-time converter)'],
+  ],
   'plan-phase': [
     ['Read `frontend`, `hasUiSpec`, and `block` from `GATE`. `frontend` honors', 'reworded onto upstream #5170 "Otherwise read `frontend`, …" sentence (same fork clause appended)'],
   ],

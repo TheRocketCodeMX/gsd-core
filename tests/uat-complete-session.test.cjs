@@ -886,3 +886,50 @@ describe('#5105: the HEAD baseline resolves however the project path is spelled'
     assert.strictEqual(JSON.parse(result.output).changed, true);
   });
 });
+
+// FORK (align-1.16.0 + pre-ship matrix A/F2): the certifier's own unresolved states block
+// completion. `[pending-certifier]` is an outstanding CERT-2 handover; a persisting
+// `could-not-prove` is an unproven checkpoint — 2.6.0's `uat_blockers` gate never completed
+// either session, and #5105's verb must not either.
+describe('FORK: certifier states keep the session partial', () => {
+  test('pure core: a `[pending-certifier]` row → status:partial', () => {
+    const completeUatSession = loadCompleteUatSession();
+    const live = completeUatContent().replace(
+      'result: pass\n\n### 2. Submit Button',
+      'result: [pending-certifier]\n\n### 2. Submit Button',
+    );
+    const result = completeUatSession(live, { clock: () => new Date('2026-05-05T00:00:00Z') });
+    assert.strictEqual(result.status, 'partial');
+  });
+
+  test('pure core: a `could-not-prove` row → status:partial (A/F2)', () => {
+    const completeUatSession = loadCompleteUatSession();
+    const live = completeUatContent().replace(
+      'result: pass\n\n### 2. Submit Button',
+      'result: could-not-prove\n\n### 2. Submit Button',
+    );
+    const result = completeUatSession(live, { clock: () => new Date('2026-05-05T00:00:00Z') });
+    assert.strictEqual(result.changed, true);
+    assert.strictEqual(result.status, 'partial');
+  });
+
+  test('CLI: a `could-not-prove` row is written partial, never complete (A/F2)', (t) => {
+    const tmpDir = createTempGitProject();
+    t.after(() => cleanup(tmpDir));
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foo');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const uatPath = path.join(phaseDir, '01-UAT.md');
+    fs.writeFileSync(uatPath, testingCompleteUatContent().replace(
+      'result: pass\n\n### 2. Submit Button\nexpected: Submitting shows loading state\nresult: pass',
+      'result: pass\n\n### 2. Submit Button\nexpected: Submitting shows loading state\nresult: could-not-prove',
+    ));
+    const { execFileSync } = require('child_process');
+    execFileSync('git', ['add', '-A'], { cwd: tmpDir, timeout: GIT_TIMEOUT_MS });
+    execFileSync('git', ['commit', '-q', '-m', 'seed UAT'], { cwd: tmpDir, timeout: GIT_TIMEOUT_MS });
+    const r = runGsdTools(['query', 'uat.complete-session', '.planning/phases/01-foo/01-UAT.md'], tmpDir);
+    assert.ok(r.success, `verb failed: ${r.error || r.output}`);
+    const out = JSON.parse(r.output);
+    assert.strictEqual(out.status, 'partial');
+    assert.match(fs.readFileSync(uatPath, 'utf-8'), /^status: partial$/m);
+  });
+});

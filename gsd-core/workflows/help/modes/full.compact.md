@@ -45,6 +45,12 @@ Usage: `/gsd:new-project`
 
 Usage: `/gsd:onboard`
 
+<!-- FORK:strategy BEGIN -->
+**`/gsd:roadmap [--auto] [--milestone] [--ws <name>]`** — Generates (or brings current) the roadmap once, at the strategy-chain → build-loop transition, born against the locked strategy decisions. Idempotent: creates, elaborates a coarse roadmap, extends for a new milestone (`--milestone`), or passes through; `new-project` no longer writes it.
+
+Usage: `/gsd:roadmap`
+<!-- FORK:strategy END -->
+
 **`/gsd:map-codebase [--fast] [--focus <area>] [--query <term>]`** — Maps an existing codebase with parallel Explore agents into `.planning/codebase/` (stack, architecture, structure, conventions, testing, integrations, concerns). `--fast` for rapid assessment, `--query` to search the intel index.
 
 Usage: `/gsd:map-codebase`
@@ -94,7 +100,7 @@ Result: Per-item artifacts under `.planning/quick/`; batch state in `.planning/q
 
 ---
 
-**`/gsd:fast [description]`** — Trivial task inline, no subagent, no planning files: typo fixes, config changes, ≤3 file edits (redirects to `/gsd:quick` above that). Atomic commit, logs to STATE.md.
+**`/gsd:fast [description]`** — Trivial task inline, no subagent, no planning files: typo fixes, config changes, renames, dead-code cleanup; redirects to `/gsd:quick` only when the work needs research, is ambiguous, adds a dependency or architectural pattern, or spans more than ~10 files — not on file count alone. Atomic commit, logs to STATE.md.
 
 Usage: `/gsd:fast "fix the typo in README"`
 
@@ -332,6 +338,7 @@ Every command below is also a live `/gsd-*` slash command, grouped by purpose.
 
 ### Knowledge & Context
 
+- **`/gsd:context [seed|scout|flush|master] [--milestone] [--phase <N>] [--text]`** — Durable project knowledge: `seed` writes quality-stamped phase context capsules (+ MASTER-CONTEXT), `scout` confirms/refutes capsule facts against live code, `flush` is a calm knowledge checkpoint, `master` curates MASTER-CONTEXT to its ~150-line bound.
 - **`/gsd:graphify [build|query <term>|status|diff]`** — Builds/queries/inspects the project knowledge graph in `.planning/graphs/`.
 - **`/gsd:mempalace-recall`** — Recalls prior decisions/patterns/surprises from MemPalace before planning.
 - **`/gsd:mempalace-capture [artifact-type]`** — Files a phase artifact into MemPalace, mirrors decisions into its temporal KG.
@@ -355,7 +362,7 @@ Every command below is also a live `/gsd-*` slash command, grouped by purpose.
 
 Six skills for two-stage hierarchical routing across 60+ skills; invoke directly to browse a category interactively:
 
-- **`/gsd-context`** — Codebase intelligence (map, graphify, docs, learnings, mempalace).
+- **`gsd-ns-context` (router)** — Codebase intelligence (map, graphify, docs, learnings, mempalace). Not the `/gsd:context` knowledge-lifecycle command above.
 - **`/gsd-ideate`** — Exploration/capture (explore, sketch, spike, spec, capture).
 - **`/gsd-manage`** — Configuration/workspace (workstreams, thread, update, ship, inbox).
 - **`/gsd-project`** — Project-lifecycle (milestones, audits, summary).

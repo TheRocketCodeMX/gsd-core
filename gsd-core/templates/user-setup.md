@@ -330,7 +330,7 @@ Complete these items so certification can run against real, seeded conditions.
 ## Verification
 
 ```bash
-grep -E "TEST_ADMIN|SMTP_" .env.local
+printenv TEST_ADMIN_EMAIL >/dev/null && printenv SMTP_HOST >/dev/null   # set in the environment (presence only, never prints values)
 curl -s http://localhost:8025/api/v1/info   # catcher reachable
 npm run seed:test-accounts                  # idempotent: second run is a no-op
 ```

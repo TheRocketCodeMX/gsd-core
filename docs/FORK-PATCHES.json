@@ -765,11 +765,29 @@
    "path": "gsd-core/workflows/help/modes/full.compact.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 3,
+   "markers": 4,
    "anchors": [
     "/gsd:model-domain",
     "/gsd:cicd-strategy",
-    "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
+    "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]",
+    "/gsd:roadmap \\[--auto\\] \\[--milestone\\] \\[--ws <name>\\]"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.compact.md",
+   "feature": "fast-scope",
+   "mode": "anchors-only",
+   "anchors": [
+    "spans more than ~10 files — not on file count alone"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.compact.md",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "/gsd:context \\[seed\\|scout\\|flush\\|master\\]",
+    "`gsd-ns-context` \\(router\\)"
    ]
   },
   {
@@ -785,11 +803,29 @@
    "path": "gsd-core/workflows/help/modes/full.md",
    "feature": "strategy",
    "mode": "markers",
-   "markers": 3,
+   "markers": 4,
    "anchors": [
     "/gsd:model-domain",
     "/gsd:cicd-strategy",
-    "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]"
+    "/gsd:testing-strategy \\[--auto\\] \\[--text\\] \\[--tune-up\\]",
+    "/gsd:roadmap \\[--auto\\] \\[--milestone\\] \\[--ws <name>\\]"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.md",
+   "feature": "fast-scope",
+   "mode": "anchors-only",
+   "anchors": [
+    "spans more than ~10 files — not on file count alone"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/help/modes/full.md",
+   "feature": "context",
+   "mode": "anchors-only",
+   "anchors": [
+    "/gsd:context \\[seed\\|scout\\|flush\\|master\\]",
+    "`gsd-ns-context` \\(router\\)"
    ]
   },
   {
@@ -1839,7 +1875,8 @@
     "-UAT-superseded-",
     "\\[\\\\w-\\]\\+",
     "UAT_CERTIFIER_RESULT",
-    "certifierPending"
+    "certifierPending",
+    "UAT_CERTIFIER_UNPROVEN_RESULT"
    ]
   },
   {
