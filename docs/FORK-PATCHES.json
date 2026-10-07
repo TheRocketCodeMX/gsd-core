@@ -8,7 +8,8 @@
    "feature": "release",
    "mode": "anchors-only",
    "anchors": [
-    "NODE_AUTH_TOKEN"
+    "NODE_AUTH_TOKEN",
+    "FORK \\(release\\): 30, not upstream 20"
    ]
   },
   {

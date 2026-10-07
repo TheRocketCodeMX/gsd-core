@@ -364,7 +364,8 @@ jobs:
     # rc-coverage-gate merges all three before enforcing the threshold. 20m
     # gives each shard generous headroom over its ~1/3 share of the unsharded
     # run's measured cost.
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -667,7 +668,8 @@ jobs:
     # unit-coverage step, which is the one that actually hit the 30m cap
     # (run 33988966357: all tests passed, 0 failures, cancelled ~80s into the
     # post-test coverage merge).
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
