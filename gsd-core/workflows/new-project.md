@@ -1059,7 +1059,7 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the f
 **If auto mode:**
 
 <!-- FORK:strategy BEGIN -->
-- **If `NEXT_STRATEGY` is set:** auto-advance **into the strategy chain** — exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (the Skill tool, never a `SlashCommand` — an interpolated `/gsd:${…}` name is invisible to the install-time slash-form converter and resolves to nothing on skill-only installs). That step, on completion, runs the **strategy auto-advance driver** (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) which dispatches the next `## Strategy Plan` step (honoring skips) and ultimately the build loop — so the chain runs hands-off, no longer dead-ending after the first step.
+- **If `NEXT_STRATEGY` is set:** auto-advance **into the strategy chain** — exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (the Skill tool, never a `SlashCommand` — an interpolated colon-form slash name is invisible to the install-time slash-form converter and resolves to nothing on skill-only installs). That step, on completion, runs the **strategy auto-advance driver** (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) which dispatches the next `## Strategy Plan` step (honoring skips) and ultimately the build loop — so the chain runs hands-off, no longer dead-ending after the first step.
 <!-- FORK:strategy END -->
 
   ```
@@ -1078,7 +1078,7 @@ NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # the f
 
 /clear then:
 
-/gsd:${NEXT_STRATEGY} — [one-line purpose] (first step of your strategy plan; it chains onward to the build loop)
+/gsd-${NEXT_STRATEGY} — [one-line purpose] (first step of your strategy plan; it chains onward to the build loop)
 
 ---
 

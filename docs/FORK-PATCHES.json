@@ -820,7 +820,7 @@
     "Strategy Plan",
     "strategy-flow\\.md",
     "NEXT_STRATEGY",
-    "Skill\\(skill=\"gsd-roadmap\", args=\"--milestone\"\\)"
+    "Skill\\(skill=\"gsd-roadmap\", args=\"--milestone \\$\\{GSD_WS\\}\"\\)"
    ]
   },
   {
@@ -1474,7 +1474,8 @@
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "forkRoadmapSkill"
+    "forkRoadmapSkill",
+    "## Step 4: Present, approve, commit"
    ]
   },
   {

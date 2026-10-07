@@ -569,10 +569,10 @@ gsd_run query commit "docs: define milestone v[X.Y] requirements" --files "$REQU
 <!-- FORK:strategy BEGIN -->
 The `gsd-roadmapper` spawn is no longer inlined here — it is owned by the `gsd-roadmap` skill (the single roadmapper spawn point shared with `new-project` and the strategy chain). Dispatch it in **milestone-extend** mode: it appends THIS milestone's phases to the existing ROADMAP.md (respecting the numbering mode), presents them for approval, commits, and **returns control here** (it does not chain onward, so Steps 10.5 and 11 still run). Because this milestone's own strategy artifacts are produced *after* this step (via the Step-11 on-ramp), the extend pass leaves the new phases **unmarked**, so plan-phase §1.6 (and the chain-end `gsd-roadmap` elaborate pass) later details them against the milestone's locked decisions.
 
-Dispatch via the **Skill** tool, forwarding `--auto` in auto mode and `--reset-phase-numbers` when it is active:
+Dispatch via the **Skill** tool, forwarding `--auto` in auto mode, `--reset-phase-numbers` when it is active, and the Step-1 `${GSD_WS}` (`--ws <name>`, empty in flat mode) so `gsd-roadmap` resolves the workstream's REQUIREMENTS/ROADMAP/STATE (#4456/#4545) instead of the root files:
 
 ```
-Skill(skill="gsd-roadmap", args="--milestone")            # + " --auto" in auto mode; + " --reset-phase-numbers" when active
+Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")            # + " --auto" in auto mode; + " --reset-phase-numbers" when active
 ```
 
 `gsd-roadmap` reads `## Current Milestone` / STATE.md `current_milestone`, `MILESTONES.md`, `config.json` (`phase_id_convention`), REQUIREMENTS.md, and every existing strategy artifact, then spawns `gsd-roadmapper` in extend-mode (append this milestone's phases, preserve all prior milestones' phases/numbering/edits) and commits `docs: extend roadmap for milestone ([N] phases added)`. When it returns, ROADMAP.md exists with the new phases — continue below.
@@ -643,8 +643,8 @@ Print a summary:
 NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # first `recommended` step, or empty
 ```
 
-- **Auto mode + `NEXT_STRATEGY` set:** exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (Skill tool, never `SlashCommand` — an interpolated `/gsd:${…}` name is invisible to the slash-form converter and resolves to nothing on skill-only installs) — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
-- **Interactive + `NEXT_STRATEGY` set:** lead the panel below with `/gsd:${NEXT_STRATEGY}` (the strategy this milestone needs) as the next step, and offer `/gsd:discuss-phase [N]` as "skip strategy, build directly" — do NOT jump straight to discuss-phase when a strategy step is recommended.
+- **Auto mode + `NEXT_STRATEGY` set:** exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto ${GSD_WS}")` (Skill tool, never `SlashCommand` — an interpolated colon-form slash name is invisible to the slash-form converter and resolves to nothing on skill-only installs) — it auto-advances the chain (`@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md`) → build loop.
+- **Interactive + `NEXT_STRATEGY` set:** lead the panel below with `/gsd-${NEXT_STRATEGY}` (spelled in the hyphen form — an interpolated colon-form name is invisible to the install-time slash-form converter; the strategy this milestone needs) as the next step, and offer `/gsd:discuss-phase [N]` as "skip strategy, build directly" — do NOT jump straight to discuss-phase when a strategy step is recommended.
 - **`NEXT_STRATEGY` empty** (strategy artifacts still fit, or none recommended): use the build-loop handoff below.
 <!-- FORK:strategy END -->
 

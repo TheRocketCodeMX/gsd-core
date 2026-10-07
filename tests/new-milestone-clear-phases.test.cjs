@@ -975,19 +975,31 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
     });
 
     // FORK (strategy, align-1.16.0): Step 10 dispatches the `gsd-roadmap` skill (the single
-    // roadmapper spawn point, milestone-extend mode), which writes and commits the roadmap itself, so
-    // there is no step-10 commit fence to drive here. The fork step still removes `.gsd-ws-arg`;
-    // workstream-path resolution for the roadmap commit lives in workflows/roadmap.md (owner follow-up).
-    const forkRoadmapSkill = content.includes('Skill(skill="gsd-roadmap", args="--milestone")');
-    describe('step 10: roadmap commit resolves ROADMAP/STATE/REQUIREMENTS through init.new-milestone, then cleans up .gsd-ws-arg', { skip: forkRoadmapSkill ? 'FORK: step 10 dispatches the gsd-roadmap skill, which owns the roadmap commit' : false }, () => {
-      const step10Fence = forkRoadmapSkill ? '' : extractFenceContaining(
-        content, '## 10. Create Roadmap', '## 10.5.', 'docs: create milestone v[X.Y] roadmap',
-      );
+    // roadmapper spawn point, milestone-extend mode), which writes and commits the roadmap itself.
+    // Upstream #4456's step-10 contract is therefore driven against the fork's two halves: the
+    // roadmap commit fence of workflows/roadmap.md (Step 4, reached with the forwarded --ws), and
+    // new-milestone's own step-10 fence, which still removes `.gsd-ws-arg` as its last consumer.
+    const forkRoadmapSkill = content.includes('Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")');
+    describe('step 10: roadmap commit resolves ROADMAP/STATE/REQUIREMENTS through init.new-milestone, then cleans up .gsd-ws-arg', () => {
+      const roadmapWorkflow = readFileNormalized(path.join(REPO_ROOT, 'gsd-core', 'workflows', 'roadmap.md'));
+      const step10Fence = forkRoadmapSkill
+        ? extractFenceContaining(roadmapWorkflow, '## Step 4: Present, approve, commit', '## Step 5.5', 'gsd_run query commit "$MSG"')
+        : extractFenceContaining(content, '## 10. Create Roadmap', '## 10.5.', 'docs: create milestone v[X.Y] roadmap');
+      const cleanupFence = forkRoadmapSkill
+        ? extractFenceContaining(content, '## 10. Create Roadmap', '## 10.5.', 'rm -f .planning/.gsd-ws-arg')
+        : step10Fence;
+      const commitMsg = forkRoadmapSkill
+        ? 'docs: extend roadmap for milestone ([N] phases added)'
+        : 'docs: create milestone v[X.Y] roadmap ([N] phases)';
 
-      function runStep10(gsdWsArg, rootPaths, wsPaths) {
+      function runStep10(gsdWsArg, rootPaths, wsPaths, fence = step10Fence) {
         fs.writeFileSync(path.join(tmpDir, '.planning', '.gsd-ws-arg'), gsdWsArg);
-        const script = stubGsdRun(rootPaths, wsPaths) + step10Fence;
-        const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env: runtimeDirEnv });
+        // The fork's roadmap.md re-parses --ws from its own $ARGUMENTS (what new-milestone's
+        // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it); MODE is the
+        // Step-2 value for the milestone-extend path.
+        const env = { ...runtimeDirEnv, ARGUMENTS: `--milestone ${gsdWsArg}`.trim(), MODE: 'extend' };
+        const script = stubGsdRun(rootPaths, wsPaths) + fence;
+        const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env });
         throwIfFailed(r, 'bash <step10 fence>');
         return r.stdout;
       }
@@ -998,7 +1010,7 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       test('ws mode: --files uses all three resolved workstream paths', () => {
         const out = runStep10('--ws search', rootPaths, wsPaths);
         assert.ok(
-          out.includes('gsd_run_call:query commit docs: create milestone v[X.Y] roadmap ([N] phases) --files /ws/ROADMAP.md /ws/STATE.md /ws/REQUIREMENTS.md'),
+          out.includes(`gsd_run_call:query commit ${commitMsg} --files /ws/ROADMAP.md /ws/STATE.md /ws/REQUIREMENTS.md`),
           `expected the resolved ws-mode paths, got: ${out}`
         );
       });
@@ -1006,15 +1018,19 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       test('flat mode: --files uses all three resolved root paths', () => {
         const out = runStep10('', rootPaths, wsPaths);
         assert.ok(
-          out.includes('gsd_run_call:query commit docs: create milestone v[X.Y] roadmap ([N] phases) --files /root/ROADMAP.md /root/STATE.md /root/REQUIREMENTS.md'),
+          out.includes(`gsd_run_call:query commit ${commitMsg} --files /root/ROADMAP.md /root/STATE.md /root/REQUIREMENTS.md`),
           `expected the resolved flat-mode paths, got: ${out}`
         );
       });
 
       test('removes .planning/.gsd-ws-arg after this commit (the true last consumer, not step 7)', () => {
-        runStep10('--ws search', rootPaths, wsPaths);
+        runStep10('--ws search', rootPaths, wsPaths, cleanupFence);
         assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', '.gsd-ws-arg')),
           '.gsd-ws-arg should be cleaned up here, since steps 9 and 10 still need it after step 7');
+      });
+
+      test('FORK: the gsd-roadmap dispatch forwards the Step-1 GSD_WS', { skip: forkRoadmapSkill ? false : 'upstream step 10 commits inline' }, () => {
+        assert.ok(forkRoadmapSkill, 'new-milestone step 10 must hand ${GSD_WS} to gsd-roadmap');
       });
     });
 

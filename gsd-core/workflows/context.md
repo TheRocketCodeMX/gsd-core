@@ -46,7 +46,8 @@ Then execute the matching mode below, end-to-end.
 **3. Per phase** — resolve paths, then branch on what exists:
 
 ```bash
-INIT=$(gsd_run query init.phase-op "${N}"); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.phase-op "${N}" ${GSD_WS:+--ws=${GSD_WS##* }}); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 # parse: phase_dir, padded_phase → CAPSULE="${phase_dir}/${padded_phase}-CONTEXT.md"
 # Decide absence MECHANICALLY with test -f; consult provenance ONLY for existing files.
 if [ ! -f "$CAPSULE" ]; then echo "ABSENT"; else gsd_run context provenance --file "$CAPSULE" 2>/dev/null; fi

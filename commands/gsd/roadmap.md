@@ -1,7 +1,7 @@
 ---
 name: gsd:roadmap
 description: Generate the project roadmap after the strategy chain, then hand off to the build loop
-argument-hint: "[--auto] [--milestone] [--reset-phase-numbers]"
+argument-hint: "[--auto] [--milestone] [--reset-phase-numbers] [--ws <name>]"
 allowed-tools:
   - Read
   - Bash
@@ -40,8 +40,9 @@ Also usable standalone to regenerate a roadmap.
 - `--auto` — auto-approve the roadmap and chain onward into the build loop (`/gsd:discuss-phase 1 --auto`).
 - `--milestone` — extend an existing roadmap with the current milestone's phases, then return control to the caller (no onward chain). Used by the new-milestone workflow.
 - `--reset-phase-numbers` — with `--milestone`, restart phase numbering at 1 for the new milestone.
+- `--ws <name>` — scope to a workstream: REQUIREMENTS/ROADMAP/STATE resolve under `.planning/workstreams/<name>/` (PROJECT.md stays shared at the root); forwarded by `new-milestone --ws`. Without it the active workstream pointer, if any, applies, else the root `.planning/` files.
 
-**When to run:** normally reached automatically at the end of the strategy chain (`strategy-chain/modes/advance.md`) or from `new-project` when no strategy steps are recommended. Requires `.planning/PROJECT.md` + `.planning/REQUIREMENTS.md`.
+**When to run:** normally reached automatically at the end of the strategy chain (`strategy-chain/modes/advance.md`) or from `new-project` when no strategy steps are recommended. Requires PROJECT.md + REQUIREMENTS.md (the workstream's REQUIREMENTS.md under `--ws`).
 </context>
 
 <process>

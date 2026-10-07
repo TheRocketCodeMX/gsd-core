@@ -57,8 +57,8 @@ describe('new-project: roadmap creation is deferred (no eager roadmapper spawn)'
 describe('strategy-chain advance: chain completion routes through gsd-roadmap', () => {
   test('advance.md step-4 dispatches gsd-roadmap (via the Skill tool)', () => {
     assert.ok(
-      /Skill\(skill="gsd-roadmap", args="--auto"\)/.test(advance),
-      'advance.md must dispatch Skill(skill="gsd-roadmap", args="--auto") when the strategy chain completes'
+      /Skill\(skill="gsd-roadmap", args="--auto \$\{GSD_WS\}"\)/.test(advance),
+      'advance.md must dispatch Skill(skill="gsd-roadmap", args="--auto ${GSD_WS}") when the strategy chain completes (workstream forwarded, #4456/#4545)'
     );
   });
 
@@ -111,7 +111,7 @@ describe('gsd-roadmap skill: owns the roadmapper spawn, born-elaborated, chains 
 
   test('auto mode chains onward to discuss-phase; --milestone returns without chaining', () => {
     assert.ok(
-      /Skill\(skill="gsd-discuss-phase", args="1 --auto"\)/.test(roadmapSkill),
+      /Skill\(skill="gsd-discuss-phase", args="1 --auto \$\{GSD_WS\}"\)/.test(roadmapSkill),
       'roadmap.md must chain to discuss-phase in auto mode'
     );
     assert.ok(
@@ -138,8 +138,8 @@ describe('new-milestone: roadmap creation routes through gsd-roadmap extend mode
 
   test('new-milestone dispatches gsd-roadmap in --milestone mode', () => {
     assert.ok(
-      /Skill\(skill="gsd-roadmap", args="--milestone"/.test(newMilestone),
-      'new-milestone.md must dispatch Skill(skill="gsd-roadmap", args="--milestone")'
+      /Skill\(skill="gsd-roadmap", args="--milestone \$\{GSD_WS\}"/.test(newMilestone),
+      'new-milestone.md must dispatch Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}") (workstream forwarded, #4456/#4545)'
     );
   });
 });
@@ -165,5 +165,141 @@ describe('gsd-roadmap skill registration', () => {
     // allowlist is the successor surface ratchet.
     assert.ok(read('tests/skill-frontmatter-contract.test.cjs').includes("'roadmap.md'"));
     assert.ok(/'roadmap'/.test(read('src/clusters.cts')), 'roadmap missing from src/clusters.cts');
+  });
+});
+
+// ─── (f) workstream scope: roadmap.md's guard / mode / commit lines, run for real ──
+//
+// Pre-ship matrix B / F1: roadmap.md used to hard-code `.planning/{REQUIREMENTS,ROADMAP,STATE}.md`,
+// so `/gsd-new-milestone --ws X` stopped at the guard ("Run /gsd-new-project first") and the
+// commit staged nothing. The fences below are extracted VERBATIM from roadmap.md and executed in
+// bash against the real gsd-tools (RUNTIME_DIR → this checkout), once against a workstream
+// fixture and once against a flat fixture whose behaviour must be unchanged.
+
+describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-milestone paths)', () => {
+  const os = require('os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { gitOrThrow, throwIfFailed } = require('./helpers/git-fixture.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const { scanFencedBlocks } = require('../gsd-core/bin/lib/markdown-sectionizer.cjs');
+
+  function bashFences(markdown) {
+    const lines = markdown.split(/\r?\n/);
+    return scanFencedBlocks(lines)
+      .filter((b) => /^bash\b/.test(b.infoString))
+      .map((b) => lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n'));
+  }
+  const fences = bashFences(roadmapSkill);
+  const fenceWith = (needle) => {
+    const hit = fences.find((f) => f.includes(needle));
+    assert.ok(hit, `roadmap.md has no bash fence containing ${needle}`);
+    return hit;
+  };
+  const step1 = fenceWith('roadmap_guard:');
+  const step2 = fenceWith('roadmap_mode:');
+  const commit = fenceWith('gsd_run query commit "$MSG"');
+
+  const shell = os.platform() === 'win32' ? null : 'bash';
+
+  function makeProject({ ws }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-roadmap-ws-'));
+    const p = (...s) => path.join(dir, '.planning', ...s);
+    fs.mkdirSync(p(), { recursive: true });
+    fs.writeFileSync(p('PROJECT.md'), '# Project\n\n<!-- roadmap-mode: standard -->\n');
+    fs.writeFileSync(p('config.json'), '{\n  "commit_docs": true\n}\n');
+    if (ws) {
+      fs.mkdirSync(p('workstreams', ws), { recursive: true });
+      fs.writeFileSync(p('workstreams', ws, 'REQUIREMENTS.md'), '# Requirements\n\n- [ ] **NOTIF-01**: push\n');
+      fs.writeFileSync(p('workstreams', ws, 'STATE.md'), '---\nmilestone: v1.0\n---\n# State\n');
+    } else {
+      fs.writeFileSync(p('REQUIREMENTS.md'), '# Requirements\n\n- [ ] **CORE-01**: thing\n');
+      fs.writeFileSync(p('STATE.md'), '---\nmilestone: v1.0\n---\n# State\n');
+    }
+    gitOrThrow(['init', '-q'], { cwd: dir });
+    gitOrThrow(['config', 'user.email', 't@example.com'], { cwd: dir });
+    gitOrThrow(['config', 'user.name', 't'], { cwd: dir });
+    gitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    gitOrThrow(['add', '.'], { cwd: dir });
+    gitOrThrow(['commit', '-q', '-m', 'init'], { cwd: dir });
+    return dir;
+  }
+
+  function run(dir, fence, args, extraEnv = {}) {
+    // Later fences rely on the `gsd_run` shim the Step-1 fence exports onto PATH (CLAUDE_ENV_FILE).
+    const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ARGUMENTS: args, ...extraEnv };
+    delete env.GSD_WORKSTREAM;
+    delete env.GSD_SESSION_KEY;
+    const r = runHook('-c', [fence], { interpreter: 'bash', cwd: dir, env });
+    throwIfFailed(r, 'bash <roadmap.md fence>');
+    return r.stdout;
+  }
+
+  function committedFiles(dir) {
+    return gitOrThrow(['show', '--name-only', '--format=%s', 'HEAD'], { cwd: dir }).trim().split('\n');
+  }
+
+  test('workstream: guard passes with --ws, resolves the workstream paths, PROJECT.md stays shared', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'notif' });
+    try {
+      const out = run(dir, step1, '--milestone --ws notif');
+      assert.match(out, /roadmap_guard: ok/);
+      assert.match(out, /project=\S*\/\.planning\/PROJECT\.md /);
+      assert.match(out, /requirements=\S*\/\.planning\/workstreams\/notif\/REQUIREMENTS\.md /);
+      assert.match(out, /roadmap=\S*\/\.planning\/workstreams\/notif\/ROADMAP\.md /);
+      assert.match(out, /state=\S*\/\.planning\/workstreams\/notif\/STATE\.md$/m);
+      // The F1 dead-end, reproduced: the same project without the flag has no root REQUIREMENTS.md.
+      assert.match(run(dir, step1, '--milestone'), /roadmap_guard: no-project/);
+    } finally { cleanup(dir); }
+  });
+
+  test('workstream: mode detection reads the workstream ROADMAP.md (extend), commit stages the workstream files', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'notif' });
+    try {
+      const wsDir = path.join(dir, '.planning', 'workstreams', 'notif');
+      assert.match(run(dir, step2, '--milestone --ws notif'), /roadmap_mode: create/);
+      fs.writeFileSync(path.join(wsDir, 'ROADMAP.md'), '# Roadmap\n\n### Phase 1: Push\n');
+      assert.match(run(dir, step2, '--milestone --ws notif'), /roadmap_mode: extend/);
+      fs.appendFileSync(path.join(wsDir, 'STATE.md'), '\nroadmapped\n');
+      fs.appendFileSync(path.join(wsDir, 'REQUIREMENTS.md'), '\n| NOTIF-01 | Phase 1 |\n');
+      run(dir, commit, '--milestone --ws notif', { MODE: 'extend' });
+      const files = committedFiles(dir);
+      assert.equal(files[0], 'docs: extend roadmap for milestone ([N] phases added)');
+      assert.deepEqual(files.slice(1).filter(Boolean).sort(), [
+        '.planning/workstreams/notif/REQUIREMENTS.md',
+        '.planning/workstreams/notif/ROADMAP.md',
+        '.planning/workstreams/notif/STATE.md',
+      ]);
+      assert.equal(gitOrThrow(['status', '--porcelain'], { cwd: dir }).trim(), '', 'nothing left untracked/unstaged');
+    } finally { cleanup(dir); }
+  });
+
+  test('flat (no workstream): guard, mode and commit behave exactly as before — root .planning/ files', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    try {
+      const out = run(dir, step1, '--auto');
+      assert.match(out, /roadmap_guard: ok/);
+      assert.match(out, /requirements=\S*\/\.planning\/REQUIREMENTS\.md /);
+      assert.match(out, /roadmap=\S*\/\.planning\/ROADMAP\.md /);
+      assert.match(run(dir, step2, '--auto'), /roadmap_mode: create/);
+      fs.writeFileSync(path.join(dir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n### Phase 1: Core\n');
+      fs.appendFileSync(path.join(dir, '.planning', 'STATE.md'), '\nroadmapped\n');
+      fs.appendFileSync(path.join(dir, '.planning', 'REQUIREMENTS.md'), '\n| CORE-01 | Phase 1 |\n');
+      run(dir, commit, '--auto', { MODE: 'create' });
+      const files = committedFiles(dir);
+      assert.equal(files[0], 'docs: create roadmap ([N] phases)');
+      assert.deepEqual(files.slice(1).filter(Boolean).sort(), [
+        '.planning/REQUIREMENTS.md',
+        '.planning/ROADMAP.md',
+        '.planning/STATE.md',
+      ]);
+    } finally { cleanup(dir); }
+  });
+
+  test('onward dispatches and pointers carry ${GSD_WS}', () => {
+    assert.ok(roadmapSkill.includes('Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")'));
+    assert.ok(roadmapSkill.includes('/gsd:discuss-phase 1 ${GSD_WS}'));
+    assert.ok(newMilestone.includes('Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")'));
+    assert.ok(advance.includes('Skill(skill="gsd-roadmap", args="--auto ${GSD_WS}")'));
   });
 });

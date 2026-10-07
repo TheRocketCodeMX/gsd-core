@@ -265,6 +265,7 @@ module.exports = {
   "tests/reviewer-manifest-body.test.cjs",
   "tests/reviewer-step-dispatch.test.cjs",
   "tests/revision-remediation-binding.test.cjs",
+  "tests/roadmap-after-strategy.test.cjs",
   "tests/roadmap-parser.test.cjs",
   "tests/roadmap-upgrade-bracket.test.cjs",
   "tests/roadmap.test.cjs",
