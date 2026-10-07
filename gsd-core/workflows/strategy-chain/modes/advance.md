@@ -15,14 +15,14 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 # Workstream scope (#4456/#4545): the `--ws <name>` the calling skill was started with — forwarded on every dispatch below.
 GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
-gsd_run query project strategy-plan 2>/dev/null   # { steps:[{step,status}], next_recommended }
+gsd_run query project strategy-plan 2>/dev/null   # { steps:[{step,status,skipped}], next_recommended }
 ```
 
 **If `AUTO_MODE` is not `true` (interactive / manual):** do NOT dispatch. Print the calling step's `Next:` pointer with the `/clear then:` hint and stop — the user drives the next step. (The driver is a no-op beyond this in interactive mode; the printed pointer is the existing behavior.) **When no strategy target remains** (this was the last step and the next target is the build loop), the terminal pointer is `/gsd:roadmap` — print `Next: /gsd:roadmap ${GSD_WS}` (it generates the now-fully-informed roadmap, then points onward to `/gsd:discuss-phase 1`), **not** `/gsd:discuss-phase 1` directly.
 
 **If `AUTO_MODE` is `true`:** pick the next step from the Strategy Plan's **ordered** `steps` and dispatch it:
-1. **Cold on-ramp** (`CURRENT` empty): target = `next_recommended` (the first step with status `recommended`).
-2. **Chain hop** (`CURRENT` set): target = the first step listed **after** `CURRENT` whose status is neither `skipped` nor `done`. (Skipping `skipped` steps is how the skip-ledger is honored in auto mode — a deliberately-skipped step is never dispatched.) If `CURRENT` is not found in `steps` (name mismatch / hand-run), fall back to `next_recommended`.
+1. **Cold on-ramp** (`CURRENT` empty): target = `next_recommended` (the first step with status `recommended` that is not skipped — it already excludes ledgered skips).
+2. **Chain hop** (`CURRENT` set): target = the first step listed **after** `CURRENT` whose status is not `done` and that does not carry `skipped: true`. A ledgered skip keeps its row's `recommended` status — the skip-ledger line is the record of the decision — so read the `skipped` flag, which covers both a ledgered skip and a row whose status is `skipped`. (This is how the skip-ledger is honored in auto mode — a deliberately-skipped step is never dispatched.) If `CURRENT` is not found in `steps` (name mismatch / hand-run), fall back to `next_recommended`.
 3. **If a target exists**, announce it, then dispatch the target step via the `Skill` tool with its name, `--auto` and `${GSD_WS}` (empty in flat mode; it re-invokes this driver at its own end, continuing the chain). For example, when the target is `recommend-architecture`:
    ```
    Skill(skill="gsd-recommend-architecture", args="--auto ${GSD_WS}")

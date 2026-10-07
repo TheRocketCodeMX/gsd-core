@@ -12,6 +12,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 // FORK: re-homed in the v2.0.0 realignment — upstream retired the core.cjs
 // re-export spine (epic #1267); output()/error() now live in io.cjs.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -19,7 +20,7 @@ import io = require('./io.cjs');
 const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
-const { planningPaths } = planningWorkspace;
+const { planningDir } = planningWorkspace;
 import { platformWriteSync } from './shell-command-projection.cjs';
 import { splitLines } from './text-lines.cjs';
 
@@ -37,7 +38,19 @@ interface ModeResult {
 
 interface StrategyStep {
   step: string;
+  /** The table cell, verbatim. */
   status: string;
+  /**
+   * #86: true when the row's own status is `skipped` OR the step has an active
+   * skip-ledger line. The ledger (not the row) is where a declined step is
+   * recorded, so the advance driver must read this flag, not only `status`.
+   */
+  skipped: boolean;
+}
+
+interface SkipLedgerEntry {
+  reason: string;
+  date: string | null;
 }
 
 interface StrategyPlanResult {
@@ -97,8 +110,45 @@ function matchModeField(section: string, field: string): string | null {
   return m ? cleanFieldValue(m[1]) : null;
 }
 
+/**
+ * Parse the skip-ledger lines of a Strategy Plan section body into a map keyed by
+ * the lower-cased skill name. Ledger lines look like `- <skill> — skipped (<reason>, <date>)`
+ * (the em-dash separator matches what strategy-flow.md / the template prescribe).
+ * Single owner of the ledger grammar: `strategy-skipped` and `strategy-plan` (#86)
+ * both read through it, so the two verbs can never disagree about a skip.
+ */
+function parseSkipLedger(section: string): Map<string, SkipLedgerEntry> {
+  const ledger = new Map<string, SkipLedgerEntry>();
+  for (const line of section.split('\n')) {
+    const m = line.match(/^\s*-\s*([^—|]+?)\s*—\s*skipped\s*\((.*)\)\s*$/i);
+    if (!m) continue;
+    const key = m[1].trim().toLowerCase();
+    if (ledger.has(key)) continue; // first line wins (matches the pre-#86 scan order)
+    const inner = m[2].trim();
+    // Split a trailing date (YYYY-MM-DD) off the reason if present.
+    const dateMatch = inner.match(/,\s*(\d{4}-\d{2}-\d{2})\s*$/);
+    const date = dateMatch ? dateMatch[1] : null;
+    const reason = dateMatch ? inner.slice(0, dateMatch.index).trim() : inner;
+    ledger.set(key, { reason, date });
+  }
+  return ledger;
+}
+
+/**
+ * #92: PROJECT.md is SHARED across workstreams — it lives at the planning root
+ * (gsd-core/references/workstream-flag.md), never under `.planning/workstreams/<ws>/`.
+ * `planningPaths(cwd).project` is workstream-scoped, so under an active workstream
+ * (GSD_WORKSTREAM / `--ws`) every verb here used to return found:false. This calls
+ * upstream's own shared-root rule — the exact expression init.new-milestone uses
+ * for `project_path` (`planningDir(cwd, null)` suppresses the workstream segment
+ * and still honours GSD_PROJECT) — for readers and the strategy-done writer alike.
+ */
+function projectMdPath(cwd: string): string {
+  return path.join(planningDir(cwd, null), 'PROJECT.md');
+}
+
 function readProjectContent(cwd: string): string | null {
-  const projectPath = planningPaths(cwd).project;
+  const projectPath = projectMdPath(cwd);
   if (!fs.existsSync(projectPath)) return null;
   try {
     return fs.readFileSync(projectPath, 'utf-8');
@@ -164,6 +214,7 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
 
   // Parse the `| Step | Status |` table; skip header, separator, and bracketed
   // placeholder rows (`| [model-domain] | [recommended] |`).
+  const ledger = parseSkipLedger(section);
   const steps: StrategyStep[] = [];
   for (const line of section.split('\n')) {
     if (!line.trim().startsWith('|')) continue;
@@ -175,10 +226,13 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
     const status = cells[1];
     if (/^step$/i.test(step) || /^-+$/.test(step)) continue;        // header / separator
     if (/^\[.*\]$/.test(step) || /^\[.*\]$/.test(status)) continue; // unfilled placeholder
-    steps.push({ step, status });
+    const skipped = /^skipped$/i.test(status) || ledger.has(step.toLowerCase());
+    steps.push({ step, status, skipped });
   }
 
-  const next = steps.find((s) => /^recommended$/i.test(s.status));
+  // #86: a ledgered skip is a decision — never the next target, even though its
+  // row keeps the `recommended` status it was planned with.
+  const next = steps.find((s) => /^recommended$/i.test(s.status) && !s.skipped);
   const next_recommended = next ? next.step : null;
 
   output(
@@ -203,18 +257,9 @@ function cmdProjectStrategySkipped(cwd: string, skill: string | undefined, raw: 
   const section = extractSection(content, 'Strategy Plan');
   if (section === null) { output({ ...empty, found: true }, raw, 'false'); return; }
 
-  // Ledger lines look like: `- <skill> — skipped (<reason>, <date>)`.
-  // The em-dash separator matches what strategy-flow.md / the template prescribe.
-  for (const line of section.split('\n')) {
-    const m = line.match(/^\s*-\s*([^—|]+?)\s*—\s*skipped\s*\((.*)\)\s*$/i);
-    if (!m) continue;
-    if (m[1].trim().toLowerCase() !== target.toLowerCase()) continue;
-    const inner = m[2].trim();
-    // Split a trailing date (YYYY-MM-DD) off the reason if present.
-    const dateMatch = inner.match(/,\s*(\d{4}-\d{2}-\d{2})\s*$/);
-    const date = dateMatch ? dateMatch[1] : null;
-    const reason = dateMatch ? inner.slice(0, dateMatch.index).trim() : inner;
-    output({ found: true, skill: target, skipped: true, reason, date }, raw, 'true');
+  const entry = parseSkipLedger(section).get(target.toLowerCase());
+  if (entry) {
+    output({ found: true, skill: target, skipped: true, reason: entry.reason, date: entry.date }, raw, 'true');
     return;
   }
 
@@ -239,7 +284,7 @@ function cmdProjectStrategyDone(cwd: string, step: string | undefined, raw: bool
   const target = (step || '').trim();
   if (!target) { error('project strategy-done requires a <step> argument'); return; }
 
-  const projectPath = planningPaths(cwd).project;
+  const projectPath = projectMdPath(cwd);
   if (!fs.existsSync(projectPath)) {
     error('project strategy-done: .planning/PROJECT.md not found');
     return;

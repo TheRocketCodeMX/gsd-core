@@ -213,3 +213,128 @@ describe('project strategy-skipped', () => {
     assert.strictEqual(o.skipped, false);
   });
 });
+
+// #86: a ledgered skip must be honoured by the next-target computation — the
+// Strategy Plan row keeps its `recommended` status (the skip ledger is the
+// record of the decision), so `strategy-plan` must consult the ledger itself.
+describe('#86 strategy-plan honours ledgered skips', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const LEDGERED = `# T
+
+## Strategy Plan
+**Archetype:** backend service
+
+| Step | Status |
+|---|---|
+| model-domain | done |
+| infrastructure-strategy | recommended |
+| cicd-strategy | recommended |
+
+### Skip-ledger
+- infrastructure-strategy — skipped (single VPS already provisioned, 2026-09-01)
+
+## Requirements
+`;
+
+  test('A(done) B(ledgered skip) C(recommended) → next is C, not B', () => {
+    writeProject(tmpDir, LEDGERED);
+    // Precondition (the matrix repro): the skip verb already says B is skipped.
+    assert.strictEqual(runGsdTools('project strategy-skipped infrastructure-strategy --raw', tmpDir).output.trim(), 'true');
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.next_recommended, 'cicd-strategy');
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'cicd-strategy');
+  });
+
+  test('each step carries a `skipped` flag the advance driver reads (row status is left verbatim)', () => {
+    writeProject(tmpDir, LEDGERED);
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    const byStep = Object.fromEntries(o.steps.map((s) => [s.step, s]));
+    assert.strictEqual(byStep['infrastructure-strategy'].status, 'recommended', 'the table cell is reported as written');
+    assert.strictEqual(byStep['infrastructure-strategy'].skipped, true);
+    assert.strictEqual(byStep['cicd-strategy'].skipped, false);
+    assert.strictEqual(byStep['model-domain'].skipped, false);
+  });
+
+  test('a row whose own status is `skipped` is flagged too', () => {
+    writeProject(tmpDir, LEDGERED.replace('| cicd-strategy | recommended |', '| cicd-strategy | skipped |'));
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.steps.find((s) => s.step === 'cicd-strategy').skipped, true);
+    assert.strictEqual(o.next_recommended, null, 'every remaining step is skipped → chain exhausted (→ /gsd-roadmap)');
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), '');
+  });
+
+  test('every ledgered skip is exhausted → next is null', () => {
+    writeProject(tmpDir, LEDGERED.replace('- infrastructure-strategy — skipped', '- cicd-strategy — skipped (no CI yet, 2026-09-02)\n- infrastructure-strategy — skipped'));
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.next_recommended, null);
+  });
+
+  test('advance.md chain-hop rule reads the `skipped` flag, not only the row status', () => {
+    const advance = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'strategy-chain', 'modes', 'advance.md'), 'utf8');
+    assert.match(advance, /steps:\[\{step,status,skipped\}\]/, 'the documented strategy-plan shape names the skipped flag');
+    assert.match(advance, /`skipped: true`/, 'rule 2 must exclude ledgered skips via the flag');
+  });
+});
+
+// #92: PROJECT.md is shared at the planning ROOT across workstreams
+// (gsd-core/references/workstream-flag.md; upstream init.new-milestone's
+// `project_path` = planningDir(cwd, null)/PROJECT.md). Every project verb —
+// readers and the strategy-done writer — must resolve it there, not inside
+// `.planning/workstreams/<ws>/`.
+describe('#92 project verbs resolve the shared root PROJECT.md under a workstream', () => {
+  let tmpDir;
+  const WS_PROJECT = FILLED;
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    writeProject(tmpDir, WS_PROJECT);
+    const wsDir = path.join(tmpDir, '.planning', 'workstreams', 'notif');
+    fs.mkdirSync(path.join(wsDir, 'phases'), { recursive: true });
+    fs.writeFileSync(path.join(wsDir, 'ROADMAP.md'), '# Roadmap\n');
+    fs.writeFileSync(path.join(wsDir, 'STATE.md'), '# State\n');
+  });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const scopes = [
+    ['GSD_WORKSTREAM env', '', { GSD_WORKSTREAM: 'notif' }],
+    ['--ws flag', ' --ws notif', {}],
+  ];
+
+  for (const [label, flag, env] of scopes) {
+    test(`project mode finds the root PROJECT.md (${label})`, () => {
+      const r = runGsdTools(`project mode${flag}`, tmpDir, env);
+      assert.ok(r.success, `failed: ${r.error}`);
+      const o = JSON.parse(r.output);
+      assert.strictEqual(o.found, true);
+      assert.strictEqual(o.origin, 'brownfield-extend');
+    });
+
+    test(`project strategy-plan finds the root Strategy Plan (${label})`, () => {
+      const o = JSON.parse(runGsdTools(`project strategy-plan${flag}`, tmpDir, env).output);
+      assert.strictEqual(o.found, true);
+      assert.strictEqual(o.next_recommended, 'recommend-architecture');
+    });
+
+    test(`project strategy-skipped reads the root skip-ledger (${label})`, () => {
+      assert.strictEqual(runGsdTools(`project strategy-skipped testing-strategy --raw${flag}`, tmpDir, env).output.trim(), 'true');
+    });
+
+    test(`project strategy-done writes the root PROJECT.md (${label})`, () => {
+      const r = runGsdTools(`project strategy-done recommend-architecture${flag}`, tmpDir, env);
+      assert.ok(r.success, `failed: ${r.error}`);
+      assert.strictEqual(JSON.parse(r.output).changed, true);
+      const root = fs.readFileSync(path.join(tmpDir, '.planning', 'PROJECT.md'), 'utf8');
+      assert.match(root, /\| recommend-architecture \| done \|/);
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'workstreams', 'notif', 'PROJECT.md')),
+        'must not create a workstream-local PROJECT.md');
+    });
+  }
+
+  test('no workstream → unchanged (root PROJECT.md, flat layout)', () => {
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.found, true);
+    assert.strictEqual(o.next_recommended, 'recommend-architecture');
+  });
+});

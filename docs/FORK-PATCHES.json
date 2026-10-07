@@ -995,6 +995,16 @@
    "note": "Sweep body extracted to gsd-core/workflows/ship/steps/certification-sweep.md (workflow DEFAULT cap); the FORK:strategy pair now wraps the lazy dispatch line."
   },
   {
+   "path": "gsd-core/workflows/smart-entry.md",
+   "feature": "strategy",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Strategy chain in progress \\(roadmap pending\\) — checked BEFORE the menu is presented",
+    "STRATEGY_ROUTE=\"\\$\\{NEXT_STRATEGY:-roadmap\\}\""
+   ]
+  },
+  {
    "path": "gsd-core/workflows/transition.md",
    "feature": "context",
    "mode": "markers",
