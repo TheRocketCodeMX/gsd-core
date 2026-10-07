@@ -278,3 +278,63 @@ describe('#86 strategy-plan honours ledgered skips', () => {
     assert.match(advance, /`skipped: true`/, 'rule 2 must exclude ledgered skips via the flag');
   });
 });
+
+// #92: PROJECT.md is shared at the planning ROOT across workstreams
+// (gsd-core/references/workstream-flag.md; upstream init.new-milestone's
+// `project_path` = planningDir(cwd, null)/PROJECT.md). Every project verb —
+// readers and the strategy-done writer — must resolve it there, not inside
+// `.planning/workstreams/<ws>/`.
+describe('#92 project verbs resolve the shared root PROJECT.md under a workstream', () => {
+  let tmpDir;
+  const WS_PROJECT = FILLED;
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    writeProject(tmpDir, WS_PROJECT);
+    const wsDir = path.join(tmpDir, '.planning', 'workstreams', 'notif');
+    fs.mkdirSync(path.join(wsDir, 'phases'), { recursive: true });
+    fs.writeFileSync(path.join(wsDir, 'ROADMAP.md'), '# Roadmap\n');
+    fs.writeFileSync(path.join(wsDir, 'STATE.md'), '# State\n');
+  });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const scopes = [
+    ['GSD_WORKSTREAM env', '', { GSD_WORKSTREAM: 'notif' }],
+    ['--ws flag', ' --ws notif', {}],
+  ];
+
+  for (const [label, flag, env] of scopes) {
+    test(`project mode finds the root PROJECT.md (${label})`, () => {
+      const r = runGsdTools(`project mode${flag}`, tmpDir, env);
+      assert.ok(r.success, `failed: ${r.error}`);
+      const o = JSON.parse(r.output);
+      assert.strictEqual(o.found, true);
+      assert.strictEqual(o.origin, 'brownfield-extend');
+    });
+
+    test(`project strategy-plan finds the root Strategy Plan (${label})`, () => {
+      const o = JSON.parse(runGsdTools(`project strategy-plan${flag}`, tmpDir, env).output);
+      assert.strictEqual(o.found, true);
+      assert.strictEqual(o.next_recommended, 'recommend-architecture');
+    });
+
+    test(`project strategy-skipped reads the root skip-ledger (${label})`, () => {
+      assert.strictEqual(runGsdTools(`project strategy-skipped testing-strategy --raw${flag}`, tmpDir, env).output.trim(), 'true');
+    });
+
+    test(`project strategy-done writes the root PROJECT.md (${label})`, () => {
+      const r = runGsdTools(`project strategy-done recommend-architecture${flag}`, tmpDir, env);
+      assert.ok(r.success, `failed: ${r.error}`);
+      assert.strictEqual(JSON.parse(r.output).changed, true);
+      const root = fs.readFileSync(path.join(tmpDir, '.planning', 'PROJECT.md'), 'utf8');
+      assert.match(root, /\| recommend-architecture \| done \|/);
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'workstreams', 'notif', 'PROJECT.md')),
+        'must not create a workstream-local PROJECT.md');
+    });
+  }
+
+  test('no workstream → unchanged (root PROJECT.md, flat layout)', () => {
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.found, true);
+    assert.strictEqual(o.next_recommended, 'recommend-architecture');
+  });
+});

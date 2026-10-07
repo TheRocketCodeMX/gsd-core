@@ -12,6 +12,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 // FORK: re-homed in the v2.0.0 realignment — upstream retired the core.cjs
 // re-export spine (epic #1267); output()/error() now live in io.cjs.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -19,7 +20,7 @@ import io = require('./io.cjs');
 const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
-const { planningPaths } = planningWorkspace;
+const { planningDir } = planningWorkspace;
 import { platformWriteSync } from './shell-command-projection.cjs';
 import { splitLines } from './text-lines.cjs';
 
@@ -133,8 +134,21 @@ function parseSkipLedger(section: string): Map<string, SkipLedgerEntry> {
   return ledger;
 }
 
+/**
+ * #92: PROJECT.md is SHARED across workstreams — it lives at the planning root
+ * (gsd-core/references/workstream-flag.md), never under `.planning/workstreams/<ws>/`.
+ * `planningPaths(cwd).project` is workstream-scoped, so under an active workstream
+ * (GSD_WORKSTREAM / `--ws`) every verb here used to return found:false. This calls
+ * upstream's own shared-root rule — the exact expression init.new-milestone uses
+ * for `project_path` (`planningDir(cwd, null)` suppresses the workstream segment
+ * and still honours GSD_PROJECT) — for readers and the strategy-done writer alike.
+ */
+function projectMdPath(cwd: string): string {
+  return path.join(planningDir(cwd, null), 'PROJECT.md');
+}
+
 function readProjectContent(cwd: string): string | null {
-  const projectPath = planningPaths(cwd).project;
+  const projectPath = projectMdPath(cwd);
   if (!fs.existsSync(projectPath)) return null;
   try {
     return fs.readFileSync(projectPath, 'utf-8');
@@ -270,7 +284,7 @@ function cmdProjectStrategyDone(cwd: string, step: string | undefined, raw: bool
   const target = (step || '').trim();
   if (!target) { error('project strategy-done requires a <step> argument'); return; }
 
-  const projectPath = planningPaths(cwd).project;
+  const projectPath = projectMdPath(cwd);
   if (!fs.existsSync(projectPath)) {
     error('project strategy-done: .planning/PROJECT.md not found');
     return;
