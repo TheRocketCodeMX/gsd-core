@@ -25,6 +25,8 @@
 process.env.GSD_TEST_MODE = '1';
 
 const { describe, test } = require('node:test');
+// FORK: whole-test budget for a real `--codex --local` install + skill emission (a distinct class from a single spawn: it wraps INSTALL_TIMEOUT_MS-class work plus the scan).
+const CODEX_LOCAL_INSTALL_TEST_TIMEOUT_MS = 300000;
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
@@ -103,7 +105,7 @@ describe('install.js twin stays in lockstep with the live module', () => {
 });
 
 describe('EMITTED tree carries the field (real install, the fidelity-test precedent)', () => {
-  test('codex --local: emitted testing-strategy SKILL.md advertises argument-hint; no brand corruption', { timeout: 300000 }, () => {
+  test('codex --local: emitted testing-strategy SKILL.md advertises argument-hint; no brand corruption', { timeout: CODEX_LOCAL_INSTALL_TEST_TIMEOUT_MS }, () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-arghint-emit-'));
     const prevCwd = process.cwd();
     try {

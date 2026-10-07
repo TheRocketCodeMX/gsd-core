@@ -77,7 +77,7 @@ Spawning parallel debug agents to investigate each issue.
 - Spawn parallel debug agents for each issue
 - Collect root causes
 - Update UAT.md with root causes
-- Proceed to `coverage_gap_capture` (spine step; it routes on to `plan_gap_closure`)
+- Proceed to `coverage_gap_capture`
 
 Diagnosis runs automatically - no user prompt. Parallel agents investigate simultaneously, so overhead is minimal and fixes are more accurate.
 

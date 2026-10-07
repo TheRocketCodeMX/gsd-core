@@ -184,6 +184,11 @@ function spawnSeam(command, args, options = {}) {
   if (options.env !== undefined) spawnOptions.env = options.env;
   if (options.input !== undefined) spawnOptions.input = options.input;
   if (options.killSignal !== undefined) spawnOptions.killSignal = options.killSignal;
+  // FORK (identity, align-1.16.0): opt-in stdout ceiling. spawnSync's 1 MiB default is
+  // exceeded by `git log --format=%B` over a realignment-sized range (459 upstream
+  // commits = ~2 MB of bodies), which the emitted-attribution trailer read reports as
+  // buffer_overflow. Callers that need more pass it; everyone else keeps the default.
+  if (options.maxBuffer !== undefined) spawnOptions.maxBuffer = options.maxBuffer;
 
   const result = spawnSync(command, args, spawnOptions);
   return toSeamResult(result);

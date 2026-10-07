@@ -164,7 +164,8 @@ const CORE_UTILS_EXEMPT_FUNCTIONS = new Set([
 //     re-derive "is this a plan" — it answers a different, narrower question
 //     (does the canonical 2-digit numbering sequence have a gap) that the
 //     owner's boolean plan/summary classification cannot answer.
-//   - check-command-router.cts listPlanFiles (fork grounding gate, #21 P1-4):
+//   - gate-grounding-plan.cts listPlanFiles (fork grounding gate, #21 P1-4;
+//     moved out of check-command-router.cts onto upstream's #5139 gate seam):
 //     the candidate set COMES from the owner (scanPhasePlans); the strict
 //     `-PLAN.md` endsWith is a case-strictness POST-FILTER so a case-variant
 //     the owner tolerates (01-01-plan.md) surfaces as a near-miss WARNING
@@ -172,7 +173,7 @@ const CORE_UTILS_EXEMPT_FUNCTIONS = new Set([
 //     re-derivation of "is this a plan".
 const FUNCTION_SCOPED_EXEMPTIONS = new Map([
   [CORE_UTILS_FILE, CORE_UTILS_EXEMPT_FUNCTIONS],
-  [path.join('src', 'check-command-router.cts'), new Set(['listPlanFiles'])],
+  [path.join('src', 'gate-grounding-plan.cts'), new Set(['listPlanFiles'])],
   [path.join('src', 'audit.cts'), new Set(['resolveQuickTaskSummaryFile'])],
   [path.join('src', 'gsd2-import.cts'), new Set(['readTasksDir'])],
   [path.join('src', 'estimate-cli.cts'), new Set(['collectCalibrationSamples'])],

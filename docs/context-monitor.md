@@ -48,7 +48,7 @@ Keys live in the `context_lifecycle` config slice (flat `context_lifecycle.*` or
 
 ## Multi-runtime
 
-On Claude Code and Gemini the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd-context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
+On Claude Code and Antigravity the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd-context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
 
 ---
 

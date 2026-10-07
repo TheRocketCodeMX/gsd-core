@@ -19,6 +19,7 @@
  */
 
 const { test, describe } = require('node:test');
+const { STAGED_HOOK_SCRIPT_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -78,7 +79,7 @@ function runMonitor(opts) {
       input: JSON.stringify(payload),
       env,
       encoding: 'utf8',
-      timeout: 8000,
+      timeout: STAGED_HOOK_SCRIPT_TIMEOUT_MS,
     });
   } catch (e) {
     stdout = e.stdout || '';

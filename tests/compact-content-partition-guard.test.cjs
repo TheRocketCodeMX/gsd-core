@@ -81,6 +81,14 @@ function computeMergeBaseSha(baseRef) {
   return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
 }
 
+/** FORK (identity): `git merge-base <a> <b>` for two SHAs, or `null` on any failure. */
+function computeMergeBaseShaOf(a, b) {
+  const result = runGit([...safeDirArgs(REPO_ROOT), 'merge-base', a, b], { cwd: REPO_ROOT, timeoutMs: GIT_TIMEOUT_MS });
+  if (result.outcome !== OUTCOME.EXITED || result.exitCode !== 0) return null;
+  const sha = result.stdout.trim();
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+}
+
 /** `git diff --name-status <mergeBaseSha>...HEAD -- gsd-core/workflows`, parsed into
  *  `{status, path}` rows (`path` is always the CURRENT path — the second field of an
  *  `R###\told\tnew` rename row, or the single field of every other status). `null` on
@@ -110,6 +118,89 @@ function showAtRefOrNull(ref, relPath) {
   });
   return result.outcome === OUTCOME.EXITED && result.exitCode === 0 ? result.stdout : null;
 }
+
+// FORK:identity BEGIN
+// Merge-anchored realignment (the fork-delta "How to use during realignment" procedure): a
+// `Merge upstream vX.Y.Z …` commit in merge-base..HEAD brings in splits upstream already
+// made — and already completeness-checked against UPSTREAM's own pre-split spine in the
+// PR that performed them. Against this fork's base, every later upstream edit to the
+// same file (1.13 → 1.16) would otherwise read as an "incomplete split". For such a
+// split, check 1 narrows to what this repo actually owns: the FORK's lines — those in
+// the base spine that are absent from the upstream spine at the previous sync point
+// (rebrand-normalized) — must all survive in the new spine ∪ detail. The size clause is
+// upstream's own split invariant and is not re-asserted. A no-op outside a realignment.
+function realignmentUpstreamParents(mergeBaseSha) {
+  const result = runGit(
+    [...safeDirArgs(REPO_ROOT), 'log', '--merges', '--format=%H%x09%P%x09%s', `${mergeBaseSha}..HEAD`],
+    { cwd: REPO_ROOT, timeoutMs: GIT_TIMEOUT_MS },
+  );
+  if (result.outcome !== OUTCOME.EXITED || result.exitCode !== 0) return [];
+  const parents = [];
+  for (const line of result.stdout.split('\n')) {
+    const [, parentList = '', subject = ''] = line.split('\t');
+    const second = parentList.split(' ')[1];
+    if (second && /^[0-9a-f]{40}$/.test(second) && /^Merge upstream v\d+\.\d+\.\d+\b/.test(subject)) parents.push(second);
+  }
+  return parents;
+}
+
+function rebrandUpstream(text) {
+  return text
+    .replace(/@opengsd\/gsd-core/g, '@therocketcode/gsd-core')
+    .replace(/open-gsd\/gsd-core/g, 'TheRocketCodeMX/gsd-core')
+    .replace(/opengsd-gsd-core/g, 'therocketcode-gsd-core');
+}
+
+// Fork lines this realignment deliberately did NOT carry verbatim, each with the upstream
+// change that resolved it (align-1.16.0; recorded in the fork-delta manifest and the wave
+// report). Matched by line prefix. Inert once the realignment merge is behind the base.
+const REALIGNMENT_RESOLVED_FORK_LINES = {
+  'execute-phase': [
+    ['7. **Handle failures:** classify BEFORE branching (#3095) — read', 'superseded: the size-only step-7 extraction retired; upstream #4405/#4217 Step 7 is theirs inline'],
+  ],
+  'plan-phase': [
+    ['Read `frontend`, `hasUiSpec`, and `block` from `GATE`. `frontend` honors', 'reworded onto upstream #5170 "Otherwise read `frontend`, …" sentence (same fork clause appended)'],
+  ],
+  'verify-work': [
+    ['INIT=$(gsd_run query init.verify-work "${PHASE_ARG}" ${GSD_WS})  # phase arg is POSITIONAL', 're-placed on upstream #4772 `${GSD_WS:+--ws=…}` form (same fork comment)'],
+    ['**Determine final status — the runtime is the authority.**', 'superseded by upstream #5105 `uat.complete-session` (fork pending-certifier rule moved into src/uat.cts)'],
+    ['Re-read the completion signal from the runtime, which parses the UAT file', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['DONE=$(gsd_run query init.verify-work "${phase_number}" ${GSD_WS})', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['if [[ "$DONE" == @file:* ]]; then DONE=$(cat "${DONE#@file:}"); fi', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['UAT_BLOCKERS=$(printf \'%s\' "$DONE"', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['if UAT_BLOCKERS is non-empty (any blocker names this phase\'s UAT file', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['# A crash-truncated entry, a still-out CERT-2 handover, or an unresolved item remains.', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['# Name the blockers in the session note; do NOT mark complete.', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['else if pending_count > 0 OR blocked_count > 0 OR skipped_no_reason > 0:', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['# Every entry has a definitive passing/closed result AND the runtime agrees.', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['where `pending_count` / `blocked_count` / `skipped_no_reason` are the local', 'superseded by upstream #5105 `uat.complete-session`'],
+    ['gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files', 'superseded: the verb commits the UAT file; the fork commits the certification artifacts in a separate CERT_FILES call'],
+    ['If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate — **conditionally**:', 'upstream #4663 rewrote the intro; the fork condition is carried in the flip itself'],
+    ['if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ] && [ "$BEHAVIOR_UNVERIFIED" -eq 0 ]', 'merged onto upstream #4663 `phase uat-passed --uat-only` flip (fork conditions added to it)'],
+    ['PHASE_VERIFICATION_STATUS="passed"', 'upstream #4663 flip re-reads verification.status instead'],
+  ],
+};
+
+function isResolvedForkLine(splitName, line) {
+  return (REALIGNMENT_RESOLVED_FORK_LINES[splitName] || []).some(([prefix]) => line.startsWith(prefix));
+}
+
+/** A realignment split's step fragments (`<name>/steps/*.md`): upstream extracted content there too. */
+function stepFragmentContents(spinePath) {
+  const dir = path.join(path.dirname(spinePath), path.basename(spinePath, '.md'), 'steps');
+  try {
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => fs.readFileSync(path.join(dir, f), 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function forkOwnedSpine(oldSpineContent, upstreamSyncSpineContent) {
+  if (oldSpineContent === null) return null;
+  const upstreamLines = new Set(normalizeNonTrivialLines(rebrandUpstream(upstreamSyncSpineContent || '')));
+  return normalizeNonTrivialLines(oldSpineContent).filter((l) => !upstreamLines.has(l)).join('\n');
+}
+// FORK:identity END
 
 // ─── pure check logic (the "lower-level functions" the fixtures call directly) ────────
 
@@ -270,6 +361,7 @@ function runPrDiffScopedChecks() {
     const m = /^gsd-core\/workflows\/([^/]+)\/detail\/[^/]+\.md$/.exec(p);
     if (m) newlySplitNames.add(m[1]);
   }
+  const upstreamParents = realignmentUpstreamParents(mergeBaseSha); // FORK:identity — see realignmentUpstreamParents
   for (const name of newlySplitNames) {
     const split = splits.find((s) => s.name === name);
     if (!split) continue;
@@ -277,6 +369,23 @@ function runPrDiffScopedChecks() {
     const oldSpineContent = showAtRefOrNull(mergeBaseSha, spineRel);
     const newSpineContent = fs.readFileSync(split.spinePath, 'utf8');
     const newDetailContents = split.detailPaths.map((p) => fs.readFileSync(p, 'utf8'));
+    // FORK:identity BEGIN
+    const upstreamParent = upstreamParents.find((sha) =>
+      split.detailPaths.some((p) => showAtRefOrNull(sha, toRepoRelative(p)) !== null));
+    if (upstreamParent) {
+      const syncPoint = computeMergeBaseShaOf(mergeBaseSha, upstreamParent);
+      const forkLines = forkOwnedSpine(oldSpineContent, syncPoint ? showAtRefOrNull(syncPoint, spineRel) : null);
+      completeness.push(
+        ...checkCompletenessForPair({
+          splitName: name,
+          oldSpineContent: forkLines,
+          newSpineContent,
+          newDetailContents: [...newDetailContents, ...stepFragmentContents(split.spinePath)],
+        }).filter((v) => v.kind === 'incomplete_split' && !isResolvedForkLine(name, v.line)),
+      );
+      continue;
+    }
+    // FORK:identity END
     completeness.push(
       ...checkCompletenessForPair({ splitName: name, oldSpineContent, newSpineContent, newDetailContents }),
     );

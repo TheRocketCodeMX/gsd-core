@@ -3234,7 +3234,12 @@ describe('config-set hooks.context_warning_threshold / hooks.context_critical_th
   // subprocess on a hot path and cannot read a manifest to learn its own
   // defaults — so this row pins the two copies against each other. If either
   // moves alone, this goes red.
-  test('an absent threshold resolves to the hook\'s own constant, not "Key not found"', () => {
+  // FORK (context-monitor): hooks/gsd-context-monitor.js is a whole-file fork replacement — the
+  // calm knowledge-flush nudge, thresholded on `context_lifecycle.hook_warn_pct`/`hook_urge_pct`
+  // (docs/context-monitor.md). It has no WARNING_THRESHOLD/CRITICAL_THRESHOLD constants to agree
+  // with, so this upstream #4285 hook-constant parity pin does not apply (the config-key
+  // validation tests around it still run).
+  test('an absent threshold resolves to the hook\'s own constant, not "Key not found"', { skip: 'FORK: the fork context-monitor hook does not consume hooks.context_*_threshold (see docs/context-monitor.md)' }, () => {
     const monitor = require('../hooks/gsd-context-monitor.js');
     for (const [key, constant] of [
       ['hooks.context_warning_threshold', monitor.WARNING_THRESHOLD],

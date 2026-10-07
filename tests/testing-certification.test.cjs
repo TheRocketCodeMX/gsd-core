@@ -695,6 +695,9 @@ describe('citation honesty', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VERIFY_WORK = 'gsd-core/workflows/verify-work.md';
+// align-1.16.0: the coverage_gap_capture body lives in its own step fragment (verify-work.md
+// keeps the <step> stub that Reads it — the spine is LARGE-capped).
+const COVERAGE_STEP = 'gsd-core/workflows/verify-work/steps/coverage-gap-capture.md';
 const CERT_STEP = 'gsd-core/workflows/verify-work/steps/agentic-certification.md';
 const SUMMARY_TPL = 'gsd-core/templates/summary.md';
 const EXECUTE_PLAN = 'gsd-core/workflows/execute-plan.md';
@@ -981,7 +984,7 @@ describe('workflow.certification — the config key', () => {
 
 describe('the feedback loop — certification/UAT failure asks which test was missing', () => {
   test('verify-work carries a coverage-gap step', () => {
-    const text = read(VERIFY_WORK);
+    const text = read(VERIFY_WORK) + '\n' + read(COVERAGE_STEP);
     assert.match(text, /<step name="coverage_gap[^"]*">/, 'a named step owns the coverage-gap question');
     assert.match(
       text,
@@ -991,14 +994,14 @@ describe('the feedback loop — certification/UAT failure asks which test was mi
   });
 
   test('it routes to add-tests and to gap planning', () => {
-    const text = read(VERIFY_WORK);
+    const text = read(COVERAGE_STEP);
     const step = text.slice(at(text, /<step name="coverage_gap[^"]*">/));
     assert.match(step.slice(0, 4000), /add-tests/);
     assert.match(step.slice(0, 4000), /plan-phase --gaps|--gaps/);
   });
 
   test('the answer is APPENDED to TEST-STRATEGY under a marked section (never a rewrite)', () => {
-    const text = read(VERIFY_WORK);
+    const text = read(COVERAGE_STEP);
     const step = text.slice(at(text, /<step name="coverage_gap[^"]*">/), at(text, /<step name="coverage_gap[^"]*">/) + 4000);
     assert.match(step, /TEST-STRATEGY/);
     assert.match(step, /##\s*Coverage debt/, 'the marked section it appends under');
@@ -1130,12 +1133,13 @@ describe('suite-metrics capture — the executor records what it actually ran', 
     // tests/no-bare-gsd-tools-command-position.test.cjs pins this file:line pair.
     // Wave 2 broke it once; this guard makes a re-break loud HERE, in the file
     // that owns the change, instead of in an upstream test. (v1.13.0: upstream's
-    // own pin moved 414 → 419 — the fork's line is now the same as upstream's.)
-    const line = read(EXECUTE_PLAN).split('\n')[418];
+    // own pin moved 414 → 419 — the fork's line is now the same as upstream's;
+    // v1.16.0: upstream #4834/#4772 moved it 419 → 421, same as upstream's pin.)
+    const line = read(EXECUTE_PLAN).split('\n')[420];
     assert.match(
       line,
       /Every deliverable MUST be classified/,
-      'execute-plan.md line 419 must still be the allowlisted `validated downstream by` line'
+      'execute-plan.md line 421 must still be the allowlisted `validated downstream by` line'
     );
   });
 });
@@ -2343,7 +2347,8 @@ describe('round-2 Wave B — verify-work completion seams (e2e-4 F5/F7)', () => 
 
   test('e2e-4 F5 — the human_needed → passed stamp is conditional on nothing being unproven', () => {
     const src = read(VW);
-    const guard = /if \[ "\$VERIFICATION_STATUS_VALUE" = "human_needed" \] && \[ "\$BEHAVIOR_UNVERIFIED" -eq 0 \] && \[ "\$CERT_UNPROVEN" -eq 0 \]/;
+    // align-1.16.0: nested inside upstream #4663's `UAT_PRECHECK_PASSED` flip guard.
+    const guard = /if \[ "\$UAT_PRECHECK_PASSED" = "true" \]; then\n(?:[^\n]*\n){0,2}\s*if \[ "\$BEHAVIOR_UNVERIFIED" -eq 0 \] && \[ "\$CERT_UNPROVEN" -eq 0 \]; then\n\s*gsd_run query frontmatter\.set "\$VERIFICATION_FILE" --field status --value passed/;
     assert.match(src, guard, 'the stamp must require zero unverified behaviours AND zero unproven checkpoints');
     // The two inputs must actually be read from the two artifacts allowed to say so.
     assert.match(src, /BEHAVIOR_UNVERIFIED=.*frontmatter\.get .*behavior_unverified/,
@@ -2359,7 +2364,7 @@ describe('round-2 Wave B — verify-work completion seams (e2e-4 F5/F7)', () => 
   });
 
   test('e2e-4 F7 — coverage_gap_capture has a record-only entry that does not need a UAT issue', () => {
-    const src = read(VW);
+    const src = read(COVERAGE_STEP);
     const stepStart = src.indexOf('<step name="coverage_gap_capture">');
     assert.notStrictEqual(stepStart, -1);
     const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
@@ -2371,7 +2376,7 @@ describe('round-2 Wave B — verify-work completion seams (e2e-4 F5/F7)', () => 
   });
 
   test('e2e-4 F7 — the record-only route does not fall into plan_gap_closure', () => {
-    const src = read(VW);
+    const src = read(COVERAGE_STEP);
     const stepStart = src.indexOf('<step name="coverage_gap_capture">');
     const step = src.slice(stepStart, src.indexOf('</step>', stepStart));
     assert.match(step, /\*\*Record-only entry:\*\* return to `complete_session`/,

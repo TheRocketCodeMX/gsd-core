@@ -21,6 +21,14 @@
    ]
   },
   {
+   "path": ".gitignore",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gate-grounding-plan\\.cjs"
+   ]
+  },
+  {
    "path": "CHANGELOG.md",
    "feature": "identity",
    "mode": "whole-file",
@@ -491,6 +499,14 @@
    "anchors": [
     "_reference/\\*\\*",
     "learn\\.cjs"
+   ]
+  },
+  {
+   "path": "eslint.config.mjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gate-grounding-plan\\.cjs"
    ]
   },
   {
@@ -1029,6 +1045,65 @@
    ]
   },
   {
+   "path": "scripts/docs-guard-registry.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "auto-advance-endings\\.test\\.cjs"
+   ]
+  },
+  {
+   "path": "scripts/lint-allow-test-rule-refs.effective-ceiling.json",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "the fork's 5 structural sites"
+   ]
+  },
+  {
+   "path": "scripts/lint-allow-test-rule-refs.unverified-ceiling.json",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "6 fork marker-bearing"
+   ]
+  },
+  {
+   "path": "scripts/lint-docs-guard-registration.exempt-baseline.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "roadmap-after-strategy\\.test\\.cjs",
+    "workflow-size-budget\\.test\\.cjs"
+   ]
+  },
+  {
+   "path": "scripts/lint-plan-count-drift.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gate-grounding-plan\\.cts"
+   ]
+  },
+  {
+   "path": "scripts/lint-test-file-count.allowlist.json",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "roadmap-after-strategy\\.test\\.cjs",
+    "milestone-name-duplication\\.test\\.cjs",
+    "context-enrichment\\.test\\.cjs"
+   ]
+  },
+  {
+   "path": "scripts/lint-verify-lifecycle-writes.allowlist.json",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "certification artifacts"
+   ]
+  },
+  {
    "path": "scripts/prompt-injection-scan.sh",
    "feature": "fidelity",
    "mode": "anchors-only",
@@ -1229,6 +1304,32 @@
    ]
   },
   {
+   "path": "tests/compact-content-partition-guard.test.cjs",
+   "feature": "identity",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "realignmentUpstreamParents",
+    "REALIGNMENT_RESOLVED_FORK_LINES"
+   ]
+  },
+  {
+   "path": "tests/config.platform.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "fork #21 P1-3"
+   ]
+  },
+  {
+   "path": "tests/config.test.cjs",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "the fork context-monitor hook does not consume hooks\\.context_\\*_threshold"
+   ]
+  },
+  {
    "path": "tests/docs-hooks-table-parity.test.cjs",
    "feature": "grounding",
    "mode": "anchors-only",
@@ -1271,6 +1372,14 @@
    ]
   },
   {
+   "path": "tests/gate-positive-control.test.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gate: 'grounding-plan'"
+   ]
+  },
+  {
    "path": "tests/gsd-quick-batch-quick-regression.test.cjs",
    "feature": "release",
    "mode": "anchors-only",
@@ -1293,9 +1402,19 @@
    "path": "tests/helpers/emitted-runtime.cjs",
    "feature": "identity",
    "mode": "markers",
-   "markers": 1,
+   "markers": 3,
    "anchors": [
-    "Uncommitted \\(staged \\+ worktree\\) changes are part of"
+    "Uncommitted \\(staged \\+ worktree\\) changes are part of",
+    "maxBuffer: 64 \\* 1024 \\* 1024 \\}",
+    "upstreamExclusions"
+   ]
+  },
+  {
+   "path": "tests/helpers/process-seam.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "opt-in stdout ceiling"
    ]
   },
   {
@@ -1357,6 +1476,14 @@
    "anchors": [
     "cap mirrors the XL tier this fork records for gsd-planner",
     "cap mirrors the XL tier this fork records for gsd-executor"
+   ]
+  },
+  {
+   "path": "tests/prompt-injection-scan.security.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "the fork.s\\n  // source-fidelity inputs"
    ]
   },
   {

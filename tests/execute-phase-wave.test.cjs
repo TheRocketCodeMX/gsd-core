@@ -9,6 +9,7 @@
  */
 
 const { test, describe } = require('node:test');
+const { GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -1021,7 +1022,7 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
       trackingBlock();
     const scriptPath = path.join(tmp, 'tracking.sh');
     fs.writeFileSync(scriptPath, script);
-    return execFileSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+    return execFileSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
   }
 
   let tmp;

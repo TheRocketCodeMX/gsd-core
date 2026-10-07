@@ -776,7 +776,11 @@ function currentSizes({ repoRoot = REPO_ROOT } = {}) {
  * `resolveChangedPaths` above.
  */
 function ackTrailerGit(args, { cwd = REPO_ROOT, timeoutMs = GIT_TIMEOUT_MS, input } = {}) {
-  const spawnOpts = { cwd, timeoutMs };
+  // FORK:identity BEGIN
+  // 64 MiB, the same ceiling resolveChangedPaths uses: the raw-%B read spans every
+  // commit in merge-base..HEAD, which a realignment merge makes hundreds of commits long.
+  const spawnOpts = { cwd, timeoutMs, maxBuffer: 64 * 1024 * 1024 };
+  // FORK:identity END
   if (input !== undefined) spawnOpts.input = input;
   const result = runGit([...safeDirArgs(cwd), ...args], spawnOpts);
   if (result.outcome === OUTCOME.EXITED && result.exitCode === 0) {
@@ -955,13 +959,34 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
   // of splitting into separate entries (silent data loss — the exact failure class
   // `MAX_ACK_TRAILERS` exists to prevent). Fixed by emitting the `%x` escape.
   const ackValueSepHex = `%x${ACK_TRAILER_VALUE_SEP.codePointAt(0).toString(16).padStart(2, '0')}`;
+  // FORK:identity BEGIN
+  // Merge-anchored realignment (docs/FORK-DELTA.md "How to use during realignment"):
+  // a `Merge upstream vX.Y.Z …` commit brings hundreds of upstream commits into
+  // merge-base..HEAD, each carrying upstream's OWN ack trailers — reviewed upstream,
+  // and routinely re-declaring one key with a different reason across separate PRs,
+  // which the ambiguity rule below would reject as a conflict. Those commits are
+  // upstream's history, not this change's: exclude everything reachable from such a
+  // merge's upstream parent (`^<M>^2`). The realignment's own growth is acked by the
+  // fork-side commits, exactly as before. Ordinary ranges contain no such merge, so
+  // this is a no-op outside a realignment.
+  const upstreamExclusions = [];
+  try {
+    const merges = ackTrailerGit(['log', '--merges', `--format=%H%x09%s`, `${mergeBase}..${headRef}`], { cwd, timeoutMs });
+    for (const line of merges.replace(/\r/g, '').split('\n')) {
+      const [sha, subject = ''] = line.split('\t');
+      if (/^[0-9a-f]{40}$/.test(sha) && /^Merge upstream v\d+\.\d+\.\d+\b/.test(subject)) upstreamExclusions.push(`^${sha}^2`);
+    }
+  } catch (err) {
+    throw new Error(`emitted-ack-trailer: could not list merge commits over the range: ${err.message}`);
+  }
+  // FORK:identity END
   const format =
     `${ACK_TRAILER_RECORD_SEP}%(trailers:key=${ACK_TRAILER_HASH},valueonly,separator=${ackValueSepHex})`
     + `${ACK_TRAILER_FIELD_SEP}%(trailers:key=${ACK_TRAILER_GROWTH},valueonly,separator=${ackValueSepHex})`;
 
   let raw;
   try {
-    raw = ackTrailerGit(['log', `${mergeBase}..${headRef}`, `--format=${format}`], { cwd, timeoutMs });
+    raw = ackTrailerGit(['log', `${mergeBase}..${headRef}`, ...upstreamExclusions, `--format=${format}`], { cwd, timeoutMs });
   } catch (err) {
     throw new Error(`emitted-ack-trailer: could not read commit trailers over the range: ${err.message}`);
   }
@@ -990,7 +1015,7 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
   let rawBodies;
   try {
     rawBodies = ackTrailerGit(
-      ['log', `${mergeBase}..${headRef}`, `--format=${ACK_TRAILER_RECORD_SEP}%B`],
+      ['log', `${mergeBase}..${headRef}`, ...upstreamExclusions, `--format=${ACK_TRAILER_RECORD_SEP}%B`],
       { cwd, timeoutMs },
     );
   } catch (err) {

@@ -88,6 +88,10 @@ const ALLOWLIST = new Set([
 // Do NOT add files here that legitimately reference injection patterns (those
 // belong in ALLOWLIST). Only add files that are large but otherwise clean.
 const SIZE_ONLY_WORKFLOWS = new Set([
+  // FORK (fidelity, align-1.16.0): ~50.3K — upstream v1.16.0 body is 49,961 B; the fork's
+  // source-fidelity inputs (Mode + design oracle handed to the reviewer) plus the rebrand
+  // push it over. Size-only: still fully injection scanned.
+  'gsd-core/workflows/code-review.md',
   'gsd-core/workflows/docs-update.md',  // ~51K after fix-loop truncation guard (#571)
   // ~51.8K after the certification re-entry wiring (#58). The file sat at ~49.6K;
   // the round-2 gate fixes (resume-path dispatch, archive-never-clobber, outcome-line

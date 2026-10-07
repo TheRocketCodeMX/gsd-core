@@ -5,6 +5,7 @@ argument-hint: "[--auto] [--milestone] [--reset-phase-numbers]"
 allowed-tools:
   - Read
   - Bash
+  - Grep
   - Write
   - Edit
   - Agent

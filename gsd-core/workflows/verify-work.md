@@ -582,12 +582,15 @@ gsd_run query uat.complete-session "$uat_path" --message "test({phase_num}): com
 
 `changed: false` → announce that the session was already complete and nothing was written or committed. `changed: true` → the UAT file (frontmatter `status`, `updated`, `## Current Test`) was written and committed in one step.
 
-**Certification rows and artifacts (fork).** The verb counts a `result: [pending-certifier]` row as blocking — a still-out CERT-2 handover leaves the session `partial`; name it in the session note, never mark complete. When the certification step produced artifacts, commit them too — the brief is the canonical record of what was certified (`commit_docs` governs, as for every `.planning/` write):
+**Certification rows and artifacts (fork).** The verb counts a `result: [pending-certifier]` row as blocking — a still-out CERT-2 handover leaves the session `partial`; name it in the session note, never mark complete. Then commit the certification artifacts:
 
 ```bash
-CERT_FILES=$(ls -d "${phase_dir}/${phase_num}-CERTIFICATION-BRIEF.md" "${phase_dir}/${phase_num}-CERTIFICATION-SCRIPT."* "${phase_dir}/${phase_num}-CERTIFICATION-RESULT.md" "${phase_dir}/certification-evidence/" 2>/dev/null)
-[ -z "$CERT_FILES" ] || gsd_run query commit "test({phase_num}): certification artifacts" --files $CERT_FILES
+gsd_run query commit "test({phase_num}): certification artifacts" --files ".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*" ".planning/phases/XX-name/{phase_num}-CERTIFICATION-RESULT.md" ".planning/phases/XX-name/certification-evidence/"
 ```
+
+Include the certification artifacts only when the run produced them — the brief is the
+canonical record of what was certified, and an uncommitted canonical artifact is a
+contradiction in terms (`commit_docs` governs, as for every `.planning/` write).
 
 **If the UAT file has a non-empty `## Deferred Follow-Ups` section,** those items are currently visible only inside this phase's `*-UAT.md` — offer to promote them to the roadmap backlog so they stay visible at the project level (#4546; reuses the exact entry mechanism `next.md`'s `prior_phase_completeness` step uses for plans-without-summaries):
 
@@ -706,14 +709,19 @@ if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ]; then
   UAT_PRECHECK=$(gsd_run phase uat-passed "{phase}" --uat-only) && UAT_EXIT=0 || UAT_EXIT=$?
   if [ "$UAT_EXIT" -gt 1 ] || { [ "$UAT_EXIT" -eq 1 ] && [ -z "$UAT_PRECHECK" ]; }; then echo "phase uat-passed could not run (exit $UAT_EXIT) — see the error above." >&2; exit 1; fi
   UAT_PRECHECK_PASSED=$(printf '%s' "$UAT_PRECHECK" | jq -r '.passed // false' 2>/dev/null || echo "false")
-  # What is still unproven, from the two artifacts that are allowed to say so (fork, e2e-4 F5).
+  # What is still unproven, from the two artifacts that are allowed to say so.
   UAT_FILE=$(ls "${PHASE_DIR}"/*-UAT.md 2>/dev/null | head -1)
   BEHAVIOR_UNVERIFIED=$(gsd_run query frontmatter.get "$VERIFICATION_FILE" --field behavior_unverified 2>/dev/null | jq -r '.behavior_unverified // 0' 2>/dev/null || echo 0)
   case "$BEHAVIOR_UNVERIFIED" in ''|*[!0-9]*) BEHAVIOR_UNVERIFIED=0 ;; esac
   CERT_UNPROVEN=$(grep -cE '^result: (\[pending-certifier\]|could-not-prove)' "$UAT_FILE" 2>/dev/null || echo 0)
   case "$CERT_UNPROVEN" in ''|*[!0-9]*) CERT_UNPROVEN=0 ;; esac
-  if [ "$UAT_PRECHECK_PASSED" = "true" ] && [ "$BEHAVIOR_UNVERIFIED" -eq 0 ] && [ "$CERT_UNPROVEN" -eq 0 ]; then
-    gsd_run query frontmatter.set "$VERIFICATION_FILE" --field status --value passed
+  if [ "$UAT_PRECHECK_PASSED" = "true" ]; then
+    # Fork (e2e-4 F5): the predicate passing is necessary, not sufficient — nothing may still be unproven.
+    if [ "$BEHAVIOR_UNVERIFIED" -eq 0 ] && [ "$CERT_UNPROVEN" -eq 0 ]; then
+      gsd_run query frontmatter.set "$VERIFICATION_FILE" --field status --value passed
+    else
+      echo "NOT canonicalizing: ${BEHAVIOR_UNVERIFIED} behaviour(s) and ${CERT_UNPROVEN} checkpoint(s) still unproven; verification stays human_needed." >&2
+    fi
   else
     UAT_BLOCKERS=$(printf '%s' "$UAT_PRECHECK" | jq -r '.blockers | length' 2>/dev/null)
     [ -n "$UAT_BLOCKERS" ] || UAT_BLOCKERS="?"
@@ -722,9 +730,29 @@ if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ]; then
 fi
 ```
 
-**Why the flip is also conditional on the unproven counts (fork, e2e-4 F5).** `human_needed` means a human still has to look at something; a zero-issue UAT answers only what the human was asked. A truth the verifier recorded as `PRESENT_BEHAVIOR_UNVERIFIED` (`behavior_unverified` frontmatter — which `--uat-only` deliberately skips) or a checkpoint the certifier escalated (`[pending-certifier]` / `could-not-prove`) never flips to `passed` silently: stamping it produced a report saying `status: passed` next to `behavior_unverified: 1`, which `phase uat-passed --require-verification` then passed.
+**Why the stamp is conditional (e2e-4 F5).** `human_needed` means *a human still has to
+look at something*. A UAT session with zero issues answers only the part the human was
+asked about; it says nothing about a truth the verifier recorded as
+`PRESENT_BEHAVIOR_UNVERIFIED`, or a checkpoint the certifier escalated as
+`could-not-prove`. Stamping unconditionally produced a file that contradicted itself —
 
-**If the stamp was withheld** because `BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` is non-zero, first run `coverage_gap_capture` in **record-only mode** (the gap was found by escalation, not by a UAT issue), then stop before phase advancement and present:
+```yaml
+status: passed
+behavior_unverified: 1
+behavior_unverified_items:
+  - truth: "Invalid email or weak password returns 400 naming the problem"
+```
+
+— and `phase uat-passed --require-verification` then returned `passed: true` on it, with
+three artifacts in one phase and two of them saying the behaviour was unproven. A
+`behavior_unverified` item never flips to `passed` silently. This is the same
+deterministic-auto-pass philosophy the coverage classifier already applies: auto-pass what
+the evidence covers, present what it does not.
+
+**If the stamp was withheld** (`PHASE_VERIFICATION_STATUS` is still `human_needed` while
+`BEHAVIOR_UNVERIFIED` or `CERT_UNPROVEN` is non-zero), first run `coverage_gap_capture` in
+**record-only mode** (below — the gap was found by escalation, not by a UAT issue), then
+stop before phase advancement and present:
 
 ```
 All UAT tests passed, but {BEHAVIOR_UNVERIFIED} behaviour(s) and {CERT_UNPROVEN} checkpoint(s) are still unproven — verification stays `human_needed`.

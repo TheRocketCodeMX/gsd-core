@@ -76,13 +76,15 @@
         "milestone-archive-hygiene.test.cjs",
         "milestone-archive.test.cjs",
         "milestone-helper.test.cjs",
+        "milestone-name-duplication.test.cjs",
         "milestone-prefixed-convention.test.cjs",
         "milestone-summary.test.cjs",
         "milestone-window-drift-guard.test.cjs",
         "milestone-window-single-owner.test.cjs",
         "milestone.test.cjs"
       ],
-      "issue": "3216"
+      "issue": "3216",
+      "justification": "FORK (milestone-render, e2e-10 F7): milestone-name-duplication.test.cjs pins the no-`--name` header rendering; see docs/FORK-DELTA.md."
     },
     "phase": {
       "files": [
@@ -97,12 +99,14 @@
     },
     "roadmap": {
       "files": [
+        "roadmap-after-strategy.test.cjs",
         "roadmap-disk-consistency.test.cjs",
         "roadmap-mode-field.test.cjs",
         "roadmap-phase-fallback.test.cjs",
         "roadmap.test.cjs"
       ],
-      "issue": "TBD"
+      "issue": "TBD",
+      "justification": "FORK (strategy): roadmap-after-strategy.test.cjs pins the single gsd-roadmap spawn point (roadmap generated after the strategy chain); see docs/FORK-DELTA.md."
     },
     "runtime-artifact-layout": {
       "files": [
@@ -286,15 +290,6 @@
       ],
       "issue": "#3854 — the tight-list suite pins the markdown write-normalizer's blank-line policy through the exported normalizeContent/platformWriteSync seam; a distinct concern from dispatch routing and path separation"
     },
-    "ui-consideration-probe": {
-      "files": [
-        "ui-consideration-probe-docs-fixtures.test.cjs",
-        "ui-consideration-probe-ui-phase-contract.test.cjs",
-        "ui-consideration-probe.test.cjs"
-      ],
-      "issue": "4657",
-      "justification": "The ui-consideration-probe cluster gains its workflow-prose contract file (tests/ui-consideration-probe-ui-phase-contract.test.cjs, #4657), mirroring the edge probe's split (edge-probe.test.cjs / edge-probe-docs-fixtures.test.cjs / edge-probe-spec-phase-contract.test.cjs). The contract file reads shipped gsd-core/workflows/ui-phase.md under the source-text-is-the-product exception, which the unit file deliberately does not carry (it asserts typed returns only)."
-    },
     "verification": {
       "files": [
         "verification-append-audit.test.cjs",
@@ -303,6 +298,16 @@
       ],
       "issue": "5105",
       "justification": "#5105 (Phase 3 of #5056) adds verification-append-audit.test.cjs for the new `verification.append-audit` verb (deny-by-default audit-block append/no-op, #4887) — a distinct concern from verification-status.test.cjs's status/fingerprint suite and verification-overrides.test.cjs's override handling."
+    },
+    "context": {
+      "files": [
+        "context-drift.test.cjs",
+        "context-enrichment.test.cjs",
+        "context-index-sync.test.cjs",
+        "fix-2289-context-monitor-event-allowlist.test.cjs"
+      ],
+      "issue": "FORK",
+      "justification": "FORK: the context capability (context-lifecycle program) owns context-enrichment; upstream's fix-2289 suite shares the derived `context` prefix, and upstream's own context-index-sync (#2950) and context-drift (#4147) suites bucket into the same cluster under the #3227 prefix rule."
     }
   }
 }

@@ -309,12 +309,13 @@ describe('ci-test-scope superset invariant (#494, rescinded by #4421)', () => {
     // FORK: fixture swapped — upstream names a context-monitor regression file
     // (bug-1974-… before v1.9.0, perf-317-context-monitor-fs.test.cjs after) as
     // the "some changed test file" fixture. Both are deleted in this fork, whose
-    // context monitor is a rewritten calm knowledge-flush nudge. Any existing
-    // tests/** file exercises the same scoping rule.
-    const result = scopeFor(['tests/managed-hooks.test.cjs']);
+    // context monitor is a rewritten calm knowledge-flush nudge. Since #4421 the
+    // rule is "a changed test that reaches the conformance tier", so the stand-in
+    // must be a tier member: tests/config.platform.test.cjs (align-1.16.0).
+    const result = scopeFor(['tests/config.platform.test.cjs']);
     assert.strictEqual(result.full_matrix, true,
       `expected full_matrix=true for a tests/**-only change (rescinded #494 carve-out, see #4421), got: ${JSON.stringify(result)}`);
-    assert.ok(result.targeted_tests.includes('tests/managed-hooks.test.cjs'),
+    assert.ok(result.targeted_tests.includes('tests/config.platform.test.cjs'),
       `expected the changed test in targeted_tests, got: ${JSON.stringify(result.targeted_tests)}`);
     // #4641: the `test` job's windows lane is deleted; full_matrix (already
     // asserted true above) is the only Windows signal left.

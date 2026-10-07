@@ -168,6 +168,8 @@ export default tseslint.config(
       'gsd-core/bin/lib/gate-verdict.cjs',
       'gsd-core/bin/lib/gate-verify-command-paths.cjs',
       'gsd-core/bin/lib/gate-verify-failure-directions.cjs',
+      // FORK (grounding, align-1.16.0): tsc-generated — lint the src/gate-grounding-plan.cts source.
+      'gsd-core/bin/lib/gate-grounding-plan.cjs',
       'gsd-core/bin/lib/cli-exit.cjs',
       'gsd-core/bin/lib/external-job.cjs',
       'gsd-core/bin/lib/edge-probe.cjs',

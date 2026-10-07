@@ -34,7 +34,7 @@ const { runNode } = require('./helpers/process-seam.cjs');
 const pkg = require('../package.json');
 
 // #3145: class-norm timeout, not a per-suite value — see helpers/timeouts.cjs.
-const { PROBE_TIMEOUT_MS, QUICK_SPAWN_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+const { PROBE_TIMEOUT_MS, QUICK_SPAWN_TIMEOUT_MS, STAGED_HOOK_SCRIPT_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 // Fixture-JSON value (seconds, not ms) simulating the PRE-migration legacy
 // settings.json hook-entry timeout under test (#3981-style migration test).
@@ -8923,7 +8923,7 @@ describe('#4377: --relative-includes emits project-relative @ includes for a loc
           // Claude Code spawns the statusline with the process env and no
           // login-profile initialisation — nvm/fnm/volta shims are NOT on PATH.
           env: { HOME: tmpDir41, PATH: '/usr/local/bin:/usr/bin:/bin' },
-          timeout: 30000,
+          timeout: STAGED_HOOK_SCRIPT_TIMEOUT_MS,
         });
         assert41.equal(
           res.status, 0,

@@ -28,5 +28,11 @@
     "rule": "L2",
     "command": "gsd_run query frontmatter.set \"$VERIFICATION_FILE\" --field status --value passed",
     "reason": "#5105 design census §1b: $VERIFICATION_FILE is always the phase's own *-VERIFICATION.md report path (resolved via verification.resolve-file) — this is the canonicalization write to the report's own status, which is filtered from the covered-file set (v3) and therefore inert by construction."
+  },
+  {
+    "file": "gsd-core/workflows/verify-work.md",
+    "rule": "L2",
+    "command": "gsd_run query commit \"test({phase_num}): certification artifacts\" --files \".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md\" \".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*\" \".planning/phases/XX-name/{phase_num}-CERTIFICATION-RESULT.md\" \".planning/phases/XX-name/certification-evidence/\"",
+    "reason": "FORK (strategy, align-1.16.0) per #5105: a commit records bytes and never rewrites them, and the certification artifacts (BRIEF/SCRIPT/RESULT/evidence) are neither declared covered_files nor *-PLAN/*-SUMMARY artifacts (allCurrentArtifactsCovered), so committing them after the fingerprint is inert to it by construction."
   }
 ]

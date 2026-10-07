@@ -120,6 +120,29 @@ gateControl({
   },
 });
 
+// FORK (grounding, align-1.16.0): the source-grounding gate moved onto the #5139 gate seam.
+gateControl({
+  gate: 'grounding-plan',
+  module: require('../gsd-core/bin/lib/gate-grounding-plan.cjs'),
+  fn: 'evaluateGroundingPlan',
+  red: 'block',
+  expectRed: { passed: false },
+  // A provided-design oracle (DESIGN-INVENTORY.md, beside PROJECT.md) is a required source; the plan cites nothing.
+  redScenario: {
+    setup: (dir) => {
+      put(dir, '.planning/PROJECT.md', ['# Project', ''].join('\n'));
+      put(dir, '.planning/DESIGN-INVENTORY.md', ['# Design Inventory', '', '- Screen: Login', ''].join('\n'));
+      put(dir, PLAN_PATH, ['---', 'phase: 1', '---', '<objective>Build login</objective>', ''].join('\n'));
+    },
+    args: [PHASE_DIR],
+  },
+  // No active strategy source and no SOURCE citation: nothing to ground.
+  greenScenario: {
+    setup: (dir) => put(dir, PLAN_PATH, ['---', 'phase: 1', '---', '<objective>Build login</objective>', ''].join('\n')),
+    args: [PHASE_DIR],
+  },
+});
+
 gateControl({
   gate: 'tdd-red-evidence',
   module: require('../gsd-core/bin/lib/gate-tdd-red-evidence.cjs'),
