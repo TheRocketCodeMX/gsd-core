@@ -213,3 +213,68 @@ describe('project strategy-skipped', () => {
     assert.strictEqual(o.skipped, false);
   });
 });
+
+// #86: a ledgered skip must be honoured by the next-target computation — the
+// Strategy Plan row keeps its `recommended` status (the skip ledger is the
+// record of the decision), so `strategy-plan` must consult the ledger itself.
+describe('#86 strategy-plan honours ledgered skips', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const LEDGERED = `# T
+
+## Strategy Plan
+**Archetype:** backend service
+
+| Step | Status |
+|---|---|
+| model-domain | done |
+| infrastructure-strategy | recommended |
+| cicd-strategy | recommended |
+
+### Skip-ledger
+- infrastructure-strategy — skipped (single VPS already provisioned, 2026-09-01)
+
+## Requirements
+`;
+
+  test('A(done) B(ledgered skip) C(recommended) → next is C, not B', () => {
+    writeProject(tmpDir, LEDGERED);
+    // Precondition (the matrix repro): the skip verb already says B is skipped.
+    assert.strictEqual(runGsdTools('project strategy-skipped infrastructure-strategy --raw', tmpDir).output.trim(), 'true');
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.next_recommended, 'cicd-strategy');
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'cicd-strategy');
+  });
+
+  test('each step carries a `skipped` flag the advance driver reads (row status is left verbatim)', () => {
+    writeProject(tmpDir, LEDGERED);
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    const byStep = Object.fromEntries(o.steps.map((s) => [s.step, s]));
+    assert.strictEqual(byStep['infrastructure-strategy'].status, 'recommended', 'the table cell is reported as written');
+    assert.strictEqual(byStep['infrastructure-strategy'].skipped, true);
+    assert.strictEqual(byStep['cicd-strategy'].skipped, false);
+    assert.strictEqual(byStep['model-domain'].skipped, false);
+  });
+
+  test('a row whose own status is `skipped` is flagged too', () => {
+    writeProject(tmpDir, LEDGERED.replace('| cicd-strategy | recommended |', '| cicd-strategy | skipped |'));
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.steps.find((s) => s.step === 'cicd-strategy').skipped, true);
+    assert.strictEqual(o.next_recommended, null, 'every remaining step is skipped → chain exhausted (→ /gsd-roadmap)');
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), '');
+  });
+
+  test('every ledgered skip is exhausted → next is null', () => {
+    writeProject(tmpDir, LEDGERED.replace('- infrastructure-strategy — skipped', '- cicd-strategy — skipped (no CI yet, 2026-09-02)\n- infrastructure-strategy — skipped'));
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.next_recommended, null);
+  });
+
+  test('advance.md chain-hop rule reads the `skipped` flag, not only the row status', () => {
+    const advance = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'strategy-chain', 'modes', 'advance.md'), 'utf8');
+    assert.match(advance, /steps:\[\{step,status,skipped\}\]/, 'the documented strategy-plan shape names the skipped flag');
+    assert.match(advance, /`skipped: true`/, 'rule 2 must exclude ledgered skips via the flag');
+  });
+});
