@@ -557,8 +557,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run --tag next
 
       - name: Tag and push
@@ -580,11 +579,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Update npm CLI (trusted publishing needs npm >= 11.5.1)
+        # FORK (release): pin the floor explicitly so a runner-image change cannot drop below the OIDC minimum.
+        run: npm install -g npm@latest && npm --version
+
       - name: Publish to npm (next)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public --tag next
 
       - name: Create GitHub pre-release
@@ -819,8 +821,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run
 
       - name: Create PR to merge release back to main
@@ -872,11 +873,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Update npm CLI (trusted publishing needs npm >= 11.5.1)
+        # FORK (release): pin the floor explicitly so a runner-image change cannot drop below the OIDC minimum.
+        run: npm install -g npm@latest && npm --version
+
       - name: Publish to npm (latest)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public
 
       - name: Create GitHub Release
