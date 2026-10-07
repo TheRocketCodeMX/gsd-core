@@ -33,6 +33,8 @@ const JS_HOOKS = [
   'gsd-write-guard.js',
   'gsd-secret-read-guard.js',
   'gsd-config-reload.js',
+  // FORK (grounding #11, align-1.16.0): the FileChanged grounding-index refresh row.
+  'gsd-grounding-index-refresh.js',
 ];
 const SH_HOOKS = [
   'gsd-validate-commit.sh',
@@ -128,6 +130,7 @@ function runOne(rt, spec, apply = applySettingsJsonHooks) {
           readGuardCommand: cmdFor('gsd-read-guard.js'),
           readInjectionScannerCommand: cmdFor('gsd-read-injection-scanner.js'),
           configReloadCommand: spec.configReloadNull ? null : cmdFor('gsd-config-reload.js'),
+          groundingRefreshCommand: cmdFor('gsd-grounding-index-refresh.js'), // FORK (grounding #11)
           hookOpts,
           localCmd,
           localShellCmd,

@@ -1372,6 +1372,22 @@
    ]
   },
   {
+   "path": "tests/fixtures/hook-registration/golden.json",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "gsd-grounding-index-refresh\\.js"
+   ]
+  },
+  {
+   "path": "tests/fixtures/hook-registration/run-scenarios.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "groundingRefreshCommand: cmdFor\\(.gsd-grounding-index-refresh\\.js.\\)"
+   ]
+  },
+  {
    "path": "tests/gate-positive-control.test.cjs",
    "feature": "grounding",
    "mode": "anchors-only",
@@ -1418,6 +1434,14 @@
    ]
   },
   {
+   "path": "tests/hook-registration-table.test.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "FileChanged carries TWO rows in the fork"
+   ]
+  },
+  {
    "path": "tests/install.test.cjs",
    "feature": "statusline-reemit",
    "mode": "anchors-only",
@@ -1443,6 +1467,14 @@
    "anchors": [
     "upstream pins the prompt count to its own literal 71",
     "COMMAND_COUNT"
+   ]
+  },
+  {
+   "path": "tests/new-milestone-clear-phases.test.cjs",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "forkRoadmapSkill"
    ]
   },
   {

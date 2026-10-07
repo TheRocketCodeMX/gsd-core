@@ -135,7 +135,10 @@ describe('settings-json hook registration edge shapes', () => {
     });
   }
 
-  const EXTENDED_EVENTS = SETTINGS_JSON_EXTENDED_ROWS.map((r) => r.event);
+  // FORK (grounding #11, align-1.16.0): FileChanged carries TWO rows in the fork (config-reload +
+  // the grounding-index refresh), so the events are de-duplicated and the repaired list must hold
+  // one entry per row registered on that event rather than exactly one.
+  const EXTENDED_EVENTS = [...new Set(SETTINGS_JSON_EXTENDED_ROWS.map((r) => r.event))];
   for (const bad of ['oops', 42, { not: 'array' }, true]) {
     for (const event of EXTENDED_EVENTS) {
       test(`a malformed ${event} key (${JSON.stringify(bad)}) is repaired, not thrown on`, () => {
@@ -146,7 +149,7 @@ describe('settings-json hook registration edge shapes', () => {
         };
         const out = scenarios.runOne({ ...rt, extendedHookEvents: [event] }, spec);
         assert.ok(Array.isArray(out.settings.hooks[event]));
-        assert.equal(out.settings.hooks[event].length, 1);
+        assert.equal(out.settings.hooks[event].length, SETTINGS_JSON_EXTENDED_ROWS.filter((r) => r.event === event).length);
       });
     }
   }

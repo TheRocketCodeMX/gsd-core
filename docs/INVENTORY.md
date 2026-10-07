@@ -519,6 +519,7 @@ Fork-owned references (`docs/FORK-DELTA.md` — `strategy`, `fidelity`, `groundi
 | Reference | Role |
 |-----------|------|
 | `strategy-chain.md` | The strategy chain's canonical order and wiring manifest — every command's "Position in workflow" header and "Next:" pointer must agree with it. |
+| `code-review-contract-conformance.md` | `gsd-code-reviewer` dimension 4 (fork `fidelity`): the both-ways engineering-standards checklist — reward-hacking / under-engineering incl. the universal floor, over-engineering, Mode-scoped severity, provided-design fidelity-loss, FE tier + error-contract rules. |
 | `strategy-flow.md` | The selection policy over `strategy-chain.md` — archetype → recommended path, `## Strategy Plan` + skip-ledger semantics. |
 | `product-discovery.md` | Reference for `/gsd-discover-product` — real demand vs interest, the narrowest wedge, outcome-framed success, the four product risks. |
 | `domain-modeling.md` | Reference for `/gsd-model-domain` — lightweight strategic DDD: shared language, subdomain distillation, optional bounded contexts. |

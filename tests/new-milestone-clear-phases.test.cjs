@@ -974,8 +974,13 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       });
     });
 
-    describe('step 10: roadmap commit resolves ROADMAP/STATE/REQUIREMENTS through init.new-milestone, then cleans up .gsd-ws-arg', () => {
-      const step10Fence = extractFenceContaining(
+    // FORK (strategy, align-1.16.0): Step 10 dispatches the `gsd-roadmap` skill (the single
+    // roadmapper spawn point, milestone-extend mode), which writes and commits the roadmap itself, so
+    // there is no step-10 commit fence to drive here. The fork step still removes `.gsd-ws-arg`;
+    // workstream-path resolution for the roadmap commit lives in workflows/roadmap.md (owner follow-up).
+    const forkRoadmapSkill = content.includes('Skill(skill="gsd-roadmap", args="--milestone")');
+    describe('step 10: roadmap commit resolves ROADMAP/STATE/REQUIREMENTS through init.new-milestone, then cleans up .gsd-ws-arg', { skip: forkRoadmapSkill ? 'FORK: step 10 dispatches the gsd-roadmap skill, which owns the roadmap commit' : false }, () => {
+      const step10Fence = forkRoadmapSkill ? '' : extractFenceContaining(
         content, '## 10. Create Roadmap', '## 10.5.', 'docs: create milestone v[X.Y] roadmap',
       );
 
