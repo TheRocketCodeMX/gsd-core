@@ -184,6 +184,7 @@ module.exports = {
   "tests/loop-hooks-verify-post-e2e.test.cjs",
   "tests/mcp-catalog.property.test.cjs",
   "tests/mcp-catalog.test.cjs",
+  "tests/mid-strategy-chain-route.test.cjs",
   "tests/milestone-archive.test.cjs",
   "tests/milestone-window-single-owner.test.cjs",
   "tests/model-resolver.test.cjs",
