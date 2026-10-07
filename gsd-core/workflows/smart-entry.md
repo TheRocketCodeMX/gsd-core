@@ -77,7 +77,7 @@ fi
 
 **If `STRATEGY_ROUTE` is non-empty**, replace the snapshot's situation, summary and actions before the `present` step:
 - `situation` = `strategy-chain`; `summary` = `Strategy chain in progress — roadmap pending`.
-- `STRATEGY_ROUTE` is a strategy step (anything but `roadmap`): actions = `Continue the strategy chain: {STRATEGY_ROUTE}` → `/gsd:{STRATEGY_ROUTE}` (recommended), `Generate the roadmap now (uses the strategy artifacts so far)` → `/gsd:roadmap`, `Show progress` → `/gsd:progress`.
+- `STRATEGY_ROUTE` is a strategy step (anything but `roadmap`): actions = `Continue the strategy chain: {STRATEGY_ROUTE}` → `/gsd-{STRATEGY_ROUTE}` (recommended), `Generate the roadmap now (uses the strategy artifacts so far)` → `/gsd:roadmap`, `Show progress` → `/gsd:progress`.
 - `STRATEGY_ROUTE` = `roadmap` (every Strategy Plan step is done or skipped): actions = `Generate the roadmap` → `/gsd:roadmap` (recommended), `Show progress` → `/gsd:progress`.
 
 Never offer `/gsd:discuss-phase` or `/gsd:plan-phase` on this route — there is no ROADMAP.md for them to read. **If `STRATEGY_ROUTE` is empty**, use the snapshot unchanged.

@@ -156,7 +156,7 @@ describe('#87 smart-entry.md fork block contract', () => {
 
   test('the override recommends the strategy step or /gsd:roadmap, never a phase command', () => {
     const block = forkBlock();
-    assert.match(block, /\/gsd:\{STRATEGY_ROUTE\}/);
+    assert.match(block, /\/gsd-\{STRATEGY_ROUTE\}/);
     assert.match(block, /\/gsd:roadmap/);
     assert.match(block, /Never offer `\/gsd:discuss-phase`/);
   });
