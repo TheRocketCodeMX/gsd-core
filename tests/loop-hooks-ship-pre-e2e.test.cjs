@@ -26,7 +26,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { cleanup } = require('./helpers.cjs');
+const { cleanup, installSpawnEnv } = require('./helpers.cjs');
+const { LOOP_HOOK_POINT_CLI_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 const GSD_TOOLS = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
 
@@ -41,20 +42,23 @@ const realRegistry = require('../gsd-core/bin/lib/capability-registry.cjs');
 /**
  * Run gsd-tools synchronously via spawnSync. Returns { status, stdout, stderr }.
  * Does NOT throw on non-zero exit — callers must assert status themselves.
+ *
+ * #4291: uses helpers.cjs's installSpawnEnv() rather than a hand-rolled env,
+ * because it sandboxes HOME (so capability-loader's overlayRoots, which
+ * falls back to os.homedir(), never reaches the real machine) AND clears
+ * the full config-location env list, not just three session-identity keys.
+ * Without it, a capability genuinely installed on the host running the
+ * suite (e.g. beads, markdown-linting) leaked into the ship:pre registry
+ * and inflated the exact-count assertions below. opts.env is spread last so
+ * the two deliberate overlay-fixture call sites below (GSD_HOME: fixture.home)
+ * still opt in to a specific third-party capability root.
  */
 function runTools(args, opts = {}) {
   const result = spawnSync(process.execPath, [GSD_TOOLS, ...args], {
     encoding: 'utf8',
-    timeout: 60000,
+    timeout: LOOP_HOOK_POINT_CLI_TIMEOUT_MS,
     cwd: opts.cwd || process.cwd(),
-    env: {
-      ...process.env,
-      // Clear ambient session vars that can redirect config paths
-      GSD_SESSION_KEY: '',
-      CODEX_THREAD_ID: '',
-      CLAUDE_SESSION_ID: '',
-      ...opts.env,
-    },
+    env: installSpawnEnv(opts.env),
   });
   return result;
 }
@@ -687,8 +691,24 @@ function workflowFilesWithShellInterpolatedQuery() {
   // allow-test-rule: source-text-is-the-product (#3559)
   // gsd-core/workflows/*.md are shipped content executed by the agent runtime — the text
   // IS the deployed dispatch contract, so the validation instruction only exists here.
-  return fs.readdirSync(WORKFLOWS_DIR)
-    .filter(name => name.endsWith('.md'))
+  //
+  // The family lives in two places: a top-level workflow, and — since #5118 moved
+  // execute-phase's code_review_gate into the shared verification step — a workflow
+  // FRAGMENT under `<workflow>/steps/`. A scan of the top level alone missed the moved
+  // site and would miss any later extraction the same way.
+  const names = [];
+  for (const entry of fs.readdirSync(WORKFLOWS_DIR, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.md')) {
+      names.push(entry.name);
+    } else if (entry.isDirectory()) {
+      const stepsDir = path.join(WORKFLOWS_DIR, entry.name, 'steps');
+      if (!fs.existsSync(stepsDir)) continue;
+      for (const step of fs.readdirSync(stepsDir)) {
+        if (step.endsWith('.md')) names.push(`${entry.name}/steps/${step}`);
+      }
+    }
+  }
+  return names
     .map(name => ({ name, body: fs.readFileSync(path.join(WORKFLOWS_DIR, name), 'utf8') }))
     .filter(f => SHELL_INTERPOLATED_QUERY.test(f.body));
 }
@@ -706,7 +726,7 @@ describe('capability gate dispatch — manifest input is validated before shell 
       `${found.length} (${found.join(', ')}). A near-zero count means SHELL_INTERPOLATED_QUERY no ` +
       'longer matches the deployed form and this whole section is passing vacuously.',
     );
-    for (const expected of ['execute-phase.md', 'plan-phase.md', 'ship.md', 'verify-work.md']) {
+    for (const expected of ['execute-phase/steps/verify-phase-goal.md', 'plan-phase.md', 'ship.md', 'verify-work.md']) {
       assert.ok(found.includes(expected), `${expected} must be in the dispatch family, got ${found.join(', ')}`);
     }
   });

@@ -24,6 +24,43 @@ const {
 } = require('../hooks/gsd-statusline.js');
 const { cleanup, saveSessionEnv, restoreSessionEnv, clearSessionEnv } = require('./helpers.cjs');
 
+// Found while implementing #5105: the statusline reads STATE.md's frontmatter from the block the
+// one fence owner finds. Its old regex missed a BOM block and closed on a `--- x` line, dropping
+// every key after it.
+describe('parseStateMd reads the frontmatter block the one fence owner finds', () => {
+  for (const [label, content] of [
+    ['a BOM before the block', '\uFEFF---\nstatus: executing\nmilestone: v1.2\n---\n\n# State\n'],
+    ['a `--- x` line before the keys', '---\nnote: x\n--- x\nstatus: executing\nmilestone: v1.2\n---\n\n# State\n'],
+    ['a block closed by the lenient `----`', '---\nstatus: executing\nmilestone: v1.2\n----\n\n# State\n'],
+  ]) {
+    test(`${label}`, () => {
+      const state = parseStateMd(content);
+      assert.strictEqual(state.status, 'executing');
+      assert.strictEqual(state.milestone, 'v1.2');
+    });
+  }
+});
+
+/**
+ * A single hooks/gsd-statusline.js spawn, no fan-out -- the "long-lived
+ * status renderer" class (renders context-window percentage, git
+ * branch/status, active-teams state), a distinct and heavier operation
+ * than a trivial CLI query despite this file's own PROBE_TIMEOUT_MS-sized
+ * sibling class norm elsewhere in the suite.
+ */
+const STATUSLINE_HOOK_TIMEOUT_MS = 4000;
+
+/**
+ * The same hooks/gsd-statusline.js hook as STATUSLINE_HOOK_TIMEOUT_MS, but
+ * this one test rigs a custom PATH (a git shim directory) and
+ * CLAUDE_CONFIG_DIR override -- a heavier setup than the plain invocation,
+ * hence the larger pre-existing bound. Coincides numerically with
+ * tests/helpers/timeouts.cjs's SCAN_USAGE_ERROR_TIMEOUT_MS and
+ * MALFORMED_INPUT_HOOK_TIMEOUT_MS (both 5000ms) but describes neither of
+ * those operations -- kept local.
+ */
+const STATUSLINE_HOOK_GIT_SHIM_TIMEOUT_MS = 5000;
+
 // ─── parseStateMd ───────────────────────────────────────────────────────────
 
 describe('parseStateMd', () => {
@@ -639,7 +676,7 @@ describe('context meter respects CLAUDE_CODE_AUTO_COMPACT_WINDOW (#2219)', () =>
       delete env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
     }
 
-    const r = runHookSeam(hookPath, [], { input: payload, env, timeoutMs: 4000 });
+    const r = runHookSeam(hookPath, [], { input: payload, env, timeoutMs: STATUSLINE_HOOK_TIMEOUT_MS });
     const stdout = r.stdout;
 
     // Parse normalized used% from the statusline bar output (e.g. "60%")
@@ -736,7 +773,7 @@ describe('context meter boundary: acw at/near totalCtx does not pin used at 100%
         input: payload,
         env,
         encoding: 'utf8',
-        timeout: 4000,
+        timeout: STATUSLINE_HOOK_TIMEOUT_MS,
       });
     } catch (e) {
       stdout = e.stdout || '';
@@ -878,7 +915,7 @@ describe('todo-resolution: resolves in_progress task from the newest matching to
         input: payload,
         env,
         encoding: 'utf8',
-        timeout: 4000,
+        timeout: STATUSLINE_HOOK_TIMEOUT_MS,
       });
     } catch (e) {
       stdout = e.stdout || '';
@@ -1656,7 +1693,7 @@ test('config-set statusline.show_context_tokens yes → rejected', () => {
           },
         },
       });
-      const r = runHookSeam(hookPath, [], { input: payload, timeoutMs: 4000 });
+      const r = runHookSeam(hookPath, [], { input: payload, timeoutMs: STATUSLINE_HOOK_TIMEOUT_MS });
       // eslint-disable-next-line no-control-regex -- stripping ANSI SGR sequences from captured CLI output
       return r.stdout.replace(/\x1b\[[0-9;]*m/g, '');
     }
@@ -1741,16 +1778,30 @@ test('config-set statusline.show_context_tokens yes → rejected', () => {
       assert.equal(shortGsdStatus(''), null);
       assert.equal(shortGsdStatus(undefined), null);
     });
-    test('paused — the canonical stuck state — wins and renders uppercase (#2162 condition)', () => {
-      assert.equal(shortGsdStatus('paused — waiting on credentials'), 'PAUSED');
-      assert.equal(shortGsdStatus('stopped by user'), 'PAUSED');
+    test('paused — the canonical stuck state — renders uppercase (#2162 condition)', () => {
+      // The #2162 shout applies to the canonical token, which is what the
+      // state writer persists (#4186 anchored vocabulary).
+      assert.equal(shortGsdStatus('paused'), 'PAUSED');
+      assert.equal(shortGsdStatus('Paused'), 'PAUSED');
+      // #4186: narrative prose is no longer keyword-guessed — a paused-led
+      // narrative renders its first word (visible, never a silent wrong
+      // token), so the shout is reserved for the recognized token itself.
+      assert.equal(shortGsdStatus('paused — waiting on credentials'), 'paused');
+      assert.equal(shortGsdStatus('stopped by user'), 'stopped');
     });
-    test('collapses lifecycle narratives to canonical keywords via normalizeStateStatus', () => {
-      assert.equal(shortGsdStatus('Executing phase 7 of the parser milestone'), 'executing');
-      assert.equal(shortGsdStatus('Ready to plan next phase'), 'planning');
-      assert.equal(shortGsdStatus('Discussing scope with user'), 'discussing');
-      assert.equal(shortGsdStatus('Verifying UAT criteria'), 'verifying');
-      assert.equal(shortGsdStatus('Work complete'), 'completed');
+    test('collapses vocabulary values to canonical keywords via normalizeStateStatus (#4186 anchored)', () => {
+      // #4186: normalizeStateStatus recognizes the DECLARED vocabulary
+      // (whole-field match), so exactly those values collapse to keywords.
+      assert.equal(shortGsdStatus('Executing Phase 7'), 'executing');
+      assert.equal(shortGsdStatus('ready to plan'), 'planning');
+      assert.equal(shortGsdStatus('Discussing'), 'discussing');
+      assert.equal(shortGsdStatus('Verifying Phase 2'), 'verifying');
+      assert.equal(shortGsdStatus('Work complete'), 'Work');
+      // Narrative prose — vocabulary words embedded in longer sentences — is
+      // no longer guessed at (a `.planning/` mention in non-English prose
+      // used to render `planning`); it falls back to the first word.
+      assert.equal(shortGsdStatus('Executing phase 7 of the parser milestone'), 'Executing');
+      assert.equal(shortGsdStatus('Ready to plan next phase'), 'Ready');
     });
     test('matches the canonical vocabulary exactly — no drift from normalizeStateStatus', () => {
       const { normalizeStateStatus } = require('../gsd-core/bin/lib/state-document.cjs');
@@ -1777,9 +1828,15 @@ test('config-set statusline.show_context_tokens yes → rejected', () => {
     test('renders version · phase/total · status', () => {
       const out = formatGsdStateCompact({
         milestone: 'v1.12', phaseNum: '7', phaseTotal: '12',
-        status: 'Executing phase 7 — building the parser',
+        status: 'Executing Phase 7',
       });
       assert.equal(out, 'v1.12 · P7/12 · executing');
+      // #4186: narrative status is not keyword-guessed — first word renders.
+      const narrative = formatGsdStateCompact({
+        milestone: 'v1.12', phaseNum: '7', phaseTotal: '12',
+        status: 'Executing phase 7 — building the parser',
+      });
+      assert.equal(narrative, 'v1.12 · P7/12 · Executing');
     });
     test('prefers lifecycle active_phase over body phase number', () => {
       const out = formatGsdStateCompact({
@@ -1789,7 +1846,7 @@ test('config-set statusline.show_context_tokens yes → rejected', () => {
     });
     test('paused state renders uppercase in the compact line', () => {
       const out = formatGsdStateCompact({
-        milestone: 'v2.0', activePhase: '4.5', status: 'paused — waiting on review',
+        milestone: 'v2.0', activePhase: '4.5', status: 'paused',
       });
       assert.equal(out, 'v2.0 · P4.5 · PAUSED');
     });
@@ -2234,7 +2291,7 @@ test('config-set statusline.show_context_tokens yes → rejected', () => {
         workspace: { current_dir: dir },
         session_id: `test-git-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       });
-      const r = runHookSeam(hookPath, [], { input: payload, timeoutMs: 4000 });
+      const r = runHookSeam(hookPath, [], { input: payload, timeoutMs: STATUSLINE_HOOK_TIMEOUT_MS });
       // eslint-disable-next-line no-control-regex -- stripping ANSI SGR sequences from captured CLI output
       return r.stdout.replace(/\x1b\[[0-9;]*m/g, '');
     }
@@ -2494,7 +2551,7 @@ describe('evaluateUpdateCache lineage guard', () => {
       });
       const r = runHookSeam(path.join(cold.hooksDir, 'gsd-statusline.js'), [], {
         input: payload,
-        timeoutMs: 4000,
+        timeoutMs: STATUSLINE_HOOK_TIMEOUT_MS,
       });
       assert.equal(r.exitCode, 0, `must exit 0 on a build failure; stdout: ${r.stdout} stderr: ${r.stderr}`);
       assert.equal(r.stdout, '', 'must degrade to empty output, not throw a stack trace to stdout');
@@ -3036,7 +3093,7 @@ describe('evaluateUpdateCache lineage guard', () => {
         const r = runHookSeam(hookPath, [], {
           input: payload,
           env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}`, CLAUDE_CONFIG_DIR: claudeDir },
-          timeoutMs: 5000,
+          timeoutMs: STATUSLINE_HOOK_GIT_SHIM_TIMEOUT_MS,
         });
         assert.equal(r.outcome, OUTCOME.EXITED, `expected clean exit, got outcome=${r.outcome}`);
         assert.equal(r.exitCode, 0);
@@ -3196,16 +3253,25 @@ describe('evaluateUpdateCache lineage guard', () => {
       test('derivationIsNotMemoizedAcrossRenders', (t) => {
         const dir = createTempGitProject('gsd-freshness-no-memo-');
         t.after(() => cleanup(dir));
+        // This row asserts non-memoization, not the timeout degrade: keep the
+        // real git spawn, lift only the hook's 1500 ms production bound so
+        // runner load cannot turn its designed `null` into a red (#4850).
+        const realExec = childProcess.execFileSync;
+        const unbounded = (file, args, opts) => realExec(file, args, { ...opts, timeout: GIT_FIXTURE_TIMEOUT_MS });
+        const read = () => {
+          let state;
+          withSpawnSpy(unbounded, () => { state = readGsdState(dir, { stateFreshness: true }); });
+          return state;
+        };
+
         const stampA = commitN(dir, 5);
         writeStateHead(dir, stampA);
-
-        const first = readGsdState(dir, { stateFreshness: true });
+        const first = read();
         assert.equal(first.freshness.commits_behind, 5);
 
         const stampB = commitN(dir, 10);
         writeStateHead(dir, stampB);
-
-        const second = readGsdState(dir, { stateFreshness: true });
+        const second = read();
         assert.equal(second.freshness.commits_behind, 10);
         assert.notEqual(first.freshness.commits_behind, second.freshness.commits_behind);
       });

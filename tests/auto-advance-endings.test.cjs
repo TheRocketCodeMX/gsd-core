@@ -110,9 +110,9 @@ describe('fork workflow endings are autonomous-run safe (#74)', () => {
       'roadmap must OR-in the consolidated auto-mode record (chain flag OR workflow.auto_advance)',
     );
     // The auto branch dispatches per advance.md's documented contract…
-    assert.match(body, /Skill\(skill="gsd-discuss-phase", args="1 --auto"\)/, "advance.md's contract: dispatch discuss-phase 1 --auto");
+    assert.match(body, /Skill\(skill="gsd-discuss-phase", args="1 --auto(?: \$\{GSD_WS\})?"\)/, "advance.md's contract: dispatch discuss-phase 1 --auto (forwarding the workstream when one is active)");
     // …and the interactive human block is preserved byte-for-byte in its key lines.
-    assert.match(body, /\/gsd:discuss-phase 1 — gather context and clarify approach/, 'human pointer preserved');
+    assert.match(body, /\/gsd:discuss-phase 1(?: \$\{GSD_WS\})? — gather context and clarify approach/, 'human pointer preserved (forwarding the workstream when one is active)');
     assert.match(body, /## ▶ Next Up/, 'human Next Up block preserved');
     // The milestone guard still precedes chaining (new-milestone must get control back).
     assert.match(body, /If `MILESTONE_MODE=true`:\*\* do NOT chain/, 'milestone-mode no-chain guard preserved');

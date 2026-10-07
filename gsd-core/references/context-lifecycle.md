@@ -107,7 +107,7 @@ The knowledge-flush nudge and the re-anchor reminder ship differently per runtim
 
 | Runtime | Flush nudge | Re-anchor |
 |---|---|---|
-| Claude Code, Gemini | calm hook nudge at the configured thresholds + a PreCompact flush reminder | injected by the PreCompact hook message |
+| Claude Code, Antigravity | calm hook nudge at the configured thresholds + a PreCompact flush reminder | injected by the PreCompact hook message |
 | All other runtimes | no hook — run `/gsd:context flush` manually at a natural break | the re-anchor procedure (above) as documented ambient practice, carried in the generated instruction files (AGENTS.md et al.) |
 
 The nudge is calm by contract — a knowledge checkpoint, never a panic save. No urgency language.

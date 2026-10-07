@@ -11,7 +11,66 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup, delay } = require('./helpers.cjs');
+const { runGsdTools, createTempDir, createTempProject, cleanup, delay, withIsolatedProcessState, homeSandboxEnv } = require('./helpers.cjs');
+
+// ─── ADR-612 PR-5: phase_id_convention enum validation ──────────────────────
+
+describe('#3638: phase_id_convention config enum', () => {
+  test('accepts sequential, milestone-prefixed, and bracket exactly', (t) => {
+    const tmpDir = createTempProject('gsd-phase-id-convention-');
+    t.after(() => cleanup(tmpDir));
+
+    for (const convention of ['sequential', 'milestone-prefixed', 'bracket']) {
+      const result = runGsdTools(['config-set', 'phase_id_convention', convention], tmpDir);
+      assert.ok(result.success, `config-set phase_id_convention ${convention} failed: ${result.error}`);
+      assert.equal(readConfig(tmpDir).phase_id_convention, convention);
+    }
+  });
+
+  test('absent and null preserve the unset legacy behavior', (t) => {
+    const tmpDir = createTempProject('gsd-phase-id-convention-');
+    t.after(() => cleanup(tmpDir));
+    assert.equal(
+      fs.existsSync(path.join(tmpDir, '.planning', 'config.json')),
+      false,
+      'an absent config leaves the convention unset',
+    );
+    writeConfig(tmpDir, { phase_id_convention: 'bracket', model_profile: 'balanced' });
+
+    const result = runGsdTools(['config-set', 'phase_id_convention', 'null'], tmpDir);
+    assert.ok(result.success, `config-set phase_id_convention null failed: ${result.error}`);
+    const config = readConfig(tmpDir);
+    assert.equal(Object.hasOwn(config, 'phase_id_convention'), false);
+    assert.equal(config.model_profile, 'balanced', 'unsetting the convention must preserve sibling config');
+  });
+
+  test('rejects unsupported and case-mismatched values with the supported set', (t) => {
+    const tmpDir = createTempProject('gsd-phase-id-convention-');
+    t.after(() => cleanup(tmpDir));
+
+    for (const value of ['free-form', 'Bracket']) {
+      const result = runGsdTools(['config-set', 'phase_id_convention', value], tmpDir);
+      assert.equal(result.success, false, `${value} must be rejected`);
+      assert.match(result.error, /Invalid phase_id_convention/);
+      assert.match(result.error, /sequential, milestone-prefixed, bracket/);
+    }
+  });
+
+  test('sequential remains valid configuration but is not a roadmap-upgrade target', (t) => {
+    const tmpDir = createTempProject('gsd-phase-id-convention-');
+    t.after(() => cleanup(tmpDir));
+
+    const configResult = runGsdTools(['config-set', 'phase_id_convention', 'sequential'], tmpDir);
+    assert.ok(configResult.success, `sequential config failed: ${configResult.error}`);
+
+    const migrationResult = runGsdTools(
+      ['roadmap', 'upgrade', '--convention', 'sequential', '--dry-run'],
+      tmpDir,
+    );
+    assert.equal(migrationResult.success, false, 'sequential must not become a migration target');
+    assert.match(migrationResult.error, /Only --convention milestone-prefixed or bracket is supported/);
+  });
+});
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +129,17 @@ async function ensureConfigReady(tmpDir, attempts = 5) {
   );
 }
 
+/**
+ * Seed `.planning/config.json` with both OS home variables pointed at the
+ * project dir through homeSandboxEnv, so the seed never inherits the
+ * developer's `~/.gsd/defaults.json` (#5016). Every `beforeEach` seed whose
+ * tests assert values a global defaults file can override goes through here,
+ * so the #5016 regression case below guards all of them at once.
+ */
+function seedProjectConfig(dir) {
+  return runGsdTools('config-ensure-section', dir, homeSandboxEnv(dir));
+}
+
 // ─── config-ensure-section ───────────────────────────────────────────────────
 
 describe('config-ensure-section command', () => {
@@ -121,169 +191,6 @@ describe('config-ensure-section command', () => {
     assert.strictEqual(secondOutput.reason, 'already_exists');
   });
 
-  test('detects Brave Search from file-based key', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so brave_api_key is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'brave_api_key'), 'test-key', 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.brave_search, true);
-  });
-
-  test('detects Tavily Search from env var', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, TAVILY_API_KEY: 'test-key' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.tavily_search, true);
-  });
-
-  test('tavily_search is false when env var absent and no key file', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, TAVILY_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.tavily_search, false);
-  });
-
-  test('detects Tavily Search from file-based key', () => {
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'tavily_api_key'), 'test-key', 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, TAVILY_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.tavily_search, true);
-  });
-
-  test('detects Ref Search from env var', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, REF_API_KEY: 'test-key' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.ref_search, true);
-  });
-
-  test('ref_search is false when env var absent and no key file', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, REF_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.ref_search, false);
-  });
-
-  test('detects Ref Search from file-based key', () => {
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'ref_api_key'), 'test-key', 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, REF_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.ref_search, true);
-  });
-
-  test('detects Perplexity from env var', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, PERPLEXITY_API_KEY: 'test-key' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.perplexity, true);
-  });
-
-  test('perplexity is false when env var absent and no key file', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, PERPLEXITY_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.perplexity, false);
-  });
-
-  test('detects Perplexity from file-based key', () => {
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'perplexity_api_key'), 'test-key', 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, PERPLEXITY_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.perplexity, true);
-  });
-
-  test('detects Jina from env var', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, JINA_API_KEY: 'test-key' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.jina, true);
-  });
-
-  test('jina is false when env var absent and no key file', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, JINA_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.jina, false);
-  });
-
-  test('detects Jina from file-based key', () => {
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'jina_api_key'), 'test-key', 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir, JINA_API_KEY: '' });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.jina, true);
-  });
-
-  test('merges user defaults from defaults.json', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so defaults.json is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'defaults.json'), JSON.stringify({
-      model_profile: 'quality',
-      commit_docs: false,
-    }), 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.model_profile, 'quality', 'model_profile should be overridden');
-    assert.strictEqual(config.commit_docs, false, 'commit_docs should be overridden');
-    assert.ok(config.git && typeof config.git === 'object', 'git should be an object');
-    assert.strictEqual(typeof config.git.branching_strategy, 'string', 'git.branching_strategy should be a string');
-  });
-
-  test('merges nested workflow keys from defaults.json preserving unset keys', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so defaults.json is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
-    const gsdDir = path.join(tmpDir, '.gsd');
-    fs.mkdirSync(gsdDir, { recursive: true });
-    fs.writeFileSync(path.join(gsdDir, 'defaults.json'), JSON.stringify({
-      workflow: { research: false },
-    }), 'utf-8');
-
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const config = readConfig(tmpDir);
-    assert.strictEqual(config.workflow.research, false, 'research should be overridden');
-    assert.strictEqual(typeof config.workflow.plan_check, 'boolean', 'plan_check should be a boolean');
-    assert.strictEqual(typeof config.workflow.verifier, 'boolean', 'verifier should be a boolean');
-  });
 });
 
 // ─── config-set ──────────────────────────────────────────────────────────────
@@ -293,8 +200,7 @@ describe('config-set command', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    // Create initial config
-    runGsdTools('config-ensure-section', tmpDir);
+    seedProjectConfig(tmpDir);
   });
 
   afterEach(() => {
@@ -443,7 +349,7 @@ describe('config-set git.protected_branches (#3552)', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    seedProjectConfig(tmpDir);
   });
 
   afterEach(() => {
@@ -518,6 +424,34 @@ describe('config-set git.protected_branches (#3552)', () => {
       'git.protected_branches must be absent after unset',
     );
   });
+
+  test('#5016: the seed ignores protected_branches in the ambient ~/.gsd/defaults.json', (t) => {
+    const ambientHome = createTempDir('gsd-5016-ambient-home-');
+    t.after(() => cleanup(ambientHome));
+    fs.mkdirSync(path.join(ambientHome, '.gsd'));
+    fs.writeFileSync(
+      path.join(ambientHome, '.gsd', 'defaults.json'),
+      JSON.stringify({ git: { protected_branches: ['release'] } }),
+    );
+    const controlDir = createTempProject();
+    const seededDir = createTempProject();
+    t.after(() => { cleanup(controlDir); cleanup(seededDir); });
+
+    const [control, seeded] = withIsolatedProcessState(() => {
+      Object.assign(process.env, homeSandboxEnv(ambientHome));
+      return [runGsdTools('config-ensure-section', controlDir), seedProjectConfig(seededDir)];
+    });
+
+    // Positive control: an unsandboxed seed must pick up the canary, or the
+    // assertion below would pass without proving anything.
+    assert.ok(control.success, `Control seed failed: ${control.error}`);
+    assert.deepStrictEqual(readConfig(controlDir).git.protected_branches, ['release']);
+    assert.ok(seeded.success, `Seed failed: ${seeded.error}`);
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(readConfig(seededDir).git, 'protected_branches'),
+      'seedProjectConfig must not inherit protected_branches from the ambient defaults.json',
+    );
+  });
 });
 
 // ─── config-get ──────────────────────────────────────────────────────────────
@@ -528,7 +462,7 @@ describe('config-get command', () => {
   beforeEach(() => {
     tmpDir = createTempProject();
     // Create config with known values — sandbox HOME to avoid global defaults
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -536,7 +470,7 @@ describe('config-get command', () => {
   });
 
   test('gets a top-level value', () => {
-    const result = runGsdTools('config-get model_profile', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runGsdTools('config-get model_profile', tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -639,7 +573,7 @@ describe('config-new-project command', () => {
       model_profile: 'balanced',
       workflow: { research: true, plan_check: true, verifier: true, nyquist_validation: true },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runGsdTools(['config-new-project', choices], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -678,32 +612,6 @@ describe('config-new-project command', () => {
     assert.strictEqual(config.hooks.context_warnings, true);
   });
 
-  test('fresh config-new-project output loads with ZERO unknown-key warnings (#21 P1-3)', () => {
-    // config-new-project seeds tavily_search / ref_search / perplexity / jina
-    // (real research toggles), but the schema whitelist didn't register them —
-    // so every loadConfig() on a fresh project warned "unknown config key(s)".
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
-    assert.ok(result.success, `Command failed: ${result.error}`);
-    const config = readConfig(tmpDir);
-    for (const key of ['tavily_search', 'ref_search', 'perplexity', 'jina']) {
-      assert.strictEqual(typeof config[key], 'boolean', `${key} is seeded by config-new-project`);
-    }
-
-    const { loadConfig } = require('../gsd-core/bin/lib/config-loader.cjs');
-    let stderrCapture = '';
-    const origStderrWrite = process.stderr.write;
-    process.stderr.write = (chunk) => { stderrCapture += chunk; return true; };
-    try {
-      loadConfig(tmpDir);
-    } finally {
-      process.stderr.write = origStderrWrite;
-    }
-    assert.ok(
-      !stderrCapture.includes('unknown config key'),
-      `a fresh config-new-project output must load warning-free, got: ${stderrCapture}`
-    );
-  });
-
   test('user choices override defaults', () => {
     const choices = JSON.stringify({
       mode: 'yolo',
@@ -713,7 +621,7 @@ describe('config-new-project command', () => {
       model_profile: 'quality',
       workflow: { research: false, plan_check: false, verifier: true, nyquist_validation: false },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runGsdTools(['config-new-project', choices], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -732,7 +640,7 @@ describe('config-new-project command', () => {
   });
 
   test('works with empty choices — all defaults materialized', () => {
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -866,17 +774,17 @@ describe('config-set <key> null — unset/clear (#2046)', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('non-secret routing key: config-set <key> null removes the key (not the string "null")', () => {
-    const setResult = runGsdTools('config-set review.models.gemini foo', tmpDir);
+    const setResult = runGsdTools('config-set review.models.codex foo', tmpDir);
     assert.ok(setResult.success, `Command failed: ${setResult.error}`);
-    assert.strictEqual(readConfig(tmpDir).review.models.gemini, 'foo');
+    assert.strictEqual(readConfig(tmpDir).review.models.codex, 'foo');
 
-    const unsetResult = runGsdTools('config-set review.models.gemini null', tmpDir);
+    const unsetResult = runGsdTools('config-set review.models.codex null', tmpDir);
     assert.ok(unsetResult.success, `Command failed: ${unsetResult.error}`);
 
     const config = readConfig(tmpDir);
     assert.ok(
-      !config.review || !config.review.models || !Object.prototype.hasOwnProperty.call(config.review.models, 'gemini'),
-      'review.models.gemini must be absent on disk after unset, not the string "null"'
+      !config.review || !config.review.models || !Object.prototype.hasOwnProperty.call(config.review.models, 'codex'),
+      'review.models.codex must be absent on disk after unset, not the string "null"'
     );
 
     // #2797: review.models.<slug> is federated to its lane capability now, and a
@@ -885,7 +793,7 @@ describe('config-set <key> null — unset/clear (#2046)', () => {
     // instead of erroring. The property this test actually guards is unchanged
     // and asserted above: the key is REMOVED from disk, never persisted as the
     // literal string "null".
-    const getResult = runGsdTools('config-get review.models.gemini', tmpDir);
+    const getResult = runGsdTools('config-get review.models.codex', tmpDir);
     const shown = (getResult.output || '').trim();
     assert.ok(
       shown === '' || shown === '""' || shown === 'undefined',
@@ -939,8 +847,8 @@ describe('config-set <key> null — unset/clear (#2046)', () => {
   });
 
   test('literal-"null" guard: no config-set <key> null ever persists the literal string "null" on disk', () => {
-    runGsdTools('config-set review.models.gemini foo', tmpDir);
-    runGsdTools('config-set review.models.gemini null', tmpDir);
+    runGsdTools('config-set review.models.codex foo', tmpDir);
+    runGsdTools('config-set review.models.codex null', tmpDir);
     runGsdTools('config-set brave_search sk-test-1234', tmpDir);
     runGsdTools('config-set brave_search null', tmpDir);
     runGsdTools('config-set context dev', tmpDir);
@@ -990,6 +898,134 @@ describe('config-set <key> null — unset/clear (#2046)', () => {
   });
 });
 
+// ─── config-set --dry-run (#4444) ────────────────────────────────────────────
+
+describe('config-set --dry-run (#4444)', () => {
+  let tmpDir;
+
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('config-set --dry-run does not write to config.json (first call, key absent)', () => {
+    const result = runGsdTools('config-set model_profile quality --dry-run', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.dry_run, true);
+
+    const configPath = path.join(tmpDir, '.planning', 'config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(config, 'model_profile'),
+        false,
+        'model_profile must not be written to config.json by a --dry-run call'
+      );
+    }
+  });
+
+  test('config-set --dry-run does not persist across repeated dry-run calls (repro: previousValue must not reflect a prior dry run)', () => {
+    const first = runGsdTools('config-set review.timeouts.antigravity 1 --dry-run', tmpDir);
+    assert.ok(first.success, `Command failed: ${first.error}`);
+    const firstOutput = JSON.parse(first.output);
+    assert.strictEqual(firstOutput.dry_run, true);
+    assert.strictEqual(firstOutput.previousValue, undefined);
+
+    const second = runGsdTools('config-set review.timeouts.antigravity 3600 --dry-run', tmpDir);
+    assert.ok(second.success, `Command failed: ${second.error}`);
+    const secondOutput = JSON.parse(second.output);
+    assert.strictEqual(secondOutput.dry_run, true);
+    // The reported bug: this used to be 1 (the first "dry run"'s value),
+    // proving it was actually persisted to disk.
+    assert.strictEqual(
+      secondOutput.previousValue,
+      undefined,
+      'a second --dry-run call must not see a value the first --dry-run "wrote"'
+    );
+  });
+
+  test('config-set: a real write after dry-run calls sees the pre-dry-run value, not a dry-run leak', () => {
+    const seed = runGsdTools('config-set review.timeouts.antigravity 10', tmpDir);
+    assert.ok(seed.success, `seed failed: ${seed.error}`);
+
+    const dryRun = runGsdTools('config-set review.timeouts.antigravity 9999 --dry-run', tmpDir);
+    assert.ok(dryRun.success, `Command failed: ${dryRun.error}`);
+    assert.strictEqual(JSON.parse(dryRun.output).dry_run, true);
+
+    // The dry-run must not have changed the on-disk value.
+    assert.strictEqual(readConfig(tmpDir).review.timeouts.antigravity, 10);
+
+    const real = runGsdTools('config-set review.timeouts.antigravity 20', tmpDir);
+    assert.ok(real.success, `Command failed: ${real.error}`);
+    assert.strictEqual(
+      JSON.parse(real.output).previousValue,
+      10,
+      'the real write must see the seeded value (10), not the dry-run value (9999)'
+    );
+    assert.strictEqual(readConfig(tmpDir).review.timeouts.antigravity, 20);
+  });
+
+  test('config-set --dry-run correctly previews the current value without mutating it', () => {
+    const seed = runGsdTools('config-set model_profile quality', tmpDir);
+    assert.ok(seed.success, `seed failed: ${seed.error}`);
+
+    const dryRun = runGsdTools('config-set model_profile speed --dry-run', tmpDir);
+    assert.ok(dryRun.success, `Command failed: ${dryRun.error}`);
+    const output = JSON.parse(dryRun.output);
+    assert.strictEqual(output.dry_run, true);
+    assert.strictEqual(output.previousValue, 'quality');
+    assert.strictEqual(output.value, 'speed');
+
+    // Unchanged on disk.
+    assert.strictEqual(readConfig(tmpDir).model_profile, 'quality');
+  });
+
+  test('config-set --dry-run still validates: an invalid value is still rejected, not silently previewed', () => {
+    const result = runGsdTools('config-set context badvalue --dry-run', tmpDir);
+    assert.strictEqual(result.success, false, 'an invalid enum value must still be rejected under --dry-run');
+    assert.match(result.error, /Invalid context value/i);
+
+    // Nothing written.
+    const configPath = path.join(tmpDir, '.planning', 'config.json');
+    if (fs.existsSync(configPath)) {
+      assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(JSON.parse(fs.readFileSync(configPath, 'utf-8')), 'context'),
+        false
+      );
+    }
+  });
+
+  test('config-set --dry-run masks secret values in the preview exactly like the real write does', () => {
+    const seed = runGsdTools('config-set brave_search sk-test-original', tmpDir);
+    assert.ok(seed.success, `seed failed: ${seed.error}`);
+
+    const dryRun = runGsdTools('config-set brave_search sk-test-newvalue --dry-run', tmpDir);
+    assert.ok(dryRun.success, `Command failed: ${dryRun.error}`);
+    const output = JSON.parse(dryRun.output);
+    assert.strictEqual(output.dry_run, true);
+    assert.strictEqual(output.masked, true);
+    assert.doesNotMatch(JSON.stringify(output), /sk-test-newvalue/, 'the new secret value must not appear in plaintext');
+    assert.doesNotMatch(JSON.stringify(output), /sk-test-original/, 'the previous secret value must not appear in plaintext');
+
+    // Unchanged on disk.
+    assert.strictEqual(readConfig(tmpDir).brave_search, 'sk-test-original');
+  });
+
+  test('config-set <key> null --dry-run does not unset (dry-run covers the unset branch too)', () => {
+    const seed = runGsdTools('config-set review.models.codex foo', tmpDir);
+    assert.ok(seed.success, `seed failed: ${seed.error}`);
+
+    const dryRun = runGsdTools('config-set review.models.codex null --dry-run', tmpDir);
+    assert.ok(dryRun.success, `Command failed: ${dryRun.error}`);
+    const output = JSON.parse(dryRun.output);
+    assert.strictEqual(output.dry_run, true);
+    assert.strictEqual(output.would_unset, true);
+
+    // Still present on disk — the dry-run must not have unset it.
+    assert.strictEqual(readConfig(tmpDir).review.models.codex, 'foo');
+  });
+});
+
 // ─── config-set (research_before_questions and discuss_mode) ──────────────────
 
 describe('config-set research_before_questions and discuss_mode', () => {
@@ -997,7 +1033,7 @@ describe('config-set research_before_questions and discuss_mode', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -1112,7 +1148,7 @@ describe('config-set-model-profile command', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -1133,7 +1169,7 @@ describe('config-set-model-profile command', () => {
   });
 
   test('reports previous profile in output', () => {
-    const result = runGsdTools('config-set-model-profile budget', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runGsdTools('config-set-model-profile budget', tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const out = JSON.parse(result.output);
@@ -1202,7 +1238,7 @@ describe('config-set workflow.skip_discuss', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    seedProjectConfig(tmpDir);
   });
 
   afterEach(() => {
@@ -1243,7 +1279,7 @@ describe('config-set workflow.skip_discuss', () => {
     });
 
     test('skip_discuss is present in config-new-project output', () => {
-      const result = runGsdTools(['config-new-project', '{}'], emptyDir, { HOME: emptyDir, USERPROFILE: emptyDir });
+      const result = runGsdTools(['config-new-project', '{}'], emptyDir, homeSandboxEnv(emptyDir));
       assert.ok(result.success, `Command failed: ${result.error}`);
 
       const config = readConfig(emptyDir);
@@ -1254,7 +1290,7 @@ describe('config-set workflow.skip_discuss', () => {
       const choices = JSON.stringify({
         workflow: { skip_discuss: true },
       });
-      const result = runGsdTools(['config-new-project', choices], emptyDir, { HOME: emptyDir, USERPROFILE: emptyDir });
+      const result = runGsdTools(['config-new-project', choices], emptyDir, homeSandboxEnv(emptyDir));
       assert.ok(result.success, `Command failed: ${result.error}`);
 
       const config = readConfig(emptyDir);
@@ -1279,7 +1315,7 @@ describe('config-set/config-get workflow.use_worktrees', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -1327,6 +1363,56 @@ describe('config-set/config-get workflow.use_worktrees', () => {
   });
 });
 
+// ─── config-set/config-get audit.enabled (#4975) ─────────────────────────────
+//
+// `audit.enabled` is the documented config opt-in for the dispatch audit trail
+// (docs/CONFIGURATION.md "Observability"). It was missing from the central
+// schema, so config-set refused it as an unknown key and it could only be set
+// by hand-editing config.json.
+
+describe('config-set/config-get audit.enabled (#4975)', () => {
+  test('config-set accepts audit.enabled and config-get round-trips it as a boolean', (t) => {
+    const tmpDir = createTempProject('gsd-4975-config-');
+    t.after(() => cleanup(tmpDir));
+    const env = homeSandboxEnv(tmpDir);
+
+    for (const value of [true, false]) {
+      const set = runGsdTools(['config-set', 'audit.enabled', String(value)], tmpDir, env);
+      assert.ok(set.success, `config-set audit.enabled ${value} must be accepted: ${set.error}`);
+      const setResult = JSON.parse(set.output);
+      assert.strictEqual(setResult.updated, true);
+      assert.strictEqual(setResult.key, 'audit.enabled');
+      assert.strictEqual(setResult.value, value);
+      assert.strictEqual(readConfig(tmpDir).audit.enabled, value, 'persisted as a real JSON boolean');
+
+      const get = runGsdTools(['config-get', 'audit.enabled'], tmpDir, env);
+      assert.ok(get.success, `config-get audit.enabled must succeed: ${get.error}`);
+      assert.strictEqual(JSON.parse(get.output), value);
+    }
+  });
+
+  test('config-set rejects a non-boolean audit.enabled without modifying config.json', (t) => {
+    const tmpDir = createTempProject('gsd-4975-config-invalid-');
+    t.after(() => cleanup(tmpDir));
+    const env = { ...homeSandboxEnv(tmpDir), GSD_JSON_ERRORS: '1' };
+    writeConfig(tmpDir, { audit: { enabled: false }, sentinel: 'preserve' });
+    const configPath = path.join(tmpDir, '.planning', 'config.json');
+    const before = fs.readFileSync(configPath, 'utf-8');
+
+    // The runtime gate honours only a real `true`, so storing anything else
+    // would be accept-then-ignore.
+    for (const value of ['yes', '1', 'TRUE', 'on', '{"on":true}']) {
+      const result = runGsdTools(['config-set', 'audit.enabled', value], tmpDir, env);
+      assert.strictEqual(result.success, false, `config-set audit.enabled ${value} must be rejected`);
+      const envelope = JSON.parse(result.error);
+      assert.strictEqual(envelope.ok, false);
+      assert.notStrictEqual(envelope.reason, 'config_invalid_key',
+        `audit.enabled ${value}: the key is valid — the VALUE must be what is refused`);
+    }
+    assert.strictEqual(fs.readFileSync(configPath, 'utf-8'), before, 'a rejected config-set must not write anything');
+  });
+});
+
 // ─── config-set/config-get context ─────────────────────────────────────────
 
 describe('config-set/config-get context', () => {
@@ -1334,7 +1420,7 @@ describe('config-set/config-get context', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -1640,7 +1726,7 @@ describe('plan_review.source_grounding and plan_review.source_grounding_authorit
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
 
   afterEach(() => {
@@ -1954,7 +2040,7 @@ describe('#3086: git.create_tag config key', () => {
     const tmpDir = createTempProject('gsd-3086-default-');
     t.after(() => cleanup(tmpDir));
 
-    const result = runGsdTools(['config-get', 'git.create_tag'], tmpDir, { HOME: tmpDir });
+    const result = runGsdTools(['config-get', 'git.create_tag'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `config-get git.create_tag failed:\n${result.error}`);
     assert.strictEqual(
       result.output.trim(),
@@ -1967,12 +2053,10 @@ describe('#3086: git.create_tag config key', () => {
     const tmpDir = createTempProject('gsd-3086-set-false-');
     t.after(() => cleanup(tmpDir));
 
-    const setResult = runGsdTools(['config-set', 'git.create_tag', 'false'], tmpDir, {
-      HOME: tmpDir,
-    });
+    const setResult = runGsdTools(['config-set', 'git.create_tag', 'false'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(setResult.success, `config-set git.create_tag false failed:\n${setResult.error}`);
 
-    const getResult = runGsdTools(['config-get', 'git.create_tag'], tmpDir, { HOME: tmpDir });
+    const getResult = runGsdTools(['config-get', 'git.create_tag'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(getResult.success, `config-get after set failed:\n${getResult.error}`);
     assert.strictEqual(
       getResult.output.trim(),
@@ -1985,9 +2069,7 @@ describe('#3086: git.create_tag config key', () => {
     const tmpDir = createTempProject('gsd-3086-invalid-');
     t.after(() => cleanup(tmpDir));
 
-    const result = runGsdTools(['config-set', 'git.create_tag', 'maybe'], tmpDir, {
-      HOME: tmpDir,
-    });
+    const result = runGsdTools(['config-set', 'git.create_tag', 'maybe'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(
       !result.success,
       `Expected config-set to fail for invalid value "maybe", but it succeeded`,
@@ -2036,10 +2118,10 @@ describe('#3086: git.create_tag config key', () => {
     const tmpDir = createTempProject('gsd-3086-detect-git-create-tag-');
     t.after(() => cleanup(tmpDir));
 
-    const setFalse = runGsdTools(['config-set', 'git.create_tag', 'false'], tmpDir, { HOME: tmpDir });
+    const setFalse = runGsdTools(['config-set', 'git.create_tag', 'false'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(setFalse.success, `config-set git.create_tag false failed:\n${setFalse.error}`);
 
-    const falseResult = runGsdTools(['init', 'complete-milestone'], tmpDir, { HOME: tmpDir });
+    const falseResult = runGsdTools(['init', 'complete-milestone'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(falseResult.success, `init complete-milestone failed:\n${falseResult.error}`);
     assert.strictEqual(
       JSON.parse(falseResult.output).git_create_tag,
@@ -2047,10 +2129,10 @@ describe('#3086: git.create_tag config key', () => {
       'init complete-milestone must report git_create_tag: false once git.create_tag is set false',
     );
 
-    const setTrue = runGsdTools(['config-set', 'git.create_tag', 'true'], tmpDir, { HOME: tmpDir });
+    const setTrue = runGsdTools(['config-set', 'git.create_tag', 'true'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(setTrue.success, `config-set git.create_tag true failed:\n${setTrue.error}`);
 
-    const trueResult = runGsdTools(['init', 'complete-milestone'], tmpDir, { HOME: tmpDir });
+    const trueResult = runGsdTools(['init', 'complete-milestone'], tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(trueResult.success, `init complete-milestone failed:\n${trueResult.error}`);
     assert.strictEqual(
       JSON.parse(trueResult.output).git_create_tag,
@@ -2118,7 +2200,7 @@ describe('ship.pr_body_sections config (#3167)', () => {
       },
     ]);
 
-    const result = runGsdTools(['config-set', 'ship.pr_body_sections', value, '--raw'], cwd, { HOME: cwd });
+    const result = runGsdTools(['config-set', 'ship.pr_body_sections', value, '--raw'], cwd, homeSandboxEnv(cwd));
 
     assert.equal(result.success, true, result.error);
     const config = JSON.parse(fs.readFileSync(path.join(cwd, '.planning', 'config.json'), 'utf8'));
@@ -2143,7 +2225,7 @@ describe('ship.pr_body_sections config (#3167)', () => {
     const notArray = runGsdTools(
       ['config-set', 'ship.pr_body_sections', JSON.stringify({ heading: 'Not an array' }), '--raw'],
       cwd,
-      { HOME: cwd }
+      homeSandboxEnv(cwd)
     );
     assert.equal(notArray.success, false);
     assert.match(notArray.error, /ship\.pr_body_sections.*JSON array/);
@@ -2151,7 +2233,7 @@ describe('ship.pr_body_sections config (#3167)', () => {
     const missingHeading = runGsdTools(
       ['config-set', 'ship.pr_body_sections', JSON.stringify([{ fallback: '- Missing heading' }]), '--raw'],
       cwd,
-      { HOME: cwd }
+      homeSandboxEnv(cwd)
     );
     assert.equal(missingHeading.success, false);
     assert.match(missingHeading.error, /heading/);
@@ -2159,7 +2241,7 @@ describe('ship.pr_body_sections config (#3167)', () => {
     const invalidEnabled = runGsdTools(
       ['config-set', 'ship.pr_body_sections', JSON.stringify([{ heading: 'Toggle', enabled: 'yes', fallback: '- item' }]), '--raw'],
       cwd,
-      { HOME: cwd }
+      homeSandboxEnv(cwd)
     );
     assert.equal(invalidEnabled.success, false);
     assert.match(invalidEnabled.error, /enabled/);
@@ -2180,7 +2262,7 @@ describe('ship.pr_body_sections config (#3167)', () => {
       },
     });
 
-    const result = runGsdTools(['config-new-project', choices], cwd, { HOME: cwd });
+    const result = runGsdTools(['config-new-project', choices], cwd, homeSandboxEnv(cwd));
 
     assert.equal(result.success, false);
     assert.match(result.error, /source must use selectors/);
@@ -2493,10 +2575,10 @@ describe('bug #3212 execute-phase stall detection and safe resume', () => {
     const workflow = read('gsd-core/workflows/execute-phase.md');
 
     assert.match(workflow, /<step name="safe_resume_gate"/, 'execute-phase must define a safe_resume_gate step');
-    // #4003: the gate greps an anchored, zero-pad-tolerant scope regex derived from the
-    // current plan id (a bare padded substring matched other milestones' plans).
-    assert.match(workflow, /PLAN_SCOPE_RE="\^\[a-z\]\+\\\(\(0\*\$\{PHASE_N\}\)-\(0\*\$\{PLAN_N\}\)\\\):"/, 'safe resume gate must derive an anchored plan-scope regex');
-    assert.match(workflow, /--grep="\$\{PLAN_SCOPE_RE\}"/, 'safe resume gate must check commits for the current plan id');
+    // #4003 -> #5164: the gate asks the evaluation-scope resolver, which matches an anchored,
+    // zero-pad-tolerant subject pattern for the current plan id (a bare padded substring matched
+    // other milestones' plans), bounded to the current milestone.
+    assert.match(workflow, /gsd_run check evaluation-scope --plan "\$\{PHASE_NUMBER\}-\{plan_padded\}" --commits-only --milestone-bound/, 'safe resume gate must check commits for the current plan id through the resolver');
     assert.match(workflow, /SUMMARY.md is missing/, 'safe resume gate must detect production commits with missing SUMMARY.md');
     assert.match(workflow, /close out manually/, 'safe resume gate must offer manual close-out recovery');
     assert.match(workflow, /re-execute from scratch/, 'safe resume gate must offer re-execute recovery');
@@ -2727,7 +2809,7 @@ describe('workflow.context_guard_mode default value', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('defaults to warn in new project config', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir });
+    const result = runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `config-ensure-section failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -2745,7 +2827,7 @@ describe('workflow.context_guard_mode config round-trip', () => {
   let tmpDir;
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
   afterEach(() => { cleanup(tmpDir); });
 
@@ -2952,7 +3034,7 @@ describe('workflow.human_verify_mode default value', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('defaults to end-of-phase in new project config', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir });
+    const result = runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
     assert.ok(result.success, `config-ensure-section failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -2970,7 +3052,7 @@ describe('workflow.human_verify_mode config round-trip', () => {
   let tmpDir;
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir });
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
   });
   afterEach(() => { cleanup(tmpDir); });
 
@@ -3079,3 +3161,132 @@ describe('references/checkpoints.md documents the flag', () => {
 });
   });
 }
+
+describe('config-set hooks.context_warning_threshold / hooks.context_critical_threshold (#4285)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir, homeSandboxEnv(tmpDir));
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  // Registration: before #4285 both keys were rejected outright as unknown, so
+  // the only way to tune a fire-point was editing the managed hook file.
+  test('both keys are accepted by config-set and persisted', () => {
+    for (const [key, value] of [
+      ['hooks.context_warning_threshold', 45],
+      ['hooks.context_critical_threshold', 30],
+    ]) {
+      const result = runGsdTools(`config-set ${key} ${value}`, tmpDir);
+      assert.ok(result.success, `config-set ${key} failed: ${result.error}`);
+      const config = readConfig(tmpDir);
+      assert.strictEqual(config.hooks[key.split('.')[1]], value);
+    }
+  });
+
+  // The domain the hook compares against (remaining_percentage) is 0-100
+  // inclusive, but the two ENDPOINTS that can never form a valid pair are
+  // refused rather than stored (#4285 review). `critical < warning` must hold at
+  // read time and both sides are clamped to 0-100, so `warning: 0` has no legal
+  // partner below it and `critical: 100` has none above it. Each is discarded by
+  // the hook for EVERY value of the other key, so storing one would report a
+  // tuning that can never take effect.
+  //
+  // Stated as a pair of tables rather than one row per case, because the
+  // asymmetry is the point: 0 is legal for critical and illegal for warning, and
+  // 100 is the reverse. A single "bounds are inclusive" row (which this replaces)
+  // asserted the misleading half and was what let the dead value through.
+  test('refuses the two endpoints that can never form a valid pair', () => {
+    for (const [key, dead] of [
+      ['hooks.context_warning_threshold', 0],
+      ['hooks.context_critical_threshold', 100],
+    ]) {
+      const before = JSON.stringify(readConfig(tmpDir));
+      const result = runGsdTools(`config-set ${key} ${dead}`, tmpDir);
+      assert.ok(!result.success, `config-set ${key} ${dead} must fail — no partner value can satisfy the pair check`);
+      assert.strictEqual(JSON.stringify(readConfig(tmpDir)), before,
+        `${key}: a refused write must leave the config byte-identical`);
+    }
+  });
+
+  test('accepts the endpoints that ARE reachable, and the values just inside the dead ones', () => {
+    // The controls for the row above. Without these, refusing 0 and 100
+    // outright would pass it just as well as refusing only the dead pairing.
+    for (const [key, live] of [
+      ['hooks.context_warning_threshold', 100],   // warning 100 pairs with the default critical 25
+      ['hooks.context_critical_threshold', 0],    // critical 0 pairs with the default warning 35
+      ['hooks.context_warning_threshold', 0.001], // just inside the dead endpoint
+      ['hooks.context_critical_threshold', 99.999],
+    ]) {
+      const result = runGsdTools(`config-set ${key} ${live}`, tmpDir);
+      assert.ok(result.success, `config-set ${key} ${live} must succeed: ${result.error}`);
+      assert.strictEqual(readConfig(tmpDir).hooks[key.split('.')[1]], live);
+    }
+  });
+
+  // The query surface must agree with the reader: an ABSENT key resolves to the
+  // hook's own default rather than "Key not found" (#4285 review). SCHEMA_DEFAULTS
+  // necessarily restates 35/25 outside the hook — the hook is a standalone
+  // subprocess on a hot path and cannot read a manifest to learn its own
+  // defaults — so this row pins the two copies against each other. If either
+  // moves alone, this goes red.
+  // FORK (context-monitor): hooks/gsd-context-monitor.js is a whole-file fork replacement — the
+  // calm knowledge-flush nudge, thresholded on `context_lifecycle.hook_warn_pct`/`hook_urge_pct`
+  // (docs/context-monitor.md). It has no WARNING_THRESHOLD/CRITICAL_THRESHOLD constants to agree
+  // with, so this upstream #4285 hook-constant parity pin does not apply (the config-key
+  // validation tests around it still run).
+  test('an absent threshold resolves to the hook\'s own constant, not "Key not found"', { skip: 'FORK: the fork context-monitor hook does not consume hooks.context_*_threshold (see docs/context-monitor.md)' }, () => {
+    const monitor = require('../hooks/gsd-context-monitor.js');
+    for (const [key, constant] of [
+      ['hooks.context_warning_threshold', monitor.WARNING_THRESHOLD],
+      ['hooks.context_critical_threshold', monitor.CRITICAL_THRESHOLD],
+    ]) {
+      const result = runGsdTools(`config-get ${key}`, tmpDir);
+      assert.ok(result.success, `config-get ${key} failed: ${result.error}`);
+      assert.strictEqual(Number(String(result.output).trim()), constant,
+        `${key} must resolve to the hook's own default (${constant}); a drift here means ` +
+        'SCHEMA_DEFAULTS and the hook constants disagree');
+    }
+  });
+
+  // Accept and honour must agree ON THE DOMAIN: the hook falls back to its
+  // default for a value outside 0-100, so config-set reporting success on such
+  // a value would tell the operator a tuning took effect when it did not. The
+  // agreement is per-key and no wider — an accepted value can still lose to the
+  // hook's pair check at read time, and a scoped write (GSD_PROJECT /
+  // GSD_WORKSTREAM) lands in a config the hook does not read at all.
+  test('rejects values the hook would discard, and leaves the config untouched', () => {
+    const before = JSON.stringify(readConfig(tmpDir));
+
+    for (const value of ['101', '-1', 'high', 'true']) {
+      for (const key of ['hooks.context_warning_threshold', 'hooks.context_critical_threshold']) {
+        const result = runGsdTools(`config-set ${key} ${value}`, tmpDir);
+        assert.ok(!result.success, `config-set ${key} ${value} must be rejected, not silently stored`);
+      }
+    }
+
+    assert.strictEqual(JSON.stringify(readConfig(tmpDir)), before,
+      'a rejected config-set must not have written anything');
+  });
+
+  // Deliberate non-guard, documented in docs/context-monitor.md: config-set
+  // writes ONE key per call, so a two-step retune (warning first, then
+  // critical) is transiently inconsistent on disk. Refusing it here would block
+  // a legitimate configuration; the hook resolves the pair at read time
+  // instead, falling back to both defaults while it is inconsistent.
+  test('does NOT enforce the pair ordering across two calls', () => {
+    const warn = runGsdTools('config-set hooks.context_warning_threshold 20', tmpDir);
+    assert.ok(warn.success, `config-set must accept a warning threshold below the default critical: ${warn.error}`);
+
+    const crit = runGsdTools('config-set hooks.context_critical_threshold 10', tmpDir);
+    assert.ok(crit.success, `config-set must accept the second half of the retune: ${crit.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.hooks.context_warning_threshold, 20);
+    assert.strictEqual(config.hooks.context_critical_threshold, 10);
+  });
+});

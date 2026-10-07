@@ -111,7 +111,8 @@ describe('legacy orderings — verify-work before any strategy re-run', () => {
   });
 
   test('both add-section paths state where a created section lands', () => {
-    for (const f of [STRATEGY, VERIFY]) {
+    // align-1.16.0: verify-work's add-section rule lives in its coverage_gap_capture step fragment.
+    for (const f of [STRATEGY, 'gsd-core/workflows/verify-work/steps/coverage-gap-capture.md']) {
       assert.match(read(f), /before[\s*]*\n?[\s*]*any trailing footer/,
         `${f}: a literal append landed sections after the file footer (re-gate 5 N2)`);
     }

@@ -85,7 +85,7 @@ If CONTEXT.md exists, add verification dimension: **Context Compliance**
 - Are deferred ideas excluded?
 - Are discretion areas handled appropriately?
 - **Do plans honor the canonical discovery artifacts?** Flag a HIGH concern if a task contradicts the architecture ADR's per-subdomain rung, the DOMAIN-MODEL classification, or the TEST-STRATEGY's test levels — same for INFRA-STRATEGY / CICD-STRATEGY / SECURITY-STRATEGY / FRONTEND-ARCHITECTURE when present; the full per-artifact rubric is `@~/.claude/gsd-core/references/plan-checker-strategy-compliance.md`. Per `engineering-standards.md` this gate is **symmetric** — flag HIGH in BOTH directions, never bias toward "simpler": (a) a plan that bakes in a hack/shortcut to pass a gate (hardcoded expected output, weakened/skipped test, "make it pass"); (b) **under-engineering** — patching around a mandated abstraction or richer rung, or skipping the universal floor (no seam at the true external boundaries), even on a simple Transaction-Script subdomain; (c) **over-engineering** — ceremony the ADR did NOT mandate for that subdomain.
-- **Do plans honor the brownfield build-loop contract? (Mode-gated)** Read `## Mode` — `gsd_run query project mode`. When **Origin = rewrite-refactor** or **Code-quality = legacy/vibe-coded**, AND a task **changes behavior-bearing existing code**, the plan MUST follow `@~/.claude/gsd-core/references/brownfield-adaptation.md`'s build-loop contract: a **characterization-test task is sequenced BEFORE** the behavior-change task (the change task depends on it) and the change-region's disposition (follow/improve/refactor) is recorded. **BLOCKER** if a behavior-changing task on existing code has no preceding characterization/parity coverage (this is how "never silently change behavior" becomes un-skippable, not advisory). Greenfield / new-file work needs none — the gate fires only on the concrete trigger (changing existing behavior). If `LEGACY-INVENTORY.md` exists, also flag a capability it lists that no task covers (the "never lose a feature" gate). **Two exemptions:** a region the new design *changes* (gap-map `design-delta`) needs no characterization task — it needs a design-fidelity reference to the mandating design element instead (BLOCK a `design-delta` region citing none); a **vibe-coded-to-harden** region needs no characterization-first either (pinning prototype behavior preserves its bugs) — require a real-test task + conformance to the ADR rung/security DoD instead.
+- **Do plans honor the brownfield build-loop contract? (Mode-gated)** Read `## Mode` — `gsd_run query project mode`. When **Origin = rewrite-refactor** or **Code-quality = legacy/vibe-coded**, AND a task **changes behavior-bearing existing code**, the plan MUST follow the build-loop contract in `@~/.claude/gsd-core/references/brownfield-adaptation.md`: a **characterization-test task is sequenced BEFORE** the behavior-change task (the change task depends on it) and the change-region's disposition (follow/improve/refactor) is recorded. **BLOCKER** if a behavior-changing task on existing code has no preceding characterization/parity coverage (this is how "never silently change behavior" becomes un-skippable, not advisory). Greenfield / new-file work needs none — the gate fires only on the concrete trigger (changing existing behavior). If `LEGACY-INVENTORY.md` exists, also flag a capability it lists that no task covers (the "never lose a feature" gate). **Two exemptions:** a region the new design *changes* (gap-map `design-delta`) needs no characterization task — it needs a design-fidelity reference to the mandating design element instead (BLOCK a `design-delta` region citing none); a **vibe-coded-to-harden** region needs no characterization-first either (pinning prototype behavior preserves its bugs) — require a real-test task + conformance to the ADR rung/security DoD instead.
 - **Do plans honor the provided design? (Mode-gated)** When `## Mode` records a provided design (`has_provided_design: true`) and a task creates/changes **any field that backs a design-covered surface — a schema column/migration, a DTO/response contract, OR a UI field** (not only UI tasks: a backend/data-schema task that backs a covered surface fires this gate too — the address slip was a data-schema task with no UI in its change region), the plan's **user-facing field set** must match the design oracle (`.planning/DESIGN-INVENTORY.md` / the UI-SPEC) per `@~/.claude/gsd-core/references/design-ingestion.md` + `exploration-and-adaptability.md` § Source precedence. Diff the task's planned field names against the oracle's **User-facing fields** table: each must match a `design`/`requirement` row, OR map to one via that row's **Backs (surface field)** column (a column-split/VO part backing one user-facing field), OR be an oracle `internal` row that backs a single covered field. **BLOCKER** a planned **user-facing** field present in **neither the design nor requirements** (invention — the address-failure guard: one `address` input must not become four required fields), or a design-shown field silently dropped. An internal value-object/normalization/column-split whose parts all **Backs** one covered user-facing field — and don't change the observable shape — is fine. A task whose planned fields back **no** covered surface (pure infra/config, or a not-covered surface) is out of scope for this gate. If no design oracle exists yet, the plan must produce one (ingest the design slice) before finalizing the shape.
 
 **REVIEWS.md** (if included by reviews mode) — Cross-AI review feedback from `/gsd:review`
@@ -523,16 +523,16 @@ issue:
 
 ## Dimension 8: Nyquist Compliance
 
-**Question:** Is every task's completion decided by an automated check that can actually fail?
+**Question:** Is every task's completion decided by an automated check that can fail?
 
 Checks 8a-8e (presence, latency, sampling continuity, Wave 0 completeness, VALIDATION.md gate),
-their skip condition and the Dimension 8 output table: @gsd-core/references/nyquist-compliance.md
+skip condition and Dimension 8 output table: @~/.claude/gsd-core/references/nyquist-compliance.md
 
 ### Check 8f - Stated Failing Direction (#3172)
 
 Each runnable `<automated>` command needs a `<fails_when>` sibling naming what output constitutes
-failure. Consume the supplied `{FAILING_DIRECTIONS}` probe, never re-derive it:
-@gsd-core/references/failing-direction.md
+failure. Consume the `{FAILING_DIRECTIONS}` probe, never re-derive it:
+@~/.claude/gsd-core/references/failing-direction.md
 
 ## Dimension 9: Cross-Plan Data Contracts
 
@@ -703,8 +703,8 @@ issue:
 
 ## Dimension: Verify Command Path Resolvability (#2401)
 
-**Question:** Does each `<automated>` command's target resolve? Consume the supplied
-`{VERIFY_PATHS}` probe, never re-run/hand-reason it: @gsd-core/references/verify-command-path-resolvability.md
+**Question:** Does each `<automated>` command's target resolve? Consume the
+`{VERIFY_PATHS}` probe, never re-run/hand-reason it: @~/.claude/gsd-core/references/verify-command-path-resolvability.md
 
 ## Dimension: Numeric/Factual Claim Authority (#1480)
 
@@ -730,8 +730,9 @@ issue:
 ## Step 1: Load Context
 
 Load phase operation context:
+@~/.claude/gsd-core/references/gsd-run-resolver.md
+
 ```bash
-_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif _gsd_at "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd_run is not on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; case "$(gsd_run runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') GSD_IDENTITY_STATUS=ok;; esac; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
 INIT=$(gsd_run query init.phase-op "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
@@ -770,12 +771,15 @@ shopt -s nullglob 2>/dev/null; setopt NULL_GLOB 2>/dev/null
 
 for plan in "$PHASE_DIR"/*-PLAN.md; do
   echo "=== $plan ==="
-  PLAN_STRUCTURE=$(gsd_run query verify.plan-structure "$plan")
+  PLAN_STRUCTURE=$(gsd_run query verify.plan-structure "$plan") && STRUCTURE_EXIT=0 || STRUCTURE_EXIT=$?
   echo "$PLAN_STRUCTURE"
+  echo "structure_exit=$STRUCTURE_EXIT"
 done
 ```
 
 Parse JSON result: `{ valid, errors, warnings, task_count, tasks: [{name, hasFiles, hasAction, hasVerify, hasDone}], frontmatter_fields }`
+
+The exit status follows the verdict (#5170): exit `0` = `valid: true`, exit `1` = `valid: false` (a negative verdict — the JSON is still authoritative, so read `errors`). Any other status (`69` `UNAVAILABLE`: the plan file is missing or unreadable; the JSON carries `error`) means the structure was **not evaluated**: raise it as a blocker for that plan, never as "no structure errors".
 
 Map errors/warnings to verification dimensions:
 - Missing frontmatter field → `task_completeness` or `must_haves_derivation`
@@ -833,8 +837,10 @@ For each requirement: find covering task(s), verify action is specific, flag gap
 Use `verify.plan-structure` (already run in Step 2):
 
 ```bash
-PLAN_STRUCTURE=$(gsd_run query verify.plan-structure "$PLAN_PATH")
+PLAN_STRUCTURE=$(gsd_run query verify.plan-structure "$PLAN_PATH") && STRUCTURE_EXIT=0 || STRUCTURE_EXIT=$?
 ```
+
+Exit `0` / `1` are the verdict (`valid` true / false, read the JSON); any other status means the structure was not evaluated (Step 2).
 
 The `tasks` array in the result shows each task's completeness:
 - `hasFiles` — files element present

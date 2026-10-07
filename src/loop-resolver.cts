@@ -28,9 +28,15 @@
  *   - capability-state.cjs (resolveCapabilityRuntimeState — for capabilities list)
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import ioMod = require('./io.cjs');
 const { output: coreOutput, error: coreError } = ioMod;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import verificationMod = require('./verification.cjs');
+const { resolvePhaseArtifactFile } = verificationMod;
+import { requireSafePath, PathAcceptance } from './security.cjs';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import configLoaderModule = require('./config-loader.cjs');
@@ -115,6 +121,8 @@ interface RawHook {
   onError?: unknown;
   blocking?: unknown;
   check?: unknown;
+  /** #4209 DISP-02: step-only reviewer-lane opt-in trait; validated boolean upstream. */
+  supportsReviewerLanes?: unknown;
 }
 
 type HookKind = 'step' | 'contribution' | 'gate';
@@ -133,6 +141,13 @@ interface ActiveHook {
   onError?: string;
   /** Resolved capability-owned config values declared in the contribution's configValues map. */
   configValues?: Record<string, unknown>;
+  /**
+   * #4209 DISP-02: step-only reviewer-lane opt-in trait. Only present (and only
+   * ever `true`) when the source step declared a literal `true`; omitted or
+   * `false` never reach the active hook — the field is inert by absence, not
+   * by carrying `false`.
+   */
+  supportsReviewerLanes?: true;
 }
 
 interface ResolveLoopHooksInput {
@@ -286,6 +301,8 @@ function resolveLoopHooks(input: ResolveLoopHooksInput): ResolveLoopHooksResult 
     if (produces.length > 0) active.produces = produces;
     if (consumes.length > 0) active.consumes = consumes;
     if (onError !== undefined) active.onError = onError;
+    // #4209 DISP-02: only a literal `true` projects; absent/false stay inert.
+    if (hook['supportsReviewerLanes'] === true) active.supportsReviewerLanes = true;
     activeHooks.push(active);
   }
 
@@ -477,24 +494,30 @@ function sanitizeLoadFailReason(reason: unknown): string {
   return cleaned || '(no reason given)';
 }
 
-function cmdLoopRenderHooks(
+interface ResolvedActiveHooks {
+  point: string;
+  activeHooks: ActiveHook[];
+  warnings: string[];
+}
+
+/**
+ * The full config/registry/capability-state resolution `cmdLoopRenderHooks` performs, minus its
+ * CLI-only output formatting — extracted so an in-process caller (e.g. `review-lane dispatch-step`
+ * self-verifying a `supportsReviewerLanes` trait) can reach the SAME resolution `gsd_run loop
+ * render-hooks <point> --raw` would give it, without spawning a subprocess and re-parsing its
+ * stdout (which was subject to `io.cjs`'s `@file:` overflow protocol on the rendered-string
+ * envelope — a bug class this in-process call cannot hit, since it never touches that envelope
+ * or its rendering at all).
+ *
+ * Throws on an invalid `point` (mirrors `resolveLoopHooks`); callers convert to their own error
+ * channel. Emits the same loud stderr load-failure warnings `cmdLoopRenderHooks` always has,
+ * regardless of caller — a skipped gate must never be silently invisible.
+ */
+function resolveActiveHooksForPoint(
   cwd: string,
   point: string,
-  raw: boolean,
   options: Record<string, unknown> = {},
-): void {
-  if (!point) {
-    coreError('loop render-hooks requires a <point> argument. Valid points: ' + CANONICAL_POINTS.join(', '));
-    return;
-  }
-
-  // --active-cap <capId> mode: emit 'true' or 'false' only (scanner-safe, no JSON envelope)
-  const activeCapId = typeof options['activeCap'] === 'string' ? options['activeCap'] : undefined;
-  if (activeCapId !== undefined && activeCapId === '') {
-    coreError('--active-cap requires a <capId> value (e.g. --active-cap tdd)');
-    return;
-  }
-
+): ResolvedActiveHooks {
   const runtimeConfigDir = typeof options['configDir'] === 'string'
     ? options['configDir']
     : undefined;
@@ -533,14 +556,7 @@ function cmdLoopRenderHooks(
     capabilityStatesById.set(cap.id, cap);
   }
 
-  let resolved: ResolveLoopHooksResult;
-  try {
-    resolved = resolveLoopHooks({ point, registry, config, cwd, capabilityStatesById });
-  } catch (err: unknown) {
-    const msg = (err instanceof Error) ? err.message : String(err);
-    coreError(msg);
-    return;
-  }
+  const resolved: ResolveLoopHooksResult = resolveLoopHooks({ point, registry, config, cwd, capabilityStatesById });
 
   // ── ADR-1244 D2: load-failed capability gates FAIL OPEN with a loud warning ────
   // Decision (#2009): a capability that failed to LOAD must not block the loop.
@@ -592,30 +608,159 @@ function cmdLoopRenderHooks(
     process.stderr.write(`gsd: warning — ${w}\n`);
   }
 
-  // --active-cap mode: print exactly 'true' or 'false' with no envelope
+  // Surface capability-state warnings and the #2009 load-failure fail-open warnings together
+  // (in addition to the stderr emission above, which is the channel host workflows actually see).
+  const combinedWarnings = [...(state.warnings || []), ...loadFailWarnings];
+
+  return { point: resolved.point, activeHooks: resolved.activeHooks, warnings: combinedWarnings };
+}
+
+// ─── #5105 R2: post-fingerprint hook gating ────────────────────────────────
+
+interface SkippedHook {
+  capId: string;
+  kind: 'step';
+  ref?: HookRef;
+  reason: 'produces-present';
+  artifacts: string[];
+}
+
+/**
+ * #5105 R2: a `produces` entry `p` "exists" in `phaseDir` when it resolves via
+ * the SAME phase-artifact selection core `resolveVerificationFile`/
+ * `resolveUatFile` delegate to (`resolvePhaseArtifactFile`, `verification.cts`)
+ * — no second derivation of "which file counts as this phase's artifact"
+ * (#3473 F2's generative-divergence class). That core is pure and takes an
+ * already-read directory listing of REGULAR-file names only, so a directory
+ * of the same name, or a suffixed near-miss (`p.bak`, `p.tmp`), never counts,
+ * and `phaseDirName` scoping rejects a stray cross-phase file (`02-SECURITY.md`
+ * inside a `01-foo` phase dir) exactly as the aggregate scans do.
+ */
+function producesEntryPresent(fileNames: readonly string[], phaseDirName: string, p: string): boolean {
+  return resolvePhaseArtifactFile([...fileNames], p, { phaseDirName, allowBare: true }) !== null;
+}
+
+/**
+ * #5105 R2: partition `activeHooks` by whether every one of a `kind:"step"`
+ * hook's declared `produces` artifacts already exists (as a regular file)
+ * directly in `phaseDir`. A hook with `produces: []` (e.g. mempalace-capture),
+ * and every gate/contribution, passes through unchanged in `activeHooks`.
+ *
+ * Throws when `phaseDir` cannot be read (fail closed — the caller converts
+ * this to a `coreError` exit, never a silent pass-everything-through).
+ */
+function partitionHooksByFingerprint(
+  activeHooks: readonly ActiveHook[],
+  phaseDir: string,
+): { activeHooks: ActiveHook[]; skippedHooks: SkippedHook[] } {
+  const entries = fs.readdirSync(phaseDir, { withFileTypes: true });
+  const fileNames = entries.filter((e) => e.isFile()).map((e) => e.name);
+  const phaseDirName = path.basename(phaseDir);
+
+  const kept: ActiveHook[] = [];
+  const skipped: SkippedHook[] = [];
+  for (const hook of activeHooks) {
+    if (hook.kind !== 'step' || !hook.produces || hook.produces.length === 0) {
+      kept.push(hook);
+      continue;
+    }
+    const everyProduced = hook.produces.every((p) => producesEntryPresent(fileNames, phaseDirName, p));
+    if (everyProduced) {
+      skipped.push({
+        capId: hook.capId,
+        kind: 'step',
+        ref: hook.ref,
+        reason: 'produces-present',
+        artifacts: [...hook.produces],
+      });
+    } else {
+      kept.push(hook);
+    }
+  }
+  return { activeHooks: kept, skippedHooks: skipped };
+}
+
+function cmdLoopRenderHooks(
+  cwd: string,
+  point: string,
+  raw: boolean,
+  options: Record<string, unknown> = {},
+): void {
+  if (!point) {
+    coreError('loop render-hooks requires a <point> argument. Valid points: ' + CANONICAL_POINTS.join(', '));
+    return;
+  }
+
+  // --active-cap <capId> mode: emit 'true' or 'false' only (scanner-safe, no JSON envelope)
+  const activeCapId = typeof options['activeCap'] === 'string' ? options['activeCap'] : undefined;
+  if (activeCapId !== undefined && activeCapId === '') {
+    coreError('--active-cap requires a <capId> value (e.g. --active-cap tdd)');
+    return;
+  }
+
+  let result: ResolvedActiveHooks;
+  try {
+    result = resolveActiveHooksForPoint(cwd, point, options);
+  } catch (err: unknown) {
+    const msg = (err instanceof Error) ? err.message : String(err);
+    coreError(msg);
+    return;
+  }
+
+  // #5105 R2: --after-fingerprint <phaseDir> — gate out verify:post steps
+  // whose declared artifact(s) already exist in phaseDir (execute-phase
+  // already dispatched them before its own fingerprint; a re-dispatch here
+  // would write a post-fingerprint covered path for no reason, #4981/#4887).
+  const afterFingerprintDir = typeof options['afterFingerprint'] === 'string' ? options['afterFingerprint'] : undefined;
+  let skippedHooks: SkippedHook[] | undefined;
+  if (afterFingerprintDir !== undefined) {
+    // #5105 S10: resolve relative to the handler's own cwd (never the
+    // process cwd) and fail closed if it escapes the project root — the same
+    // `requireSafePath` seam `uat.cts`'s `cmdUatCompleteSession` uses for its
+    // own path argument.
+    let safePhaseDir: string;
+    try {
+      safePhaseDir = requireSafePath(afterFingerprintDir, cwd, '--after-fingerprint directory', PathAcceptance.AbsoluteInsideRoot);
+    } catch (err: unknown) {
+      const msg = (err instanceof Error) ? err.message : String(err);
+      coreError(`--after-fingerprint directory is unsafe: ${msg}`);
+      return;
+    }
+    let partition: { activeHooks: ActiveHook[]; skippedHooks: SkippedHook[] };
+    try {
+      partition = partitionHooksByFingerprint(result.activeHooks, safePhaseDir);
+    } catch (err: unknown) {
+      const msg = (err instanceof Error) ? err.message : String(err);
+      coreError(`--after-fingerprint phase directory not found or unreadable: ${afterFingerprintDir} (${msg})`);
+      return;
+    }
+    result = { point: result.point, activeHooks: partition.activeHooks, warnings: result.warnings };
+    skippedHooks = partition.skippedHooks;
+  }
+
   if (activeCapId !== undefined) {
-    const isActive = resolved.activeHooks.some((h) => h.capId === activeCapId);
+    const isActive = result.activeHooks.some((h) => h.capId === activeCapId);
     process.stdout.write(isActive ? 'true\n' : 'false\n');
     return;
   }
 
-  const rendered = renderLoopHooks(resolved);
+  const rendered = renderLoopHooks({ point: result.point, activeHooks: result.activeHooks });
   const envelope: {
     point: string;
     activeHooks: ActiveHook[];
     rendered: string;
     warnings?: string[];
+    skippedHooks?: SkippedHook[];
   } = {
-    point: resolved.point,
-    activeHooks: resolved.activeHooks,
+    point: result.point,
+    activeHooks: result.activeHooks,
     rendered,
   };
-  // Surface capability-state warnings and the #2009 load-failure fail-open
-  // warnings together in the structured `warnings` channel (in addition to the
-  // stderr emission above, which is the channel host workflows actually see).
-  const combinedWarnings = [...(state.warnings || []), ...loadFailWarnings];
-  if (combinedWarnings.length > 0) {
-    envelope.warnings = combinedWarnings;
+  if (result.warnings.length > 0) {
+    envelope.warnings = result.warnings;
+  }
+  if (skippedHooks !== undefined) {
+    envelope.skippedHooks = skippedHooks;
   }
 
   coreOutput(envelope, raw);
@@ -625,6 +770,8 @@ export = {
   resolveLoopHooks,
   renderLoopHooks,
   cmdLoopRenderHooks,
+  resolveActiveHooksForPoint,
+  partitionHooksByFingerprint,
   // Exported for tests
   _getNestedConfigValue,
   _resolveActivationValue,

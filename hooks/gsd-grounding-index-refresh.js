@@ -51,7 +51,7 @@ process.stdin.on('end', () => {
 
     // Only fire for a strategy/source doc under THIS project's .planning/.
     const planning = path.resolve(cwd, '.planning');
-    if (!path.resolve(filePath).startsWith(planning + path.sep)) { allow(undefined); return; }
+    if (!path.resolve(filePath).startsWith(planning + path.sep)) { allow(undefined); return; } // allow-handrolled-containment: selection filter — only fire for docs under this project's .planning/, not an access-control decision (the hook reads nothing at that path)
     if (!isStrategyDoc(filePath)) { allow(undefined); return; }
 
     // Compute the current active source set (in-process; the resolver is a sibling lib).

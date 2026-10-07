@@ -135,7 +135,8 @@ describe('execute-phase sectional capsule injection', () => {
   });
 
   test('verifier spawn reads the capsule What Done Looks Like section', () => {
-    const wf = read('gsd-core/workflows/execute-phase.md');
+    // align-1.16.0: upstream extracted the verifier spawn prompt into its own step fragment.
+    const wf = read('gsd-core/workflows/execute-phase/steps/verify-phase-goal.md');
     assert.match(wf, /What Done Looks Like/, 'verifier slice: What Done Looks Like');
   });
 });

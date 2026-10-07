@@ -11,6 +11,9 @@ import fs = require('node:fs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import path = require('node:path');
 import { splitLines } from './text-lines.cjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import frontmatterMod = require('./frontmatter.cjs');
+const { frontmatterRegion } = frontmatterMod;
 
 interface Provenance { phase: string | null; author: string; date: string; quality: string; note: string }
 interface Anchor { path: string; line: number | null; fact: string; bulletLine: number }
@@ -20,13 +23,17 @@ const ANCHOR_RE = /\[anchor:\s*([^\s"\]]+?)(?::(\d+))?\s+"([^"]+)"\]/g;
 const FACT_SECTIONS = ['## Verified Facts', '## Load-bearing verified facts'];
 
 function parseContextProvenance(text: string): Provenance | null {
-  const fm = /^---\r?\n([\s\S]{0,20000}?)\r?\n---/.exec(text);
-  if (!fm || !/context_provenance:/.test(fm[1])) return null;
+  // One fence owner (align-1.16.0, lint-frontmatter-fence-drift): `frontmatterRegion` locates the
+  // block through `locateFrontmatterFence`; an unterminated block is not provenance.
+  const found = frontmatterRegion(text);
+  if (!found || !found.terminated) return null;
+  const fmText = found.region;
+  if (!/context_provenance:/.test(fmText)) return null;
   const grab = (k: string): string => {
-    const m = new RegExp(`^\\s*${k}:\\s*"?([^"\\n]+)"?\\s*$`, 'm').exec(fm[1]);
+    const m = new RegExp(`^\\s*${k}:\\s*"?([^"\\n]+)"?\\s*$`, 'm').exec(fmText);
     return m ? m[1].trim() : '';
   };
-  const phase = /^phase:\s*(\S+)/m.exec(fm[1]);
+  const phase = /^phase:\s*(\S+)/m.exec(fmText);
   return { phase: phase ? phase[1] : null, author: grab('author'), date: grab('date'), quality: grab('quality'), note: grab('note') };
 }
 

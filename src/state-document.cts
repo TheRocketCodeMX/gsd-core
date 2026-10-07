@@ -12,6 +12,7 @@ import { clampPercentFromFraction } from './phase-lifecycle.cjs';
 import { collectSection, withSection } from './markdown-sectionizer.cjs';
 import type { HeadingToken } from './markdown-sectionizer.cjs';
 import { escapeRegex } from './pattern.cjs';
+import { parsePlanningDoc } from './planning-document.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- planning-scope.cjs is an export= CommonJS module
 import planningScopeMod = require('./planning-scope.cjs');
 const { SCOPE } = planningScopeMod;
@@ -371,7 +372,7 @@ export function stateFieldContinuation(content: string, fieldName: string): stri
   // is deliberately absent: a `| Field | value |` row is bounded by its closing
   // pipe and cannot wrap.
   const match =
-    new RegExp(`\\*\\*${escaped}:\\*\\*[ \\t]*(.+)`, 'i').exec(content) ??
+    new RegExp(`^[ \\t]*\\*\\*${escaped}:\\*\\*[ \\t]*(.+)`, 'im').exec(content) ??
     new RegExp(`^${escaped}:[ \\t]*(.+)`, 'im').exec(content);
   if (!match) return null;
 
@@ -400,8 +401,9 @@ export function stateFieldContinuation(content: string, fieldName: string): stri
 
 export function stateExtractField(content: string, fieldName: string): string | null {
   const escaped = escapeRegex(fieldName);
-  // Bold inline format: **FieldName:** value
-  const boldPattern = new RegExp(`\\*\\*${escaped}:\\*\\*[ \\t]*(.+)`, 'i');
+  // Bold line-start format: **FieldName:** value. Leading same-line whitespace
+  // matches the writer's established indented-field tolerance.
+  const boldPattern = new RegExp(`^[ \\t]*\\*\\*${escaped}:\\*\\*[ \\t]*(.+)`, 'im');
   const boldMatch = content.match(boldPattern);
   if (boldMatch)
     return boldMatch[1].trim();
@@ -548,14 +550,106 @@ function joinFieldReplacement(prefix: string, newValue: string): string {
 export function stateReplaceField(content: string, fieldName: string, newValue: string): string | null {
   const escaped = escapeRegex(fieldName);
   // Bold inline format: **FieldName:** value
-  // The label-to-value gap is same-line whitespace only (`[ \t]*`, mirroring the
-  // read side at stateExtractField). `\s*` here matched `\n`, so on an empty field
-  // `(.*)` captured the following line and the rebuild discarded it — the #4010
-  // data-loss. ADR-3180 §7.7 makes stateExtractField the same-line-confined owner;
-  // this aligns the writer to it.
-  const boldPattern = new RegExp(`(\\*\\*${escaped}:\\*\\*[ \\t]*)(.*)`, 'i');
-  if (boldPattern.test(content)) {
-    return content.replace(boldPattern, (_match, prefix: string) => joinFieldReplacement(prefix, newValue));
+  //
+  // #5007 (Phase 6 / ADR-4910 amendment): migrated off the hand-rolled
+  // `^([ \t]*\*\*${escaped}:\*\*[ \t]*)(.*)$` regex (which, per #4010/#4243
+  // below, already existed to fix real same-line-confinement and mid-prose
+  // data-loss bugs) onto `parsePlanningDoc` for LOCATING the field — same-
+  // line confinement AND fence/frontmatter exclusion (parseBoldFieldLine
+  // never matches inside a fenced block or frontmatter, which the removed
+  // regex could not tell apart from prose) — so this migration keeps
+  // #4010/#4243's fix and extends it, rather than replacing it with a
+  // weaker check.
+  //
+  // This does NOT go through the seam's `setFieldValue`/`serialize` write
+  // path. An earlier version of this migration did, via a since-removed
+  // `setFieldValue({ allowSeparator: true })` option (#5007) — that option
+  // spliced the caller's value across the FULL rest-of-line span
+  // (`valueSpan.start`..`trailingSpan.end`) to permit a value containing the
+  // grammar's ` — ` trailing-separator token (needed here: see the
+  // `${currentPhase} — COMPLETE` value below). It was removed after a
+  // failing-first reproduction proved it only avoided the write-time
+  // refusal: the bytes it writes are correct, but `parseBoldFieldLine`
+  // splits on ` — ` unconditionally on every read, with no escaping
+  // convention in this grammar to tell "atomic value containing the token"
+  // apart from "value plus hand-annotation". So the NEXT fresh
+  // `parsePlanningDoc` of that exact text — not the in-memory doc the
+  // option's own tests checked — silently re-truncates the value and
+  // demotes the rest to `trailingSpan`, with `findField`/`readNode`
+  // reporting a confident, wrong `ok: true` and no error. That is exactly
+  // the #4917 finding-2 corruption `setFieldValue`'s round-trip check
+  // exists to prevent, just moved one parse cycle downstream. This call
+  // site never reads STATE.md fields back through `parsePlanningDoc`/
+  // `findField` (reads go through `stateExtractField`'s own non-splitting
+  // regex, below), so it is safe HERE — but making that a shared, public
+  // option on the seam's `setFieldValue` was an attractive nuisance for any
+  // future `findField`/`readNode` caller (this same module already serves
+  // ROADMAP.md's `Plans`/`Depends on` fields that way). The full-rest-of-
+  // line splice is done locally, directly against `content`, instead —
+  // `parsePlanningDoc` is used only to locate the field's spans.
+  //
+  // Two deliberate deviations from a bare findField() call, both
+  // PRESERVING this function's own prior contract rather than adopting the
+  // seam's stricter defaults:
+  //
+  //  1. Label lookup here is case-INSENSITIVE (not findField's exact
+  //     match), mirroring the removed regex's `i` flag: callers in
+  //     state.cts/state-transition.cts pass a fieldName spelling that can
+  //     differ only in case from what a given template actually has (the
+  //     explicit 'Last Activity' / 'Last activity' fallback-call pairs at
+  //     those call sites), so a case-sensitive lookup would silently miss
+  //     matches the removed regex used to find.
+  //  2. Every write below replaces the FULL rest-of-line span
+  //     (`valueSpan.start`..`trailingSpan.end`) UNCONDITIONALLY, not only
+  //     when `newValue` contains the grammar's ` — ` separator token,
+  //     because `joinFieldReplacement` always discarded the OLD regex's
+  //     entire captured tail (`(.*)$` — both what the seam calls
+  //     `valueSpan` AND `trailingSpan`) and replaced it wholesale with the
+  //     new value. This call site never had a "preserve a hand-written
+  //     trailing annotation" contract, so writing anything narrower than
+  //     the full rest-of-line span here would be a NEW, untested behavior
+  //     this migration must not introduce as a side effect.
+  //
+  // Matching BOTH bold-placement spellings (`**Label:**` and `**Label**:`,
+  // `BOLD_FIELD_RE`) where the removed regex recognized only `**Label:**`
+  // is the same, already-precedented widening as the "Depends on"
+  // migration (src/phase.cts) — intentional, not scope creep.
+  //
+  // A parse failure, an absent/case-mismatched label, or a value containing
+  // a line break (\r/\n — would forge sibling structure on splice, the same
+  // hazard `setFieldValue` refuses unconditionally at #4917/ADR-4910
+  // Decision 2 & 4; this local splice has no seam call to inherit that
+  // refusal from, so it is re-checked here) falls through to the
+  // plain/pipe-table branches below unchanged — the same silent
+  // per-occurrence no-op-on-no-match contract the removed regex had for any
+  // input it didn't match.
+  const parsed = parsePlanningDoc(content, 'STATE.md');
+  if (parsed.ok) {
+    let boldField: Extract<(typeof parsed.value.nodes)[number], { kind: 'boldField' }> | null = null;
+    for (const node of parsed.value.nodes) {
+      if (node.kind !== 'boldField') continue;
+      if (node.label.toLowerCase() !== fieldName.toLowerCase()) continue;
+      boldField = node;
+      break;
+    }
+    if (boldField) {
+      // Replicates joinFieldReplacement's own `` `${newValue}` `` coercion
+      // (a caller may pass a non-string, e.g. a number, at the JS boundary
+      // even though the type signature says `string`) before the
+      // missing-separator normalization below: insert a single space when
+      // the existing label-to-value gap has none, so `**Status:**value`
+      // still becomes `**Status:** value` rather than gluing the two
+      // together.
+      const spacingText = parsed.value.source.slice(boldField.labelSpan.end, boldField.valueSpan.start);
+      const newValueStr = `${newValue}`;
+      const needsSeparator = newValueStr.length > 0 && !/[ \t]$/.test(spacingText);
+      const writeValue = `${needsSeparator ? ' ' : ''}${newValueStr}`;
+      if (!/[\r\n]/.test(writeValue)) {
+        return (
+          content.slice(0, boldField.valueSpan.start) + writeValue + content.slice(boldField.trailingSpan.end)
+        );
+      }
+    }
   }
   // Plain line-start format: FieldName: value (same same-line confinement as above)
   const plainPattern = new RegExp(`(^${escaped}:[ \\t]*)(.*)`, 'im');
@@ -611,31 +705,115 @@ export function stateReplaceFieldInSession(content: string, primary: string, fal
   return withSection(content, target, (sectionBody) => stateReplaceFieldWithFallback(sectionBody, primary, fallback, value));
 }
 
+/**
+ * #4186: the DECLARED raw-status vocabulary `normalizeStateStatus` recognizes.
+ * Keys are whole-field values, compared against the caller's input after
+ * lowercasing, trimming, and collapsing internal whitespace runs to single
+ * spaces — so case and whitespace variants the vocabulary documents
+ * (`EXECUTING PHASE 5`, `  Paused  `, `In   progress`) keep normalizing.
+ * Values are members of `STATUS_LIFECYCLE_ENUM` (`src/state-md-schema.cts`)
+ * — the set the normalizer maps recognized input ONTO.
+ *
+ * The mapping preserves the PRE-#4186 branch ORDER's observable artifacts for
+ * every value the old substring chain recognized: `Planning complete` →
+ * `planning` (the `planning` branch outranked `complete`) and
+ * `Phase complete — ready for verification` → `verifying` (`verif` outranked
+ * `complete`; pinned by tests/state.test.cjs's advance-plan case-5 comment).
+ *
+ * Everything else — prose that merely CONTAINS a status word — falls through
+ * to the caller's raw value (the recorded lenient fallback, #3873 phase-3
+ * row 26). A token guessed from a substring inside a sentence is worse than
+ * a visible paragraph: the paragraph is visibly prose, the wrong token is
+ * not (a `.planning/` path in Italian prose silently produced
+ * `status: planning`; `verificata` produced `verifying`; `completezza`
+ * produced `completed`).
+ */
+export const STATUS_EXACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
+  paused: 'paused',
+  stopped: 'paused',
+  executing: 'executing',
+  'in progress': 'executing',
+  'ready to execute': 'executing',
+  planning: 'planning',
+  'ready to plan': 'planning',
+  'planning complete': 'planning',
+  discussing: 'discussing',
+  verifying: 'verifying',
+  completed: 'completed',
+  done: 'completed',
+  complete: 'completed',
+  'phase complete': 'completed',
+  // advance-plan's phase-complete write (state-transition.cts:1812) — maps
+  // to `verifying`, preserving the pre-#4186 branch order where `verif`
+  // outranked `complete`.
+  'phase complete — ready for verification': 'verifying',
+  'all phases complete': 'completed',
+  // Legacy bare terminal form. ADR-2207/#2204 removed it from every WRITER
+  // (phase verbs write `All phases complete`; milestone close writes
+  // `<version> milestone complete`) — kept here as READER recognition so a
+  // legacy STATE.md still normalizes, exactly the way KNOWN_TEMPLATE_DEFAULTS
+  // keeps the other legacy Status strings.
+  'milestone complete': 'completed',
+  unknown: 'unknown',
+} as const);
+
+/**
+ * #4186: ANCHORED patterns for handler-written raw statuses whose text
+ * carries a variable component (a phase number, a milestone version, a
+ * #1070 completion glyph). Each pattern is matched against the same
+ * normalized key as `STATUS_EXACT_TOKENS` (lowercased, trimmed,
+ * whitespace-collapsed) and must match the WHOLE value — never a substring —
+ * mirroring how `KNOWN_STATUS_PATTERNS` anchors its template-default checks.
+ * `Executing Phase 5 — final stretch` (executor-appended prose) matches
+ * NOTHING and passes through verbatim, the same discipline #1070 applies to
+ * "Complete but needs manual QA".
+ */
+export const STATUS_ANCHORED_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = Object.freeze([
+  // begin-phase / planned transitions write `Executing Phase ${N}`.
+  [/^executing phase\s+\S+$/, 'executing'],
+  [/^planning phase\s+\S+$/, 'planning'],
+  [/^verifying phase\s+\S+$/, 'verifying'],
+  // phase-complete verbs write `Phase ${N} complete` (state.cts) — the exact
+  // shape the #3578 demote guard then re-checks against the disk counters.
+  [/^phase\s+\S+\s+complete$/, 'completed'],
+  // milestoneCompleteCore writes `${version} milestone complete` (terminal,
+  // ADR-2207); the version label is a single token (milestone.cts's charset
+  // validation admits letters, digits, '.', '-', '_').
+  [/^\S+\s+milestone complete$/, 'completed'],
+  // #1070: LLM executors may write "Complete ✓" or bare "Complete" when
+  // finishing a phase.
+  [/^complete\s*[✓✔✅☑]?$/, 'completed'],
+] as const);
+
+/**
+ * Normalize a raw `Status` body-field value to the canonical status token.
+ *
+ * #4186: recognition is ANCHORED — the whole field value (lowercased,
+ * trimmed, whitespace-collapsed) must be a member of the declared vocabulary
+ * (`STATUS_EXACT_TOKENS` / `STATUS_ANCHORED_PATTERNS` above). The pre-#4186
+ * implementation ran a first-match-wins chain of SUBSTRING tests over the
+ * free-prose field, so any prose merely CONTAINING a trigger word was
+ * silently rewritten to a credible wrong token: a `.planning/...` path
+ * mentioned in a non-English status line landed on `planning` (the trigger
+ * word lives in the directory name and outranked the `verif`/`complete`
+ * branches), Italian `verifica*` landed on `verifying`, `completezza` and
+ * `fasi complete` landed on `completed`. The lenient FALLBACK is unchanged
+ * and recorded (#3873 phase-3 row 26): an unrecognized value passes through
+ * verbatim — visible prose, never a guessed token.
+ *
+ * `pausedAt` keeps its documented force (issue #4186: intended behavior): a
+ * truthy value yields `paused` regardless of the prose.
+ */
 export function normalizeStateStatus(status: string | null | undefined, pausedAt: unknown): string {
-  let normalizedStatus = status || 'unknown';
-  const statusLower = (status || '').toLowerCase();
-  if (statusLower.includes('paused') || statusLower.includes('stopped') || pausedAt) {
-    normalizedStatus = 'paused';
+  if (pausedAt) return 'paused';
+  if (!status) return 'unknown';
+  const key = status.trim().toLowerCase().replace(/\s+/g, ' ');
+  const exact = STATUS_EXACT_TOKENS[key];
+  if (exact) return exact;
+  for (const [pattern, token] of STATUS_ANCHORED_PATTERNS) {
+    if (pattern.test(key)) return token;
   }
-  else if (statusLower.includes('executing') || statusLower.includes('in progress')) {
-    normalizedStatus = 'executing';
-  }
-  else if (statusLower.includes('planning') || statusLower.includes('ready to plan')) {
-    normalizedStatus = 'planning';
-  }
-  else if (statusLower.includes('discussing')) {
-    normalizedStatus = 'discussing';
-  }
-  else if (statusLower.includes('verif')) {
-    normalizedStatus = 'verifying';
-  }
-  else if (statusLower.includes('complete') || statusLower.includes('done')) {
-    normalizedStatus = 'completed';
-  }
-  else if (statusLower.includes('ready to execute')) {
-    normalizedStatus = 'executing';
-  }
-  return normalizedStatus;
+  return status;
 }
 
 /**

@@ -16,7 +16,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
-const { captureFdSync } = require('./helpers.cjs');
+const { captureFdSync, suppressFdAsync } = require('./helpers.cjs');
 
 const io = require('../gsd-core/bin/lib/io.cjs');
 const {
@@ -571,12 +571,6 @@ describe('bug #1008: io.error() tolerates a full non-blocking stderr pipe', () =
 {
   const { describe: __foldDescribe } = require('node:test');
   __foldDescribe("folded:bug-1891-file-resolution (consolidation epic #1969 B5 #1974)", () => {
-// allow-test-rule: structural-implementation-guard (see #1891)
-// gsd-tools.cjs @file: resolution is a low-level stdout interception that cannot be
-// exercised end-to-end via runGsdTools without a real workflow that emits @file: output.
-// These structural tests guard the interception wiring until a behavioral integration
-// test suite for the full @file: path is added.
-
 /**
  * Regression tests for bug #1891
  *
@@ -588,52 +582,70 @@ describe('bug #1008: io.error() tolerates a full non-blocking stderr pipe', () =
 
 'use strict';
 
-const { describe, test, before } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const GSD_TOOLS_SRC = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
-
 describe('bug #1891: @file: resolution in gsd-tools.cjs', () => {
-  let src;
-
-  before(() => {
-    // allow-test-rule: structural-implementation-guard (see #1891) — gsd-tools.cjs's
-    // stdout @file: interception has no exported symbol to assert on directly; every
-    // src.includes()/indexOf()/match() call in this describe block traces back to this
-    // read (#3545)
-    src = fs.readFileSync(GSD_TOOLS_SRC, 'utf-8');
+  // The @file: check + read live in ONE shared helper, `resolveAtFileOutput`
+  // (src/io.cts, #5105 review finding 7), which gsd-tools.cjs's main() calls on
+  // both the --pick and the non-pick path — asserted behaviorally here.
+  test('resolveAtFileOutput replaces an @file: reference with the file content', (t) => {
+    const { createTempDir, cleanup } = require('./helpers.cjs');
+    const dir = createTempDir('gsd-1891-');
+    t.after(() => cleanup(dir));
+    const file = path.join(dir, 'payload.json');
+    const content = '{"big":"héllo"}\n';
+    fs.writeFileSync(file, content, 'utf-8');
+    assert.strictEqual(io.resolveAtFileOutput(`@file:${file}`), content);
   });
 
-  test('main() intercepts stdout and resolves @file: references', () => {
-    // The non-pick path should have @file: resolution, just like the --pick path
-    assert.ok(
-      src.includes("captured.startsWith('@file:')") ||
-      src.includes('captured.startsWith(\'@file:\')'),
-      'main() should check for @file: prefix in captured output'
-    );
+  test('resolveAtFileOutput leaves non-@file: output untouched', () => {
+    for (const captured of ['', '@file', '@fil:x', ' @file:/x', '{"ok":true}', 'x@file:/y']) {
+      assert.strictEqual(io.resolveAtFileOutput(captured), captured, JSON.stringify(captured));
+    }
   });
 
-  test('@file: resolution reads file content via readFileSync', () => {
-    // Verify the resolution reads the actual file
-    assert.ok(
-      src.includes("readFileSync(captured.slice(6)") ||
-      src.includes('readFileSync(captured.slice(6)'),
-      '@file: resolution should read file at the path after the prefix'
-    );
+  // m3 (#5105): replaces a source-grep test that inspected gsd-tools.cjs's
+  // TEXT (`src.match(/resolveAtFileOutput\(/g)`) to guess whether main()'s
+  // non-pick path resolves an @file: reference. That never proved the
+  // interception actually WORKS — only that the string appeared somewhere.
+  // This drives the exact same shared primitives gsd-tools.cjs's main() calls
+  // in its non-pick path (captureStdoutSyncWrites → output → resolveAtFileOutput
+  // → fs.writeSync(1, ...), see gsd-core/bin/gsd-tools.cjs's own comment at its
+  // `captureStdoutSyncWrites` call above `fs.writeSync(1, resolveAtFileOutput(captured))`),
+  // over a real >50KB payload, and asserts the FINAL bytes a caller would see:
+  // never a literal `@file:` prefix, and the fully resolved JSON content.
+  test('behavioral: the non-pick @file: interception resolves a >50KB payload to its real content, never leaking the @file: prefix', async () => {
+    const big = 'x'.repeat(60000);
+    const captured = await io.captureStdoutSyncWrites(() => {
+      io.output({ big }, false);
+    });
+    // Sanity: prove the overflow protocol actually engaged, so a regression
+    // that stopped redirecting large payloads would not silently pass this
+    // test by never producing an `@file:` prefix in the first place.
+    assert.match(captured, /^@file:/, 'a >50KB payload must trigger the @file: redirection (io.output, >50000 chars)');
+
+    const resolved = io.resolveAtFileOutput(captured);
+    assert.doesNotMatch(resolved, /^@file:/, 'the non-pick path must resolve @file: before it reaches the real caller');
+    assert.deepStrictEqual(JSON.parse(resolved), { big }, 'resolved content must be the exact original payload');
   });
 
-  test('stdout interception wraps runCommand in the non-pick path', () => {
-    // The main function should resolve @file: output in BOTH --pick and
-    // non-pick paths. This can be either two inline checks or a shared helper.
-    const mainFunc = src.slice(src.indexOf('async function main()'));
-    const resolveCalls = (mainFunc.match(/resolveAtFileOutput\(/g) || []).length;
-    const inlineAtFileChecks = (mainFunc.match(/@file:/g) || []).length;
-    assert.ok(
-      resolveCalls >= 2 || inlineAtFileChecks >= 2,
-      'Both --pick and normal paths should resolve @file: references'
-    );
+  // Mirrors the --pick path's own resolve-then-JSON.parse sequence (gsd-tools.cjs's
+  // main(): `resolveAtFileOutput(captured)` runs BEFORE `JSON.parse`, because an
+  // unresolved `@file:<path>` string is not itself JSON — parsing the RAW
+  // captured output must fail while parsing the resolved output must succeed.
+  test('behavioral: the --pick path\'s resolve-before-parse sequence — raw @file: text is not JSON, resolved content is', async () => {
+    const rows = Array.from({ length: 2000 }, (_, i) => ({ id: i, note: 'row'.repeat(20) }));
+    const captured = await io.captureStdoutSyncWrites(() => {
+      io.output({ rows }, false);
+    });
+    assert.match(captured, /^@file:/, 'sanity: this fixture must also overflow the 50KB threshold');
+    assert.throws(() => JSON.parse(captured), 'the raw @file: pointer must not itself be parseable as JSON');
+    const resolved = io.resolveAtFileOutput(captured);
+    const parsed = JSON.parse(resolved);
+    assert.strictEqual(parsed.rows.length, 2000, 'the --pick path must recover the FULL payload, not a truncated one');
   });
 });
   });
@@ -682,6 +694,8 @@ const EXPECTED_REASON_OUTCOME_3912 = {
   security_scan_failed: 'INTERNAL',
   pick_field_absent: 'UNAVAILABLE',
   pick_output_not_json: 'UNAVAILABLE',
+  summary_extract_unparseable: 'UNAVAILABLE',
+  verification_status_invalid: 'UNAVAILABLE',
   usage: 'USAGE',
   unknown: 'FAIL',
 };
@@ -694,14 +708,14 @@ function expectedErrorCode3912(reasonValue, version) {
   return CODE_FOR_3912.get(outcome);
 }
 
-describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 25-member enum', () => {
+describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 27-member enum', () => {
   afterEach(() => {
     resolveContractVersion({ argv: ['node', 'x'], env: {} }); // restore v1 default
   });
 
   // A1 — the acceptance criterion: EVERY member of ERROR_REASON, iterated
   // from the enum itself (not a hand-picked subset), exits 1 under v1. A
-  // 26th member added to the enum without a table entry still exits 1
+  // 28th member added to the enum without a table entry still exits 1
   // under v1 (v1 never consults the table at all); under v2, the table
   // lookup for that member yields `undefined`, `CODE_FOR_3912.get(undefined)`
   // yields `undefined`, and `err.code === expected` fails against the real
@@ -717,7 +731,7 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
     test(`v1: ERROR_REASON.${key} (${reasonValue}) exits 1`, () => {
       resolveContractVersion({ argv: ['node', 'x'], env: {} }); // v1
       assert.throws(
-        () => io.error('msg', reasonValue),
+        () => captureFdSync(2, () => { io.error('msg', reasonValue); }),
         (err) => err instanceof ExitError && err.code === 1,
         `ERROR_REASON.${key} must exit 1 under v1`,
       );
@@ -727,7 +741,7 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
       resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
       const expected = expectedErrorCode3912(reasonValue, 'v2');
       assert.throws(
-        () => io.error('msg', reasonValue),
+        () => captureFdSync(2, () => { io.error('msg', reasonValue); }),
         (err) => err instanceof ExitError && err.code === expected,
         `ERROR_REASON.${key} under v2 must exit ${expected}`,
       );
@@ -738,7 +752,7 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
   test('A2: error() with no reason argument exits 1 under v1 (defaults to UNKNOWN)', () => {
     resolveContractVersion({ argv: ['node', 'x'], env: {} });
     assert.throws(
-      () => io.error('no reason given'),
+      () => captureFdSync(2, () => { io.error('no reason given'); }),
       (err) => err instanceof ExitError && err.code === 1,
     );
   });
@@ -746,7 +760,7 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
   test('A2: error() with no reason argument stays FAIL (exit 1) under v2 too — UNKNOWN is not a specific outcome', () => {
     resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
     assert.throws(
-      () => io.error('no reason given'),
+      () => captureFdSync(2, () => { io.error('no reason given'); }),
       (err) => err instanceof ExitError && err.code === 1,
     );
   });
@@ -756,7 +770,7 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
     resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
     for (const key of ['SDK_MISSING_ARG', 'SDK_UNKNOWN_COMMAND', 'USAGE']) {
       assert.throws(
-        () => io.error('msg', io.ERROR_REASON[key]),
+        () => captureFdSync(2, () => { io.error('msg', io.ERROR_REASON[key]); }),
         (err) => err instanceof ExitError && err.code === 64,
         `${key} must project to 64 under v2`,
       );
@@ -768,10 +782,14 @@ describe('#3912 A1/B1: error() declares from ERROR_REASON, exhaustive over the 2
   test('B5 (anti-vacuity): v1 and v2 differ for at least one reason', () => {
     resolveContractVersion({ argv: ['node', 'x'], env: {} });
     let v1Code;
-    try { io.error('msg', io.ERROR_REASON.SDK_MISSING_ARG); } catch (e) { v1Code = e.code; }
+    captureFdSync(2, () => {
+      try { io.error('msg', io.ERROR_REASON.SDK_MISSING_ARG); } catch (e) { v1Code = e.code; }
+    });
     resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
     let v2Code;
-    try { io.error('msg', io.ERROR_REASON.SDK_MISSING_ARG); } catch (e) { v2Code = e.code; }
+    captureFdSync(2, () => {
+      try { io.error('msg', io.ERROR_REASON.SDK_MISSING_ARG); } catch (e) { v2Code = e.code; }
+    });
     assert.equal(v1Code, 1);
     assert.equal(v2Code, 64);
     assert.notEqual(v1Code, v2Code, 'v1 and v2 must differ for at least one reason, or the declaration is decorative');
@@ -857,10 +875,11 @@ describe('#3912 A3-A5: output({error}) records DEGRADED — shape-exhaustive plu
   // ioMod`) whose first argument is an object literal carrying an `error`
   // property. This is the SHAPE the design measured, over the real tree,
   // not a hand-picked subset — and it independently reproduces the design
-  // doc's per-file breakdown (frontmatter 7, phase 4, roadmap 3, state 25,
-  // verify 8, workstream 7, commands 5, template 3, gsd2-import 2 = 64),
-  // which is itself the corrected count over ADR-2980's stale 60.
-  test('A3 census: exactly 64 output({error}) call sites exist in src/, across the 9 modules the design measured', () => {
+  // doc's per-file breakdown AS MEASURED THEN (frontmatter 7, phase 4, roadmap 3,
+  // state 25, verify 8, workstream 7, commands 5, template 3, gsd2-import 2 = 64,
+  // the corrected count over ADR-2980's stale 60). The live per-file table is
+  // the one asserted below; verify.cts has since left it (see that entry).
+  test('A3 census: exactly 61 output({error}) call sites exist in src/, across the 8 modules that still carry one', () => {
     const SRC_ROOT = path.resolve(__dirname, '../src');
 
     function listCtsFiles(dir) {
@@ -910,12 +929,24 @@ describe('#3912 A3-A5: output({error}) records DEGRADED — shape-exhaustive plu
     assert.deepStrictEqual(
       perFile,
       {
-        'commands.cts': 5, 'frontmatter.cts': 7, 'gsd2-import.cts': 2, 'phase.cts': 4,
-        'roadmap.cts': 3, 'state.cts': 27, 'template.cts': 3, 'verify.cts': 8, 'workstream.cts': 7,  // +1 #3807: advance-plan's ambiguous-position error; +1 #3784: advance-plan's ambiguous-PLAN-position error (two plan spellings, different numbers)
+        'commands.cts': 5, 'frontmatter.cts': 10, 'gsd2-import.cts': 2, 'phase.cts': 4,
+        // frontmatter.cts +2 #5105: spliceOrReportRefusal's write-refusal report (shared by
+        // set/merge) and cmdFrontmatterMerge's #1660 lossy-object-list-field refusal (parity
+        // with cmdFrontmatterSet's existing site) — 8 -> 10.
+        // verify.cts 8 -> 0 #5170: the eight sites became typed verdicts printed by emitVerbVerdict
+        // (src/verify.cts), which calls output(verdict.payload) with a NON-literal argument (so the
+        // literal-shape census no longer sees them) and then declareGateExit (src/gate-exit.cts). Pending
+        // outcome, read from those two functions: output() still records DEGRADED for a payload carrying an
+        // `error` key, exactly as before; declareGateExit then OVERRIDES it for a non-PASS verdict
+        // (unreadable -> UNAVAILABLE 69, empty -> NO_INPUT 66, block in status mode -> FAIL 1), and for a
+        // PASS leaves output()'s DEGRADED untouched. So the migrated sites record a declared outcome where
+        // they used to record DEGRADED, and the census count falls because of the call shape, not because
+        // the error key stopped being recorded.
+        'roadmap.cts': 3, 'state.cts': 27, 'template.cts': 3, 'workstream.cts': 7,  // +1 #3807: advance-plan's ambiguous-position error; +1 #3784: advance-plan's ambiguous-PLAN-position error (two plan spellings, different numbers); +1 #4806: cmdFrontmatterGet's unparseable-frontmatter error
       },
       `per-file output({error}) census drifted: ${JSON.stringify(perFile)}`,
     );
-    assert.strictEqual(total, 66, `enumerated output({error}) population drifted from the measured 66 (64 + #3807's ambiguous-position error + #3784's ambiguous-plan-position error): got ${total}`);
+    assert.strictEqual(total, 61, `enumerated output({error}) population drifted from the measured 61 (69 - verify.cts's 8 sites that #5170 converted to typed verdicts): got ${total}`);
   });
 });
 
@@ -990,11 +1021,22 @@ describe('review fix: pending-outcome cell lifetime (last-write-wins, cleared on
     try {
       // First invocation declares DEGRADED via a payload-carried error and
       // returns nothing — runMain projects it to 80 under v2.
-      runMain(() => {
-        io.output({ found: false, error: 'not found' }, false);
-        return undefined;
+      //
+      // runMain() defers main() via Promise.resolve().then(...), so the
+      // actual fs.writeSync(1, ...) fires in a later microtask, not
+      // synchronously inside this call. suppressFdAsync (not captureFdAsync)
+      // keeps fs.writeSync patched across that await AND prevents the
+      // deferred write from ever reaching the real fd 1 — this exact window
+      // races node:test's own fd-1 IPC protocol under
+      // --test-isolation=process and forwarding (as captureFdAsync does) was
+      // empirically confirmed to still corrupt it (#4448).
+      await suppressFdAsync(1, async () => {
+        runMain(() => {
+          io.output({ found: false, error: 'not found' }, false);
+          return undefined;
+        });
+        await waitForRunMain();
       });
-      await waitForRunMain();
       assert.strictEqual(process.exitCode, 80, 'first runMain should have projected the DEGRADED cell to 80');
 
       // Second, unrelated invocation in the SAME process declares nothing
@@ -1002,8 +1044,10 @@ describe('review fix: pending-outcome cell lifetime (last-write-wins, cleared on
       // runMain, so this would inherit the first call's stale DEGRADED and
       // also exit 80 — the exact bug the reviewers found.
       process.exitCode = undefined;
-      runMain(() => undefined);
-      await waitForRunMain();
+      await suppressFdAsync(1, async () => {
+        runMain(() => undefined);
+        await waitForRunMain();
+      });
       assert.strictEqual(
         process.exitCode,
         undefined,
@@ -1018,12 +1062,14 @@ describe('review fix: pending-outcome cell lifetime (last-write-wins, cleared on
     resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
     const savedExitCode = process.exitCode;
     try {
-      runMain(() => {
-        io.output({ found: false, error: 'not found' }, false);
-        io.output({ ok: true }, false);
-        return undefined;
+      await suppressFdAsync(1, async () => {
+        runMain(() => {
+          io.output({ found: false, error: 'not found' }, false);
+          io.output({ ok: true }, false);
+          return undefined;
+        });
+        await waitForRunMain();
       });
-      await waitForRunMain();
       assert.strictEqual(
         process.exitCode,
         undefined,
@@ -1038,13 +1084,29 @@ describe('review fix: pending-outcome cell lifetime (last-write-wins, cleared on
     resolveContractVersion({ argv: ['node', 'x', '--exit-contract=v2'], env: {} });
     const savedExitCode = process.exitCode;
     try {
-      runMain(() => {
-        io.output({ error: 'x' }, false);
-        return undefined;
+      const captured = await suppressFdAsync(1, async () => {
+        runMain(() => {
+          io.output({ error: 'x' }, false);
+          return undefined;
+        });
+        await waitForRunMain();
       });
-      await waitForRunMain();
       assert.strictEqual(process.exitCode, 80);
       assert.strictEqual(getPendingOutcome(), undefined, 'the cell must be cleared once runMain has consumed it');
+      // Load-bearing check on the wrap itself, not just the outcome it
+      // guards: proves suppressFdAsync actually intercepted the deferred
+      // bytes runMain wrote (rather than the patch having been restored
+      // before the deferred write ran, which would silently capture an
+      // empty string — verified as the failure mode of a naive
+      // captureFdSync wrap during development of this fix). These bytes
+      // never reached the real fd 1 by design (#4448) — only the in-memory
+      // recording is asserted on here.
+      const parsedCaptured = JSON.parse(captured);
+      assert.strictEqual(
+        parsedCaptured.error,
+        'x',
+        `expected suppressFdAsync to intercept the output({error}) JSON bytes for fd 1; got: ${JSON.stringify(captured)}`,
+      );
     } finally {
       process.exitCode = savedExitCode;
     }

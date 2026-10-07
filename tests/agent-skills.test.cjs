@@ -35,7 +35,7 @@ function runGsdToolsWithStderr(args, cwd, env) {
   };
 }
 
-const { loadTrustedGlobalRoots, validatePath } = require('../gsd-core/bin/lib/security.cjs');
+const { loadTrustedGlobalRoots, tryWithinRoot, PathAcceptance } = require('../gsd-core/bin/lib/security.cjs');
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -164,6 +164,129 @@ describe('agent-skills command', () => {
     const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, { GSD_RUNTIME: 'claude' });
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.strictEqual(r.ir.block, '');
+  });
+
+  // ── #4407 (ADR-4139 stream 2): compact/canonical payload selection ────────
+  // Same fixture pattern as the Codex-fallback tests immediately above — a real
+  // `<runtime>/agents/` directory under a temp project, no mocking of
+  // `checkAgentsInstalled`. See .gsd/phase/enhance-4407-agent-skill-seam/
+  // 50-test-matrix.md for the full input-class table.
+  describe('#4407 compact payload selection (the #2454 persona fallback)', () => {
+    const CANONICAL = '# Local Codex executor\nCanonical persona.\n';
+    const COMPACT = '# Codex executor (compact)\n';
+
+    test('class 1: compact on + compact file present -> compact content verbatim', () => {
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.compact.md'), COMPACT);
+      writeConfig(tmpDir, { runtime: 'codex', workflow: { compact_content: true } });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.strictEqual(r.ir.block, COMPACT);
+      assert.strictEqual(r.ir.agent_payload_variant, 'compact');
+
+      // Raw (non-JSON) mode is what ${AGENT_SKILLS_*} substitution actually
+      // consumes — must match the JSON block byte-for-byte.
+      const raw = runGsdTools(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(raw.success, `Raw command failed: ${raw.error}`);
+      assert.strictEqual(raw.output, COMPACT.trimEnd());
+    });
+
+    test('class 2: compact off (default) -> canonical content, unchanged from today', () => {
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      writeConfig(tmpDir, { runtime: 'codex' });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.strictEqual(r.ir.block, CANONICAL);
+      assert.strictEqual(r.ir.agent_payload_variant, 'canonical');
+    });
+
+    test('class 3: compact on + no compact file registered -> canonical with disclosed fallback', () => {
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      writeConfig(tmpDir, { runtime: 'codex', workflow: { compact_content: true } });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.strictEqual(
+        r.ir.block,
+        '<!-- gsd: no compact payload registered for gsd-executor; serving canonical -->\n\n' + CANONICAL,
+      );
+      assert.strictEqual(r.ir.agent_payload_variant, 'canonical');
+
+      const raw = runGsdTools(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(raw.success, `Raw command failed: ${raw.error}`);
+      assert.strictEqual(raw.output, r.ir.block.trimEnd());
+    });
+
+    test('class 4 (boundary): compact file exists but is empty -> treated as not registered', () => {
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.compact.md'), '');
+      writeConfig(tmpDir, { runtime: 'codex', workflow: { compact_content: true } });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.strictEqual(
+        r.ir.block,
+        '<!-- gsd: no compact payload registered for gsd-executor; serving canonical -->\n\n' + CANONICAL,
+      );
+      assert.strictEqual(r.ir.agent_payload_variant, 'canonical');
+    });
+
+    test('class 5: Claude runtime + compact on -> fallback never invoked, unchanged contract', () => {
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.compact.md'), COMPACT);
+      writeConfig(tmpDir, { runtime: 'claude', workflow: { compact_content: true } });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, { GSD_RUNTIME: 'claude' });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.strictEqual(r.ir.block, '');
+      assert.strictEqual(r.ir.agent_payload_variant, null);
+    });
+
+    test('class 6 (boundary): a user agent_skills block already resolved -> fallback path never reached', () => {
+      const skillDir = path.join(tmpDir, 'skills', 'test-skill');
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Test Skill\n');
+      const agentsDir = path.join(tmpDir, '.codex', 'agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.md'), CANONICAL);
+      fs.writeFileSync(path.join(agentsDir, 'gsd-executor.compact.md'), COMPACT);
+      writeConfig(tmpDir, {
+        runtime: 'codex',
+        workflow: { compact_content: true },
+        agent_skills: { 'gsd-executor': ['skills/test-skill'] },
+      });
+
+      const r = runAgentSkillsJson(['agent-skills', 'gsd-executor'], tmpDir, {
+        HOME: tmpDir, USERPROFILE: tmpDir, GSD_RUNTIME: '',
+      });
+      assert.ok(r.success, `Command failed: ${r.error}`);
+      assert.ok(r.ir.block.includes('test-skill'), 'expected the user-configured skills block, not the persona fallback');
+      assert.strictEqual(r.ir.agent_payload_variant, null);
+    });
   });
 
   test('returns block containing agent_skills XML for configured agent', () => {
@@ -767,7 +890,7 @@ describe('loadTrustedGlobalRoots', () => {
 // ─── trusted_global_roots integration guard (#52) ─────────────────────────────
 //
 // NOTE: These tests validate the trusted-root bypass logic by directly calling
-// loadTrustedGlobalRoots + validatePath rather than invoking the full CLI
+// loadTrustedGlobalRoots + tryWithinRoot rather than invoking the full CLI
 // (which would require controlling the runtime HOME path in a way that also
 // triggers a symlink escape scenario through gsd-tools subprocess invocation).
 // Full end-to-end symlink testing would require OS-level symlink setup in tmp
@@ -790,24 +913,24 @@ describe('trusted_global_roots guard logic', () => {
     cleanup(externalDir);
   });
 
-  test('validatePath rejects skill outside globalSkillsBase (baseline — no trusted roots)', () => {
+  test('tryWithinRoot rejects skill outside globalSkillsBase (baseline — no trusted roots)', () => {
     const skillMd = path.join(externalDir, 'SKILL.md');
-    const result = validatePath(skillMd, tmpDir, { allowAbsolute: true });
-    assert.ok(!result.safe, 'skill outside base must be rejected by validatePath');
+    const result = tryWithinRoot(skillMd, tmpDir, PathAcceptance.AbsoluteInsideRoot);
+    assert.equal(result, null, 'skill outside base must be rejected by tryWithinRoot');
   });
 
-  test('with trusted root matching real target dir — validatePath accepts', () => {
+  test('with trusted root matching real target dir — tryWithinRoot accepts', () => {
     // Simulate the trusted-root fallback: skill is outside base but inside trusted root
     const skillMd = path.join(externalDir, 'SKILL.md');
-    const baseCheck = validatePath(skillMd, tmpDir, { allowAbsolute: true });
-    assert.ok(!baseCheck.safe, 'base check must fail (prerequisite)');
+    const baseCheck = tryWithinRoot(skillMd, tmpDir, PathAcceptance.AbsoluteInsideRoot);
+    assert.equal(baseCheck, null, 'base check must fail (prerequisite)');
 
     // Trusted root fallback: check against externalDir
     const config = { agent_skills_security: { trusted_global_roots: [externalDir] } };
     const trustedRoots = loadTrustedGlobalRoots(config);
     const acceptedViaTrustedRoot = trustedRoots.some((root) => {
-      const rootCheck = validatePath(skillMd, root, { allowAbsolute: true });
-      return rootCheck.safe;
+      const rootCheck = tryWithinRoot(skillMd, root, PathAcceptance.AbsoluteInsideRoot);
+      return rootCheck !== null;
     });
     assert.ok(acceptedViaTrustedRoot, 'skill must be accepted when within a trusted root');
   });
@@ -819,8 +942,8 @@ describe('trusted_global_roots guard logic', () => {
       const config = { agent_skills_security: { trusted_global_roots: [unrelatedDir] } };
       const trustedRoots = loadTrustedGlobalRoots(config);
       const acceptedViaTrustedRoot = trustedRoots.some((root) => {
-        const rootCheck = validatePath(skillMd, root, { allowAbsolute: true });
-        return rootCheck.safe;
+        const rootCheck = tryWithinRoot(skillMd, root, PathAcceptance.AbsoluteInsideRoot);
+        return rootCheck !== null;
       });
       assert.ok(!acceptedViaTrustedRoot, 'skill must still be rejected when trusted root is unrelated');
     } finally {
@@ -834,8 +957,8 @@ describe('trusted_global_roots guard logic', () => {
     const trustedRoots = loadTrustedGlobalRoots(config);
     assert.strictEqual(trustedRoots.length, 0, 'no roots loaded');
     const acceptedViaTrustedRoot = trustedRoots.some((root) => {
-      const rootCheck = validatePath(skillMd, root, { allowAbsolute: true });
-      return rootCheck.safe;
+      const rootCheck = tryWithinRoot(skillMd, root, PathAcceptance.AbsoluteInsideRoot);
+      return rootCheck !== null;
     });
     assert.ok(!acceptedViaTrustedRoot, 'skill must be rejected when trusted roots is empty');
   });
@@ -1441,7 +1564,12 @@ describe('bug #1243: plugin-namespaced agent skills', () => {
 
     // allow-test-rule: source-text-is-the-product (#1243)
     const AGENTS_DIR = path.join(__dirname, '..', 'agents');
-    const agentFiles = fs.readdirSync(AGENTS_DIR).filter((f) => f.startsWith('gsd-') && f.endsWith('.md'));
+    // #4407: exclude .compact.md variant siblings — they carry the SAME
+    // frontmatter as their canonical agent by design (ADR-4139 stream 2), so
+    // counting them here would double-report every consumer as a "new" agent
+    // rather than checking the real agent roster this guard exists for.
+    const agentFiles = fs.readdirSync(AGENTS_DIR)
+      .filter((f) => f.startsWith('gsd-') && f.endsWith('.md') && !f.endsWith('.compact.md'));
 
     /**
      * Extract tool names from an agent file's frontmatter (same logic as above).
@@ -1824,5 +1952,275 @@ describe('#1400 regression: plain agent-skills output survives pipe/file stdout'
     assert.ok(out.trim().endsWith('</agent_skills>'), 'block must end with the closing tag (no tail truncation)');
     assert.ok(out.includes(`- @${skillPaths[0]}/SKILL.md`), 'first skill ref must be present');
     assert.ok(out.includes(`- @${skillPaths[skillPaths.length - 1]}/SKILL.md`), 'last skill ref must be present');
+  });
+});
+
+// ─── #4772: workflows forward the workstream they were started for ──────────
+//
+// A bare `gsd_run query agent-skills <agent>` / `gsd_run query init.*` resolves
+// the workstream from the ambient pointer, not from the `--ws <name>` the
+// command was started with. The parity test below is generative: it scans every
+// fenced call in the workflow corpus, so a newly added call that forgets the
+// flag fails here instead of silently reintroducing the defect.
+describe('regressions: workflows forward the started workstream to agent-skills and init.* (#4772)', () => {
+  const { splitLines } = require('../gsd-core/bin/lib/text-lines.cjs');
+  const REPO_ROOT = path.join(__dirname, '..');
+  const WORKFLOWS_DIR = path.join(REPO_ROOT, 'gsd-core', 'workflows');
+  const EXTRA_FILES = [path.join(REPO_ROOT, 'gsd-core', 'references', 'autonomous-smart-discuss.md')];
+
+  // The single parse idiom every workflow fence uses. Always ASSIGNS (an empty
+  // result clears a stale value) and needs no file, so concurrent sessions in
+  // one checkout cannot cross-read each other's workstream. (new-milestone.md
+  // predates this and keeps its own persisted GSD_WS_ARG file; its calls are
+  // held to the same forwarding rule through the `viaFile` branch below.)
+  const CANONICAL_PARSE =
+    'GSD_WS=$(echo " $ARGUMENTS" | sed -nE \'s/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \\1/p\' | head -n 1)';
+  // The single-token call-site expansion: `--ws=<name>` or nothing. One token
+  // is what makes it safe under zsh, which does not word-split `$GSD_WS`.
+  const FLAG_EXPANSION = '${GSD_WS:+--ws=${GSD_WS##* }}';
+
+  // Project / workspace lifecycle workflows: no workstream exists yet, or the
+  // workflow manages workspaces themselves. (update.md is root-scoped too but
+  // has no `gsd_run query` call of this shape, so it needs no entry.)
+  const ROOT_SCOPED = new Set([
+    'new-project.md',
+    'list-workspaces.md',
+    'new-workspace.md',
+    'remove-workspace.md',
+  ]);
+
+  const CALL_RE = /\bgsd_run query (?:agent-skills [A-Za-z0-9-]+|init\.[A-Za-z0-9-]+)(?![A-Za-z0-9-])/;
+
+  function listMarkdown(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...listMarkdown(abs));
+      else if (entry.isFile() && entry.name.endsWith('.md')) out.push(abs);
+    }
+    return out.sort();
+  }
+
+  function fences(markdown) {
+    const out = [];
+    let cur = null;
+    splitLines(markdown).forEach((line, idx) => {
+      if (/^\s*```/.test(line)) {
+        if (cur) { out.push(cur); cur = null; } else cur = { start: idx + 1, lines: [] };
+      } else if (cur) cur.lines.push({ text: line, no: idx + 1 });
+    });
+    return out;
+  }
+
+  /** Every fenced agent-skills / init.* call that does not carry a defined workstream flag. */
+  function unforwardedCalls(markdown) {
+    const bad = [];
+    for (const fence of fences(markdown)) {
+      const calls = fence.lines.filter((l) => CALL_RE.test(l.text) && !/^\s*#/.test(l.text));
+      for (const call of calls) {
+        const viaFile = call.text.includes('GSD_WS_ARG');
+        const expected = viaFile ? FLAG_EXPANSION.split('GSD_WS').join('GSD_WS_ARG') : FLAG_EXPANSION;
+        if (!call.text.includes(expected)) {
+          bad.push(`line ${call.no}: call does not carry ${expected}: ${call.text.trim()}`);
+          continue;
+        }
+        const defined = fence.lines.some((l) => (viaFile ? /^\s*GSD_WS_ARG=/ : /^\s*GSD_WS=/).test(l.text));
+        if (!defined) {
+          bad.push(`line ${call.no}: fence never assigns ${viaFile ? 'GSD_WS_ARG' : 'GSD_WS'} before using it: ${call.text.trim()}`);
+        }
+      }
+    }
+    return bad;
+  }
+
+  const corpus = listMarkdown(WORKFLOWS_DIR).concat(EXTRA_FILES);
+
+  test('every fenced agent-skills / init.* call in a workstream-scoped workflow forwards GSD_WS', () => {
+    const failures = [];
+    for (const file of corpus) {
+      if (path.dirname(file) === WORKFLOWS_DIR && ROOT_SCOPED.has(path.basename(file))) continue;
+      for (const msg of unforwardedCalls(fs.readFileSync(file, 'utf-8'))) {
+        failures.push(`${path.relative(REPO_ROOT, file)} ${msg}`);
+      }
+    }
+    assert.deepStrictEqual(failures, []);
+  });
+
+  test('the root-scoped exemptions are not stale: each still has a fenced call', () => {
+    for (const name of ROOT_SCOPED) {
+      const text = fs.readFileSync(path.join(WORKFLOWS_DIR, name), 'utf-8');
+      const calls = fences(text).flatMap((f) => f.lines).filter((l) => CALL_RE.test(l.text));
+      assert.ok(calls.length > 0, `${name} no longer has an agent-skills/init.* call — drop it from ROOT_SCOPED`);
+    }
+  });
+
+  test('the parity check can fail: dropping one flag, or the parse line, is reported', () => {
+    const text = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-phase.md'), 'utf-8');
+    assert.deepStrictEqual(unforwardedCalls(text), [], 'plan-phase.md must be clean before mutation');
+    const noFlag = text.replace(` ${FLAG_EXPANSION}`, '');
+    assert.notStrictEqual(noFlag, text, 'mutation 1 must change the file');
+    assert.strictEqual(unforwardedCalls(noFlag).length, 1);
+    const noParse = splitLines(text).filter((l) => !l.startsWith('GSD_WS=')).join('\n');
+    assert.notStrictEqual(noParse, text, 'mutation 2 must change the file');
+    assert.ok(unforwardedCalls(noParse).length >= 4, 'every call in a fence with no GSD_WS assignment is reported');
+  });
+
+  test('every workflow parses --ws with the byte-identical canonical line (no divergent copies)', () => {
+    const variants = new Map();
+    for (const file of corpus) {
+      for (const line of splitLines(fs.readFileSync(file, 'utf-8'))) {
+        if (line.startsWith('GSD_WS=$(echo " $ARGUMENTS"')) {
+          // A trailing ` # ...` note is allowed (Read-loaded files, and disjointness from their spine).
+          const key = line.replace(/ # .*$/, '');
+          variants.set(key, (variants.get(key) || []).concat(path.relative(REPO_ROOT, file)));
+        }
+      }
+    }
+    assert.deepStrictEqual([...variants.keys()], [CANONICAL_PARSE]);
+    assert.ok([...variants.values()][0].length >= 30, 'the canonical parse must be used across the workflow corpus');
+  });
+
+  // Linux/Windows benches may have no zsh, and a Windows `bash` can resolve to a
+  // WSL shim without node: probe for the exact capabilities the scripts need.
+  const shellUsable = (sh) => process.platform !== 'win32' &&
+    spawnSync(sh, ['-c', 'command -v sed >/dev/null && command -v node >/dev/null'], { timeout: PROBE_TIMEOUT_MS }).status === 0;
+  const shells = ['bash', 'zsh'].filter(shellUsable);
+  test('bash is available to execute the flag-parse tests (zsh runs additionally where installed)', (t) => {
+    if (!shells.includes('bash')) t.skip('no usable bash on this platform');
+  });
+
+  test('the parse accepts exactly the names the workstream name policy accepts (first character alphanumeric)', (t) => {
+    if (!shells.includes('bash')) return t.skip('no usable bash on this platform');
+    const { validateWorkstreamName } = require('../gsd-core/bin/lib/workstream-name-policy.cjs');
+    for (const name of ['a', 'ws-a', 'backend_api', 'v1.2', 'A9']) {
+      assert.ok(validateWorkstreamName(name), `${name} is valid under the policy`);
+      const r = spawnSync('bash', ['-c', `${CANONICAL_PARSE}\nprintf '%s' "$GSD_WS"`], {
+        env: { ...process.env, ARGUMENTS: `1 --ws ${name}` }, encoding: 'utf-8', timeout: PROBE_TIMEOUT_MS,
+      });
+      assert.strictEqual(r.stdout, `--ws ${name}`);
+    }
+    for (const name of ['-x', '.x', '_x']) {
+      assert.ok(!validateWorkstreamName(name), `${name} is invalid under the policy`);
+      const r = spawnSync('bash', ['-c', `${CANONICAL_PARSE}\nprintf '%s' "$GSD_WS"`], {
+        env: { ...process.env, ARGUMENTS: `1 --ws ${name}` }, encoding: 'utf-8', timeout: PROBE_TIMEOUT_MS,
+      });
+      assert.strictEqual(r.stdout, '', `${name} must not be captured`);
+    }
+  });
+
+  // The call-site expansion is executed, not just matched: flag parsing is where
+  // bash-only constructs silently mis-parse under zsh (the Bash tool's shell).
+
+  for (const sh of shells) {
+    describe(`flag parse and expansion under ${sh}`, () => {
+      function expand(argumentsValue) {
+        const script = `${CANONICAL_PARSE}\nset -- ${FLAG_EXPANSION}\nprintf '%s|%s' "$#" "$*"`;
+        const r = spawnSync(sh, ['-c', script], {
+          env: { ...process.env, ARGUMENTS: argumentsValue },
+          encoding: 'utf-8',
+          timeout: PROBE_TIMEOUT_MS,
+        });
+        assert.strictEqual(r.status, 0, r.stderr);
+        return r.stdout;
+      }
+
+      test('--ws <name> becomes exactly one --ws=<name> token', () => {
+        assert.strictEqual(expand('2 --ws backend-api'), '1|--ws=backend-api');
+        assert.strictEqual(expand('--ws  ws_a.1   --auto 3'), '1|--ws=ws_a.1');
+        assert.strictEqual(expand('2 --skip-research --ws ws-a'), '1|--ws=ws-a');
+      });
+
+      test('no --ws (or a malformed one) expands to zero tokens, never a stray empty argument', () => {
+        assert.strictEqual(expand('2'), '0|');
+        assert.strictEqual(expand(''), '0|');
+        assert.strictEqual(expand('2 --ws'), '0|');
+        assert.strictEqual(expand('2 --wsx foo'), '0|');
+        assert.strictEqual(expand('2 --ws --auto'), '0|');
+        assert.strictEqual(expand('2 --ws -x'), '0|');
+      });
+    });
+  }
+
+  describe('the extracted workflow fences reach the requested workstream with no pointer set', () => {
+    let proj;
+
+    beforeEach(() => {
+      proj = createTempProject();
+      for (const ws of ['ws-a', 'ws-b']) fs.mkdirSync(path.join(proj, '.planning', 'workstreams', ws), { recursive: true });
+      fs.mkdirSync(path.join(proj, 'skills', 's-a'), { recursive: true });
+      fs.writeFileSync(path.join(proj, 'skills', 's-a', 'SKILL.md'), '# s-a\n');
+      fs.writeFileSync(
+        path.join(proj, '.planning', 'workstreams', 'ws-a', 'config.json'),
+        JSON.stringify({ agent_skills: { 'gsd-planner': ['skills/s-a'] } }),
+      );
+    });
+
+    afterEach(() => cleanup(proj));
+
+    /** Build (not run) a script from the workflow's own `GSD_WS=` line + the lines matching `pick` from its fence. */
+    function buildFenceScript(workflow, pick, argumentsValue, extraSetup = '') {
+      const text = fs.readFileSync(path.join(WORKFLOWS_DIR, workflow), 'utf-8');
+      const fence = fences(text).find((f) => f.lines.some((l) => pick.test(l.text)));
+      assert.ok(fence, `${workflow}: no fence matches ${pick}`);
+      const body = fence.lines
+        .map((l) => l.text)
+        .filter((l) => l.startsWith('GSD_WS=') || pick.test(l))
+        .join('\n');
+      const script = `gsd_run() { node "${TOOLS_PATH}" "$@"; }\n${extraSetup}\n${body}\n`;
+      return { script, argumentsValue };
+    }
+
+    function exec(sh, { script, argumentsValue }, printVars) {
+      const r = spawnSync(sh, ['-c', `${script}\n${printVars}`], {
+        cwd: proj,
+        env: { ...process.env, ...TEST_ENV_BASE, GSD_WORKSTREAM: '', ARGUMENTS: argumentsValue, HOME: proj, USERPROFILE: proj },
+        encoding: 'utf-8',
+        timeout: PROBE_TIMEOUT_MS * 4,
+      });
+      assert.strictEqual(r.status, 0, `${sh} failed: ${r.stderr}`);
+      return r.stdout;
+    }
+
+    for (const sh of shells) {
+      test(`plan-phase.md agent-skills resolves ws-a skills under ${sh} (was empty)`, () => {
+        const fence = buildFenceScript('plan-phase.md', /^AGENT_SKILLS_PLANNER=/, '1 --ws ws-a');
+        assert.ok(exec(sh, fence, 'printf "%s" "$AGENT_SKILLS_PLANNER"').includes('@skills/s-a/SKILL.md'));
+      });
+
+      test(`a different --ws, or none, yields the empty block under ${sh}`, () => {
+        for (const args of ['1 --ws ws-b', '1']) {
+          const fence = buildFenceScript('plan-phase.md', /^AGENT_SKILLS_PLANNER=/, args);
+          assert.strictEqual(exec(sh, fence, 'printf "%s" "$AGENT_SKILLS_PLANNER"'), '', `args: ${args}`);
+        }
+      });
+
+      test(`explicit --ws beats a stale shared pointer to another workstream under ${sh}`, () => {
+        fs.writeFileSync(path.join(proj, '.planning', 'active-workstream'), 'ws-b\n');
+        const fence = buildFenceScript('plan-phase.md', /^AGENT_SKILLS_PLANNER=/, '1 --ws ws-a');
+        assert.ok(exec(sh, fence, 'printf "%s" "$AGENT_SKILLS_PLANNER"').includes('@skills/s-a/SKILL.md'));
+      });
+
+      test(`quick.md init.quick lands in the requested workstream under ${sh}`, () => {
+        const fence = buildFenceScript('quick.md', /^INIT=\$\(gsd_run query init\.quick /, 'do a thing --ws ws-a',
+          'DESCRIPTION="do a thing"; DISCUSS_PARAM=""; RESEARCH_PARAM=""; VALIDATE_PARAM=""; FULL_PARAM=""');
+        const init = JSON.parse(exec(sh, fence, 'case "$INIT" in @file:*) INIT=$(cat "${INIT#@file:}");; esac; printf "%s" "$INIT"'));
+        const quickDir = String(init.quick_dir).split(path.sep).join('/');
+        assert.ok(quickDir.includes('/workstreams/ws-a/'), `quick_dir should be workstream-scoped, got ${quickDir}`);
+      });
+    }
+
+    test('--ws none is forwarded and fails loudly (reserved name), never resolving workstreams/none', (t) => {
+      if (!shells.includes('bash')) return t.skip('no usable bash on this platform');
+      const fence = buildFenceScript('plan-phase.md', /^AGENT_SKILLS_PLANNER=/, '1 --ws none');
+      const r = spawnSync('bash', ['-c', `${fence.script}\nprintf "%s" "$AGENT_SKILLS_PLANNER"`], {
+        cwd: proj,
+        env: { ...process.env, ...TEST_ENV_BASE, GSD_WORKSTREAM: '', ARGUMENTS: fence.argumentsValue, HOME: proj, USERPROFILE: proj },
+        encoding: 'utf-8',
+        timeout: PROBE_TIMEOUT_MS * 4,
+      });
+      assert.strictEqual(r.stdout, '');
+      assert.match(r.stderr, /Workstream name 'none' is reserved/);
+      assert.strictEqual(fs.existsSync(path.join(proj, '.planning', 'workstreams', 'none')), false);
+    });
   });
 });

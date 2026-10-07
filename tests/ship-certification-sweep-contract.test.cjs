@@ -25,6 +25,7 @@
  */
 
 const { describe, test } = require('node:test');
+const { GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
@@ -62,7 +63,7 @@ function runSweep(files) {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, body);
   }
-  const out = execFileSync('bash', ['-c', SWEEP], { cwd: tmp, encoding: 'utf8', timeout: 30000 });
+  const out = execFileSync('bash', ['-c', SWEEP], { cwd: tmp, encoding: 'utf8', timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
   cleanup(tmp);
   return out.split(/\r?\n/).filter(Boolean);
 }

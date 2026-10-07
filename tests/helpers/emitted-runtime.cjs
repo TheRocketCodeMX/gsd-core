@@ -47,6 +47,7 @@ const {
 } = require('./install-shared.cjs');
 const { ACK_TRAILER_HASH, ACK_TRAILER_GROWTH, parseAckTrailers } = require('./emitted-diff.cjs');
 const { runGit, OUTCOME } = require('./process-seam.cjs');
+const { escapeRegex } = require('../../gsd-core/bin/lib/pattern.cjs');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 const FIXTURE_SUBDIR = 'tests/fixtures/golden-install-parity';
@@ -275,10 +276,10 @@ function git(args, { cwd = REPO_ROOT } = {}) {
  * "nothing changed" would make every moved hash unattributable and produce a failure
  * storm that reads exactly like a real finding.
  */
-function resolveChangedPaths(base = 'origin/next') {
+function resolveChangedPaths(base = 'origin/next', { cwd = REPO_ROOT } = {}) {
   let out;
   try {
-    out = git(['diff', '--name-only', `${base}...HEAD`]);
+    out = git(['diff', '--name-only', `${base}...HEAD`], { cwd });
     // FORK:identity BEGIN
     // Uncommitted (staged + worktree) changes are part of "this tree" too: the
     // CURRENT manifests are built from the working tree, so the explanation set
@@ -286,7 +287,7 @@ function resolveChangedPaths(base = 'origin/next') {
     // every merge-staged source change would be invisible and its emitted ripple
     // "unattributable". In CI the tree is clean and this union is a no-op, so
     // the gate's semantics there are byte-identical to upstream's.
-    out += '\n' + git(['diff', '--name-only', 'HEAD']);
+    out += '\n' + git(['diff', '--name-only', 'HEAD'], { cwd });
     // FORK:identity END
   } catch (err) {
     throw new Error(
@@ -336,14 +337,56 @@ function baseRefCandidates(env = process.env) {
  * failure would make the suite permanently red in the gsd-test container, where no
  * base ref can exist by construction.
  */
-function resolveBase(env = process.env) {
+function resolveBase(env = process.env, { cwd = REPO_ROOT } = {}) {
   for (const candidate of baseRefCandidates(env)) {
+    if (candidate.startsWith('-')) continue; // never let an env value reach git as an option
     try {
-      const sha = git(['rev-parse', '--verify', `${candidate}^{commit}`]).trim();
+      const sha = git(['rev-parse', '--verify', `${candidate}^{commit}`], { cwd }).trim();
       if (/^[0-9a-f]{40}$/.test(sha)) return { ref: candidate, sha };
     } catch { /* try the next candidate */ }
   }
   return null;
+}
+
+/**
+ * The commit the differential gate measures FROM: the merge-base of the resolved base
+ * ref and HEAD, alongside the base tip it was derived from.
+ *
+ * The baseline manifests, the changed-path range (`resolveChangedPaths`'s three-dot
+ * diff) and the ack-trailer range (`readAckTrailers`) must all start at ONE commit, or
+ * a change that landed only on the base side after HEAD forked shows up in
+ * baseline-vs-current while no path in `merge-base..HEAD` explains it (#5008). That is
+ * exactly what `release.yml`'s finalize lane hit: it tests `release/X.Y.Z` as is (never
+ * merged onto `next`), `next` gained #4937 between `create` and `finalize`, and a
+ * baseline built at the `next` TIP attributed that merge to the release branch.
+ *
+ * PR lanes merge the tree onto `pull_request.base.sha` first, so there the merge-base
+ * IS the base tip and the cache key (`emitted-baseline-<base.sha>`) still hits.
+ *
+ * Null when no base ref resolves (the caller's explicit-skip path, same as
+ * `resolveBase`). A merge-base failure once a base DOES resolve THROWS: the three-dot
+ * diff needs the same commit, so a silent fallback to the tip would reintroduce the
+ * mismatch this exists to close.
+ *
+ * @returns {{ ref: string, tipSha: string, sha: string } | null} `sha` is the merge-base.
+ */
+function resolveAttributionBase(env = process.env, { cwd = REPO_ROOT } = {}) {
+  const resolved = resolveBase(env, { cwd });
+  if (!resolved) return null;
+  let sha;
+  try {
+    sha = git(['merge-base', resolved.sha, 'HEAD'], { cwd }).trim();
+  } catch (err) {
+    throw new Error(
+      `emitted-attribution: could not resolve the merge-base of "${resolved.ref}" and HEAD: ${err.message}. ` +
+      'This is a hard error on purpose — measuring the baseline at the base tip instead ' +
+      'would attribute base-only merges to this tree.',
+    );
+  }
+  if (!/^[0-9a-f]{40}$/.test(sha)) {
+    throw new Error(`emitted-attribution: merge-base of "${resolved.ref}" and HEAD is not a 40-hex sha: ${JSON.stringify(sha)}`);
+  }
+  return { ref: resolved.ref, tipSha: resolved.sha, sha };
 }
 
 /**
@@ -732,8 +775,14 @@ function currentSizes({ repoRoot = REPO_ROOT } = {}) {
  * clean exit — same "a git failure is a hard error, never an empty result" law as
  * `resolveChangedPaths` above.
  */
-function ackTrailerGit(args, { cwd = REPO_ROOT, timeoutMs = GIT_TIMEOUT_MS } = {}) {
-  const result = runGit([...safeDirArgs(cwd), ...args], { cwd, timeoutMs });
+function ackTrailerGit(args, { cwd = REPO_ROOT, timeoutMs = GIT_TIMEOUT_MS, input } = {}) {
+  // FORK:identity BEGIN
+  // 64 MiB, the same ceiling resolveChangedPaths uses: the raw-%B read spans every
+  // commit in merge-base..HEAD, which a realignment merge makes hundreds of commits long.
+  const spawnOpts = { cwd, timeoutMs, maxBuffer: 64 * 1024 * 1024 };
+  // FORK:identity END
+  if (input !== undefined) spawnOpts.input = input;
+  const result = runGit([...safeDirArgs(cwd), ...args], spawnOpts);
   if (result.outcome === OUTCOME.EXITED && result.exitCode === 0) {
     return result.stdout;
   }
@@ -741,6 +790,111 @@ function ackTrailerGit(args, { cwd = REPO_ROOT, timeoutMs = GIT_TIMEOUT_MS } = {
     `emitted-ack-trailer: \`git ${args.join(' ')}\` failed — outcome=${result.outcome} `
     + `exitCode=${result.exitCode} stderr=${(result.stderr || '').trim()}`,
   );
+}
+
+// #4454 follow-on — SQUASH-MERGE BURIAL. `%(trailers:...)` (used by readAckTrailers
+// below) only recognises a trailer block that is the TRUE TERMINAL block of a commit
+// message: consecutive `Token: value` lines running to the very end, nothing after.
+// GitHub's squash-merge commit body is every constituent commit's subject+body
+// concatenated in order, followed by its OWN appended `---------` separator and
+// `Co-authored-by:` trailers. Two independent commits landing after the one carrying
+// an ack trailer — including GitHub's own appended suffix, which follows EVERY squash
+// commit unconditionally — silently bury it: git's parser (correctly, by its own
+// contract) stops at the first non-conforming line scanning backward, so it never even
+// reaches past `---------` to see the real content underneath, let alone further back
+// to an earlier bullet. Confirmed directly against a real squash commit (gsd-core
+// 78013b3b74): `%(trailers)` there returns ONLY GitHub's own two `Co-authored-by:`
+// lines — not even the last original commit's own trailer survives, only GitHub's
+// appended one.
+//
+// FIX: independently trailer-parse each squash-BULLET sub-chunk of the raw message,
+// using `git interpret-trailers --parse` (the same underlying algorithm as
+// `%(trailers:...)`, but runnable against arbitrary TEXT via stdin rather than only a
+// real commit object) — so each original commit's own terminal trailer block is found
+// on its own terms, independent of what got concatenated after it.
+//
+// SCOPED TIGHTLY to avoid reintroducing the false-positive class `%(trailers:...)` was
+// chosen to prevent (row 32 — prose that merely MENTIONS trailer syntax must stay
+// inert): this sub-chunk pass activates ONLY when the raw body contains GitHub's own
+// distinctive squash suffix marker (a blank line, 9+ hyphens alone on a line, another
+// blank line) — an ordinary, non-squash commit whose body happens to contain markdown
+// bullets never matches this and is completely unaffected. Within an activated commit,
+// each bullet chunk still goes through git's own STRICT per-chunk terminal-block
+// algorithm (via `interpret-trailers`), so a mid-chunk MENTION of trailer syntax
+// (not at that chunk's own true end) is exactly as inert as it always was — the
+// protection is now granular per original commit instead of per whole squashed message,
+// never removed.
+// Review finding (2026-09-08): a bare `.match()` against this pattern returns the
+// FIRST occurrence scanning left-to-right, but GitHub's own appended suffix is always
+// the TRUE TAIL of the message — an earlier bullet's own body legitimately using a
+// markdown horizontal rule (also `---------`-shaped) before the bullet that actually
+// carries the ack would truncate `beforeSuffix` too early, silently excluding the real
+// ack bullet from the split/parse scan below and reintroducing the exact bug this
+// function exists to fix. `findLastGithubSquashSuffixIndex` below finds the LAST match
+// instead, via a global-flag scan (an anchor-and-backtrack trick with a leading
+// `[\s\S]*` was tried and rejected: it forces the match's OWN `.index` to 0, which
+// breaks the `rawBody.slice(0, match.index)` usage pattern this function needs).
+const GITHUB_SQUASH_SUFFIX_RE = /\n\n-{9,}\n\n/g;
+const SQUASH_BULLET_SPLIT_RE = /\n\n(?=\* )/;
+
+/** Index of the START of the LAST GitHub-squash-suffix occurrence in `text`, or -1. */
+function findLastGithubSquashSuffixIndex(text) {
+  GITHUB_SQUASH_SUFFIX_RE.lastIndex = 0;
+  let last = -1;
+  let m;
+  while ((m = GITHUB_SQUASH_SUFFIX_RE.exec(text)) !== null) {
+    last = m.index;
+    // A zero-length match cannot happen for this pattern (it requires literal
+    // characters), but guard against an infinite loop defensively regardless.
+    if (m[0].length === 0) GITHUB_SQUASH_SUFFIX_RE.lastIndex += 1;
+  }
+  return last;
+}
+const ACK_TRAILER_LINE_RE = new RegExp(
+  `^(${escapeRegex(ACK_TRAILER_HASH)}|${escapeRegex(ACK_TRAILER_GROWTH)}):\\s*(.*)$`,
+);
+
+/**
+ * Recover ack trailers buried mid-message by squash-merge concatenation. Returns
+ * `{ hash: string[], growth: string[] }` of any ADDITIONAL values found beyond what the
+ * whole-message `%(trailers:...)` pass in `readAckTrailers` already sees — callers
+ * merge both into the same value lists before the final `parseAckTrailers` call, so
+ * this never needs its own dedup or its own result-shape handling.
+ *
+ * A commit whose body does not contain GitHub's squash suffix signal is not a squash
+ * commit by this heuristic and is returned untouched (empty arrays) — this is the sole
+ * gate against widening false-positive risk to ordinary commits.
+ */
+function extractSquashBuriedTrailers(rawBody, { cwd, timeoutMs }) {
+  const suffixIndex = findLastGithubSquashSuffixIndex(rawBody);
+  if (suffixIndex === -1) return { hash: [], growth: [] };
+  const beforeSuffix = rawBody.slice(0, suffixIndex);
+  const chunks = beforeSuffix.split(SQUASH_BULLET_SPLIT_RE);
+  const hash = [];
+  const growth = [];
+  for (const chunk of chunks) {
+    // A chunk with no blank-line-separated body (a bare `* subject` bullet, or the
+    // pre-first-bullet PR-title preamble) cannot carry a trailer block at all —
+    // skipping it is an optimisation, not a correctness requirement (interpret-trailers
+    // would just return nothing for it).
+    if (!chunk.trim()) continue;
+    let parsed;
+    try {
+      parsed = ackTrailerGit(['interpret-trailers', '--parse'], { cwd, timeoutMs, input: chunk });
+    } catch {
+      // A single malformed/unparseable chunk must not abort the whole scan — the
+      // existing whole-message pass and every OTHER chunk still stand. Fail this
+      // chunk closed (recover nothing from it), never the whole function.
+      continue;
+    }
+    for (const line of parsed.split('\n')) {
+      const m = ACK_TRAILER_LINE_RE.exec(line);
+      if (!m) continue;
+      if (m[1] === ACK_TRAILER_HASH) hash.push(m[2]);
+      else growth.push(m[2]);
+    }
+  }
+  return { hash, growth };
 }
 
 // Record/field/value separators for the `git log --format` trailer extraction below.
@@ -805,13 +959,34 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
   // of splitting into separate entries (silent data loss — the exact failure class
   // `MAX_ACK_TRAILERS` exists to prevent). Fixed by emitting the `%x` escape.
   const ackValueSepHex = `%x${ACK_TRAILER_VALUE_SEP.codePointAt(0).toString(16).padStart(2, '0')}`;
+  // FORK:identity BEGIN
+  // Merge-anchored realignment (docs/FORK-DELTA.md "How to use during realignment"):
+  // a `Merge upstream vX.Y.Z …` commit brings hundreds of upstream commits into
+  // merge-base..HEAD, each carrying upstream's OWN ack trailers — reviewed upstream,
+  // and routinely re-declaring one key with a different reason across separate PRs,
+  // which the ambiguity rule below would reject as a conflict. Those commits are
+  // upstream's history, not this change's: exclude everything reachable from such a
+  // merge's upstream parent (`^<M>^2`). The realignment's own growth is acked by the
+  // fork-side commits, exactly as before. Ordinary ranges contain no such merge, so
+  // this is a no-op outside a realignment.
+  const upstreamExclusions = [];
+  try {
+    const merges = ackTrailerGit(['log', '--merges', `--format=%H%x09%s`, `${mergeBase}..${headRef}`], { cwd, timeoutMs });
+    for (const line of merges.replace(/\r/g, '').split('\n')) {
+      const [sha, subject = ''] = line.split('\t');
+      if (/^[0-9a-f]{40}$/.test(sha) && /^Merge upstream v\d+\.\d+\.\d+\b/.test(subject)) upstreamExclusions.push(`^${sha}^2`);
+    }
+  } catch (err) {
+    throw new Error(`emitted-ack-trailer: could not list merge commits over the range: ${err.message}`);
+  }
+  // FORK:identity END
   const format =
     `${ACK_TRAILER_RECORD_SEP}%(trailers:key=${ACK_TRAILER_HASH},valueonly,separator=${ackValueSepHex})`
     + `${ACK_TRAILER_FIELD_SEP}%(trailers:key=${ACK_TRAILER_GROWTH},valueonly,separator=${ackValueSepHex})`;
 
   let raw;
   try {
-    raw = ackTrailerGit(['log', `${mergeBase}..${headRef}`, `--format=${format}`], { cwd, timeoutMs });
+    raw = ackTrailerGit(['log', `${mergeBase}..${headRef}`, ...upstreamExclusions, `--format=${format}`], { cwd, timeoutMs });
   } catch (err) {
     throw new Error(`emitted-ack-trailer: could not read commit trailers over the range: ${err.message}`);
   }
@@ -829,7 +1004,77 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
     for (const v of growthField.split(ACK_TRAILER_VALUE_SEP)) if (v !== '') growthValues.push(v);
   }
 
+  // #4454 follow-on: recover any ack trailer the whole-message pass above cannot see
+  // because a squash-merge concatenated other commits' bodies after it (see
+  // extractSquashBuriedTrailers's doc comment for the full mechanism and the
+  // false-positive scoping that keeps this from widening risk on ordinary commits).
+  // A SEPARATE `%B` read (rather than reusing the format above) because the raw body
+  // is needed verbatim, including the exact blank-line/hyphen/bullet structure the
+  // squash-suffix and bullet-boundary regexes key on — `%(trailers:...)` already
+  // discards everything but the trailers themselves and cannot supply this.
+  let rawBodies;
+  try {
+    rawBodies = ackTrailerGit(
+      ['log', `${mergeBase}..${headRef}`, ...upstreamExclusions, `--format=${ACK_TRAILER_RECORD_SEP}%B`],
+      { cwd, timeoutMs },
+    );
+  } catch (err) {
+    throw new Error(`emitted-ack-trailer: could not read commit bodies over the range: ${err.message}`);
+  }
+  const bodyRecords = rawBodies.replace(/\r/g, '').split(ACK_TRAILER_RECORD_SEP).slice(1);
+  for (const body of bodyRecords) {
+    const recovered = extractSquashBuriedTrailers(body, { cwd, timeoutMs });
+    hashValues.push(...recovered.hash);
+    growthValues.push(...recovered.growth);
+  }
+
   return parseAckTrailers({ hash: hashValues, growth: growthValues });
+}
+
+/**
+ * Pin ALL THREE "before" inputs of the differential gate to the ONE merge-base sha
+ * `resolveAttributionBase` returned (#5008): the baseline, the changed-path range
+ * (`resolveChangedPaths`), and the ack-trailer range (`readAckTrailers`) must share one
+ * origin, or a change that landed only on the base side after HEAD forked shows up in
+ * baseline-vs-current while nothing in `merge-base..HEAD` explains it — the release-lane
+ * shape #5008 fixes (see `resolveAttributionBase`'s doc comment for the full story).
+ *
+ * Passing the RESOLVED SHA to each of the three, never the ref NAME, closes the other
+ * half of that bug: a ref name re-resolves live inside each call, so a fetch landing
+ * mid-run could move the changed-path range and the ack range to a newer commit than
+ * the one the baseline was built at, even though all three started from the same
+ * `attributionBase`. A sha is inert — nothing can move what it resolves to.
+ *
+ * Every dependency is injected (`resolveBaselineFn`, `buildBaselineFn`, `readJson`) so
+ * this wiring — previously inlined and untested at the real-tree test's call site — is
+ * itself testable without a real installer spawn or a live baseline cache/build.
+ *
+ * @param {{ref: string, tipSha: string, sha: string}} attributionBase `resolveAttributionBase`'s result.
+ * @param {object} [opts]
+ * @param {string} [opts.cwd]
+ * @param {function} opts.resolveBaselineFn required: a `resolveBaseline`-shaped function, `(opts) => result`
+ * @param {function} [opts.buildBaselineFn] defaults to `buildBaselineAtRef`
+ * @param {function} [opts.readJson] passed through to `resolveBaselineFn` as its own `readJson`
+ * @returns {{resolvedBaseline: object, changedPaths: string[], ack: object}} `ack` is `readAckTrailers`'s
+ *   own return shape (`{hash, growth, errors}`).
+ */
+function resolveAttributionInputs(attributionBase, {
+  cwd = REPO_ROOT,
+  resolveBaselineFn,
+  buildBaselineFn = buildBaselineAtRef,
+  readJson,
+} = {}) {
+  if (typeof resolveBaselineFn !== 'function') {
+    throw new Error('resolveAttributionInputs: resolveBaselineFn must be supplied');
+  }
+  const resolvedBaseline = resolveBaselineFn({
+    expectedSha: attributionBase.sha,
+    readJson,
+    buildFallback: () => buildBaselineFn(attributionBase.sha, { cwd }),
+  });
+  const changedPaths = resolveChangedPaths(attributionBase.sha, { cwd });
+  const ack = readAckTrailers({ baseRef: attributionBase.sha, cwd });
+  return { resolvedBaseline, changedPaths, ack };
 }
 
 module.exports = {
@@ -848,6 +1093,8 @@ module.exports = {
   resolveBaseSha,
   baseRefCandidates,
   resolveBase,
+  resolveAttributionBase,
+  resolveAttributionInputs,
   baselineFamilyNamesAtRef,
   baselineManifestsAtRef,
   baselineSizesAtRef,

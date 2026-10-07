@@ -197,7 +197,8 @@ const capabilities = {
         "projectInstructionFile": "GEMINI.md",
         "noPathRewrite": true,
         "hookPathStyle": "raw",
-        "globalDirResolver": "antigravity"
+        "globalDirResolver": "antigravity",
+        "contentRewriteProfile": "attribution-only"
       }
     },
     "reviewer": {
@@ -428,7 +429,8 @@ const capabilities = {
       "extendedHookEvents": [],
       "hostBehaviors": {
         "commandBodyConverter": "convertClaudeToAugmentMarkdown",
-        "mcpCompanion": "settings-json"
+        "mcpCompanion": "settings-json",
+        "contentRewriteProfile": "slash-lookahead-own-derived"
       },
       "hostIntegration": {
         "embeddingMode": "declarative",
@@ -613,7 +615,14 @@ const capabilities = {
         "skillsGlobalOnboarding": true,
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": "global",
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "skipCompactAgents": true,
+        "omitBashRunnerOnWindows": true,
+        "specRootSkillPass": true,
+        "restoreAtRefTildeInAgents": true,
+        "restoreAtRefTildeInSpecTree": true,
+        "skipRuntimeDefaultsStamp": true,
+        "contentRewriteProfile": "slash-tilde-restore"
       }
     },
     "reviewer": {
@@ -736,20 +745,6 @@ const capabilities = {
     "steps": [],
     "contributions": [
       {
-        "point": "execute:wave:pre",
-        "into": "executor",
-        "fragment": {
-          "path": "fragments/execute-wave-pre.md",
-          "inline": "# Claude orchestration — Workflow execution backend (BETA)\n\n> Injected at `execute:wave:pre` `into: executor` only when\n> `claude_orchestration.enabled` is true. Default-off; `onError: skip`.\n\n## When this contribution is active\n\nThe Claude orchestration capability is **default-off and BETA**. It activates only\nwhen ALL of the following hold:\n\n1. `claude_orchestration.enabled` is `true` in `.planning/config.json`, AND\n2. the active runtime is **Claude Code** (the Workflow tool is Claude / Agent\n   SDK-specific), AND\n3. `claude_orchestration.execution_backend` resolves to `workflow` — either\n   explicitly, or via `auto` — **and** the Agent SDK version is\n   `>= claude_orchestration.min_agent_sdk_version` (default `0.3.149`). The SDK\n   floor applies in both `auto` and `workflow` modes (fail-closed: a pre-release\n   or older SDK never activates the preview backend).\n\nDetection is fail-closed: any miss degrades to **inline, manual, one-agent-per-\nmessage dispatch** — exactly today's behaviour. On a non-Claude runtime this\ncontribution is a no-op.\n\n## Why `execute:wave:pre` (not `execute:wave:post`)\n\nThis is a **dispatch-backend selector** — it decides HOW a wave's executor agents\nare spawned. That decision has to be made BEFORE the wave's `Agent()` calls in\n`execute-phase.md` step 3, not after the wave has already finished (#2285). The\ncapability previously registered at `execute:wave:post`, which fires only after\nworktree merge/post-merge tests/tracking updates — by then the wave was already\ndispatched inline, so the contribution was structurally unable to change how\ndispatch happened. This fragment is injected at the point that actually precedes\ndispatch.\n\n## What the orchestrator does when the Workflow backend is active\n\nBefore spawning executor agents for the current wave (execute-phase.md step 3),\nresolve the dispatch backend through the single composed CLI seam:\n\n```bash\ngsd-tools claude-orchestration resolve-wave-dispatch \\\n  --waves \"$WAVE_MANIFEST_PATH\" --run-id \"$PHASE_RUN_ID\" \\\n  --runtime \"$RUNTIME\" \\\n  --phase-dir \"$PHASE_DIR\" --raw\n```\n\n`--agent-sdk-version` is no longer passed here (#2590). The router resolves the\ninstalled Agent SDK version itself; see **Agent SDK version** below. The former\n`${AGENT_SDK_VERSION:+--agent-sdk-version \"$AGENT_SDK_VERSION\"}` line was also\n**shell-dependent**: zsh does not word-split unquoted parameter expansions, so it\ncollapsed to a SINGLE argv element there, `argValue()` never matched, and the run\nfailed into `agent_sdk_version_unknown` — indistinguishable from genuinely\nunknown. Pass `--agent-sdk-version <ver>` explicitly only to pin a version.\n\nThis composes `detectWorkflowBackend` (the gate ladder above) with\n`emitWorkflowScript` (the wave→plan mapping below) in ONE call — the pure\nfunction backing it is `resolveWaveDispatch` in\n`gsd-core/bin/lib/claude-orchestration.cjs`. Response shape:\n`{ backend: 'inline'|'workflow', reason, script?, summary? }`.\n\n### Manifest construction (`$WAVE_MANIFEST_PATH`, `$PHASE_RUN_ID`, `$PHASE_DIR`)\n\nThese are NOT pre-existing execute-phase.md variables — the orchestrator builds\nthem at this step, from data it already has in-context from `discover_and_group_plans`\n(the `PLAN_INDEX` JSON) and step 2.5 (the per-plan `USE_WORKTREES_FOR_PLAN` decision):\n\n1. **`$PHASE_DIR`** — reuse `{phase_dir}` from the `INIT` bundle (already loaded\n   in the `initialize` step). No new value needed.\n\n2. **`$PHASE_RUN_ID`** — a stable identifier for THIS phase-execution attempt, so\n   `resumeFromRunId` can resume an interrupted run without re-dispatching plans\n   the Workflow tool already completed. Construct it deterministically —\n   `execute-{phase_number}-{phase_slug}` — from `INIT`'s `phase_number`/`phase_slug`\n   (both are already validated identifiers used elsewhere in this workflow, so\n   they satisfy `emitWorkflowScript`'s `isScriptableIdentifier` check). Do NOT\n   mint a new random id per wave — the SAME `$PHASE_RUN_ID` is reused for every\n   wave in the phase so the Workflow tool can correctly track cross-wave resume\n   state.\n\n3. **`$WAVE_MANIFEST_PATH`** — a fresh temp file for THIS wave's manifest (one\n   wave = one `waves` array with a single entry, matching the wave-by-wave\n   dispatch loop; do not batch multiple waves into one manifest — waves are\n   dispatched in wave order, not all at once):\n\n   ```bash\n   WAVE_MANIFEST_PATH=$(mktemp \"${TMPDIR:-/tmp}/gsd-wave-dispatch-XXXXXX\") && mv \"$WAVE_MANIFEST_PATH\" \"$WAVE_MANIFEST_PATH.json\" && WAVE_MANIFEST_PATH=\"$WAVE_MANIFEST_PATH.json\"\n   ```\n\n   Then **use the Write tool** (not a bash/jq pipeline — the orchestrator already\n   has every field parsed in-context) to write the manifest JSON to\n   `$WAVE_MANIFEST_PATH`:\n\n   ```json\n   {\n     \"waves\": [\n       {\n         \"id\": \"wave-{N}\",\n         \"plans\": [\n           {\n             \"id\": \"{plan_id}\",\n             \"brief\": \"{the SAME <objective>...<success_criteria> prompt block step 3 builds for this plan's inline Agent() call}\",\n             \"files_modified\": [\"{from PLAN_INDEX.plans[].files_modified for this plan}\"],\n             \"use_worktree\": {true unless step 2.5 set USE_WORKTREES_FOR_PLAN=false for this plan}\n           }\n         ]\n       }\n     ]\n   }\n   ```\n\n   - **`id`** — the plan id from `PLAN_INDEX`, e.g. `\"01-01\"`.\n   - **`brief`** — MUST carry the same task content as step 3's inline `Agent()`\n     prompt (the `<objective>`/`<execution_context>`/`<required_reading>`/\n     `<success_criteria>` block, with `{plan_number}`/`{phase_number}`/\n     `{phase_name}` substituted) — a short summary here would NOT reproduce\n     step 3's behavior and would violate the \"identical artifacts\" contract.\n   - **`files_modified`** — copy verbatim from the plan's `PLAN_INDEX` entry.\n   - **`use_worktree`** — `true` for every plan UNLESS step 2.5's per-plan\n     worktree gate (`execute-phase/steps/per-plan-worktree-gate.md`) set\n     `USE_WORKTREES_FOR_PLAN=false` for that plan (submodule-touching plan, or\n     project-level `USE_WORKTREES=false`) — in which case pass `false` here so\n     `emitWorkflowScript` omits `isolation: \"worktree\"` for that plan (#2772 /\n     #2285 finding 1). **Never** hardcode `true` — that would force worktree\n     isolation on a plan the inline path explicitly keeps out of worktrees.\n\n4. **`$AGENT_SDK_VERSION`** — no longer built here; the router resolves it.\n\n**Agent SDK version:** the orchestrator has no *bash-computable* way to\nintrospect the live Agent SDK version — but the router runs in Node, so it\nresolves the version itself (#2590), in this order:\n\n1. an explicit `--agent-sdk-version <ver>` (pin a version),\n2. `GSD_AGENT_SDK_VERSION`,\n3. the **installed** `@anthropic-ai/claude-agent-sdk` package version, read from\n   its `package.json` on disk by walking `node_modules` up the tree. (Read\n   directly rather than via `require.resolve`: the SDK's `exports` map does not\n   expose `./package.json`, so `require.resolve` throws\n   `ERR_PACKAGE_PATH_NOT_EXPORTED`.)\n\nPreviously nothing computed this at all, so gate 5 returned\n`agent_sdk_version_unknown` on **every** automated run and the Workflow backend\ncould never activate — while `gsd-tools capability state` still reported the\ncapability `active: true`. Fail-closed is preserved: when no version can be\nresolved, gate 5 still declines to `inline`. What changed is that a resolvable\nversion is now actually found, so a genuinely-too-old SDK reports\n`agent_sdk_version_below_floor` — the truthful reason — instead of `unknown`.\n\n**If `backend == \"workflow\"`:** run the emitted `script` via the Workflow tool\nfor THIS wave instead of the per-message `Agent()` loop in step 3. The script\ncomposes the SAME `gsd-executor` agent type the inline path uses, with\nworktree isolation applied PER PLAN from the manifest's `use_worktree` field\n(see `emitWorkflowScript`):\n\n- **waves → one or more sequential `parallel()` barriers** — each wave is a\n  barrier group; when plans within a wave share `files_modified`, they are split\n  into separate sequential stages within that wave's barrier.\n- **plans → `agent(brief, { agentType: 'gsd-executor', isolation: 'worktree' })`**\n  when `use_worktree` is not `false`, or `agent(brief, { agentType: 'gsd-executor' })`\n  (no isolation) when it is — so the produced `SUMMARY.md` and commits are\n  identical to inline dispatch, INCLUDING the inline path's submodule safety\n  gate (#2772 / #2285 finding 1).\n- **`files_modified` overlap → separate sequential stages** — the same overlap\n  rule execute-phase already applies inline (step 1 of the wave loop).\n- **`resumeFromRunId`** — **pass `summary.resumeRunId` as the Workflow tool's\n  `resumeFromRunId` INPUT when you invoke the tool.** It is a tool parameter,\n  not a script function; the script deliberately does not call it (#2590 — doing\n  so threw \"resumeFromRunId is not defined\" and rejected the entire script).\n  Omitting it from the tool invocation silently regresses phase-resume to a\n  no-op: an interrupted phase re-runs completed plans.\n\n### After the run: manifest bridge into the merge chain (#3302)\n\nThe single Workflow tool call replaces step 3's per-plan `Agent()` loop — which also\nmeans step 3's manifest bookkeeping (creation + per-agent recording) does NOT happen on\nthis path. The orchestrator MUST bridge the run's per-agent results into the SAME\nmanifest-scoped merge chain inline dispatch uses, before steps 4–5.8, which then run\nunchanged:\n\n1. **Create the manifest BEFORE invoking the tool** (this is step 3's creation block,\n   which this path skips). When ANY plan in the wave has `use_worktree` not `false`:\n\n   ```bash\n   if [ -z \"${WAVE_WORKTREE_MANIFEST:-}\" ]; then\n     M=$(mktemp \"${TMPDIR:-/tmp}/gsd-worktree-wave-XXXXXX\") && mv \"$M\" \"$M.json\" && WAVE_WORKTREE_MANIFEST=\"$M.json\" || exit 1  # XXXXXX must be path-final on BSD/macOS (#1520)\n     # Persist the dispatch-time orchestrator worktree root so wave-cleanup pins back\n     # to the orchestrator's OWN worktree (#630), exactly as inline dispatch does.\n     ORCH_ROOT=$(git rev-parse --show-toplevel)\n     ORCH_ROOT=\"$ORCH_ROOT\" MANIFEST=\"$WAVE_WORKTREE_MANIFEST\" node -e 'const fs=require(\"fs\");fs.writeFileSync(process.env.MANIFEST,JSON.stringify({orchestrator_root:process.env.ORCH_ROOT||null,worktrees:[]})+\"\\n\")'\n     export WAVE_WORKTREE_MANIFEST\n   fi\n   ```\n\n2. **Invoke the Workflow tool with the emitted script and\n   `resumeFromRunId: summary.resumeRunId`.** The script top-level `return`s one entry\n   per dispatched plan: `{ plan, expects_worktree, metadata }`. `metadata` is that\n   plan's executor `<worktree_metadata>` JSON (`{agent_id, worktree_path, branch,\n   expected_base}` — captured by the executor itself per\n   `agents/gsd-executor.md`), or `null` when the agent's result carried none\n   (interrupted agent, resumed-from-cache plan, or a non-worktree plan).\n\n3. **Record every worktree plan** exactly as inline dispatch does at step 3's\n   \"After each `Agent()` returns\" — one `worktree.record-agent` per returned entry\n   with `expects_worktree: true` and complete metadata:\n\n   ```bash\n   gsd_run query worktree.record-agent --manifest \"$WAVE_WORKTREE_MANIFEST\" \\\n     --agent-id \"<metadata.agent_id>\" --path \"<metadata.worktree_path>\" \\\n     --branch \"<metadata.branch>\" --base \"<metadata.expected_base>\" \\\n     --files \"<plan files_modified, space-separated>\" \\\n     --deletions \"<plan files_deleted, space-separated>\"\n   ```\n\n   `--deletions` (#3003) carries the plan's declared `files_deleted` so a plan that scoped a file\n   removal merges through `cleanup-wave` instead of being blocked. Unlike `--files` it is not\n   advisory: omitting it leaves the deletions guard blocking on any deletion at all, so this\n   dispatch path must pass it or plans declaring a removal fail to merge here while succeeding on\n   the inline path.\n\n   The verb's write-strict validation applies as inline: on a non-zero exit or any\n   missing field, stop and ask for recovery — do not append an under-populated entry.\n\n4. **HALT on uncapturable metadata — never a silently-empty manifest (#3302).**\n   After recording, the manifest must hold one entry per `expects_worktree: true`\n   outcome (`summary.worktreePlans` from `resolve-wave-dispatch` is the expected\n   count). Any shortfall — a `null` `metadata`, a missing/empty field, or a count\n   mismatch — means commits are stranded on their `worktree-wf_*` branches and\n   `worktree.cleanup-wave` would merge nothing while the phase looks green. STOP the\n   phase with the failing plan id and the recovery hint below; do NOT run\n   `worktree.cleanup-wave` and do NOT proceed to step 4.\n\n   **Recovery hint:** the unmerged `worktree-wf_*` branch still holds the work. Recover\n   the missing metadata from the run's per-agent result journal (`journal.jsonl` — one\n   `{\"type\":\"result\",…}` line per agent — in the Workflow run's transcript dir), re-run\n   `worktree.record-agent` by hand, then re-run cleanup. If the journal cannot be\n   recovered either, merge the branch manually after review — never discard it.\n\n5. **Resume (`resumeFromRunId`).** Cached/resumed agents do not re-emit their final\n   messages, so a previously-completed plan can return with `metadata: null`. Recover\n   that plan's metadata from the ORIGINAL run's journal (same hint as above). If it\n   cannot be recovered, fail loudly per rule 4 — a resumed run must never report\n   success over silently-dropped agent work.\n\n6. **Non-worktree plans** (`expects_worktree: false` — `use_worktree: false` in the\n   manifest): they ran without isolation; their commits are already on the main working\n   tree. No record-agent entry, no manifest write.\n\nWith the manifest populated, steps 4–5.8 (wait/completion bookkeeping, step 5.5's\nmanifest-scoped `worktree.cleanup-wave`, post-merge gate, tracking update) run\nUNCHANGED — the Workflow backend replaces HOW agents are spawned and returns their\nmetadata; the merge chain itself is the inline path's own, now with real input.\n\n**If `backend == \"inline\"`** (any gate miss, or `resolve-wave-dispatch` itself\nunavailable/erroring): proceed to step 3's standard per-message `Agent()`\ndispatch — the default, byte-identical-to-today path. `onError: skip` on this\ncontribution means a `resolve-wave-dispatch` command failure is treated exactly\nlike an `inline` result, never as a fatal wave error.\n\n## Fallback contract\n\nDetection is fail-closed end-to-end: capability disabled, non-Claude runtime,\n`execution_backend:\"inline\"`, missing/incapable host descriptor, unknown or\nbelow-floor Agent SDK version, or an `emitWorkflowScript` failure on a malformed\nwave manifest — ANY of these degrades to `backend:\"inline\"` and execute-phase's\nstandard inline dispatch (step 3) runs unmodified. The Workflow backend never\npartially activates; the executor MUST NOT assume parallelism, a shared budget,\nor resume-from-run-id semantics when `backend == \"inline\"`.\n"
-        },
-        "produces": [],
-        "consumes": [
-          "PLAN.md"
-        ],
-        "when": "claude_orchestration.enabled",
-        "onError": "skip"
-      },
-      {
         "point": "plan:post",
         "into": "planner",
         "fragment": {
@@ -855,7 +850,8 @@ const capabilities = {
         "skipSharedHooksInstall": true,
         "localTargetIsProjectRoot": true,
         "clineRulesSurface": true,
-        "localCommandsViaRules": true
+        "localCommandsViaRules": true,
+        "contentRewriteProfile": "slash-bare-own-tilde"
       }
     }
   },
@@ -922,6 +918,7 @@ const capabilities = {
         "consumes": [
           "SUMMARY.md"
         ],
+        "supportsReviewerLanes": true,
         "when": "workflow.code_review",
         "pointFrom": "workflow.code_review_point",
         "onError": "skip"
@@ -935,6 +932,7 @@ const capabilities = {
           "REVIEW.md"
         ],
         "consumes": [],
+        "supportsReviewerLanes": true,
         "when": "workflow.code_review",
         "pointFrom": "workflow.code_review_point",
         "onError": "skip"
@@ -1057,7 +1055,8 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
-        "reportCommandsDir": true
+        "reportCommandsDir": true,
+        "contentRewriteProfile": "slash-bare-own-tilde-bare"
       }
     }
   },
@@ -1224,7 +1223,18 @@ const capabilities = {
         "tomlConfigInstall": true,
         "cleanupSkillSidecars": true,
         "agentTomlFiles": true,
-        "frontmatterDialect": "codex"
+        "frontmatterDialect": "codex",
+        "unsupportedFeatures": [
+          "context-warnings",
+          "phase-lifecycle-display"
+        ],
+        "rewriteClaudeAtIncludes": true,
+        "contentRewriteProfile": "slash-own-tilde",
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".toml",
+          ".md"
+        ]
       }
     },
     "reviewer": {
@@ -1476,7 +1486,8 @@ const capabilities = {
         "reapplyCommand": "/gsd-update --reapply",
         "agentFileExtension": ".agent.md",
         "skipSharedHooksInstall": true,
-        "noPathRewrite": true
+        "noPathRewrite": true,
+        "contentRewriteProfile": "attribution-only"
       }
     }
   },
@@ -1594,7 +1605,8 @@ const capabilities = {
           "stop",
           "subagentStart",
           "subagentStop"
-        ]
+        ],
+        "contentRewriteProfile": "slash-lookahead-own-tilde"
       }
     },
     "reviewer": {
@@ -1654,7 +1666,7 @@ const capabilities = {
     "role": "feature",
     "version": "2.6.0",
     "title": "Drift detection gates",
-    "description": "Drift detection gates for the planning loop. At execute:wave:post: a blocking schema drift gate (detects schema files changed without a database push) and a non-blocking codebase drift gate (detects structural additions not reflected in STRUCTURE.md). At plan:pre: a non-blocking, warn-only codebase drift gate (gated on workflow.plan_drift_precheck) that flags a stale codebase map before planning, so plans are authored against a fresh STRUCTURE.md instead of discovering drift mid-execution.",
+    "description": "Drift detection gates for the planning loop. At execute:wave:post: a blocking schema drift gate (detects schema files changed without a database push) and a non-blocking codebase drift gate (detects structural additions outside the codebase map and modified or deleted files inside it). At plan:pre: a non-blocking, warn-only codebase drift gate (gated on workflow.plan_drift_precheck) that flags a stale codebase map before planning, so plans are authored against a fresh STRUCTURE.md instead of discovering drift mid-execution.",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -1673,7 +1685,7 @@ const capabilities = {
       "workflow.drift_threshold": {
         "type": "number",
         "default": 3,
-        "description": "Minimum number of new structural elements (directories, barrel exports, migrations, routes) before the codebase drift gate triggers a warn or auto-remap action."
+        "description": "Minimum number of drift elements (new directories, barrel exports, migrations, routes, plus modified and deleted files inside mapped directories) before the codebase drift gate triggers a warn or auto-remap action."
       },
       "workflow.drift_action": {
         "type": "enum",
@@ -1687,12 +1699,12 @@ const capabilities = {
       "workflow.schema_drift_gate": {
         "type": "boolean",
         "default": true,
-        "description": "Enable the drift gates at execute:wave:post. When enabled, the schema drift gate blocks verification if schema-relevant files changed during execution but no database push command was executed; the codebase drift gate (non-blocking) warns when structural additions exceed the drift_threshold."
+        "description": "Enable the drift gates at execute:wave:post. When enabled, the schema drift gate blocks verification if schema-relevant files changed during execution but no database push command was executed; the codebase drift gate (non-blocking) warns when drift elements exceed the drift_threshold."
       },
       "workflow.plan_drift_precheck": {
         "type": "boolean",
         "default": true,
-        "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (structural additions exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
+        "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
       },
       "workflow.context_drift_precheck": {
         "type": "boolean",
@@ -1874,69 +1886,6 @@ const capabilities = {
       }
     ]
   },
-  "gemini": {
-    "id": "gemini",
-    "role": "reviewer",
-    "version": "2.6.0",
-    "title": "Gemini CLI",
-    "description": "Google Gemini CLI — cross-AI /gsd:review reviewer lane only; not a GSD install target (no runtime body, no artifacts). Spawned as `gemini -p - -m <model>` with the plan piped on stdin.",
-    "tier": "full",
-    "requires": [],
-    "engines": {
-      "gsd": ">=1.8.0"
-    },
-    "reviewer": {
-      "slug": "gemini",
-      "flags": [
-        "--gemini"
-      ],
-      "transport": "spawn",
-      "probe": {
-        "kind": "command-exists",
-        "binary": "gemini"
-      },
-      "invoke": {
-        "binary": "gemini",
-        "args": [
-          "{{model}}",
-          "-p",
-          "-"
-        ],
-        "promptChannel": "stdin",
-        "outputChannel": "stdout",
-        "modelArg": "-m",
-        "effortChannel": "none"
-      },
-      "timeoutFloorMs": 900000,
-      "timeoutConfigKey": "review.timeouts.gemini",
-      "emptyOutput": "stub-with-stderr",
-      "reviewsSection": "Gemini",
-      "evidenceClass": "source-grounded",
-      "requiresBinaries": [],
-      "promptBudgetKey": "review.max_prompt_tokens_per_reviewer.gemini",
-      "modelConfigKey": "review.models.gemini",
-      "effortConfigKey": null,
-      "defaultEffort": null,
-      "handler": null
-    },
-    "config": {
-      "review.models.gemini": {
-        "type": "string",
-        "default": "",
-        "description": "Model passed to the Gemini reviewer lane."
-      },
-      "review.max_prompt_tokens_per_reviewer.gemini": {
-        "type": "number",
-        "default": -1,
-        "description": "Prompt-token budget for the Gemini reviewer lane. Unset is -1, a sentinel: 0 is a legitimate value meaning \"do not trim this lane\", so it cannot double as \"not configured\"."
-      },
-      "review.timeouts.gemini": {
-        "type": "number",
-        "default": -1,
-        "description": "Outer wall-clock timeout override (seconds) for the Gemini reviewer lane. Unset is -1, a sentinel: 0 or a negative number is also treated as unset (a timeout has no legitimate zero/negative value), so no second sentinel is needed. Falls back to the lane's built-in timeoutFloorMs when unset."
-      }
-    }
-  },
   "graphify": {
     "id": "graphify",
     "role": "feature",
@@ -2104,7 +2053,11 @@ const capabilities = {
         "reapplyCommand": "gsd-update --reapply (mention the skill name)",
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": true,
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "legacyFlatSkillsCleanup": true,
+        "bareStemSkillsCleanup": true,
+        "categoryContainerCleanup": true,
+        "contentRewriteProfile": "branded-lookahead-own-derived"
       },
       "hostIntegration": {
         "embeddingMode": "imperative",
@@ -2306,7 +2259,11 @@ const capabilities = {
           "file": "gsd-core.js",
           "source": ".kilo/plugins/gsd-core.js"
         },
-        "skipUpdateBannerCommand": true
+        "skipUpdateBannerCommand": true,
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".md"
+        ]
       }
     }
   },
@@ -2410,7 +2367,9 @@ const capabilities = {
         "agentManifestStyle": "kimi-nested",
         "doneBannerStyle": "kimi-agent-file",
         "skipSharedHooksInstall": true,
-        "noPathRewrite": true
+        "noPathRewrite": true,
+        "requiresSubagentPair": true,
+        "contentRewriteProfile": "slash-bare"
       }
     }
   },
@@ -2524,7 +2483,8 @@ const capabilities = {
         "agentManifestStyle": "none",
         "doneBannerStyle": "kimi-code",
         "skipSharedHooksInstall": true,
-        "namedSubagentsSupported": false
+        "namedSubagentsSupported": false,
+        "reclaimsKimiLegacyHooksRoot": true
       }
     },
     "reviewer": {
@@ -2964,7 +2924,7 @@ const capabilities = {
         "into": "verifier",
         "fragment": {
           "path": "fragments/capture-problems.md",
-          "inline": "<!--\n  MemPalace capability — contribution fragment.\n  Rendered into the execute:wave:post verifier prompt when `mempalace.capture_artifacts` is true.\n  Contributes DATA (capture instructions), not control flow. onError: skip — never fails a wave.\n-->\n### Capture problems → fixes (MemPalace)\n\n**Gate first.** Read `.planning/config.json`. If `mempalace.enabled` is not `true`, or `mempalace.capture_artifacts` is `false`, **skip this entire section** and let the wave complete unchanged. (This contribution is only injected when the capability is enabled; the `capture_artifacts` check lets you turn capture off without disabling the rest of the capability.)\n\nOtherwise — after verifying this wave, persist any *confirmed* problem→fix pairs into the palace so they are recalled in future phases. This is best-effort; if MemPalace is unreachable, skip silently — capture never fails a wave.\n\nFor each confirmed bug/issue resolved in this wave:\n\n1. **Resolve the wing** (`mempalace.wing`, else `project_code`, else project dir) and target `room: problems`.\n2. **Dedupe first.** Call `mempalace_check_duplicate` (interactive) before filing so re-runs don't create duplicate drawers.\n3. **File the drawer verbatim.** Store the problem statement and its fix as a drawer in `room: problems` — interactive: `mempalace_add_drawer`; headless: stage the artifact under the `problems/` folder and run `mempalace mine` (no `--room` flag — see [CLI reference](https://mempalaceofficial.com/reference/cli.html); room assignment is via `detect_room()` folder-path match per the [mining guide](https://mempalaceofficial.com/guide/mining.html); use the same staging pattern documented in `gsd-mempalace-capture` Step 3). Include provenance (`source_file`, phase id).\n4. **Mirror the KG fact** when `mempalace.mirror_kg` is on: add `(<bug>, fixed_by, <fix>)` with `valid_from` = the phase date via `mempalace_kg_add`.\n5. **Mode awareness** (`mempalace.memory_mode`). Under `augment` the fact is an *additive* mirror alongside `.planning/graphs/`. Under `kg_backend`/`replace` the palace is the *authoritative* store for the fact; GSD still writes `.planning/graphs/` through its normal graphify, so an unreachable palace never loses it.\n\nCaptures are idempotent: deterministic drawer IDs + `check_duplicate` mean re-running the wave re-files the same content without duplication. On any error, skip and let the wave complete normally.\n"
+          "inline": "<!--\n  MemPalace capability — contribution fragment.\n  Rendered into the execute:wave:post verifier prompt when `mempalace.capture_artifacts` is true.\n  Contributes DATA (capture instructions), not control flow. onError: skip — never fails a wave.\n-->\n### Capture problems → fixes (MemPalace)\n\n**Gate first.** Read `.planning/config.json`. If `mempalace.enabled` is not `true`, or `mempalace.capture_artifacts` is `false`, **skip this entire section** and let the wave complete unchanged. (This contribution is only injected when the capability is enabled; the `capture_artifacts` check lets you turn capture off without disabling the rest of the capability.)\n\nOtherwise — after verifying this wave, persist any *confirmed* problem→fix pairs into the palace so they are recalled in future phases. This is best-effort; if MemPalace is unreachable, skip silently — capture never fails a wave.\n\nFor each confirmed bug/issue resolved in this wave:\n\n1. **Resolve the wing** (`mempalace.wing`, else `project_code`, else project dir) and target `room: problems`.\n2. **Dedupe first.** Call `mempalace_check_duplicate` (interactive) before filing so re-runs don't create duplicate drawers.\n3. **File the drawer verbatim.** Store the problem statement and its fix as a drawer in `room: problems` — interactive: `mempalace_add_drawer`; headless: stage the artifact under the `problems/` folder and run `mempalace mine --daemon --background` (no `--room` flag; the background queue defers the write when another writer holds the palace lock, #4700 — see [CLI reference](https://mempalaceofficial.com/reference/cli.html); room assignment is via `detect_room()` folder-path match per the [mining guide](https://mempalaceofficial.com/guide/mining.html); use the same staging pattern documented in `gsd-mempalace-capture` Step 3). Include provenance (`source_file`, phase id).\n4. **Mirror the KG fact** when `mempalace.mirror_kg` is on: add `(<bug>, fixed_by, <fix>)` with `valid_from` = the phase date via `mempalace_kg_add`.\n5. **Mode awareness** (`mempalace.memory_mode`). Under `augment` the fact is an *additive* mirror alongside `.planning/graphs/`. Under `kg_backend`/`replace` the palace is the *authoritative* store for the fact; GSD still writes `.planning/graphs/` through its normal graphify, so an unreachable palace never loses it.\n\nCaptures are idempotent: deterministic drawer IDs + `check_duplicate` mean re-running the wave re-files the same content without duplication. On any error, skip and let the wave complete normally.\n"
         },
         "produces": [],
         "consumes": [],
@@ -3222,7 +3182,11 @@ const capabilities = {
         "skipHomePrefixSubstitution": true,
         "skipSettingsUi": true,
         "skipUpdateBannerCommand": true,
-        "skipCodexSkillsManifest": true
+        "opencodePathPrefix": true,
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".md"
+        ]
       }
     },
     "reviewer": {
@@ -3593,7 +3557,8 @@ const capabilities = {
         "legacyCommandsGsdCleanup": true,
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": true,
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "contentRewriteProfile": "branded-lookahead-own-derived"
       }
     },
     "reviewer": {
@@ -4100,7 +4065,8 @@ const capabilities = {
       "hostBehaviors": {
         "skipSharedHooksInstall": true,
         "soloStageMetadata": "workflow",
-        "projectInstructionFile": ".trae/rules/rules.md"
+        "projectInstructionFile": ".trae/rules/rules.md",
+        "contentRewriteProfile": "slash-bare-own-derived"
       }
     }
   },
@@ -4145,6 +4111,11 @@ const capabilities = {
         "type": "boolean",
         "default": true,
         "description": "Block execution on unmet UI-SPEC contracts."
+      },
+      "workflow.ui_interaction_capture": {
+        "type": "boolean",
+        "default": false,
+        "description": "Default-off. Let gsd-ui-auditor add post-interaction captures (hover, focus, open menus, filled forms) through the chrome-devtools CLI, driven from Bash — no MCP server and no tools: change (#4223). Requires an installed Chrome; when off, or when none resolves, the auditor's Playwright-only static capture is unchanged."
       }
     },
     "steps": [
@@ -4345,7 +4316,8 @@ const capabilities = {
         "skipSharedHooksInstall": true,
         "legacyDevinSkillsCleanup": true,
         "installsCommandBodiesForWorkflowDelegation": true,
-        "verificationStyle": "windsurf-workflows"
+        "verificationStyle": "windsurf-workflows",
+        "contentRewriteProfile": "slash-lookahead-nested-own-devin"
       }
     }
   },
@@ -4457,7 +4429,8 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
-        "skipSharedHooksInstall": true
+        "skipSharedHooksInstall": true,
+        "contentRewriteProfile": "slash-tilde-restore"
       }
     }
   }
@@ -4837,23 +4810,7 @@ const byLoopPoint = {
   },
   "execute:wave:pre": {
     "steps": [],
-    "contributions": [
-      {
-        "capId": "claude-orchestration",
-        "point": "execute:wave:pre",
-        "into": "executor",
-        "fragment": {
-          "path": "fragments/execute-wave-pre.md",
-          "inline": "# Claude orchestration — Workflow execution backend (BETA)\n\n> Injected at `execute:wave:pre` `into: executor` only when\n> `claude_orchestration.enabled` is true. Default-off; `onError: skip`.\n\n## When this contribution is active\n\nThe Claude orchestration capability is **default-off and BETA**. It activates only\nwhen ALL of the following hold:\n\n1. `claude_orchestration.enabled` is `true` in `.planning/config.json`, AND\n2. the active runtime is **Claude Code** (the Workflow tool is Claude / Agent\n   SDK-specific), AND\n3. `claude_orchestration.execution_backend` resolves to `workflow` — either\n   explicitly, or via `auto` — **and** the Agent SDK version is\n   `>= claude_orchestration.min_agent_sdk_version` (default `0.3.149`). The SDK\n   floor applies in both `auto` and `workflow` modes (fail-closed: a pre-release\n   or older SDK never activates the preview backend).\n\nDetection is fail-closed: any miss degrades to **inline, manual, one-agent-per-\nmessage dispatch** — exactly today's behaviour. On a non-Claude runtime this\ncontribution is a no-op.\n\n## Why `execute:wave:pre` (not `execute:wave:post`)\n\nThis is a **dispatch-backend selector** — it decides HOW a wave's executor agents\nare spawned. That decision has to be made BEFORE the wave's `Agent()` calls in\n`execute-phase.md` step 3, not after the wave has already finished (#2285). The\ncapability previously registered at `execute:wave:post`, which fires only after\nworktree merge/post-merge tests/tracking updates — by then the wave was already\ndispatched inline, so the contribution was structurally unable to change how\ndispatch happened. This fragment is injected at the point that actually precedes\ndispatch.\n\n## What the orchestrator does when the Workflow backend is active\n\nBefore spawning executor agents for the current wave (execute-phase.md step 3),\nresolve the dispatch backend through the single composed CLI seam:\n\n```bash\ngsd-tools claude-orchestration resolve-wave-dispatch \\\n  --waves \"$WAVE_MANIFEST_PATH\" --run-id \"$PHASE_RUN_ID\" \\\n  --runtime \"$RUNTIME\" \\\n  --phase-dir \"$PHASE_DIR\" --raw\n```\n\n`--agent-sdk-version` is no longer passed here (#2590). The router resolves the\ninstalled Agent SDK version itself; see **Agent SDK version** below. The former\n`${AGENT_SDK_VERSION:+--agent-sdk-version \"$AGENT_SDK_VERSION\"}` line was also\n**shell-dependent**: zsh does not word-split unquoted parameter expansions, so it\ncollapsed to a SINGLE argv element there, `argValue()` never matched, and the run\nfailed into `agent_sdk_version_unknown` — indistinguishable from genuinely\nunknown. Pass `--agent-sdk-version <ver>` explicitly only to pin a version.\n\nThis composes `detectWorkflowBackend` (the gate ladder above) with\n`emitWorkflowScript` (the wave→plan mapping below) in ONE call — the pure\nfunction backing it is `resolveWaveDispatch` in\n`gsd-core/bin/lib/claude-orchestration.cjs`. Response shape:\n`{ backend: 'inline'|'workflow', reason, script?, summary? }`.\n\n### Manifest construction (`$WAVE_MANIFEST_PATH`, `$PHASE_RUN_ID`, `$PHASE_DIR`)\n\nThese are NOT pre-existing execute-phase.md variables — the orchestrator builds\nthem at this step, from data it already has in-context from `discover_and_group_plans`\n(the `PLAN_INDEX` JSON) and step 2.5 (the per-plan `USE_WORKTREES_FOR_PLAN` decision):\n\n1. **`$PHASE_DIR`** — reuse `{phase_dir}` from the `INIT` bundle (already loaded\n   in the `initialize` step). No new value needed.\n\n2. **`$PHASE_RUN_ID`** — a stable identifier for THIS phase-execution attempt, so\n   `resumeFromRunId` can resume an interrupted run without re-dispatching plans\n   the Workflow tool already completed. Construct it deterministically —\n   `execute-{phase_number}-{phase_slug}` — from `INIT`'s `phase_number`/`phase_slug`\n   (both are already validated identifiers used elsewhere in this workflow, so\n   they satisfy `emitWorkflowScript`'s `isScriptableIdentifier` check). Do NOT\n   mint a new random id per wave — the SAME `$PHASE_RUN_ID` is reused for every\n   wave in the phase so the Workflow tool can correctly track cross-wave resume\n   state.\n\n3. **`$WAVE_MANIFEST_PATH`** — a fresh temp file for THIS wave's manifest (one\n   wave = one `waves` array with a single entry, matching the wave-by-wave\n   dispatch loop; do not batch multiple waves into one manifest — waves are\n   dispatched in wave order, not all at once):\n\n   ```bash\n   WAVE_MANIFEST_PATH=$(mktemp \"${TMPDIR:-/tmp}/gsd-wave-dispatch-XXXXXX\") && mv \"$WAVE_MANIFEST_PATH\" \"$WAVE_MANIFEST_PATH.json\" && WAVE_MANIFEST_PATH=\"$WAVE_MANIFEST_PATH.json\"\n   ```\n\n   Then **use the Write tool** (not a bash/jq pipeline — the orchestrator already\n   has every field parsed in-context) to write the manifest JSON to\n   `$WAVE_MANIFEST_PATH`:\n\n   ```json\n   {\n     \"waves\": [\n       {\n         \"id\": \"wave-{N}\",\n         \"plans\": [\n           {\n             \"id\": \"{plan_id}\",\n             \"brief\": \"{the SAME <objective>...<success_criteria> prompt block step 3 builds for this plan's inline Agent() call}\",\n             \"files_modified\": [\"{from PLAN_INDEX.plans[].files_modified for this plan}\"],\n             \"use_worktree\": {true unless step 2.5 set USE_WORKTREES_FOR_PLAN=false for this plan}\n           }\n         ]\n       }\n     ]\n   }\n   ```\n\n   - **`id`** — the plan id from `PLAN_INDEX`, e.g. `\"01-01\"`.\n   - **`brief`** — MUST carry the same task content as step 3's inline `Agent()`\n     prompt (the `<objective>`/`<execution_context>`/`<required_reading>`/\n     `<success_criteria>` block, with `{plan_number}`/`{phase_number}`/\n     `{phase_name}` substituted) — a short summary here would NOT reproduce\n     step 3's behavior and would violate the \"identical artifacts\" contract.\n   - **`files_modified`** — copy verbatim from the plan's `PLAN_INDEX` entry.\n   - **`use_worktree`** — `true` for every plan UNLESS step 2.5's per-plan\n     worktree gate (`execute-phase/steps/per-plan-worktree-gate.md`) set\n     `USE_WORKTREES_FOR_PLAN=false` for that plan (submodule-touching plan, or\n     project-level `USE_WORKTREES=false`) — in which case pass `false` here so\n     `emitWorkflowScript` omits `isolation: \"worktree\"` for that plan (#2772 /\n     #2285 finding 1). **Never** hardcode `true` — that would force worktree\n     isolation on a plan the inline path explicitly keeps out of worktrees.\n\n4. **`$AGENT_SDK_VERSION`** — no longer built here; the router resolves it.\n\n**Agent SDK version:** the orchestrator has no *bash-computable* way to\nintrospect the live Agent SDK version — but the router runs in Node, so it\nresolves the version itself (#2590), in this order:\n\n1. an explicit `--agent-sdk-version <ver>` (pin a version),\n2. `GSD_AGENT_SDK_VERSION`,\n3. the **installed** `@anthropic-ai/claude-agent-sdk` package version, read from\n   its `package.json` on disk by walking `node_modules` up the tree. (Read\n   directly rather than via `require.resolve`: the SDK's `exports` map does not\n   expose `./package.json`, so `require.resolve` throws\n   `ERR_PACKAGE_PATH_NOT_EXPORTED`.)\n\nPreviously nothing computed this at all, so gate 5 returned\n`agent_sdk_version_unknown` on **every** automated run and the Workflow backend\ncould never activate — while `gsd-tools capability state` still reported the\ncapability `active: true`. Fail-closed is preserved: when no version can be\nresolved, gate 5 still declines to `inline`. What changed is that a resolvable\nversion is now actually found, so a genuinely-too-old SDK reports\n`agent_sdk_version_below_floor` — the truthful reason — instead of `unknown`.\n\n**If `backend == \"workflow\"`:** run the emitted `script` via the Workflow tool\nfor THIS wave instead of the per-message `Agent()` loop in step 3. The script\ncomposes the SAME `gsd-executor` agent type the inline path uses, with\nworktree isolation applied PER PLAN from the manifest's `use_worktree` field\n(see `emitWorkflowScript`):\n\n- **waves → one or more sequential `parallel()` barriers** — each wave is a\n  barrier group; when plans within a wave share `files_modified`, they are split\n  into separate sequential stages within that wave's barrier.\n- **plans → `agent(brief, { agentType: 'gsd-executor', isolation: 'worktree' })`**\n  when `use_worktree` is not `false`, or `agent(brief, { agentType: 'gsd-executor' })`\n  (no isolation) when it is — so the produced `SUMMARY.md` and commits are\n  identical to inline dispatch, INCLUDING the inline path's submodule safety\n  gate (#2772 / #2285 finding 1).\n- **`files_modified` overlap → separate sequential stages** — the same overlap\n  rule execute-phase already applies inline (step 1 of the wave loop).\n- **`resumeFromRunId`** — **pass `summary.resumeRunId` as the Workflow tool's\n  `resumeFromRunId` INPUT when you invoke the tool.** It is a tool parameter,\n  not a script function; the script deliberately does not call it (#2590 — doing\n  so threw \"resumeFromRunId is not defined\" and rejected the entire script).\n  Omitting it from the tool invocation silently regresses phase-resume to a\n  no-op: an interrupted phase re-runs completed plans.\n\n### After the run: manifest bridge into the merge chain (#3302)\n\nThe single Workflow tool call replaces step 3's per-plan `Agent()` loop — which also\nmeans step 3's manifest bookkeeping (creation + per-agent recording) does NOT happen on\nthis path. The orchestrator MUST bridge the run's per-agent results into the SAME\nmanifest-scoped merge chain inline dispatch uses, before steps 4–5.8, which then run\nunchanged:\n\n1. **Create the manifest BEFORE invoking the tool** (this is step 3's creation block,\n   which this path skips). When ANY plan in the wave has `use_worktree` not `false`:\n\n   ```bash\n   if [ -z \"${WAVE_WORKTREE_MANIFEST:-}\" ]; then\n     M=$(mktemp \"${TMPDIR:-/tmp}/gsd-worktree-wave-XXXXXX\") && mv \"$M\" \"$M.json\" && WAVE_WORKTREE_MANIFEST=\"$M.json\" || exit 1  # XXXXXX must be path-final on BSD/macOS (#1520)\n     # Persist the dispatch-time orchestrator worktree root so wave-cleanup pins back\n     # to the orchestrator's OWN worktree (#630), exactly as inline dispatch does.\n     ORCH_ROOT=$(git rev-parse --show-toplevel)\n     ORCH_ROOT=\"$ORCH_ROOT\" MANIFEST=\"$WAVE_WORKTREE_MANIFEST\" node -e 'const fs=require(\"fs\");fs.writeFileSync(process.env.MANIFEST,JSON.stringify({orchestrator_root:process.env.ORCH_ROOT||null,worktrees:[]})+\"\\n\")'\n     export WAVE_WORKTREE_MANIFEST\n   fi\n   ```\n\n2. **Invoke the Workflow tool with the emitted script and\n   `resumeFromRunId: summary.resumeRunId`.** The script top-level `return`s one entry\n   per dispatched plan: `{ plan, expects_worktree, metadata }`. `metadata` is that\n   plan's executor `<worktree_metadata>` JSON (`{agent_id, worktree_path, branch,\n   expected_base}` — captured by the executor itself per\n   `agents/gsd-executor.md`), or `null` when the agent's result carried none\n   (interrupted agent, resumed-from-cache plan, or a non-worktree plan).\n\n3. **Record every worktree plan** exactly as inline dispatch does at step 3's\n   \"After each `Agent()` returns\" — one `worktree.record-agent` per returned entry\n   with `expects_worktree: true` and complete metadata:\n\n   ```bash\n   gsd_run query worktree.record-agent --manifest \"$WAVE_WORKTREE_MANIFEST\" \\\n     --agent-id \"<metadata.agent_id>\" --path \"<metadata.worktree_path>\" \\\n     --branch \"<metadata.branch>\" --base \"<metadata.expected_base>\" \\\n     --files \"<plan files_modified, space-separated>\" \\\n     --deletions \"<plan files_deleted, space-separated>\"\n   ```\n\n   `--deletions` (#3003) carries the plan's declared `files_deleted` so a plan that scoped a file\n   removal merges through `cleanup-wave` instead of being blocked. Unlike `--files` it is not\n   advisory: omitting it leaves the deletions guard blocking on any deletion at all, so this\n   dispatch path must pass it or plans declaring a removal fail to merge here while succeeding on\n   the inline path.\n\n   The verb's write-strict validation applies as inline: on a non-zero exit or any\n   missing field, stop and ask for recovery — do not append an under-populated entry.\n\n4. **HALT on uncapturable metadata — never a silently-empty manifest (#3302).**\n   After recording, the manifest must hold one entry per `expects_worktree: true`\n   outcome (`summary.worktreePlans` from `resolve-wave-dispatch` is the expected\n   count). Any shortfall — a `null` `metadata`, a missing/empty field, or a count\n   mismatch — means commits are stranded on their `worktree-wf_*` branches and\n   `worktree.cleanup-wave` would merge nothing while the phase looks green. STOP the\n   phase with the failing plan id and the recovery hint below; do NOT run\n   `worktree.cleanup-wave` and do NOT proceed to step 4.\n\n   **Recovery hint:** the unmerged `worktree-wf_*` branch still holds the work. Recover\n   the missing metadata from the run's per-agent result journal (`journal.jsonl` — one\n   `{\"type\":\"result\",…}` line per agent — in the Workflow run's transcript dir), re-run\n   `worktree.record-agent` by hand, then re-run cleanup. If the journal cannot be\n   recovered either, merge the branch manually after review — never discard it.\n\n5. **Resume (`resumeFromRunId`).** Cached/resumed agents do not re-emit their final\n   messages, so a previously-completed plan can return with `metadata: null`. Recover\n   that plan's metadata from the ORIGINAL run's journal (same hint as above). If it\n   cannot be recovered, fail loudly per rule 4 — a resumed run must never report\n   success over silently-dropped agent work.\n\n6. **Non-worktree plans** (`expects_worktree: false` — `use_worktree: false` in the\n   manifest): they ran without isolation; their commits are already on the main working\n   tree. No record-agent entry, no manifest write.\n\nWith the manifest populated, steps 4–5.8 (wait/completion bookkeeping, step 5.5's\nmanifest-scoped `worktree.cleanup-wave`, post-merge gate, tracking update) run\nUNCHANGED — the Workflow backend replaces HOW agents are spawned and returns their\nmetadata; the merge chain itself is the inline path's own, now with real input.\n\n**If `backend == \"inline\"`** (any gate miss, or `resolve-wave-dispatch` itself\nunavailable/erroring): proceed to step 3's standard per-message `Agent()`\ndispatch — the default, byte-identical-to-today path. `onError: skip` on this\ncontribution means a `resolve-wave-dispatch` command failure is treated exactly\nlike an `inline` result, never as a fatal wave error.\n\n## Fallback contract\n\nDetection is fail-closed end-to-end: capability disabled, non-Claude runtime,\n`execution_backend:\"inline\"`, missing/incapable host descriptor, unknown or\nbelow-floor Agent SDK version, or an `emitWorkflowScript` failure on a malformed\nwave manifest — ANY of these degrades to `backend:\"inline\"` and execute-phase's\nstandard inline dispatch (step 3) runs unmodified. The Workflow backend never\npartially activates; the executor MUST NOT assume parallelism, a shared budget,\nor resume-from-run-id semantics when `backend == \"inline\"`.\n"
-        },
-        "produces": [],
-        "consumes": [
-          "PLAN.md"
-        ],
-        "when": "claude_orchestration.enabled",
-        "onError": "skip"
-      }
-    ],
+    "contributions": [],
     "gates": []
   },
   "execute:wave:post": {
@@ -4868,6 +4825,7 @@ const byLoopPoint = {
           "REVIEW.md"
         ],
         "consumes": [],
+        "supportsReviewerLanes": true,
         "when": "workflow.code_review",
         "pointFrom": "workflow.code_review_point",
         "onError": "skip"
@@ -4916,7 +4874,7 @@ const byLoopPoint = {
         "into": "verifier",
         "fragment": {
           "path": "fragments/capture-problems.md",
-          "inline": "<!--\n  MemPalace capability — contribution fragment.\n  Rendered into the execute:wave:post verifier prompt when `mempalace.capture_artifacts` is true.\n  Contributes DATA (capture instructions), not control flow. onError: skip — never fails a wave.\n-->\n### Capture problems → fixes (MemPalace)\n\n**Gate first.** Read `.planning/config.json`. If `mempalace.enabled` is not `true`, or `mempalace.capture_artifacts` is `false`, **skip this entire section** and let the wave complete unchanged. (This contribution is only injected when the capability is enabled; the `capture_artifacts` check lets you turn capture off without disabling the rest of the capability.)\n\nOtherwise — after verifying this wave, persist any *confirmed* problem→fix pairs into the palace so they are recalled in future phases. This is best-effort; if MemPalace is unreachable, skip silently — capture never fails a wave.\n\nFor each confirmed bug/issue resolved in this wave:\n\n1. **Resolve the wing** (`mempalace.wing`, else `project_code`, else project dir) and target `room: problems`.\n2. **Dedupe first.** Call `mempalace_check_duplicate` (interactive) before filing so re-runs don't create duplicate drawers.\n3. **File the drawer verbatim.** Store the problem statement and its fix as a drawer in `room: problems` — interactive: `mempalace_add_drawer`; headless: stage the artifact under the `problems/` folder and run `mempalace mine` (no `--room` flag — see [CLI reference](https://mempalaceofficial.com/reference/cli.html); room assignment is via `detect_room()` folder-path match per the [mining guide](https://mempalaceofficial.com/guide/mining.html); use the same staging pattern documented in `gsd-mempalace-capture` Step 3). Include provenance (`source_file`, phase id).\n4. **Mirror the KG fact** when `mempalace.mirror_kg` is on: add `(<bug>, fixed_by, <fix>)` with `valid_from` = the phase date via `mempalace_kg_add`.\n5. **Mode awareness** (`mempalace.memory_mode`). Under `augment` the fact is an *additive* mirror alongside `.planning/graphs/`. Under `kg_backend`/`replace` the palace is the *authoritative* store for the fact; GSD still writes `.planning/graphs/` through its normal graphify, so an unreachable palace never loses it.\n\nCaptures are idempotent: deterministic drawer IDs + `check_duplicate` mean re-running the wave re-files the same content without duplication. On any error, skip and let the wave complete normally.\n"
+          "inline": "<!--\n  MemPalace capability — contribution fragment.\n  Rendered into the execute:wave:post verifier prompt when `mempalace.capture_artifacts` is true.\n  Contributes DATA (capture instructions), not control flow. onError: skip — never fails a wave.\n-->\n### Capture problems → fixes (MemPalace)\n\n**Gate first.** Read `.planning/config.json`. If `mempalace.enabled` is not `true`, or `mempalace.capture_artifacts` is `false`, **skip this entire section** and let the wave complete unchanged. (This contribution is only injected when the capability is enabled; the `capture_artifacts` check lets you turn capture off without disabling the rest of the capability.)\n\nOtherwise — after verifying this wave, persist any *confirmed* problem→fix pairs into the palace so they are recalled in future phases. This is best-effort; if MemPalace is unreachable, skip silently — capture never fails a wave.\n\nFor each confirmed bug/issue resolved in this wave:\n\n1. **Resolve the wing** (`mempalace.wing`, else `project_code`, else project dir) and target `room: problems`.\n2. **Dedupe first.** Call `mempalace_check_duplicate` (interactive) before filing so re-runs don't create duplicate drawers.\n3. **File the drawer verbatim.** Store the problem statement and its fix as a drawer in `room: problems` — interactive: `mempalace_add_drawer`; headless: stage the artifact under the `problems/` folder and run `mempalace mine --daemon --background` (no `--room` flag; the background queue defers the write when another writer holds the palace lock, #4700 — see [CLI reference](https://mempalaceofficial.com/reference/cli.html); room assignment is via `detect_room()` folder-path match per the [mining guide](https://mempalaceofficial.com/guide/mining.html); use the same staging pattern documented in `gsd-mempalace-capture` Step 3). Include provenance (`source_file`, phase id).\n4. **Mirror the KG fact** when `mempalace.mirror_kg` is on: add `(<bug>, fixed_by, <fix>)` with `valid_from` = the phase date via `mempalace_kg_add`.\n5. **Mode awareness** (`mempalace.memory_mode`). Under `augment` the fact is an *additive* mirror alongside `.planning/graphs/`. Under `kg_backend`/`replace` the palace is the *authoritative* store for the fact; GSD still writes `.planning/graphs/` through its normal graphify, so an unreachable palace never loses it.\n\nCaptures are idempotent: deterministic drawer IDs + `check_duplicate` mean re-running the wave re-files the same content without duplication. On any error, skip and let the wave complete normally.\n"
         },
         "produces": [],
         "consumes": [],
@@ -4971,6 +4929,7 @@ const byLoopPoint = {
         "consumes": [
           "SUMMARY.md"
         ],
+        "supportsReviewerLanes": true,
         "when": "workflow.code_review",
         "pointFrom": "workflow.code_review_point",
         "onError": "skip"
@@ -5184,9 +5143,6 @@ const configKeys = {
   "external_job.submit_timeout_ms": "external-job",
   "external_job.poll_timeout_ms": "external-job",
   "workflow.post_planning_gaps": "gap-analysis",
-  "review.models.gemini": "gemini",
-  "review.max_prompt_tokens_per_reviewer.gemini": "gemini",
-  "review.timeouts.gemini": "gemini",
   "graphify.enabled": "graphify",
   "workflow.grounding_gate": "grounding",
   "intel.enabled": "intel",
@@ -5237,7 +5193,8 @@ const configKeys = {
   "workflow.tdd_mode": "tdd",
   "workflow.ui_phase": "ui",
   "workflow.ui_review": "ui",
-  "workflow.ui_safety_gate": "ui"
+  "workflow.ui_safety_gate": "ui",
+  "workflow.ui_interaction_capture": "ui"
 };
 
 const configSchema = {
@@ -5451,7 +5408,7 @@ const configSchema = {
     "owner": "drift",
     "type": "number",
     "default": 3,
-    "description": "Minimum number of new structural elements (directories, barrel exports, migrations, routes) before the codebase drift gate triggers a warn or auto-remap action."
+    "description": "Minimum number of drift elements (new directories, barrel exports, migrations, routes, plus modified and deleted files inside mapped directories) before the codebase drift gate triggers a warn or auto-remap action."
   },
   "workflow.drift_action": {
     "owner": "drift",
@@ -5467,13 +5424,13 @@ const configSchema = {
     "owner": "drift",
     "type": "boolean",
     "default": true,
-    "description": "Enable the drift gates at execute:wave:post. When enabled, the schema drift gate blocks verification if schema-relevant files changed during execution but no database push command was executed; the codebase drift gate (non-blocking) warns when structural additions exceed the drift_threshold."
+    "description": "Enable the drift gates at execute:wave:post. When enabled, the schema drift gate blocks verification if schema-relevant files changed during execution but no database push command was executed; the codebase drift gate (non-blocking) warns when drift elements exceed the drift_threshold."
   },
   "workflow.plan_drift_precheck": {
     "owner": "drift",
     "type": "boolean",
     "default": true,
-    "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (structural additions exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
+    "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
   },
   "workflow.context_drift_precheck": {
     "owner": "drift",
@@ -5529,24 +5486,6 @@ const configSchema = {
     "type": "boolean",
     "default": true,
     "description": "Run the post-planning gap analysis report after plans are generated."
-  },
-  "review.models.gemini": {
-    "owner": "gemini",
-    "type": "string",
-    "default": "",
-    "description": "Model passed to the Gemini reviewer lane."
-  },
-  "review.max_prompt_tokens_per_reviewer.gemini": {
-    "owner": "gemini",
-    "type": "number",
-    "default": -1,
-    "description": "Prompt-token budget for the Gemini reviewer lane. Unset is -1, a sentinel: 0 is a legitimate value meaning \"do not trim this lane\", so it cannot double as \"not configured\"."
-  },
-  "review.timeouts.gemini": {
-    "owner": "gemini",
-    "type": "number",
-    "default": -1,
-    "description": "Outer wall-clock timeout override (seconds) for the Gemini reviewer lane. Unset is -1, a sentinel: 0 or a negative number is also treated as unset (a timeout has no legitimate zero/negative value), so no second sentinel is needed. Falls back to the lane's built-in timeoutFloorMs when unset."
   },
   "graphify.enabled": {
     "owner": "graphify",
@@ -5870,6 +5809,12 @@ const configSchema = {
     "type": "boolean",
     "default": true,
     "description": "Block execution on unmet UI-SPEC contracts."
+  },
+  "workflow.ui_interaction_capture": {
+    "owner": "ui",
+    "type": "boolean",
+    "default": false,
+    "description": "Default-off. Let gsd-ui-auditor add post-interaction captures (hover, focus, open menus, filled forms) through the chrome-devtools CLI, driven from Bash — no MCP server and no tools: change (#4223). Requires an installed Chrome; when off, or when none resolves, the auditor's Playwright-only static capture is unchanged."
   }
 };
 
@@ -5979,7 +5924,8 @@ const runtimes = {
         "projectInstructionFile": "GEMINI.md",
         "noPathRewrite": true,
         "hookPathStyle": "raw",
-        "globalDirResolver": "antigravity"
+        "globalDirResolver": "antigravity",
+        "contentRewriteProfile": "attribution-only"
       }
     },
     "reviewer": {
@@ -6127,7 +6073,8 @@ const runtimes = {
       "extendedHookEvents": [],
       "hostBehaviors": {
         "commandBodyConverter": "convertClaudeToAugmentMarkdown",
-        "mcpCompanion": "settings-json"
+        "mcpCompanion": "settings-json",
+        "contentRewriteProfile": "slash-lookahead-own-derived"
       },
       "hostIntegration": {
         "embeddingMode": "declarative",
@@ -6267,7 +6214,14 @@ const runtimes = {
         "skillsGlobalOnboarding": true,
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": "global",
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "skipCompactAgents": true,
+        "omitBashRunnerOnWindows": true,
+        "specRootSkillPass": true,
+        "restoreAtRefTildeInAgents": true,
+        "restoreAtRefTildeInSpecTree": true,
+        "skipRuntimeDefaultsStamp": true,
+        "contentRewriteProfile": "slash-tilde-restore"
       }
     },
     "reviewer": {
@@ -6421,7 +6375,8 @@ const runtimes = {
         "skipSharedHooksInstall": true,
         "localTargetIsProjectRoot": true,
         "clineRulesSurface": true,
-        "localCommandsViaRules": true
+        "localCommandsViaRules": true,
+        "contentRewriteProfile": "slash-bare-own-tilde"
       }
     }
   },
@@ -6539,7 +6494,8 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
-        "reportCommandsDir": true
+        "reportCommandsDir": true,
+        "contentRewriteProfile": "slash-bare-own-tilde-bare"
       }
     }
   },
@@ -6654,7 +6610,18 @@ const runtimes = {
         "tomlConfigInstall": true,
         "cleanupSkillSidecars": true,
         "agentTomlFiles": true,
-        "frontmatterDialect": "codex"
+        "frontmatterDialect": "codex",
+        "unsupportedFeatures": [
+          "context-warnings",
+          "phase-lifecycle-display"
+        ],
+        "rewriteClaudeAtIncludes": true,
+        "contentRewriteProfile": "slash-own-tilde",
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".toml",
+          ".md"
+        ]
       }
     },
     "reviewer": {
@@ -6815,7 +6782,8 @@ const runtimes = {
         "reapplyCommand": "/gsd-update --reapply",
         "agentFileExtension": ".agent.md",
         "skipSharedHooksInstall": true,
-        "noPathRewrite": true
+        "noPathRewrite": true,
+        "contentRewriteProfile": "attribution-only"
       }
     }
   },
@@ -6933,7 +6901,8 @@ const runtimes = {
           "stop",
           "subagentStart",
           "subagentStop"
-        ]
+        ],
+        "contentRewriteProfile": "slash-lookahead-own-tilde"
       }
     },
     "reviewer": {
@@ -7076,7 +7045,11 @@ const runtimes = {
         "reapplyCommand": "gsd-update --reapply (mention the skill name)",
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": true,
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "legacyFlatSkillsCleanup": true,
+        "bareStemSkillsCleanup": true,
+        "categoryContainerCleanup": true,
+        "contentRewriteProfile": "branded-lookahead-own-derived"
       },
       "hostIntegration": {
         "embeddingMode": "imperative",
@@ -7226,7 +7199,11 @@ const runtimes = {
           "file": "gsd-core.js",
           "source": ".kilo/plugins/gsd-core.js"
         },
-        "skipUpdateBannerCommand": true
+        "skipUpdateBannerCommand": true,
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".md"
+        ]
       }
     }
   },
@@ -7330,7 +7307,9 @@ const runtimes = {
         "agentManifestStyle": "kimi-nested",
         "doneBannerStyle": "kimi-agent-file",
         "skipSharedHooksInstall": true,
-        "noPathRewrite": true
+        "noPathRewrite": true,
+        "requiresSubagentPair": true,
+        "contentRewriteProfile": "slash-bare"
       }
     }
   },
@@ -7444,7 +7423,8 @@ const runtimes = {
         "agentManifestStyle": "none",
         "doneBannerStyle": "kimi-code",
         "skipSharedHooksInstall": true,
-        "namedSubagentsSupported": false
+        "namedSubagentsSupported": false,
+        "reclaimsKimiLegacyHooksRoot": true
       }
     },
     "reviewer": {
@@ -7633,7 +7613,11 @@ const runtimes = {
         "skipHomePrefixSubstitution": true,
         "skipSettingsUi": true,
         "skipUpdateBannerCommand": true,
-        "skipCodexSkillsManifest": true
+        "opencodePathPrefix": true,
+        "bakesStaticAgentModel": true,
+        "bakedAgentFileExtensions": [
+          ".md"
+        ]
       }
     },
     "reviewer": {
@@ -7873,7 +7857,8 @@ const runtimes = {
         "legacyCommandsGsdCleanup": true,
         "legacyCommandsGsdInstallMigration": true,
         "legacyCommandsGsdUninstall": true,
-        "hyphenNameAgentBody": true
+        "hyphenNameAgentBody": true,
+        "contentRewriteProfile": "branded-lookahead-own-derived"
       }
     },
     "reviewer": {
@@ -8010,7 +7995,8 @@ const runtimes = {
       "hostBehaviors": {
         "skipSharedHooksInstall": true,
         "soloStageMetadata": "workflow",
-        "projectInstructionFile": ".trae/rules/rules.md"
+        "projectInstructionFile": ".trae/rules/rules.md",
+        "contentRewriteProfile": "slash-bare-own-derived"
       }
     }
   },
@@ -8160,7 +8146,8 @@ const runtimes = {
         "skipSharedHooksInstall": true,
         "legacyDevinSkillsCleanup": true,
         "installsCommandBodiesForWorkflowDelegation": true,
-        "verificationStyle": "windsurf-workflows"
+        "verificationStyle": "windsurf-workflows",
+        "contentRewriteProfile": "slash-lookahead-nested-own-devin"
       }
     }
   },
@@ -8272,7 +8259,8 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
-        "skipSharedHooksInstall": true
+        "skipSharedHooksInstall": true,
+        "contentRewriteProfile": "slash-tilde-restore"
       }
     }
   }
@@ -8497,7 +8485,6 @@ const _requiresGraph = {
   "drift": [],
   "external-job": [],
   "gap-analysis": [],
-  "gemini": [],
   "graphify": [],
   "grounding": [],
   "hermes": [],

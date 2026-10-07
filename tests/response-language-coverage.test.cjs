@@ -181,6 +181,88 @@ describe('response-language workflow coverage lint (#2529)', () => {
     );
   });
 
+  // #4403 / ADR-4139 §6 — `detail/` is the fourth fragment-directory kind
+  // (spine + detail split), added to FRAGMENT_DIRS alongside modes/steps/
+  // templates. It inherits through the exact same per-file proof as the other
+  // three: the parent must dispatch it from a read/execute context and be
+  // itself covered. These pin the same three cases the modes/steps/templates
+  // tests above pin, for `detail/` specifically, so the extension cannot
+  // silently become an exemption instead of inheritance.
+  function detailFragmentFixture({ parentCovered = true, parentNamesFragment = true } = {}) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-response-language-detail-'));
+    tempDirs.push(root);
+    fs.mkdirSync(path.join(root, 'autonomous', 'detail'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'autonomous.md'),
+      [
+        parentCovered
+          ? '@~/.claude/gsd-core/references/response-language-directive.md'
+          : '# No directive here',
+        parentNamesFragment
+          ? 'read and execute `gsd-core/workflows/autonomous/detail/converge-detail.md`'
+          : 'read and execute `gsd-core/workflows/autonomous/detail/something-else.md`',
+      ].join('\n') + '\n',
+    );
+    fs.writeFileSync(
+      path.join(root, 'autonomous', 'detail', 'converge-detail.md'),
+      'Extended convergence prose.\n',
+    );
+    return root;
+  }
+
+  test('a detail/ file inherits coverage from the parent that names it', () => {
+    const root = detailFragmentFixture();
+    assert.strictEqual(
+      inheritsParentCoverage(root, 'autonomous/detail/converge-detail.md'),
+      true,
+    );
+    assert.deepStrictEqual(findViolations(root), []);
+  });
+
+  test('a detail/ file with an uncovered or non-dispatching parent still fails (inheritance, not an exemption)', () => {
+    const uncoveredParent = detailFragmentFixture({ parentCovered: false });
+    assert.deepStrictEqual(
+      findViolations(uncoveredParent).map((file) => path.relative(uncoveredParent, file).replaceAll(path.sep, '/')),
+      ['autonomous.md', 'autonomous/detail/converge-detail.md'],
+    );
+
+    const unreferenced = detailFragmentFixture({ parentNamesFragment: false });
+    assert.deepStrictEqual(
+      findViolations(unreferenced).map((file) => path.relative(unreferenced, file).replaceAll(path.sep, '/')),
+      ['autonomous/detail/converge-detail.md'],
+    );
+  });
+
+  test('a detail/ file carrying its own inline directive is accepted independently of parent inheritance', () => {
+    const root = detailFragmentFixture({ parentCovered: false });
+    fs.writeFileSync(
+      path.join(root, 'autonomous', 'detail', 'converge-detail.md'),
+      'Apply response_language to all user-facing prose, narration between tool calls included.\n',
+    );
+    // Own directive covers the file even though the parent is uncovered — the
+    // same behavior modes/steps/templates already get, because
+    // hasResponseLanguageCoverage is checked before inheritsParentCoverage is
+    // ever consulted (findViolations). Not double-flagged as redundant either.
+    assert.deepStrictEqual(
+      findViolations(root).map((file) => path.relative(root, file).replaceAll(path.sep, '/')),
+      ['autonomous.md'],
+    );
+  });
+
+  test('the shipped plan-phase/detail/elaboration.md fixture is covered in the real catalog (#4403)', () => {
+    // One real example exists today (ADR-4139): prove the recognizer actually
+    // reaches it, not just a synthetic fixture.
+    const relative = 'plan-phase/detail/elaboration.md';
+    assert.ok(
+      fs.existsSync(path.join(WORKFLOWS_DIR, relative)),
+      `expected shipped detail file missing: ${relative}`,
+    );
+    assert.strictEqual(inheritsParentCoverage(WORKFLOWS_DIR, relative), true);
+    const violations = findViolations(WORKFLOWS_DIR)
+      .map((file) => path.relative(WORKFLOWS_DIR, file).replaceAll(path.sep, '/'));
+    assert.ok(!violations.includes(relative), `${relative} must not be a violation in the real catalog`);
+  });
+
   // #2558 round 10, Minor D. `inheritsParentCoverage` used to prove the parent
   // "is the way in" with a bare substring test, so any mention of the fragment
   // path — a changelog line, a deprecation note, a sentence about the file —
@@ -266,11 +348,16 @@ describe('response-language workflow coverage lint (#2529)', () => {
   // so the lint cannot see it and this test is now the only thing holding the two
   // halves together. Asserted against the REAL tree, not a fixture: a fixture
   // would only prove the assertion can pass.
+  //
+  // #5118: the dispatch prompt moved from execute-phase.md into the ONE shared
+  // verification step both execute-phase and verify-work include
+  // (execute-phase/steps/verify-phase-goal.md); the anchor moved with it, and
+  // the prompt now carries the directive line inline right after it.
   const VERIFIER_DISPATCH_CONTRACT = {
     reference: '../references/execute-phase-response-language.md',
     directive: 'Use response_language {response_language} for all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code and paths.',
     anchor: 'Create VERIFICATION.md.',
-    anchorIn: 'execute-phase.md',
+    anchorIn: 'execute-phase/steps/verify-phase-goal.md',
   };
 
   test('the gsd-verifier dispatch contract still has both of its halves', () => {
@@ -298,6 +385,13 @@ describe('response-language workflow coverage lint (#2529)', () => {
       referenceFile.includes(anchor),
       `${reference} no longer names the anchor "${anchor}"`,
     );
+
+    // #5118: the shared prompt carries the directive immediately after the
+    // anchor, so verify-work (which does not load the reference) injects it too.
+    const promptLines = fs.readFileSync(anchorPath, 'utf8').split(/\r?\n/);
+    const at = promptLines.findIndex((line) => line === anchor);
+    assert.ok(at !== -1, `${anchorIn}: the anchor is a line of its own`);
+    assert.equal(promptLines[at + 1], directive, `${anchorIn}: the directive follows the anchor`);
   });
 
   test('inheritance reaches fragment directories only, never a nested workflow tree', () => {

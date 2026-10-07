@@ -1,3 +1,4 @@
 {
-  "maxFiles": 283
+  "maxFiles": 290,
+  "note": "align-1.16.0: upstream ceiling 284 + 6 fork marker-bearing test files (grounding/strategy/fidelity/release suites, unchanged since origin/next) that upstream v1.14-v1.16 detection now counts as unverified."
 }

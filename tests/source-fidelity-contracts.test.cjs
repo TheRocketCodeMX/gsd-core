@@ -140,7 +140,7 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
   // These pin the MECHANISM so it can't regress to prose-deep again.
 
   test('READ: both gate spawn prompts hand the oracle to the Read-only gate agents', () => {
-    has(WF('execute-phase.md'), 'DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md'); // verifier spawn
+    has(WF('execute-phase/steps/verify-phase-goal.md'), 'DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md'); // verifier spawn (align-1.16.0: upstream extracted it into this step)
     has(WF('plan-phase.md'), 'design oracle — REQUIRED input for the design-fidelity check'); // plan-checker spawn
   });
 

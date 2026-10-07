@@ -158,6 +158,11 @@ const AGENT_TRANSFORM_SRCS = [
   'src/runtime-artifact-conversion.cts',
   'src/install-effort-resolver.cts',
   'src/model-catalog.cts',
+  // #4770: the Codex .toml family's sandbox_mode is derived through
+  // src/codex-agent-toml.cts (deriveCodexSandboxMode — the single owner of the
+  // derivation), so a change there moves every emitted agents/*.toml without
+  // touching any agents/*.md source.
+  'src/codex-agent-toml.cts',
 ];
 
 // #3738: antigravity's global skills pass through the antigravity converter
@@ -181,6 +186,18 @@ const ZCODE_BODY_TRANSFORM_SRCS = [
   'src/runtime-artifact-conversion.cts',
   'bin/install.js',
 ];
+
+// #4482: every non-Copilot runtime filters audience-specific notes through the
+// conversion module and the published installer copy path.
+const RUNTIME_NOTE_FILTER_TRANSFORM_SRCS = [
+  'src/runtime-artifact-conversion.cts',
+  'bin/install.js',
+];
+const RUNTIME_NOTE_FILTERED_FAMILIES = new Set(
+  MANIFEST_FAMILIES
+    .filter(({ runtime }) => runtime !== 'copilot')
+    .map(({ name }) => name),
+);
 
 /**
  * A `sources` entry ending in `/` is a PREFIX, not a file: it means "any repo path
@@ -266,7 +283,11 @@ const PROVENANCE_RULES = [
   // ── Verbatim engine payload ────────────────────────────────────────────────
   {
     id: 'gsd-core-verbatim',
-    kind: 'identity',
+    // Markdown payloads pass through copyWithPathReplacement's audience
+    // filter for non-Copilot runtimes. Non-Markdown payloads remain byte-for-
+    // byte copies, but one rule has one kind; the match-specific transform
+    // list below keeps the causal attribution precise.
+    kind: 'derived',
     roots: ['gsd-core'],
     // Enumerated subdirs, NOT `.+`: a new gsd-core/<subdir> must fail totality
     // loudly rather than being absorbed silently. Also keeps this mutually
@@ -279,6 +300,11 @@ const PROVENANCE_RULES = [
     pattern: /^(workflows|references|templates|contexts|bin|visual)\/.+$/,
     // FORK:learn END
     sources: (m) => [`gsd-core/${m[0]}`],
+    transforms: (m, ctx) => (
+      m[0].endsWith('.md') && RUNTIME_NOTE_FILTERED_FAMILIES.has(ctx.runtime)
+        ? RUNTIME_NOTE_FILTER_TRANSFORM_SRCS
+        : []
+    ),
   },
   {
     id: 'gsd-core-commands-corpus',
@@ -531,6 +557,7 @@ const PROVENANCE_RULES = [
     // ZCODE_BODY_TRANSFORM_SRCS), so the converter change explains theirs too.
     transforms: (_m, ctx) => {
       if (ctx.runtime === 'antigravity') return ANTIGRAVITY_SKILL_TRANSFORM_SRCS;
+      if (RUNTIME_NOTE_FILTERED_FAMILIES.has(ctx.runtime)) return RUNTIME_NOTE_FILTER_TRANSFORM_SRCS;
       if (ctx.runtime === 'zcode') return ZCODE_BODY_TRANSFORM_SRCS;
       return [];
     },
@@ -546,7 +573,11 @@ const PROVENANCE_RULES = [
     sources: (m) => [`${COMMANDS_SRC}/${stripSkillPrefix(m[2])}.md`],
     // #4002: zcode's nested router children pass through the same rewrite pass
     // as its flat skills — see ZCODE_BODY_TRANSFORM_SRCS.
-    transforms: (_m, ctx) => (ctx.runtime === 'zcode' ? ZCODE_BODY_TRANSFORM_SRCS : []),
+    transforms: (_m, ctx) => {
+      if (RUNTIME_NOTE_FILTERED_FAMILIES.has(ctx.runtime)) return RUNTIME_NOTE_FILTER_TRANSFORM_SRCS;
+      if (ctx.runtime === 'zcode') return ZCODE_BODY_TRANSFORM_SRCS;
+      return [];
+    },
   },
   {
     id: 'flat-commands-from-commands',
@@ -554,9 +585,14 @@ const PROVENANCE_RULES = [
     roots: ['commands', 'command'],
     pattern: /^gsd-([^/]+)\.md$/,
     sources: (m) => [`${COMMANDS_SRC}/${m[1]}.md`],
+    // #4482: OpenCode command bodies pass through its command converter.
     // #4002: zcode command bodies pass through _applyRuntimeRewrites with
     // converter: null — see ZCODE_BODY_TRANSFORM_SRCS above.
-    transforms: (_m, ctx) => (ctx.runtime === 'zcode' ? ZCODE_BODY_TRANSFORM_SRCS : []),
+    transforms: (_m, ctx) => {
+      if (RUNTIME_NOTE_FILTERED_FAMILIES.has(ctx.runtime)) return RUNTIME_NOTE_FILTER_TRANSFORM_SRCS;
+      if (ctx.runtime === 'zcode') return ZCODE_BODY_TRANSFORM_SRCS;
+      return [];
+    },
   },
 
   // ── Descriptor-declared native plugin / extension ─────────────────────────
@@ -926,6 +962,7 @@ module.exports = {
   SKILLS_ROOTS,
   KIMI_ROOT_AGENT_SRC,
   AGENT_TRANSFORM_SRCS,
+  RUNTIME_NOTE_FILTER_TRANSFORM_SRCS,
   SOURCE_PREFIX_SUFFIX,
   HOOKS_ROOTS,
   COMMANDS_SRC,

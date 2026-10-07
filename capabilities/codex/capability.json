@@ -109,7 +109,18 @@
       "tomlConfigInstall": true,
       "cleanupSkillSidecars": true,
       "agentTomlFiles": true,
-      "frontmatterDialect": "codex"
+      "frontmatterDialect": "codex",
+      "unsupportedFeatures": [
+        "context-warnings",
+        "phase-lifecycle-display"
+      ],
+      "rewriteClaudeAtIncludes": true,
+      "contentRewriteProfile": "slash-own-tilde",
+      "bakesStaticAgentModel": true,
+      "bakedAgentFileExtensions": [
+        ".toml",
+        ".md"
+      ]
     }
   },
   "reviewer": {
