@@ -1289,6 +1289,14 @@
    ]
   },
   {
+   "path": "tests/auto-select-attribute.test.cjs",
+   "feature": "fidelity",
+   "mode": "anchors-only",
+   "anchors": [
+    "const EXECUTOR_CAP = 57344"
+   ]
+  },
+  {
    "path": "tests/agent-tracked-source-rule.test.cjs",
    "feature": "fidelity",
    "mode": "anchors-only",

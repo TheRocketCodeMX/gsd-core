@@ -633,11 +633,6 @@ function cmdMilestoneComplete(cwd: string, version: string, options: MilestoneCo
   // name suffix when a distinct name was actually supplied.
   const nameSuffix = options.name && options.name !== version ? ` ${options.name}` : '';
 
-  // Ensure archive directory exists (skipped in dry-run — no mutations)
-  if (!options.dryRun) {
-    platformEnsureDir(archiveDir);
-  }
-
   // Scope stats and accomplishments to only the phases belonging to the
   // current milestone's ROADMAP.  Uses the shared filter from roadmap-parser.cjs
   // (same logic used by cmdPhasesList and other callers).

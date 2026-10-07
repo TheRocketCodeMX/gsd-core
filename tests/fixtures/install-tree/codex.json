@@ -280,6 +280,7 @@
   "gsd-core/references/certification.md",
   "gsd-core/references/checkpoints.md",
   "gsd-core/references/cicd-strategy.md",
+  "gsd-core/references/code-review-contract-conformance.md",
   "gsd-core/references/common-bug-patterns.md",
   "gsd-core/references/compact-content-gate.md",
   "gsd-core/references/context-budget.md",

@@ -19,8 +19,11 @@ const EXECUTOR = path.join(ROOT, 'agents', 'gsd-executor.md');
 const EXECUTE_PHASE_WORKFLOW = path.join(ROOT, 'gsd-core', 'workflows', 'execute-phase.md');
 const CHECKPOINTS_REF = path.join(ROOT, 'gsd-core', 'references', 'checkpoints.md');
 
-/** Agent-file hard red line (tests/agent-size-budget.test.cjs LARGE_CAP). */
-const LARGE_CAP = 49152;
+/** Agent-file hard red line (upstream: tests/agent-size-budget.test.cjs LARGE_CAP, 49152). */
+// FORK: tests/agent-size-budget.test.cjs re-tiers gsd-executor to XL (56 KiB) — upstream's own
+// body left no LARGE headroom for the fork's marked fidelity/context blocks — so the executor
+// is held to the XL red line here, the same cap that suite enforces for it.
+const EXECUTOR_CAP = 57344;
 
 function read(file) {
   return fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -88,11 +91,11 @@ describe('issue #4095: gsd-executor.md routes absent auto_select through checkpo
     );
   });
 
-  test('executor is under the 49152-byte cap after adding auto_select content', () => {
+  test('executor is under its agent-size cap after adding auto_select content', () => {
     const bytes = lfByteCount(EXECUTOR);
     assert.ok(
-      bytes < LARGE_CAP,
-      `gsd-executor.md is ${bytes} bytes, must be < ${LARGE_CAP} (LF-normalized, measured the same way tests/agent-size-budget.test.cjs does)`,
+      bytes < EXECUTOR_CAP,
+      `gsd-executor.md is ${bytes} bytes, must be < ${EXECUTOR_CAP} (LF-normalized, measured the same way tests/agent-size-budget.test.cjs does)`,
     );
   });
 });

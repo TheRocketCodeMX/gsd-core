@@ -315,7 +315,6 @@ module.exports = {
   "tests/verify-lifecycle-writes-e2e.test.cjs",
   "tests/verify-work-auto-transition.test.cjs",
   "tests/verify.test.cjs",
-  "tests/windows-robustness.test.cjs",
   "tests/windsurf-hooks-bridge.test.cjs",
   "tests/workflow-guard.test.cjs",
   "tests/workflow-shell-pinning.test.cjs",

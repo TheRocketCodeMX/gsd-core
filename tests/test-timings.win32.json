@@ -8,7 +8,7 @@
     "test-timings-windows-latest-job1.jsonl",
     "test-timings-windows-latest-job2.jsonl"
   ],
-  "file_count": 280,
+  "file_count": 279,
   "timings": {
     "adr-index-gate.test.cjs": 20776,
     "adr857-core-without-capabilities.test.cjs": 10064,
@@ -187,7 +187,6 @@
     "path-replacement.test.cjs": 27514,
     "pause-work-context-detection.test.cjs": 1448,
     "pause-work-improvements.test.cjs": 1011,
-    "perf-317-context-monitor-fs.test.cjs": 15052,
     "phase-completion-single-owner.test.cjs": 13576,
     "phase-estimation.test.cjs": 24065,
     "phase-locator.test.cjs": 17050,
