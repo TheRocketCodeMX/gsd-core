@@ -6,7 +6,10 @@
  * When `workflow.windows_enforce` is true, `/gsd-ship` blocks while any entry is
  * `open`; an entry can be `waived` only with a recorded reason or `fixed`.
  *
- * LEAF MODULE — imports ONLY: node:fs, node:path. No other src/ imports.
+ * LEAF MODULE — imports node:fs + node:path, the leaf frontmatter-fence.cjs (the one
+ * frontmatter fence owner), plus two compiled sibling lib modules require()d at runtime:
+ * workstream-inventory.cjs (the #4487 milestone stamp) and capability-lock.cjs (the #3780
+ * cross-process ledger lock). No other src/ imports.
  *
  * Storage format (`.planning/WINDOWS.md`):
  *   ---
@@ -55,6 +58,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { locateFrontmatterFence } from './frontmatter-fence.cjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import workstreamInventory = require('./workstream-inventory.cjs');
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -85,6 +91,11 @@ export const REASON = Object.freeze({
   // sole source of truth) at the pre-write seam — refuse rather than silently
   // reconcile by overwriting the operator's hand-edit or dropping a row.
   WINDOWS_LEDGER_TABLE_DRIFT: 'windows_ledger_table_drift',
+  // #3780: the read-compute-write cycle is serialized on a cross-process
+  // ledger lock; this fires only when another writer held the lock past the
+  // whole bounded retry budget — a typed, actionable refusal instead of a
+  // silently-lost mutation reported as success.
+  WINDOWS_LEDGER_LOCK: 'windows_ledger_lock',
 });
 
 /** Allowed window kinds. Aligned with the issue's enumerated sources. */
@@ -126,11 +137,25 @@ export interface WindowEntry {
   reason: string;      // '' unless status === 'waived'
   recorded_at: string; // ISO-8601
   resolved_at: string | null;
+  // #4487: the workstream's resolved milestone version (e.g. "v2.0") at the
+  // moment the entry was recorded, or null when it could not be resolved.
+  // Phase numbers are unique only within one active phases/ directory --
+  // `milestone complete` archives phases and frees their numbers for reuse,
+  // so two milestones routinely produce entries under the same `phase`
+  // value with nothing to distinguish them. Absence (on an entry recorded
+  // before this field existed) reads as "recorded before this change" --
+  // validateEntryShape below does NOT require this key, so existing ledgers
+  // stay valid with no migration. Optional (not `| null` alone): a genuinely
+  // absent key must survive parseLedger -> renderLedger as absent, not as an
+  // explicit `null`, or every legacy entry picks up permanent JSON noise
+  // the first time ANY entry in the ledger is touched (JSON.stringify drops
+  // an `undefined` property but keeps an explicit `null` one).
+  milestone?: string | null;
 }
 
 /** Input shape for appendWindow — id/status/timestamps are assigned by the fn. */
 export type WindowInput = Pick<WindowEntry, 'kind' | 'phase' | 'description'> &
-  Partial<Pick<WindowEntry, 'file' | 'line'>>;
+  Partial<Pick<WindowEntry, 'file' | 'line' | 'milestone'>>;
 
 /**
  * Field set amendWindow may rewrite. Deliberately excludes `id`, `kind`,
@@ -324,12 +349,14 @@ function nextId(entries: WindowEntry[]): number {
  * Append a window to the ledger. Assigns the next dense id (max+1), sets
  * status=open, timestamps via opts.now.
  *
- * Concurrency (issue #1950 review L2): NOT safe for concurrent writers. Two
- * parallel `gsd_run windows append` invocations both read the same snapshot,
- * both compute the same nextId, both write — the second atomic rename wins
- * and the first append (and the entry it added) is silently lost. This is
- * acceptable in the current single-executor-per-phase model; document if the
- * executor ever gains parallel wave-level append.
+ * Concurrency (issue #1950 review L2, superseded by #3780): as a PURE
+ * function this operates on whatever ledger snapshot it is passed and cannot
+ * see concurrent writers — serialization is the CALLER's job. The I/O entry
+ * points below (cmdWindowsAppend/Waive/MarkFixed) now discharge that duty by
+ * holding the cross-process ledger lock across their whole
+ * read-compute-write cycle, so the previously-documented loss (two parallel
+ * writers, second rename wins, first entry silently gone) can no longer
+ * occur through the CLI.
  */
 export function appendWindow(
   ledger: Ledger,
@@ -353,6 +380,7 @@ export function appendWindow(
     reason: '',
     recorded_at: opts.now,
     resolved_at: null,
+    milestone: input.milestone ?? null,
   };
 
   const entries = [...ledger.entries, entry];
@@ -633,27 +661,26 @@ function locateJsonBlock(raw: string, expectedTotal?: number): JsonBlockLookup {
  * structural deviation — fail-closed on drift.
  */
 function parseFrontmatterStrict(raw: string): Record<string, number | string> {
-  if (!raw.startsWith('---\n') && !raw.startsWith('---\r\n')) {
+  // The block is the one the one fence owner finds (`locateFrontmatterFence`).
+  const fence = locateFrontmatterFence(raw);
+  if (!fence) {
     throw new WindowsError(
       REASON.WINDOWS_LEDGER_MALFORMED,
       'Ledger missing frontmatter opening ---',
     );
   }
-  const headerEnd = raw.startsWith('---\r\n') ? 5 : 4;
-  const closeIdx = raw.indexOf('\n---', headerEnd);
-  if (closeIdx === -1) {
+  if (!fence.closed) {
     throw new WindowsError(
       REASON.WINDOWS_LEDGER_MALFORMED,
       'Ledger missing frontmatter closing ---',
     );
   }
-  const yamlBody = raw.slice(headerEnd, closeIdx);
+  const yamlBody = raw.slice(fence.openEnd, fence.bodyEnd);
   const out: Record<string, number | string> = {};
   for (const rawLine of yamlBody.split(/\r?\n/)) {
-    // #3116: the `\n---` scan leaves the final line's CR attached on a CRLF
-    // ledger, and `.` never matches CR, so the key: value regex below fails on
-    // it. Strip the trailing CR per line so the rest of `raw` (which
-    // parseJsonBlock also slices by byte offset) is unaffected.
+    // #3116: strip a trailing CR per line (`.` never matches CR, so the key: value regex
+    // below would fail on it) without touching the rest of `raw`, which parseJsonBlock also
+    // slices by byte offset.
     const line = rawLine.replace(/\r$/, '');
     if (line.trim() === '') continue;
     const m = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
@@ -800,6 +827,19 @@ function validateEntryShape(e: unknown, i: number): WindowEntry {
     reason: o.reason,
     recorded_at: recordedStr,
     resolved_at: resolvedStr,
+    // #4487: NOT in `required` above -- an entry recorded before this field
+    // existed has no `milestone` key at all, and that must parse cleanly.
+    // Preserve the absence itself -- by not materializing the property at
+    // all, via the conditional spread below, rather than assigning it
+    // `milestone: undefined` (an object literal property set to `undefined`
+    // is still an OWN property; `'milestone' in entry` reads true either
+    // way) -- so a genuinely absent key stays absent both to `in` and to
+    // JSON.stringify on re-render. Collapsing absence to an explicit null
+    // instead would stamp every legacy entry with permanent
+    // `"milestone": null` noise the moment the ledger is next touched. A
+    // genuinely-recorded-but-unresolvable milestone (set by appendWindow)
+    // is still an explicit null and round-trips as one.
+    ...('milestone' in o ? { milestone: typeof o.milestone === 'string' ? o.milestone : null } : {}),
   };
 }
 
@@ -1134,6 +1174,98 @@ function ledgerPath(cwd: string): string {
   return path.join(cwd, '.planning', LEDGER_FILE_NAME);
 }
 
+// ─── #3780: cross-process ledger mutation lock ─────────────────────────────
+
+interface LedgerLockHandle { path: string; token: string; dev: number | null; ino: number | null }
+
+interface LockModule {
+  acquireLock: (
+    lockPath: string,
+    opts?: { maxAttempts?: number; waitForFresh?: boolean },
+  ) => LedgerLockHandle | null;
+  releaseLock: (handle: LedgerLockHandle | null) => void;
+}
+
+/**
+ * The SHARED hardened cross-process lock primitive (single source of truth
+ * for capability-lifecycle + capability-consent, extracted so locks cannot
+ * diverge). Required LAZILY: capability-lock captures the process start time
+ * at module load — a `ps` subprocess on macOS, PowerShell on win32 — and
+ * this module is loaded by lock-free readers (`windows status`, the
+ * /gsd-ship gate) that must not pay that per-invocation cost (#3780
+ * review). `require` is cached, so writers pay it once per process.
+ */
+let _lockMod: LockModule | null = null;
+function ledgerLock(): LockModule {
+  if (_lockMod === null) {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    _lockMod = require('./capability-lock.cjs') as LockModule;
+    /* eslint-enable @typescript-eslint/no-require-imports */
+  }
+  return _lockMod;
+}
+
+/**
+ * Budget mirrors capability-consent's CONSENT_LOCK_MAX_ATTEMPTS: two
+ * genuinely-racing writers must SERIALIZE, not fail. The ledger's critical
+ * section is sub-millisecond and the primitive backs off ~25-50ms per
+ * attempt, so 50 attempts is orders of magnitude beyond any real contention
+ * while keeping the worst case (a holder that never releases until the
+ * primitive's own liveness/deadman protocol reclaims it) bounded at ~2s
+ * before the typed refusal below.
+ */
+const LEDGER_LOCK_MAX_ATTEMPTS = 50;
+
+function ledgerLockPath(cwd: string): string {
+  return path.join(cwd, '.planning', '.WINDOWS.lock');
+}
+
+function acquireLedgerLock(cwd: string): LedgerLockHandle | null {
+  return ledgerLock().acquireLock(ledgerLockPath(cwd), {
+    maxAttempts: LEDGER_LOCK_MAX_ATTEMPTS,
+    // A contended fresh/live holder is WAITED FOR (back off + retry), not
+    // failed-fast — racing wave-level executors serialize (issue #3780).
+    waitForFresh: true,
+  });
+}
+
+function releaseLedgerLock(handle: LedgerLockHandle | null): void {
+  ledgerLock().releaseLock(handle);
+}
+
+/**
+ * Run `fn` (a full ledger read-compute-write cycle) while holding the
+ * cross-process ledger lock. Throws a typed WindowsError — never falls back
+ * to an unlocked mutation — when the lock cannot be acquired within the
+ * budget, mirroring capability-consent finding 3: a locked store must refuse
+ * the write rather than silently race for it. Readers (cmdWindowsStatus, the
+ * ship gate) deliberately do NOT take this lock: the atomic rename already
+ * gives them a whole-file snapshot.
+ *
+ * EXPORTED (#3780) because `withLedgerLock` is the ONE serialization seam
+ * for WINDOWS.md: every writer of the ledger — the cmd* entry points here
+ * and any sibling module with its own read-compute-write cycle on the same
+ * file (refactor-trigger-command-router's strict-window record/resolve) —
+ * must hold this lock, or the lost-update race #3780 fixed survives on that
+ * path.
+ */
+export function withLedgerLock<T>(cwd: string, fn: () => T): T {
+  const handle = acquireLedgerLock(cwd);
+  if (!handle) {
+    throw new WindowsError(
+      REASON.WINDOWS_LEDGER_LOCK,
+      `Another writer holds the ledger lock at ${ledgerLockPath(cwd)}; WINDOWS.md ` +
+        'mutations are serialized per project. Re-run the command once the other ' +
+        'writer finishes — the lock is reclaimed automatically if its holder died.',
+    );
+  }
+  try {
+    return fn();
+  } finally {
+    releaseLedgerLock(handle);
+  }
+}
+
 function readLedgerOrNull(cwd: string): Ledger | null {
   const p = ledgerPath(cwd);
   let raw: string;
@@ -1394,27 +1526,43 @@ export function cmdWindowsAppend(
     required: ['--kind', '--phase', '--description'],
   });
 
-  let ledger: Ledger;
-  try {
-    ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
-  } catch (e) {
-    if (e instanceof WindowsError) throw e;
-    throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
-  }
+  // #3780: the whole read-compute-write cycle — snapshot, milestone stamp,
+  // id allocation, atomic rename — holds the ledger lock, so two parallel
+  // invocations can no longer compute the same nextId from the same snapshot
+  // and silently lose the first append to the second rename.
+  withLedgerLock(cwd, () => {
+    let ledger: Ledger;
+    try {
+      ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+    } catch (e) {
+      if (e instanceof WindowsError) throw e;
+      throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
+    }
 
-  const result = appendWindow(
-    ledger,
-    {
-      kind: parsed.values['--kind'] as WindowKind,
-      phase: parsed.values['--phase'] ?? '',
-      file: parsed.values['--file'] ?? '',
-      line: parsed.values['--line'] == null ? null : Number(parsed.values['--line']),
-      description: parsed.values['--description'] ?? '',
-    },
-    { now: nowIso() },
-  );
-  writeLedgerAtomic(cwd, result.ledger);
-  emit({ ok: true, ledger: result.ledger, entry: result.entry });
+    // #4487: stamp the workstream's resolved milestone at record time -- the
+    // same STATE.md-first, ROADMAP-fallback resolution workstream-inventory.cts
+    // already uses. Best-effort: an unreadable/missing STATE.md or ROADMAP.md
+    // resolves to null, same as an entry recorded before this field existed.
+    const milestone = workstreamInventory.readCurrentMilestoneVersion(
+      path.join(cwd, '.planning', 'STATE.md'),
+      path.join(cwd, '.planning', 'ROADMAP.md'),
+    );
+
+    const result = appendWindow(
+      ledger,
+      {
+        kind: parsed.values['--kind'] as WindowKind,
+        phase: parsed.values['--phase'] ?? '',
+        file: parsed.values['--file'] ?? '',
+        line: parsed.values['--line'] == null ? null : Number(parsed.values['--line']),
+        description: parsed.values['--description'] ?? '',
+        milestone,
+      },
+      { now: nowIso() },
+    );
+    writeLedgerAtomic(cwd, result.ledger);
+    emit({ ok: true, ledger: result.ledger, entry: result.entry });
+  });
 }
 
 /** `gsd-tools windows waive <id> "<reason>"`. */
@@ -1435,17 +1583,21 @@ export function cmdWindowsWaive(
 
   const id = parseIdOrThrow(idStr);
 
-  let ledger: Ledger;
-  try {
-    ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
-  } catch (e) {
-    if (e instanceof WindowsError) throw e;
-    throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
-  }
+  // #3780: same serialization as append — a concurrent append holding a stale
+  // snapshot would otherwise overwrite the waive and resurrect the entry.
+  withLedgerLock(cwd, () => {
+    let ledger: Ledger;
+    try {
+      ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+    } catch (e) {
+      if (e instanceof WindowsError) throw e;
+      throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
+    }
 
-  const updated = markWaived(ledger, id, reason ?? '', { now: nowIso() });
-  writeLedgerAtomic(cwd, updated);
-  emit({ ok: true, ledger: updated });
+    const updated = markWaived(ledger, id, reason ?? '', { now: nowIso() });
+    writeLedgerAtomic(cwd, updated);
+    emit({ ok: true, ledger: updated });
+  });
 }
 
 /** `gsd-tools windows fixed <id> ["<reason>"]` — the reason is optional. */
@@ -1466,17 +1618,21 @@ export function cmdWindowsMarkFixed(
   const id = parseIdOrThrow(positionals[0]);
   const reason = positionals[1];
 
-  let ledger: Ledger;
-  try {
-    ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
-  } catch (e) {
-    if (e instanceof WindowsError) throw e;
-    throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
-  }
+  // #3780: same serialization as append — a concurrent writer holding a
+  // stale snapshot would otherwise overwrite the resolved status.
+  withLedgerLock(cwd, () => {
+    let ledger: Ledger;
+    try {
+      ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+    } catch (e) {
+      if (e instanceof WindowsError) throw e;
+      throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
+    }
 
-  const updated = markFixed(ledger, id, reason ?? '', { now: nowIso() });
-  writeLedgerAtomic(cwd, updated);
-  emit({ ok: true, ledger: updated });
+    const updated = markFixed(ledger, id, reason ?? '', { now: nowIso() });
+    writeLedgerAtomic(cwd, updated);
+    emit({ ok: true, ledger: updated });
+  });
 }
 
 /** `gsd-tools windows amend <id> [--description D] [--reason R] [--file F] [--line L]`. */
@@ -1499,17 +1655,20 @@ export function cmdWindowsAmend(
   if (parsed.values['--file'] !== undefined) fields.file = parsed.values['--file'];
   if (parsed.values['--line'] !== undefined) fields.line = parsed.values['--line'];
 
-  let ledger: Ledger;
-  try {
-    ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
-  } catch (e) {
-    if (e instanceof WindowsError) throw e;
-    throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
-  }
+  // #3780: amend mutates the ledger — serialize on the same lock.
+  withLedgerLock(cwd, () => {
+    let ledger: Ledger;
+    try {
+      ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+    } catch (e) {
+      if (e instanceof WindowsError) throw e;
+      throw new WindowsError(REASON.WINDOWS_LEDGER_MALFORMED, (e as Error).message);
+    }
 
-  const updated = amendWindow(ledger, id, fields, { now: nowIso() });
-  writeLedgerAtomic(cwd, updated);
-  emit({ ok: true, ledger: updated });
+    const updated = amendWindow(ledger, id, fields, { now: nowIso() });
+    writeLedgerAtomic(cwd, updated);
+    emit({ ok: true, ledger: updated });
+  });
 }
 
 /**
@@ -1527,35 +1686,38 @@ export function cmdWindowsReconcile(
   parseArgs(args, { flags: [], required: [], positionals: 0 });
 
   const p = ledgerPath(cwd);
-  let raw: string;
-  try {
-    raw = fs.readFileSync(p, 'utf8');
-  } catch (e: unknown) {
-    const code = (e && typeof e === 'object' && 'code' in e)
-      ? String((e as { code?: unknown }).code)
-      : '';
-    if (code === 'ENOENT') {
+  // #3780: reconcile rewrites the ledger — serialize on the same lock.
+  withLedgerLock(cwd, () => {
+    let raw: string;
+    try {
+      raw = fs.readFileSync(p, 'utf8');
+    } catch (e: unknown) {
+      const code = (e && typeof e === 'object' && 'code' in e)
+        ? String((e as { code?: unknown }).code)
+        : '';
+      if (code === 'ENOENT') {
+        throw new WindowsError(
+          REASON.WINDOWS_LEDGER_MISSING,
+          `No ledger at ${p} — nothing to reconcile.`,
+        );
+      }
       throw new WindowsError(
-        REASON.WINDOWS_LEDGER_MISSING,
-        `No ledger at ${p} — nothing to reconcile.`,
+        REASON.WINDOWS_LEDGER_MALFORMED,
+        `Could not read ledger at ${p} (${code || 'unknown fs error'}): ${(e as Error).message}.`,
       );
     }
-    throw new WindowsError(
-      REASON.WINDOWS_LEDGER_MALFORMED,
-      `Could not read ledger at ${p} (${code || 'unknown fs error'}): ${(e as Error).message}.`,
-    );
-  }
 
-  const result = reconcileLedger(raw, { now: nowIso() });
-  if (result.repaired || result.normalized) {
-    writeLedgerAtomic(cwd, result.ledger, { regenerateTable: true });
-  }
-  emit({
-    ok: true,
-    repaired: result.repaired,
-    normalized: result.normalized,
-    before: result.before,
-    ledger: result.ledger,
+    const result = reconcileLedger(raw, { now: nowIso() });
+    if (result.repaired || result.normalized) {
+      writeLedgerAtomic(cwd, result.ledger, { regenerateTable: true });
+    }
+    emit({
+      ok: true,
+      repaired: result.repaired,
+      normalized: result.normalized,
+      before: result.before,
+      ledger: result.ledger,
+    });
   });
 }
 

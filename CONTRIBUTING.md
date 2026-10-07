@@ -192,7 +192,7 @@ Contributor requirements (summary):
 - **Use the correct PR template** — there are separate templates for [Fix](.github/PULL_REQUEST_TEMPLATE/fix.md), [Enhancement](.github/PULL_REQUEST_TEMPLATE/enhancement.md), and [Feature](.github/PULL_REQUEST_TEMPLATE/feature.md). Using the wrong template or using the default template for a feature is a rejection reason.
 - **Link with a closing keyword** — use `Closes #123`, `Fixes #123`, or `Resolves #123` in the PR body. The CI check will fail and the PR will be auto-closed if no valid issue reference is found.
   - **Test-only and docs-only follow-up PRs may reference without closing.** If your PR is documentation or regression coverage only — say, a repo-wide guard for a fix that already shipped — and there is no open issue for it to close, use a non-closing reference instead: `Refs #123`. `Ref`, `Refs`, `References`, `Relates to`, `Related to`, and `Follow-up to` are all accepted in that position. Do **not** write a closing keyword against an already-closed issue to satisfy the check; on merge it closes nothing, and it trains readers to treat closing keywords as decorative.
-  - **Qualifying diff shape:** every changed file must be under `tests/`, under `docs/`, or a root-level `*.md` (`README.md`, `CONTRIBUTING.md`, …). This mirrors the doc-only classification the push gate already uses, and it is deliberately root-only — markdown under a subdirectory (`gsd-core/workflows/*.md`, `agents/*.md`, `commands/**/*.md`) is runtime-loaded text, not documentation, so it still requires a closing keyword. `CHANGELOG.md` is excluded too: edit it through a `.changeset/` fragment, never directly.
+  - **Qualifying diff shape:** every changed file must be under `tests/`, under `docs/`, under `.out-of-scope/` (knowledge-base entries recording declined requests), or a root-level `*.md` (`README.md`, `CONTRIBUTING.md`, …). This mirrors the doc-only classification the push gate already uses, and it is deliberately root-only — markdown under a subdirectory (`gsd-core/workflows/*.md`, `agents/*.md`, `commands/**/*.md`) is runtime-loaded text, not documentation, so it still requires a closing keyword. `CHANGELOG.md` is excluded too: edit it through a `.changeset/` fragment, never directly.
   - This weaker form is accepted **only** for that diff shape. A PR touching anything else still needs a closing keyword, and a PR with no issue reference at all still fails. On a very large PR (more than 100 changed files) the check cannot confirm the diff shape and falls back to requiring a closing keyword.
 - **One concern per PR** — bug fixes, enhancements, and features must be separate PRs
 - **No drive-by formatting** — don't reformat code unrelated to your change
@@ -1110,6 +1110,27 @@ explanation holds, and only you can say which. There is no "which source owns th
 question underneath it, because there is no shared file for two sources to own — to change
 an acknowledgment, amend the commit carrying it.
 
+**Splitting a workflow file into a spine + `detail/*.md` parts (ADR-4139, `workflow.compact_content`)**
+follows the same trailer idiom for one more case. See `docs/PARTITION-RULES.md` for the
+full rule set — the short version: a split moves text, it never restates it, so there is
+no drift-parity check to satisfy, only a guard (`tests/compact-content-partition-guard.test.cjs`)
+that a moved sentence stay moved and a protected sentence never move at all. When the guard
+reports an ordinary (non-protected) line that moved from a spine into its own detail part
+without a declaration, add:
+
+```
+Boundary-Move-Declared: gsd-core/workflows/plan-phase.md — condensed the filesystem-fallback banner into one summary paragraph
+```
+
+Same range (`git log $(git merge-base <base> HEAD)..HEAD`), same fail-closed behavior on an
+uncomputable range, same silent dedupe of identical declarations across a rebase, same hard
+error on two conflicting reasons for the same spine — it is a second key space alongside
+`Emitted-Drift-Ack-Hash`/`-Growth` above, not a different mechanism. Content on the
+protected-content list (guardrails, output-format contracts, few-shot examples the
+workflow's own steps depend on, security language, machine-parsed structural headings) has
+no trailer escape hatch: it may not leave the spine, moved or not, and the guard fails
+regardless of what the trailer says.
+
 `npm run regen:derived` still exists for the artifacts that ARE committed and derived —
 `sync-manifest-versions`, the ADR index, the capability matrix, the inventory manifest,
 the registry, and `tests/fixtures/install-tree/*.json` (`npm run gen:install-tree`, the
@@ -1284,6 +1305,21 @@ the pipeline runs exactly as it did before, and the per-job
 `scripts/ci-rebase-check.cjs` still catches the conflict. Full reference,
 including which lanes are deliberately *not* gated, is in
 [docs/TESTING-SUITES.md → The mergeability preflight](docs/TESTING-SUITES.md#the-mergeability-preflight).
+
+### A PR cannot merge onto a red base branch
+
+The `Base branch health` required check queries GitHub for the base branch's
+own last push-triggered Tests run and blocks your merge if that run is red —
+independent of whether your own PR's changes pass. This needs no
+branch-protection reconfiguration: it rides the existing "Required tests"
+check, the same status GitHub already requires before merge.
+
+If your PR is itself the fix-forward and you need to land it while the base
+branch is still red, a maintainer applies the `fix-next` label directly to
+your PR to explicitly bypass this one check. Applying a label requires
+GitHub write access to the repo, so a PR author cannot self-apply it to
+bypass the gate — only a maintainer or another collaborator with label-write
+permission can. Full decision logic is in `scripts/ci-next-health.cjs`.
 
 ### CI Test Quality Checks
 

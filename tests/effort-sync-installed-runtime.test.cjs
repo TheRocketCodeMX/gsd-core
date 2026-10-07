@@ -26,6 +26,7 @@ const { runNode } = require('./helpers/process-seam.cjs');
 
 const { runMinimalInstall } = require('./helpers/install-shared.cjs');
 const { cleanup } = require('./helpers.cjs');
+const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 // Absolute path to the built module, spawned in a child process below so the
 // JSON `cmdEffortSync` writes straight to fd 1 (via io.cjs's writeAllSync) can
@@ -53,7 +54,7 @@ describe('#2071: effort sync runs in an installed runtime (no package-root bin/i
       const gsdTools = path.join(configDir, 'gsd-core', 'bin', 'gsd-tools.cjs');
       const result = runNode(
         [gsdTools, 'effort', 'sync', '--config-dir', configDir],
-        { cwd: root, env: { ...process.env, HOME: root }, timeoutMs: 15000 },
+        { cwd: root, env: { ...process.env, HOME: root }, timeoutMs: PROBE_TIMEOUT_MS },
       );
       const combined = `${result.stdout || ''}${result.stderr || ''}`;
 
@@ -1189,6 +1190,18 @@ describe('#3706: frontmatter line editors are scoped to the matched block', () =
     } finally {
       cleanup(root);
     }
+  });
+
+  test('a body line starting with the key is not the line rewritten', (t) => {
+    // Bytes-based scoping (not a whole-file regex): only the frontmatter line
+    // may change, never a body line that happens to start with the key.
+    const { root, cwd, configDir, agentsDir, home } = makeSandbox();
+    t.after(() => cleanup(root));
+    writeProjectEffortConfig(cwd, 'xhigh');
+    const filePath = path.join(agentsDir, 'gsd-executor.md');
+    fs.writeFileSync(filePath, '---\nname: x\neffort: high\n---\n\neffort: not-the-frontmatter\n');
+    runEffortSync({ cwd, home, configDir });
+    assert.strictEqual(fs.readFileSync(filePath, 'utf8'), '---\nname: x\neffort: xhigh\n---\n\neffort: not-the-frontmatter\n');
   });
 
   test('a document whose frontmatter starts at byte 0 is byte-identical to before', () => {

@@ -21,6 +21,16 @@ const { promisify } = require('node:util');
 
 const { createTempDir, cleanup } = require('./helpers.cjs');
 const { getLiveCommandTokens } = require('./helpers/live-command-registry.cjs');
+const { LOOP_HOOK_POINT_CLI_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+
+// Bounds a full run of scripts/qa-smell-ratchet.cjs against the real repo
+// tree (a static-analysis scan, not an installer or a CLI subcommand). The
+// value numerically coincides with INSTALL_TIMEOUT_MS in
+// tests/helpers/timeouts.cjs, but describes a different class of work, so
+// it is kept local rather than reusing that constant. No fresh bench data
+// justifies a different number, so the pre-existing 120000ms literal is
+// preserved exactly under this name.
+const QA_SMELL_RATCHET_SCAN_TIMEOUT_MS = 120000;
 
 const { KIND, classify } = require('./qa/result.cjs');
 const { ORACLES, runOracles, SEVERITY } = require('./qa/oracles.cjs');
@@ -199,6 +209,42 @@ describe('RunResult classification', () => {
     const result = classify(raw);
     assert.notStrictEqual(result.kind, KIND.JSON);
     assert.strictEqual(result.kind, KIND.UNSTRUCTURED_ERROR);
+  });
+
+  // #5170: a failing verdict exits 1 and prints the verdict on stdout. The classifier reads that as the
+  // verb's answer (VERDICT_REFUSED, json = the verdict), but only when the payload IS a verdict.
+  for (const [label, stdout, kind] of [
+    ['a boolean `passed:false`', JSON.stringify({ passed: false, blockers: ['x'] }), KIND.VERDICT_REFUSED],
+    ['a boolean `block:true`', JSON.stringify({ block: true, message: 'm' }), KIND.VERDICT_REFUSED],
+    // Positive control: the same shapes with a POSITIVE verdict contradict their own exit status.
+    ['`passed:true` (the exit status contradicts the verdict)', JSON.stringify({ passed: true }), KIND.UNSTRUCTURED_ERROR],
+    ['`block:false` (the exit status contradicts the verdict)', JSON.stringify({ block: false, message: 'm' }), KIND.UNSTRUCTURED_ERROR],
+    ['`passed:true` with `block:true` (a negative `block` still refuses)', JSON.stringify({ passed: true, block: true }), KIND.VERDICT_REFUSED],
+    ['`passed:false` with `block:false` (a negative `passed` still refuses)', JSON.stringify({ passed: false, block: false }), KIND.VERDICT_REFUSED],
+    ['a non-boolean `passed`', JSON.stringify({ passed: 'no' }), KIND.UNSTRUCTURED_ERROR],
+    ['an array', JSON.stringify([{ passed: false }]), KIND.UNSTRUCTURED_ERROR],
+    ['null', 'null', KIND.UNSTRUCTURED_ERROR],
+    ['no stdout', '', KIND.UNSTRUCTURED_ERROR],
+    ['non-JSON stdout', 'passed: false', KIND.UNSTRUCTURED_ERROR],
+  ]) {
+    test(`exit 1 with stdout ${label} classifies as ${kind}`, () => {
+      const result = classify({ exitCode: 1, stdout, stderr: 'Command failed: gsd-tools phase uat-passed 1', argv: ['phase', 'uat-passed', '1'] });
+      assert.strictEqual(result.kind, kind);
+      if (kind === KIND.VERDICT_REFUSED) assert.deepStrictEqual(result.json, JSON.parse(stdout));
+      else assert.strictEqual(result.json, null);
+    });
+  }
+
+  test('a verdict-refused result passes the exit and json contracts: the exit status is the verb\'s own answer', () => {
+    const result = classify({ exitCode: 1, stdout: JSON.stringify({ passed: false }), stderr: '', argv: ['phase', 'uat-passed', '1'] });
+    assert.strictEqual(getOracle('exit-contract').check({ result }).ok, true);
+    assert.strictEqual(getOracle('json-contract').check({ result }).ok, true);
+  });
+
+  test('a structured stderr envelope still outranks a verdict-shaped stdout', () => {
+    const stderr = JSON.stringify({ ok: false, reason: 'usage', message: 'm' });
+    const result = classify({ exitCode: 1, stdout: JSON.stringify({ passed: false }), stderr, argv: ['x'] });
+    assert.strictEqual(result.kind, KIND.STRUCTURED_ERROR);
   });
 
   test('warnings array captures all stderr lines except the last', () => {
@@ -1617,7 +1663,7 @@ describe('worktree-concurrency (dedicated — trajectory 9 is not expressible as
     const { stdout } = await execFileAsync(
       process.execPath,
       [TOOLS_PATH, '--json-errors', ...argv],
-      { cwd: dir, encoding: 'utf-8', env, timeout: 60000 },
+      { cwd: dir, encoding: 'utf-8', env, timeout: LOOP_HOOK_POINT_CLI_TIMEOUT_MS },
     );
     return { stdout: stdout.trim(), startedAtMs, finishedAtMs: Date.now() };
   }
@@ -1849,7 +1895,7 @@ describe('qa-smell-ratchet gate (#3597)', () => {
     const result = spawnSync(
       process.execPath,
       ['-e', `require(${JSON.stringify(scriptPath)})`],
-      { cwd: repoRoot, timeout: 120000, encoding: 'utf-8' },
+      { cwd: repoRoot, timeout: QA_SMELL_RATCHET_SCAN_TIMEOUT_MS, encoding: 'utf-8' },
     );
     assert.strictEqual(
       result.status,

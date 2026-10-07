@@ -30,23 +30,37 @@ Valid GSD subagent types (use the exact name — do not fall back to 'general-pu
 **Runtime shim (REQUIRED — copy-paste verbatim):**
 
 ```bash
-_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif _gsd_at "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd_run is not on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; case "$(gsd_run runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') GSD_IDENTITY_STATUS=ok;; esac; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+# Workstream scope (#4456/#4545, references/workstream-flag.md): parse the `--ws <name>`
+# this skill was started with (canonical per-fence idiom — every fence below re-parses
+# it, fences are separate shells) and resolve every planning path from init.new-milestone.
+# PROJECT.md is shared at the root; REQUIREMENTS/ROADMAP/STATE live under the workstream.
+# No workstream → the root .planning/ files, exactly as before.
+GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+_gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
+PROJECT_PATH=$(_gsd_field "$INIT" project_path); REQUIREMENTS_PATH=$(_gsd_field "$INIT" requirements_path); ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path)
+CONFIG_PATH=$(_gsd_field "$INIT" config_path); MILESTONES_PATH=$(_gsd_field "$INIT" milestones_path); RESEARCH_DIR=$(_gsd_field "$INIT" research_dir)
 AUTO_MODE=false; case " $ARGUMENTS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
 # #74: an autonomous project (mode: yolo / workflow.auto_advance: true) must not
 # stall at this boundary when invoked WITHOUT the flag — consult the consolidated
 # record (chain flag OR workflow.auto_advance), the same read advance.md and the
 # discuss-phase family use. Flag-only derivation left headless pods printing a
 # human handoff no one is there to read.
-[ "$AUTO_MODE" = true ] || AUTO_MODE=$(gsd_run query check auto-mode --pick active 2>/dev/null || echo "false")
+[ "$AUTO_MODE" = true ] || AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
 MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 RESET_PHASES=false; case " $ARGUMENTS " in *" --reset-phase-numbers "*) RESET_PHASES=true;; esac
-AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper 2>/dev/null)
+AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)
 # #3602: bind the roadmapper's model here (dynamic_routing / model_profile), never
 # inherit it silently. Empty or "inherit" → omit `model=` at the spawn (#2517).
-ROADMAPPER_MODEL=$(gsd_run query resolve-model gsd-roadmapper --raw 2>/dev/null || true)
+ROADMAPPER_MODEL=$(gsd_run query resolve-model gsd-roadmapper --raw ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || true)
+if [ -f "$PROJECT_PATH" ] && [ -f "$REQUIREMENTS_PATH" ]; then echo "roadmap_guard: ok"; else echo "roadmap_guard: no-project"; fi
+echo "roadmap_paths: project=$PROJECT_PATH requirements=$REQUIREMENTS_PATH roadmap=$ROADMAP_PATH state=$STATE_PATH"
 ```
 
-**Guard — no project yet.** If `.planning/PROJECT.md` and `.planning/REQUIREMENTS.md` do not both exist, there is nothing to roadmap:
+Keep the resolved values for the rest of this skill: `{project_path}`, `{requirements_path}`, `{roadmap_path}`, `{state_path}`, `{config_path}`, `{milestones_path}`, `{research_dir}` below mean these Step-1 values. `GSD_WS` (`--ws <name>` or empty) is carried to every onward dispatch and pointer below.
+
+**Guard — no project yet.** If the fence printed `roadmap_guard: no-project` (the shared PROJECT.md or the workstream-resolved REQUIREMENTS.md is missing), there is nothing to roadmap:
 
 ```
 No project to roadmap yet. Run /gsd:new-project first (it defines PROJECT.md + REQUIREMENTS.md, then routes here after the strategy chain).
@@ -57,9 +71,13 @@ Stop.
 ## Step 2: Decide the mode (idempotency guard — mirrors plan-phase §1.6)
 
 ```bash
+GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+ROADMAP_PATH=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};process.stdout.write(String(o.roadmap_path||''))" "$INIT")
+MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 MODE=create
-if [ -f .planning/ROADMAP.md ]; then
-  if grep -q 'Elaborated against strategy' .planning/ROADMAP.md; then
+if [ -f "$ROADMAP_PATH" ]; then
+  if grep -q 'Elaborated against strategy' "$ROADMAP_PATH"; then
     MODE=current
   else
     MODE=elaborate   # unmarked roadmap present
@@ -71,11 +89,11 @@ if [ -f .planning/ROADMAP.md ]; then
   fi
 fi
 # Milestone extend: a fresh milestone's requirements sit on top of an existing roadmap.
-if [ "$MILESTONE_MODE" = true ] && [ -f .planning/ROADMAP.md ]; then MODE=extend; fi
+if [ "$MILESTONE_MODE" = true ] && [ -f "$ROADMAP_PATH" ]; then MODE=extend; fi
 echo "roadmap_mode: $MODE"
 ```
 
-**Determine the phase-template mode** (Vertical MVP vs Horizontal Layers). `new-project` persists the user's Step-7.5 choice as a `<!-- roadmap-mode: ... -->` marker in PROJECT.md so the deferred roadmap honors it:
+**Determine the phase-template mode** (Vertical MVP vs Horizontal Layers). `new-project` persists the user's Step-7.5 choice as a `<!-- roadmap-mode: ... -->` marker in PROJECT.md so the deferred roadmap honors it (PROJECT.md is shared, so the root path is `{project_path}` in every mode):
 
 ```bash
 PROJECT_MODE=$(grep -oiE 'roadmap-mode:[[:space:]]*[a-z]+' .planning/PROJECT.md 2>/dev/null | head -1 | grep -oiE '(mvp|standard)' | tr 'A-Z' 'a-z')
@@ -98,7 +116,7 @@ if [ -z "$PROJECT_MODE" ]; then [ "$AUTO_MODE" = true ] && PROJECT_MODE=mvp || P
 ◆ Spawning roadmapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
 ```
 
-Spawn `gsd-roadmapper` with the block for the resolved `MODE`, passing `model="{ROADMAPPER_MODEL}"` — **omit the `model=` parameter entirely when `ROADMAPPER_MODEL` is `inherit` or empty** (an empty value 404s on runtimes without native tier aliases; omitting it inherits the orchestrator's model — #2517, see @gsd-core/references/model-profile-resolution.md). Substitute `${AGENT_SKILLS_ROADMAPPER}` and, for MVP projects, the Step-2 template rule.
+Spawn `gsd-roadmapper` with the block for the resolved `MODE`, passing `model="{ROADMAPPER_MODEL}"` — **omit the `model=` parameter entirely when `ROADMAPPER_MODEL` is `inherit` or empty** (an empty value 404s on runtimes without native tier aliases; omitting it inherits the orchestrator's model — #2517, see @gsd-core/references/model-profile-resolution.md). Substitute `${AGENT_SKILLS_ROADMAPPER}`, the Step-1 `{…_path}` / `{research_dir}` values (workstream-resolved; the root `.planning/` files when no workstream is set) and, for MVP projects, the Step-2 template rule.
 
 **MODE=create:**
 
@@ -106,10 +124,10 @@ Spawn `gsd-roadmapper` with the block for the resolved `MODE`, passing `model="{
 Agent(prompt="
 <planning_context>
 <required_reading>
-- .planning/PROJECT.md (Project context)
-- .planning/REQUIREMENTS.md (v1 Requirements)
-- .planning/research/SUMMARY.md (Research findings - if exists)
-- .planning/config.json (Granularity and mode settings)
+- {project_path} (Project context)
+- {requirements_path} (v1 Requirements)
+- {research_dir}/SUMMARY.md (Research findings - if exists)
+- {config_path} (Granularity and mode settings)
 - .planning/adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md (locked strategy decisions - read every one that exists)
 </required_reading>
 
@@ -124,7 +142,7 @@ Create the roadmap:
 4. Detail the near-horizon phase(s); keep later phases coarse. Where strategy artifacts (ADR / SECURITY / FRONTEND / TEST / INFRA / CICD) exist, shape phase boundaries against those locked decisions AND write the marker `**Elaborated against strategy:** <artifacts> (<date>)` near the top of ROADMAP.md so the build loop never re-elaborates.
 5. Apply the phase-template mode: {MVP template rule if PROJECT_MODE=mvp, else standard}
 6. Validate 100% coverage
-7. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability), then return ROADMAP CREATED with a summary.
+7. Write files immediately ({roadmap_path}, {state_path}, update {requirements_path} traceability), then return ROADMAP CREATED with a summary.
 </instructions>
 ", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Create roadmap")
 ```
@@ -132,7 +150,7 @@ Create the roadmap:
 **MODE=elaborate** (a coarse roadmap predates the strategy artifacts — mirrors `workflows/plan-phase/modes/strategy-elaboration.md`):
 
 ```text
-Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon .planning/ROADMAP.md phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Elaborate roadmap against strategy")
+Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon {roadmap_path} phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Elaborate roadmap against strategy")
 ```
 
 **MODE=extend** (a new milestone's requirements on top of an existing roadmap):
@@ -141,13 +159,13 @@ Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): deta
 Agent(prompt="
 <planning_context>
 <required_reading>
-- .planning/PROJECT.md (current milestone context — `## Current Milestone`)
-- .planning/REQUIREMENTS.md (this milestone's requirements)
-- .planning/ROADMAP.md (existing roadmap — APPEND to it, do not regenerate)
-- .planning/STATE.md (current_milestone / active milestone)
-- .planning/MILESTONES.md (if exists)
-- .planning/config.json (phase_id_convention, granularity)
-- .planning/research/SUMMARY.md (if exists)
+- {project_path} (current milestone context — `## Current Milestone`)
+- {requirements_path} (this milestone's requirements)
+- {roadmap_path} (existing roadmap — APPEND to it, do not regenerate)
+- {state_path} (current_milestone / active milestone)
+- {milestones_path} (if exists)
+- {config_path} (phase_id_convention, granularity)
+- {research_dir}/SUMMARY.md (if exists)
 - strategy artifacts (.planning/adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md) — read every one that exists
 </required_reading>
 
@@ -162,12 +180,12 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 4. Detail the near-horizon phase(s); keep this milestone's later phases coarse — they get elaborated against this milestone's locked decisions at the end of ITS strategy chain (or at plan-phase §1.6), not baked now.
 5. Do **NOT** write the `Elaborated against strategy` marker for the appended phases, and REMOVE any existing marker line: this milestone's strategy artifacts run AFTER this step, so the roadmap must stay unmarked until the chain-end elaborate pass (or plan-phase §1.6) details the new phases against the fresh decisions. Leaving it marked would suppress that elaboration.
 6. Apply the phase-template mode: {MVP template rule if PROJECT_MODE=mvp, else standard}
-7. Validate 100% coverage of this milestone's requirements. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability), then return ROADMAP CREATED with a summary.
+7. Validate 100% coverage of this milestone's requirements. Write files immediately ({roadmap_path}, {state_path}, update {requirements_path} traceability), then return ROADMAP CREATED with a summary.
 </instructions>
 ", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Extend roadmap for milestone")
 ```
 
-> **ORCHESTRATOR RULE:** the roadmapper **runs in a subagent** — after spawning, stop and wait (silence during the subagent run is expected; do not kill it, do not read files or run tests meanwhile). Then re-read ROADMAP.md — never route against the pre-spawn roadmap.
+> **ORCHESTRATOR RULE:** the roadmapper **runs in a subagent** — after spawning, stop and wait (silence during the subagent run is expected; do not kill it, do not read files or run tests meanwhile). Then re-read `{roadmap_path}` — never route against the pre-spawn roadmap.
 
 ## Step 4: Present, approve, commit
 
@@ -193,15 +211,19 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 ---
 ```
 
-**Approval:** In **auto** mode, skip the gate — auto-approve. In **interactive** mode, AskUserQuestion (header "Roadmap"): "Approve" (commit + continue) / "Adjust phases" (get notes, re-spawn the roadmapper with a `<revision>` block editing files in place, loop until approved) / "Review full file" (`cat .planning/ROADMAP.md`, re-ask).
+**Approval:** In **auto** mode, skip the gate — auto-approve. In **interactive** mode, AskUserQuestion (header "Roadmap"): "Approve" (commit + continue) / "Adjust phases" (get notes, re-spawn the roadmapper with a `<revision>` block editing files in place, loop until approved) / "Review full file" (`cat "{roadmap_path}"`, re-ask).
 
 **Commit** (after approval or in auto) with the message matching the mode:
 
 ```bash
+GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+_gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
+ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path); REQUIREMENTS_PATH=$(_gsd_field "$INIT" requirements_path)
 if [ "$MODE" = extend ]; then MSG="docs: extend roadmap for milestone ([N] phases added)";
 elif [ "$MODE" = elaborate ]; then MSG="docs: elaborate roadmap against strategy";
 else MSG="docs: create roadmap ([N] phases)"; fi
-gsd_run query commit "$MSG" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md
+gsd_run query commit "$MSG" --files "$ROADMAP_PATH" "$STATE_PATH" "$REQUIREMENTS_PATH"
 ```
 
 ## Step 5.5: Offer capsule seeding
@@ -214,8 +236,8 @@ SEED_OFFER=$(gsd_run query config-get context_lifecycle.seed_offer --default pro
 ```
 
 - `CL_ENABLED=false` or `SEED_OFFER=off` → skip silently, continue to Step 5 unchanged.
-- `SEED_OFFER=auto`, OR `AUTO_MODE=true` → `Skill(skill="gsd-context", args="seed --milestone --auto")`, then continue to Step 5.
-- `SEED_OFFER=prompt` (interactive) → ONE AskUserQuestion (header "Context") — "Seed phase context capsules now, while this session's context is richest? Recommended right after roadmap approval." → "Yes" (seed) / "Skip" (TEXT_MODE: numbered-list fallback). "Yes" → `Skill(skill="gsd-context", args="seed --milestone")`, then continue to Step 5. "Skip" → continue to Step 5 unchanged.
+- `SEED_OFFER=auto`, OR `AUTO_MODE=true` → `Skill(skill="gsd-context", args="seed --milestone --auto ${GSD_WS}")`, then continue to Step 5.
+- `SEED_OFFER=prompt` (interactive) → ONE AskUserQuestion (header "Context") — "Seed phase context capsules now, while this session's context is richest? Recommended right after roadmap approval." → "Yes" (seed) / "Skip" (TEXT_MODE: numbered-list fallback). "Yes" → `Skill(skill="gsd-context", args="seed --milestone ${GSD_WS}")`, then continue to Step 5. "Skip" → continue to Step 5 unchanged.
 
 Seeding quality is stamped honestly — a thin session produces `artifact-distilled` capsules, and that is fine.
 
@@ -226,7 +248,7 @@ Seeding quality is stamped honestly — a thin session produces `artifact-distil
 **Else if `AUTO_MODE=true`:** the roadmap now exists → land in the build loop by dispatching the first phase's discussion via the **Skill** tool (never an Agent spawn):
 
 ```
-Skill(skill="gsd-discuss-phase", args="1 --auto")
+Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")
 ```
 
 **Else (interactive standalone / chain-end pointer):** print the next-step pointer and stop:
@@ -240,9 +262,9 @@ Skill(skill="gsd-discuss-phase", args="1 --auto")
 
 /clear then:
 
-/gsd:discuss-phase 1 — gather context and clarify approach
+/gsd:discuss-phase 1 ${GSD_WS} — gather context and clarify approach
 
-Also: /gsd:plan-phase 1 — skip discussion, plan directly
+Also: /gsd:plan-phase 1 ${GSD_WS} — skip discussion, plan directly
 
 ---
 ```
@@ -253,5 +275,6 @@ Also: /gsd:plan-phase 1 — skip discussion, plan directly
 - [ ] Exactly one ROADMAP.md write path per transition (create / elaborate / extend / current), chosen by the idempotency guard.
 - [ ] When strategy artifacts exist, the produced ROADMAP.md carries `**Elaborated against strategy:**` so plan-phase §1.6 evaluates `skip` (born-elaborated).
 - [ ] Auto mode chains to `gsd-discuss-phase 1`; interactive prints the `/gsd:discuss-phase 1` pointer; `--milestone` returns to the caller without chaining.
+- [ ] Every planning path (guard, mode detection, roadmapper reading list, commit) is resolved from `init.new-milestone` with `--ws` forwarded — PROJECT.md shared at the root, REQUIREMENTS/ROADMAP/STATE workstream-scoped; flat mode resolves to the root `.planning/` files.
 - [ ] The `gsd-roadmapper` agent is spawned (never re-implemented) and the roadmapper agent + §1.6 gate are left untouched.
 </success_criteria>

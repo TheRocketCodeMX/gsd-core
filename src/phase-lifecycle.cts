@@ -25,6 +25,9 @@ import type { MarkdownTable } from './markdown-table.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- phase-id.cjs is an export= CommonJS module
 import phaseIdMod = require('./phase-id.cjs');
 const { isSentinelPhaseId } = phaseIdMod;
+// #5060: `phase-status.cjs` is a load-time leaf (no top-level requires), safe
+// to import here for the ROADMAP Status-cell reader.
+import { WIRE_STATUS, parseRoadmapStatusCell } from './phase-status.cjs';
 
 /** Result of deriveProgressFromRoadmap. */
 export interface RoadmapProgress {
@@ -99,9 +102,6 @@ export function deriveProgressFromRoadmap(roadmapContent: string): RoadmapProgre
   if (table) {
     const allRows = table.rows;
 
-    const completed = allRows.filter((r) => /^complete$/i.test((r['Status'] ?? '').trim())).length;
-    completedPhases = completed > 0 ? completed : null;
-
     // Data rows only (exclude sentinel phases 0 and 999.x).
     // #3185: canonical sentinel predicate (SENTINEL_RANGES [0,999]) — this was a local 999-only literal that admitted Phase 0.
     const dataRows = allRows.filter((r) => {
@@ -109,6 +109,13 @@ export function deriveProgressFromRoadmap(roadmapContent: string): RoadmapProgre
       return /^\d/.test(phase) && !isSentinelPhaseId(phase);
     });
     totalPhases = dataRows.length > 0 ? dataRows.length : null;
+
+    // #5060: routed through the Phase Status Module's `parseRoadmapStatusCell`
+    // owner (rather than a local `/^complete$/i` regex) and counted over
+    // `dataRows` (not `allRows`) — a sentinel row's Status cell must never
+    // contribute to `completedPhases`.
+    const completed = dataRows.filter((r) => parseRoadmapStatusCell(r['Status']) === WIRE_STATUS.COMPLETE).length;
+    completedPhases = completed > 0 ? completed : null;
 
     let totalPlansSum = 0;
     for (const r of allRows) {
@@ -150,4 +157,62 @@ export function clampPercentFromFraction(fraction: number): number {
 export function clampPercent(completed: number, total: number): number {
   if (!total || total <= 0) return 0;
   return clampPercentFromFraction(completed / total);
+}
+
+/**
+ * How many cells of a `width`-cell progress bar are filled for `percent`.
+ *
+ * #4294: the RENDER half's kernel — the counterpart of `clampPercentFromFraction`
+ * one layer down. That function owns `fraction -> integer percent`; this one
+ * owns `integer percent -> filled cells`, and is the single place that rounding
+ * is expressed. Five inline copies of the rounding carried it before this
+ * change — three in `commands.cts`, and one each in `gsd2-import.cts` and
+ * `formatProgressMachineSegment` here; the latter two used `/ 10` with the
+ * width already substituted (`pct` in `gsd2-import.cts`, `clamped` in the
+ * formatter). (#4294 counts SIX call sites because it counts
+ * `cmdStateUpdateProgress` and `syncCore` separately; #4231 had already routed
+ * both through `formatProgressMachineSegment` — as it does
+ * `applyPostSyncPreservation` — so by this branch's base they share one copy.)
+ * Every copy saturated: at width 10 that rounds to a full bar from 95 up, at
+ * width 20 from 98 up, so a project at 19/20 plans drew the same bar as a
+ * shipped one beside a number that said otherwise.
+ *
+ * Contract:
+ *   - A FULL bar is reserved for an actual 100. Below 100 the fill is held one
+ *     cell short of the width. This is the only departure from the old formula:
+ *     at width 10 exactly 95-99 move (10 -> 9), at width 20 exactly 98-99
+ *     (20 -> 19); every other percent in 0-100 rounds as before.
+ *   - `null` / `undefined` / non-finite renders an empty bar, matching the
+ *     `percent === null ? 0 : ...` guard the `progress` renderers already carried.
+ *   - Out-of-range input is clamped to 0-100 before rounding, so the count is
+ *     always within `[0, width]` and a `'░'.repeat(width - filled)` can never
+ *     be handed a negative count (the old inline form threw `RangeError` at
+ *     120%). A non-positive width yields 0.
+ *
+ * Callers wanting the glyph run call `renderProgressBar`; this is exported so
+ * the rounding rule can be pinned directly against the legacy curve.
+ */
+export function progressBarFilledCells(percent: number | null | undefined, width: number): number {
+  const cells = Number.isFinite(width) && width > 0 ? Math.floor(width) : 0;
+  if (cells === 0) return 0;
+  if (typeof percent !== 'number' || !Number.isFinite(percent)) return 0;
+  const clamped = Math.max(0, Math.min(100, percent));
+  if (clamped >= 100) return cells;
+  // Scale by the WIDTH, not by 100 — this is cells-from-percent, not the
+  // completion-ratio derivation lint-completion-ratio-drift.cjs guards.
+  const rounded = Math.round((clamped / 100) * cells);
+  return Math.min(rounded, cells - 1);
+}
+
+/**
+ * Render the glyph run of a `width`-cell progress bar for `percent` —
+ * `'█'` for each filled cell, `'░'` for the rest, always exactly `width`
+ * glyphs (an empty string for a non-positive width). Brackets, the printed
+ * percent and any suffix stay with the caller; the fill rule is
+ * `progressBarFilledCells` (#4294).
+ */
+export function renderProgressBar(percent: number | null | undefined, width: number): string {
+  const filled = progressBarFilledCells(percent, width);
+  const cells = Number.isFinite(width) && width > 0 ? Math.floor(width) : 0;
+  return '█'.repeat(filled) + '░'.repeat(cells - filled);
 }

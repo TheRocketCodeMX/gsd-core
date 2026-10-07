@@ -1,5 +1,5 @@
 {
-  "maxSites": 89,
+  "maxSites": 69,
   "grace": 2,
-  "note": "align-1.13.0: upstream ceiling 84 + the fork's 5 structural sites carried since align-1.11.0 — the router-shadowing guard (see #1969) and 4 install-copy pins (see #935) are assertions require() cannot express."
+  "note": "align-1.16.0: upstream ceiling 64 + the fork's 5 structural sites carried since align-1.11.0 — the router-shadowing guard (see #1969) and 4 install-copy pins (see #935) are assertions require() cannot express."
 }

@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { HOOK_ON_CRASH, allow, deny, crash } = require('./lib/hook-exit.js');
-const { reportIfUndetermined } = require('./lib/git-probe.js');
+const { reportIfUndetermined, BLOCKING_GUARD_PROBE_TIMEOUT_MS } = require('./lib/git-probe.js');
 
 // This guard's outer catch has always exited 0 (fail open): a path guard that
 // cannot resolve the worktree must not block the user's edit — its whole job
@@ -28,7 +28,11 @@ const { reportIfUndetermined } = require('./lib/git-probe.js');
 // rather than inheriting a default (#3911).
 const ON_CRASH = HOOK_ON_CRASH.ALLOW;
 
-const SPAWNOPT = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000, windowsHide: true };
+// A timed-out git probe fails OPEN (see ON_CRASH above), so the per-probe
+// budget is the shared blocking-guard value, sized for a starved host rather
+// than git's ~0.1s typical run (rationale and arithmetic in
+// hooks/lib/git-probe.js, #5180). This guard runs at most 3 sequential probes.
+const SPAWNOPT = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: BLOCKING_GUARD_PROBE_TIMEOUT_MS, windowsHide: true };
 
 function git(args, cwd) {
   return spawnSync('git', args, { ...SPAWNOPT, cwd });
@@ -163,17 +167,37 @@ process.stdin.on('end', () => {
     // returns a path containing .git/worktrees/ as a component.
     // In the main repo or a submodule it returns .git (or a path without /worktrees/).
     // This approach works even when cwd is a subdirectory of the worktree.
-    const gitDirResult = git(['rev-parse', '--git-dir'], cwd);
+    // Combined into one spawn — git rev-parse accepts multiple query flags in
+    // one invocation and prints one line of output per flag, in the exact
+    // order given, reducing this guard's worst-case subprocess count under
+    // CI/load contention (three spawns collapse into one). `--abbrev-ref HEAD`
+    // is used instead of `symbolic-ref --short HEAD` because it is combinable
+    // (a single `rev-parse` call) and behaviorally equivalent for this guard's
+    // branch-acceptance check, including on detached HEAD: `--abbrev-ref`
+    // returns the literal string `HEAD` there (exit 0), which the acceptance
+    // regex below also rejects — the same guard outcome as symbolic-ref's
+    // exit-128/empty-stdout failure. Do not change any timeout value as part
+    // of this change, only the spawn count.
+    const combinedResult = git(['rev-parse', '--git-dir', '--abbrev-ref', 'HEAD', '--show-toplevel'], cwd);
     // #3911: a timeout/spawn-failure result is indistinguishable from a clean
     // "not a git repo" answer by status/stdout alone — reportIfUndetermined
     // is a no-op on a genuine negative and only fires the diagnostic when the
     // probe itself could not run. The allow() below is UNCHANGED either way.
-    reportIfUndetermined('gsd-worktree-path-guard', 'git rev-parse --git-dir', gitDirResult);
-    if (gitDirResult.status !== 0 || !gitDirResult.stdout) {
+    reportIfUndetermined(
+      'gsd-worktree-path-guard',
+      'git rev-parse --git-dir --abbrev-ref HEAD --show-toplevel',
+      combinedResult
+    );
+    if (combinedResult.status !== 0 || !combinedResult.stdout) {
       allow(undefined); // not a git repo — pass through
     }
 
-    const gitDir = gitDirResult.stdout.trim();
+    const combinedLines = combinedResult.stdout.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+    if (combinedLines.length < 3) {
+      allow(undefined); // malformed/short output — can't determine root, fail open
+    }
+    const [gitDir, branch, wtTopRaw] = combinedLines;
+
     // A linked worktree's --git-dir contains .git/worktrees/ as a path component
     const isLinkedWorktree = /[/\\]\.git[/\\]worktrees[/\\]/.test(gitDir);
     if (!isLinkedWorktree) {
@@ -186,23 +210,14 @@ process.stdin.on('end', () => {
     // created linked worktree (plain non-GSD work, e.g. Claude Code plan-mode) is
     // on the user's own branch, so the guard must be a no-op there. Detached HEAD
     // / error → not GSD-managed → no-op.
-    const branchResult = git(['symbolic-ref', '--short', 'HEAD'], cwd);
-    reportIfUndetermined('gsd-worktree-path-guard', 'git symbolic-ref --short HEAD', branchResult);
-    const branch = branchResult.status === 0 && branchResult.stdout ? branchResult.stdout.trim() : '';
     // #3021: accept worktree-wf_<runid>-<n> branches (Workflow backend's naming).
     if (!/^((worktree-)?agent-|worktree-wf_)[A-Za-z0-9._/-]+$/.test(branch)) {
       allow(undefined); // not a GSD-managed executor worktree — no-op
     }
 
-    // Get the raw --show-toplevel output for the worktree (cwd).
+    // wtTopRaw: the raw --show-toplevel output for the worktree (cwd).
     // We keep it raw (not path.resolve'd) to compare directly with the
     // file's toplevel — same git binary, same format, no normalization needed.
-    const wtTopResult = git(['rev-parse', '--show-toplevel'], cwd);
-    reportIfUndetermined('gsd-worktree-path-guard', 'git rev-parse --show-toplevel (worktree cwd)', wtTopResult);
-    if (wtTopResult.status !== 0 || !wtTopResult.stdout) {
-      allow(undefined); // can't determine root — fail open
-    }
-    const wtTopRaw = wtTopResult.stdout.trim();
 
     // #2595 (review Major 3): read the field TYPED. `?.file_path || ''` let a
     // non-string through — `[]` and `{}` are truthy, so they survived the

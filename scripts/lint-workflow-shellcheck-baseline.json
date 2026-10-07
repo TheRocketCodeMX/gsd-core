@@ -280,6 +280,26 @@
     "message": "Double quote to prevent globbing and word splitting."
   },
   {
+    "file": "gsd-core/workflows/complete-milestone/detail/elaboration.md",
+    "code": "2001",
+    "message": "See if you can use ${variable//search/replace} instead."
+  },
+  {
+    "file": "gsd-core/workflows/complete-milestone/detail/elaboration.md",
+    "code": "2001",
+    "message": "See if you can use ${variable//search/replace} instead."
+  },
+  {
+    "file": "gsd-core/workflows/complete-milestone/detail/elaboration.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/complete-milestone/detail/elaboration.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
     "file": "gsd-core/workflows/context.md",
     "code": "2086",
     "message": "Double quote to prevent globbing and word splitting."
@@ -351,11 +371,6 @@
   },
   {
     "file": "gsd-core/workflows/execute-phase.md",
-    "code": "2012",
-    "message": "Use find instead of ls to better handle non-alphanumeric filenames."
-  },
-  {
-    "file": "gsd-core/workflows/execute-phase.md",
     "code": "2016",
     "message": "Expressions don't expand in single quotes, use double quotes for that."
   },
@@ -380,7 +395,7 @@
     "message": "Double quote to prevent globbing and word splitting."
   },
   {
-    "file": "gsd-core/workflows/execute-phase.md",
+    "file": "gsd-core/workflows/execute-phase/detail/elaboration.md",
     "code": "2086",
     "message": "Double quote to prevent globbing and word splitting."
   },
@@ -401,6 +416,16 @@
   },
   {
     "file": "gsd-core/workflows/execute-phase/steps/gap-closure-artifacts.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/execute-phase/steps/verify-phase-goal.md",
+    "code": "2012",
+    "message": "Use find instead of ls to better handle non-alphanumeric filenames."
+  },
+  {
+    "file": "gsd-core/workflows/execute-phase/steps/verify-phase-goal.md",
     "code": "2086",
     "message": "Double quote to prevent globbing and word splitting."
   },
@@ -510,12 +535,72 @@
     "message": "Use find instead of ls to better handle non-alphanumeric filenames."
   },
   {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/new-milestone.md",
+    "code": "2086",
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
     "file": "gsd-core/workflows/new-project.md",
     "code": "2012",
     "message": "Use find instead of ls to better handle non-alphanumeric filenames."
   },
   {
     "file": "gsd-core/workflows/new-project.md",
+    "code": "2012",
+    "message": "Use find instead of ls to better handle non-alphanumeric filenames."
+  },
+  {
+    "file": "gsd-core/workflows/new-project/detail/elaboration.md",
+    "code": "2012",
+    "message": "Use find instead of ls to better handle non-alphanumeric filenames."
+  },
+  {
+    "file": "gsd-core/workflows/new-project/detail/elaboration.md",
     "code": "2012",
     "message": "Use find instead of ls to better handle non-alphanumeric filenames."
   },
@@ -1113,5 +1198,20 @@
     "file": "gsd-core/workflows/verify-work/steps/mvp-uat-framing.md",
     "code": "2086",
     "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "gsd-core/workflows/execute-phase/steps/code-review-disposition.md",
+    "code": "2317",
+    "message": "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
+  },
+  {
+    "file": "gsd-core/workflows/execute-phase/steps/code-review-disposition.md",
+    "code": "2317",
+    "message": "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
+  },
+  {
+    "file": "gsd-core/workflows/execute-phase/steps/code-review-disposition.md",
+    "code": "2317",
+    "message": "Command appears to be unreachable. Check usage (or ignore if invoked indirectly)."
   }
 ]

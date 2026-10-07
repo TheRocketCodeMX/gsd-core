@@ -56,7 +56,7 @@ points.
 | `assumption-delta` | feature | full | `>=1.6.0` | `plan:pre` | contribution | first-party |
 | `audit` | feature | full | `>=1.6.0` | — | — | first-party |
 | `broken-windows` | feature | full | `>=1.7.0` | `ship:pre` | gate | first-party |
-| `claude-orchestration` | feature | full | `>=1.7.0` | `plan:post`, `execute:wave:pre` | contribution | first-party |
+| `claude-orchestration` | feature | full | `>=1.7.0` | `plan:post` | contribution | first-party |
 | `code-review` | feature | full | `>=1.6.0` | `execute:wave:post`, `execute:post` | step | first-party |
 | `context` | feature | full | `>=1.6.0` | `plan:pre` | contribution | first-party |
 | `drift` | feature | full | `>=1.6.0` | `plan:pre`, `execute:wave:post` | gate | first-party |
@@ -108,7 +108,7 @@ emission), so their extension-point and hook-kind cells are `—`.
 | `windsurf` | runtime | core | `>=1.6.0` | — | — | first-party |
 | `zcode` | runtime | core | `>=1.6.0` | — | — | first-party |
 
-### Reviewer capabilities (role: reviewer) — 5
+### Reviewer capabilities (role: reviewer) — 4
 
 Reviewer capabilities declare a cross-AI **reviewer lane** — one external CLI or
 model endpoint `/gsd-review` hands a plan to (ADR-2782 D3). They are not install
@@ -126,7 +126,6 @@ at install like any other — see
 | id | role | tier | engines.gsd | extension points | hook kinds | source |
 |---|---|---|---|---|---|---|
 | `coderabbit` | reviewer | full | `>=1.8.0` | — | — | first-party |
-| `gemini` | reviewer | full | `>=1.8.0` | — | — | first-party |
 | `llama-cpp` | reviewer | full | `>=1.8.0` | — | — | first-party |
 | `lm-studio` | reviewer | full | `>=1.8.0` | — | — | first-party |
 | `ollama` | reviewer | full | `>=1.8.0` | — | — | first-party |

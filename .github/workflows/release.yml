@@ -364,7 +364,8 @@ jobs:
     # rc-coverage-gate merges all three before enforcing the threshold. 20m
     # gives each shard generous headroom over its ~1/3 share of the unsharded
     # run's measured cost.
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -452,7 +453,7 @@ jobs:
       # exactly the layout c8 expects from a single run (test.yml's
       # coverage-gate job does the identical merge for the same reason).
       - name: Download every shard's raw coverage
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: coverage-tmp-rc-shard-*
           path: coverage/tmp
@@ -556,8 +557,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run --tag next
 
       - name: Tag and push
@@ -579,11 +579,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
+
       - name: Publish to npm (next)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public --tag next
 
       - name: Create GitHub pre-release
@@ -616,6 +619,7 @@ jobs:
 
       - name: Verify publish
         if: ${{ !inputs.dry_run }}
+        timeout-minutes: 15
         env:
           PRE_VERSION: ${{ steps.prerelease.outputs.pre_version }}
         run: node scripts/verify-npm-publish.cjs --package @therocketcode/gsd-core --version "$PRE_VERSION" --dist-tag next
@@ -666,7 +670,8 @@ jobs:
     # unit-coverage step, which is the one that actually hit the 30m cap
     # (run 33988966357: all tests passed, 0 failures, cancelled ~80s into the
     # post-test coverage merge).
-    timeout-minutes: 20
+    # FORK (release): 30, not upstream 20 — the fork suite adds ~4 min of fork tests, so the heaviest LPT shard (2/3) ran past 20 min on the 2.7.0 finalize and was cancelled (shards 1/3 and 3/3: 17 and 13 min).
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -731,7 +736,7 @@ jobs:
         run: npm ci
 
       - name: Download every shard's raw coverage
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: coverage-tmp-finalize-shard-*
           path: coverage/tmp
@@ -816,8 +821,7 @@ jobs:
       # npm bundled with Node 24 (pinned via setup-node) already supports trusted publishing (#318)
 
       - name: Dry-run publish validation
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --dry-run
 
       - name: Create PR to merge release back to main
@@ -869,11 +873,14 @@ jobs:
           fi
           git push origin "$BRANCH" --tags
 
+      - name: Check npm CLI supports trusted publishing (npm >= 11.5.1)
+        # FORK (release): fail fast instead of self-upgrading npm (#318 forbids a runtime npm self-upgrade in release lanes).
+        run: node -e "const v=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); const ok=v[0]>11||(v[0]===11&&(v[1]>5||(v[1]===5&&v[2]>=1))); console.log('npm '+v.join('.')); if(!ok){console.error('::error::npm '+v.join('.')+' is below 11.5.1 — trusted publishing (OIDC) will not work; bump NODE_VERSION'); process.exit(1)}"
+
       - name: Publish to npm (latest)
         if: ${{ !inputs.dry_run }}
-        # Token auth via NPM_TOKEN secret; provenance is still signed via the OIDC id-token permission.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Trusted publishing: npm exchanges the job OIDC id-token for a short-lived publish credential; provenance is signed the same way.
+        # FORK (release): npm trusted publishing (OIDC via id-token: write) — no stored npm credential; npm refused token publishes from 2.7.0 on.
         run: npm publish --provenance --access public
 
       - name: Create GitHub Release
@@ -906,6 +913,7 @@ jobs:
 
       - name: Verify publish
         if: ${{ !inputs.dry_run }}
+        timeout-minutes: 15
         env:
           VERSION: ${{ inputs.version }}
         run: node scripts/verify-npm-publish.cjs --package @therocketcode/gsd-core --version "$VERSION" --dist-tag latest

@@ -30,11 +30,14 @@ const {
 // ─── Frozen taxonomy lock ─────────────────────────────────────────────────────
 // #175: SdkDispatchFailed and SdkLoadFailed are removed from the closed enum.
 // The set shrinks from 6 to 4 values.
+// #5118: VerificationStatusInvalid joins the closed enum (5 values) — a handler
+// read a verification report whose status is outside the closed set.
 const EXPECTED_ERROR_KINDS = Object.freeze(new Set([
   'UnknownCommand',
   'InvalidArgs',
   'HandlerRefusal',
   'HandlerFailure',
+  'VerificationStatusInvalid',
 ]));
 
 describe('CommandRoutingHub — ERROR_KINDS taxonomy', () => {
@@ -42,7 +45,7 @@ describe('CommandRoutingHub — ERROR_KINDS taxonomy', () => {
     assert.ok(Object.isFrozen(ERROR_KINDS), 'ERROR_KINDS must be frozen');
   });
 
-  test('ERROR_KINDS contains exactly the 4 documented values (SdkDispatchFailed and SdkLoadFailed removed)', () => {
+  test('ERROR_KINDS contains exactly the 5 documented values (SdkDispatchFailed and SdkLoadFailed removed; VerificationStatusInvalid added by #5118)', () => {
     const actual = new Set(Object.values(ERROR_KINDS));
     assert.deepStrictEqual(actual, EXPECTED_ERROR_KINDS);
   });
@@ -962,20 +965,48 @@ describe('CommandRoutingHub — exitReason? field on InvalidArgs (#1644 / amendm
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { runGsdTools } = require('./helpers.cjs');
+const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 
-test('bug #167: query meta-command prefixes direct gsd-tools calls', () => {
-  const direct = runGsdTools(['init.progress']);
+// #4342: this ran gsd-tools with runGsdTools's default cwd — the checkout's own
+// working directory — and an inherited HOME, so the child read the developer's
+// real .planning/config.json and ~/.gsd/defaults.json. On a machine whose real
+// project enables workstream mode with no active workstream, `init.progress`
+// exits non-zero and the FIRST assertion fails, so the routing comparison this
+// test exists for was never reached. testEnvBase() blanks the config-LOCATION
+// env keys but sandboxes neither cwd nor HOME.
+//
+// The routing invariant is about `query <cmd>` and `<cmd>` agreeing, which is
+// independent of project state — so the fixture only has to be a project whose
+// state is known and unaffected by the developer's.
+test('bug #167: query meta-command prefixes direct gsd-tools calls', (t) => {
+  const fixture = createTempProject('gsd-4342-routing-');
+  t.after(() => cleanup(fixture));
+  // HOME/USERPROFILE point at the fixture so ~/.gsd/defaults.json resolves
+  // inside it (absent) rather than in the developer's home — the idiom
+  // runGsdTools's own doc comment prescribes for exactly this.
+  const sandbox = { HOME: fixture, USERPROFILE: fixture };
+
+  const direct = runGsdTools(['init.progress'], fixture, sandbox);
   assert.equal(direct.success, true, `init.progress failed: ${direct.error || direct.output}`);
 
-  const meta = runGsdTools(['query', 'init.progress']);
+  const meta = runGsdTools(['query', 'init.progress'], fixture, sandbox);
   assert.equal(meta.success, true, `query init.progress failed: ${meta.error || meta.output}`);
 
+  const directPayload = JSON.parse(direct.output);
   assert.deepEqual(
     JSON.parse(meta.output),
-    JSON.parse(direct.output),
+    directPayload,
     'query-prefixed and direct invocations should return identical init.progress payloads'
   );
+
+  // Pin the sandbox itself, deterministically rather than conditionally: the
+  // fixture HAS a .planning/ and the repo checkout does NOT, so if the cwd
+  // override is ever dropped this fails on every lane — including CI, where the
+  // ambient state that exposed the bug is absent.
+  assert.equal(directPayload.planning_exists, true,
+    'the child must run in the fixture project, not in the checkout');
+  assert.equal(directPayload.phase_count, 0,
+    'the fixture has no phases — a non-zero count means a real project was read');
 });
   });
 }

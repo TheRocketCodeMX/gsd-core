@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { platformWriteSync, posixNormalize } from './shell-command-projection.cjs';
+import { hostBehaviorsFor } from './runtime-name-policy.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import installProfiles = require('./install-profiles.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -73,6 +74,18 @@ import retiredArtifactCleanup = require('./retired-artifact-cleanup.cjs');
 const { assertDestWithinConfigHome } = runtimeArtifactInstallPlan;
 
 const SURFACE_FILE_NAME = '.gsd-surface.json';
+const INSTALL_MANIFEST_FILE_NAME = 'gsd-file-manifest.json';
+
+/** Read only the installer-owned relative-include style, failing closed. */
+function readRelativeIncludePrefix(runtimeConfigDir: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(runtimeConfigDir, INSTALL_MANIFEST_FILE_NAME), 'utf8'));
+    const prefix = (parsed as Record<string, unknown>)?.['relativeIncludePrefix'];
+    return typeof prefix === 'string' ? prefix : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -407,9 +420,13 @@ function applySurface(runtimeConfigDir: string, layout: Layout, manifest: Map<st
   // then projects the defaulted value to the boolean `_computePathPrefix`'s
   // existing `isGlobal: boolean` API requires.
   const _isGlobal = isGlobalScope(layout.scope ?? 'global');
-  const _isOpencode = layout.runtime === 'opencode';
+  const _isOpencode = hostBehaviorsFor(layout.runtime).opencodePathPrefix === true;
   const _isWindowsHost = (opts?.platform ?? process.platform) === 'win32';
-  const _pathPrefix = runtimeArtifactConversion._computePathPrefix({ isGlobal: _isGlobal, isOpencode: _isOpencode, isWindowsHost: _isWindowsHost, resolvedTarget: _resolvedTarget, homeDir: _homeDir });
+  // #4377: style is an install-time fact, not a process environment setting.
+  // A later gsd-tools surface apply runs in another process, so it must reuse
+  // the persisted, root-relative prefix the installer actually emitted.
+  const _relativeIncludePrefix = readRelativeIncludePrefix(runtimeConfigDir);
+  const _pathPrefix = runtimeArtifactConversion._computePathPrefix({ isGlobal: _isGlobal, isOpencode: _isOpencode, isWindowsHost: _isWindowsHost, resolvedTarget: _resolvedTarget, homeDir: _homeDir, projectRelative: !_isGlobal && typeof _relativeIncludePrefix === 'string', projectRelativePath: _relativeIncludePrefix, localDirName: runtimeArtifactConversion._localIncludeDirName(layout.runtime) });
   const _attribution = opts?.resolveAttribution ? opts.resolveAttribution(layout.runtime) : undefined;
   // #2875 Part 2 (row I1): layout.configDir is this call's install root.
   const agentCtx: AgentCtx = { runtime: layout.runtime, pathPrefix: _pathPrefix, attribution: _attribution, targetDir: layout.configDir };
@@ -435,13 +452,24 @@ function applySurface(runtimeConfigDir: string, layout: Layout, manifest: Map<st
   try {
     for (const kind of layout.kinds) {
       let staged: string;
-      if (kind.kind === 'agents') {
+      // #4211: kimi-agents is an AGENT kind — kimiAgentsKind.stage() forwards
+      // agentCtx into stageAgentsForRuntimeWithConverter exactly as agentsKind
+      // does, and createRuntimeArtifactInstallPlan hands every kind the
+      // context. Staging it bare here dropped the path-prefix rewrites and the
+      // attribution trailer from Kimi's generated subagents, and (under an
+      // unmodified `full` profile) staged only the skill-referenced subset the
+      // install path stages with `skills: '*'`.
+      if (kind.kind === 'agents' || kind.kind === 'kimi-agents') {
         const agentProfile = _isUnmodifiedFull ? { ...resolved, skills: '*' as const } : resolved;
         staged = kind.stage(agentProfile, agentCtx);
       } else {
         staged = kind.stage(resolved);
       }
-      if (kind.kind === 'skills') {
+      // #4211: kimi-agents takes the skill-body rewrite too —
+      // createRuntimeArtifactInstallPlan routes `skills` and `kimi-agents`
+      // through rewriteStagedSkillBodies together, so omitting it here left
+      // Kimi's surface-materialized prompts with unrewritten paths.
+      if (kind.kind === 'skills' || kind.kind === 'kimi-agents') {
         runtimeArtifactConversion.rewriteStagedSkillBodies(staged, {
           runtime: layout.runtime,
           configDir: layout.configDir,
@@ -637,6 +665,45 @@ function _syncGsdDir(stagedDir: string, destDir: string, kind: ArtifactKind | st
   // (no agentFileExtension declared) keep the staged filename verbatim.
   const _agentExt = runtime ? runtimeArtifactConversion.agentFileExtensionFor(runtime) : undefined;
   const isRenamedAgents = !!_agentExt && kindName === 'agents';
+
+  if (kindName === 'kimi-agents') {
+    // #4211: Kimi's managed tree is `gsd.yaml` + `gsd.md` + `subagents/gsd-*.{yaml,md}`
+    // (runtime-artifact-layout.cts kimiAgentsKind), and install copies it
+    // RECURSIVELY (_copyStaged in src/install-engine.cts). Surface apply fell
+    // through to the flat command/agent branch below, which reads only `*.md`
+    // at the top level: the YAML half and the whole subagents/ subtree were
+    // dropped, and `gsd.md` was written as `gsdgsd.md` (the flat branch
+    // re-applies kind.prefix to a name that already carries it). A surface
+    // change could therefore corrupt Kimi's installed artifacts while still
+    // reporting success.
+    fs.cpSync(stagedDir, destDir, { recursive: true });
+
+    // Prune GSD-owned files the new surface no longer stages, with exactly the
+    // ownership rule install's _removeGsdEntries applies to this kind: the two
+    // root files, and `gsd-`-prefixed .yaml/.md under subagents/. Everything
+    // else in the directory is user-owned and is preserved.
+    const _rootStaged = new Set(fs.readdirSync(stagedDir));
+    for (const fileName of ['gsd.yaml', 'gsd.md']) {
+      if (!_rootStaged.has(fileName)) {
+        try { fs.rmSync(path.join(destDir, fileName), { force: true }); } catch { /* ignore */ }
+      }
+    }
+    const _stagedSubagentsDir = path.join(stagedDir, 'subagents');
+    const _destSubagentsDir = path.join(destDir, 'subagents');
+    const _stagedSubagents = fs.existsSync(_stagedSubagentsDir)
+      ? new Set(fs.readdirSync(_stagedSubagentsDir))
+      : new Set<string>();
+    if (fs.existsSync(_destSubagentsDir)) {
+      for (const entry of fs.readdirSync(_destSubagentsDir, { withFileTypes: true })) {
+        if (!entry.isFile()) continue;
+        if (!entry.name.startsWith('gsd-')) continue;
+        if (!entry.name.endsWith('.yaml') && !entry.name.endsWith('.md')) continue;
+        if (_stagedSubagents.has(entry.name)) continue;
+        try { fs.rmSync(path.join(_destSubagentsDir, entry.name), { force: true }); } catch { /* ignore */ }
+      }
+    }
+    return;
+  }
 
   if (kindName === 'skills') {
     // Skills kind: work with directories, not files.

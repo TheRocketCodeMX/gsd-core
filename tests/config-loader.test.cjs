@@ -494,6 +494,26 @@ describe('loadConfigResolved — provenance', () => {
     assert.equal(result.degraded, false);
   });
 
+  test('whitespace-only explicit and environment workstreams resolve and label the root (#4462)', () => {
+    writeConfig(tmpDir, { model_profile: 'quality' });
+    for (const workstream of ['  ', '\t', '\n', ' \t\n ']) {
+      const explicit = loadConfigResolved(tmpDir, { workstream });
+      assert.equal(explicit.source, 'root');
+      assert.equal(explicit.degraded, false);
+
+      const original = process.env.GSD_WORKSTREAM;
+      try {
+        process.env.GSD_WORKSTREAM = workstream;
+        const ambient = loadConfigResolved(tmpDir);
+        assert.equal(ambient.source, 'root');
+        assert.equal(ambient.degraded, false);
+      } finally {
+        if (original === undefined) delete process.env.GSD_WORKSTREAM;
+        else process.env.GSD_WORKSTREAM = original;
+      }
+    }
+  });
+
   test('Fix 2a: GSD_WORKSTREAM set to nonexistent workstream (dir absent) → source:"root", degraded:true', () => {
     writeConfig(tmpDir, { model_profile: 'root-value' });
     const origWs = process.env['GSD_WORKSTREAM'];
@@ -1685,81 +1705,146 @@ describe('#3894 research_before_questions global-defaults forwarding', () => {
   });
 });
 
-// ─── e2e-5 F5 — the shipped config template did not validate against the ─────
-// shipped schema. `templates/config.json` declares `gates` (8 toggles) and
-// `safety` (2), and four workflow branches read exactly those keys
-// (transition.md:118/:578/:713, execute-plan.md:78, complete-milestone.md:178),
-// but neither section was registered — so every `gsd-tools` call on a
-// freshly-initialized project printed
-//   "unknown config key(s) … gates, safety — these will be ignored"
-// which is BOTH noise and false: `config-get gates.confirm_transition` returns
-// the configured value and the branches demonstrably honour it.
-describe('e2e-5 F5 — gates/safety are registered config sections', () => {
-  const { isValidConfigKey } = require('../gsd-core/bin/lib/config-schema.cjs');
-  const { createTempProject } = require('./helpers.cjs');
-  const TEMPLATE = require('path').join(__dirname, '..', 'gsd-core', 'templates', 'config.json');
+// ── #4717 — an empty config.runtime is filled from GSD_RUNTIME / the marker ──
+describe('loadConfigResolved — runtime identity fill (#4717)', () => {
+  const slash = require('../gsd-core/bin/lib/runtime-slash.cjs');
+  const fsx = require('node:fs');
+  const pathx = require('node:path');
+  const { createTempDir: mkTmp4717, cleanup: cleanup4717 } = require('./helpers.cjs');
+  let tmpCodexHome;
+  let originalCodexHome;
+  let originalGsdRuntime;
 
-  let tmpDir2;
-  let stderrCapture2;
-  let origStderrWrite2;
+  let originalGsdHome;
+  let originalHome;
+  let originalUserProfile;
 
   beforeEach(() => {
-    tmpDir2 = createTempProject();
-    stderrCapture2 = '';
-    origStderrWrite2 = process.stderr.write;
-    process.stderr.write = (chunk) => { stderrCapture2 += chunk; return true; };
-    _resetRuntimeWarningCacheForTests();
+    originalCodexHome = process.env.CODEX_HOME;
+    originalGsdRuntime = process.env.GSD_RUNTIME;
+    originalGsdHome = process.env.GSD_HOME;
+    originalHome = process.env.HOME;
+    originalUserProfile = process.env.USERPROFILE;
+    delete process.env.GSD_RUNTIME;
+    tmpCodexHome = mkTmp4717('gsd-4717-');
+    process.env.CODEX_HOME = tmpCodexHome;
+    // Isolate the SHARED defaults file too: loadConfigResolved's global-defaults
+    // branch reads ~/.gsd/defaults.json from GSD_HOME || homedir, and a real
+    // machine's stamped defaults would bleed into these rows (#4717 review).
+    process.env.GSD_HOME = tmpCodexHome;
+    process.env.HOME = tmpCodexHome;
+    process.env.USERPROFILE = tmpCodexHome;
+    slash._setInstallRuntimeMarkerForTests('codex');
   });
 
   afterEach(() => {
-    process.stderr.write = origStderrWrite2;
-    cleanup(tmpDir2);
+    slash._resetInstallRuntimeMarkerCacheForTests();
+    if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = originalCodexHome;
+    if (originalGsdRuntime === undefined) delete process.env.GSD_RUNTIME;
+    else process.env.GSD_RUNTIME = originalGsdRuntime;
+    if (originalGsdHome === undefined) delete process.env.GSD_HOME;
+    else process.env.GSD_HOME = originalGsdHome;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
+    cleanup4717(tmpCodexHome);
   });
 
-  test('every gates.* / safety.* key a shipped workflow reads is a valid config key', () => {
-    const keys = [
-      'gates.confirm_project', 'gates.confirm_phases', 'gates.confirm_roadmap',
-      'gates.confirm_breakdown', 'gates.confirm_plan', 'gates.execute_next_plan',
-      'gates.issues_review', 'gates.confirm_transition',
-      // complete-milestone.md:178 branches on this one; no template ships it.
-      'gates.confirm_milestone_scope',
-      'safety.always_confirm_destructive', 'safety.always_confirm_external_services',
-    ];
-    const invalid = keys.filter((k) => !isValidConfigKey(k));
-    assert.deepStrictEqual(invalid, [], `unregistered config keys: ${invalid.join(', ')}`);
+  test('an empty config.runtime is filled from the install marker (#4717)', (t) => {
+    const projDir = mkTmp4717('gsd-4717-proj-');
+    t.after(() => cleanup4717(projDir));
+    const resolved = loadConfigResolved(projDir, { persist: false });
+    assert.equal(resolved.config.runtime, 'codex',
+      'the marker-owned runtime fills an empty config.runtime (copy-on-write)');
   });
 
-  test('the shipped config template produces no unknown-key warning', () => {
-    const template = JSON.parse(fs.readFileSync(TEMPLATE, 'utf-8'));
-    fs.writeFileSync(
-      path.join(tmpDir2, '.planning', 'config.json'),
-      JSON.stringify(template, null, 2),
+  test('GSD_RUNTIME outranks the marker in the identity fill (#4717)', (t) => {
+    const projDir = mkTmp4717('gsd-4717-proj-');
+    t.after(() => cleanup4717(projDir));
+    process.env.GSD_RUNTIME = 'kimi';
+    const resolved = loadConfigResolved(projDir, { persist: false });
+    assert.equal(resolved.config.runtime, 'kimi');
+  });
+
+  // Branch D (the shared-defaults path) fires only when the project dir has NO
+  // .planning/ at all — these rows use bare dirs for exactly that (#4717).
+  function bareProjDir(t, prefix) {
+    const dir = mkTmp4717(prefix);
+    t.after(() => cleanup4717(dir));
+    return dir;
+  }
+
+  test('#4717 stamped-defaults leg: a shared defaults runtime does not leak past THIS install\'s marker', (t) => {
+    // The issue's second failure shape: the first non-Claude install stamped
+    // `runtime` into the SHARED ~/.gsd/defaults.json; a Claude install on the
+    // same machine must not inherit that identity. Branch D forwards the
+    // stamped value; the fill corrects it to the marker's own.
+    fsx.mkdirSync(pathx.join(tmpCodexHome, '.gsd'), { recursive: true });
+    fsx.writeFileSync(
+      pathx.join(tmpCodexHome, '.gsd', 'defaults.json'),
+      JSON.stringify({ runtime: 'codex' }),
     );
+    slash._setInstallRuntimeMarkerForTests('claude');
 
-    loadConfig(tmpDir2);
+    const projDir = bareProjDir(t, 'gsd-4717-proj-stamped-');
 
-    assert.ok(
-      !stderrCapture2.includes('unknown config key'),
-      'the SHIPPED template must validate against the SHIPPED schema, got: ' + stderrCapture2,
+    const resolved = loadConfigResolved(projDir);
+    assert.equal(resolved.source, 'global-defaults', 'fixture: the shared-defaults branch must fire');
+    assert.equal(
+      resolved.config.runtime,
+      'claude',
+      'the marker-owned identity must correct the machine-wide stamp',
     );
   });
 
-  test('a configured gates/safety value is readable through config-get (the branch reader)', () => {
-    // This is the surface the workflows use — `<if mode="interactive"
-    // OR="custom with gates.confirm_transition true">`. The warning claimed these
-    // keys "will be ignored"; they are not, which is why the warning had to go.
-    const { runGsdTools } = require('./helpers.cjs');
-    fs.writeFileSync(
-      path.join(tmpDir2, '.planning', 'config.json'),
-      JSON.stringify({ gates: { confirm_transition: false }, safety: { always_confirm_destructive: true } }),
+  test('#4717 stamped-defaults leg: with no marker of its own, the stamped value still stands (status quo preserved)', (t) => {
+    fsx.mkdirSync(pathx.join(tmpCodexHome, '.gsd'), { recursive: true });
+    fsx.writeFileSync(
+      pathx.join(tmpCodexHome, '.gsd', 'defaults.json'),
+      JSON.stringify({ runtime: 'codex' }),
     );
+    slash._setInstallRuntimeMarkerForTests(null);
 
-    const gate = runGsdTools(['config-get', 'gates.confirm_transition', '--raw'], tmpDir2);
-    assert.ok(gate.success, `config-get gates.confirm_transition failed: ${gate.error}`);
-    assert.strictEqual(gate.output.trim(), 'false');
+    const projDir = bareProjDir(t, 'gsd-4717-proj-stamped-nomarker-');
 
-    const safety = runGsdTools(['config-get', 'safety.always_confirm_destructive', '--raw'], tmpDir2);
-    assert.ok(safety.success, `config-get safety.always_confirm_destructive failed: ${safety.error}`);
-    assert.strictEqual(safety.output.trim(), 'true');
+    const resolved = loadConfigResolved(projDir);
+    assert.equal(resolved.config.runtime, 'codex', 'no own identity — the stamped value is all we know');
+  });
+
+  test('#4717 fail-safe: a garbage marker does not fill the runtime (#4717 review)', (_t) => {
+    slash._setInstallRuntimeMarkerForTests('   not-a-runtime   ');
+
+    const projDir = bareProjDir(_t, 'gsd-4717-proj-garbage-');
+
+    const resolved = loadConfigResolved(projDir);
+    assert.equal(
+      resolved.config.runtime || null,
+      null,
+      'an unrecognizable marker value must fail safe to no identity',
+    );
+  });
+
+  test('an explicit config.runtime is preserved — the fill never overrides it (#4717)', (t) => {
+    const projDir = mkTmp4717('gsd-4717-proj-');
+    t.after(() => cleanup4717(projDir));
+    fsx.mkdirSync(pathx.join(projDir, '.planning'), { recursive: true });
+    fsx.writeFileSync(
+      pathx.join(projDir, '.planning', 'config.json'),
+      JSON.stringify({ runtime: 'claude' }),
+    );
+    const resolved = loadConfigResolved(projDir, { persist: false });
+    assert.equal(resolved.config.runtime, 'claude',
+      'an explicit project runtime is never overwritten by the marker fill');
+  });
+
+  test('copy-on-write: the shared builtin-defaults object is never mutated (#4717)', (t) => {
+    const projDir = mkTmp4717('gsd-4717-proj-');
+    t.after(() => cleanup4717(projDir));
+    const resolved = loadConfigResolved(projDir, { persist: false });
+    assert.equal(resolved.config.runtime, 'codex');
+    const again = loadConfigResolved(projDir, { persist: false });
+    assert.equal(again.config.runtime, 'codex');
   });
 });

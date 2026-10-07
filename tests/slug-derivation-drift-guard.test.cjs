@@ -34,6 +34,7 @@ const { generateSlugInternal } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib
 const { getPhaseDirFromPhaseId } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'phase-id.cjs'));
 const { slugify: qaSmellRatchetSlugify } = require(path.join(ROOT, 'scripts', 'qa-smell-ratchet.cjs'));
 const { createTempDir, cleanup } = require('./helpers.cjs');
+const { QUICK_SPAWN_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const { splitLines } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'text-lines.cjs'));
 const { MAX_REGEX_LITERAL_LEN, resetRegexScanStats, getRegexScanStats } = require(path.join(ROOT, 'scripts', 'lib', 'drift-scan.cjs'));
 
@@ -127,15 +128,21 @@ describe('findSlugDerivationDrift — T3-T5: sanctioned sites are exempted BY th
 
 describe('findSlugDerivationDrift — MAJOR-1: allowlist exemption is scoped to the REAL function body, not "until the next top-level function"', () => {
   const sanctionedRealEndLines = [
-    { file: path.join('src', 'core-utils.cts'), fn: 'generateSlugInternal', realEndLine: 199 },
-    { file: path.join('src', 'gsd2-import.cts'), fn: 'slugify', realEndLine: 103 },
-    { file: path.join('src', 'runtime-artifact-conversion.cts'), fn: 'normalizeKimiSkillName', realEndLine: 635 },
-    { file: path.join('scripts', 'generate-package-identity.cjs'), fn: 'slugifyPackageName', realEndLine: 42 },
+    { file: path.join('src', 'core-utils.cts'), fn: 'generateSlugInternal' },
+    { file: path.join('src', 'gsd2-import.cts'), fn: 'slugify' },
+    { file: path.join('src', 'runtime-artifact-conversion.cts'), fn: 'normalizeKimiSkillName' },
+    { file: path.join('scripts', 'generate-package-identity.cjs'), fn: 'slugifyPackageName' },
   ];
 
-  for (const { file, fn, realEndLine } of sanctionedRealEndLines) {
+  for (const { file, fn } of sanctionedRealEndLines) {
     test(`a re-derivation planted immediately AFTER ${fn}'s (${file}) real closing brace IS flagged — the pre-fix bug exempted up to 50 lines past the function's own 11-line body`, () => {
       const lines = splitLines(fs.readFileSync(path.join(ROOT, file), 'utf8'));
+      // Derive the function's real closing brace: the first column-0 `}` after its declaration.
+      const startIdx = lines.findIndex((l) => new RegExp(`^(export\\s+)?function ${fn}\\(`).test(l));
+      assert.ok(startIdx >= 0, `${file}: function ${fn} declaration not found`);
+      const endIdx = lines.findIndex((l, i) => i > startIdx && l === '}');
+      assert.ok(endIdx > startIdx, `${file}: no closing brace found after ${fn}`);
+      const realEndLine = endIdx + 1;
       const evilSlug = "const evilSlug = (t) => t.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');";
       lines.splice(realEndLine, 0, evilSlug); // insert right after the function's REAL closing brace
       const text = lines.join('\n');
@@ -439,7 +446,7 @@ describe('CLI (main()) — the process.exitCode/stderr surface scanRepo alone do
 
     const res = spawnSync(process.execPath, [path.join(tmpRoot, 'scripts', 'lint-slug-derivation-drift.cjs')], {
       encoding: 'utf8',
-      timeout: 10000,
+      timeout: QUICK_SPAWN_TIMEOUT_MS,
     });
 
     assert.equal(res.status, 1, 'main() must set a non-zero process.exitCode when a violation is found');
@@ -470,7 +477,7 @@ describe('CLI (main()) — the process.exitCode/stderr surface scanRepo alone do
 
     const res = spawnSync(process.execPath, [path.join(tmpRoot, 'scripts', 'lint-slug-derivation-drift.cjs')], {
       encoding: 'utf8',
-      timeout: 10000,
+      timeout: QUICK_SPAWN_TIMEOUT_MS,
     });
 
     assert.equal(res.status, 0);
