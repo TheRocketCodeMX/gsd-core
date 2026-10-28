@@ -32,7 +32,7 @@ Source labels: **[M]** measured in this repo (command given), **[D]** GitHub/npm
 
 ## 2. Evidence
 
-Repo `TheRocketCodeMX/gsd-core`, **public**, default branch `next`. Window: **2026-09-21T00:08:56Z to 2026-10-21T18:18:35Z** (30 days) unless stated.
+Repo `open-gsd/gsd-core`, **public**, default branch `next`. Window: **2026-09-21T00:08:56Z to 2026-10-21T18:18:35Z** (30 days) unless stated.
 
 ### 2.1 What `main` is used for today [M]
 
@@ -41,19 +41,19 @@ Repo `TheRocketCodeMX/gsd-core`, **public**, default branch `next`. Window: **20
 | `main` moves only when a release PR merges. 4 release→`main` PRs merged in the window (#5018 1.15.0, #5222 1.16.0, #5429 1.17.0, #5532 1.18.0). No other PR targeted `main`. | `gh pr list --search created:... --json baseRefName`; `git log origin/main --first-parent --since=2026-09-21` |
 | `main` is an ancestor of `next`; `next` is 35 commits ahead of `main`; 267 files differ. | `git rev-list --count origin/main..origin/next`; `git merge-base --is-ancestor origin/main origin/next`; `git diff --stat origin/main origin/next` |
 | Releases are almost all minors. Tags: 1.10.0 (08-08), 1.11.0 (08-19), 1.12.0 (08-30), 1.13.0 (09-06), 1.14.0 (09-14), 1.15.0 (09-26), 1.16.0 (10-05), 1.17.0 (10-14), 1.18.0 (10-19). One patch (1.9.1) since July. | `git for-each-ref --sort=-creatordate refs/tags` |
-| No pre-release since 1.7.0. npm dist-tags: `{ next: '1.7.0-rc.6', latest: '1.18.0' }`. | `git tag -l '*-rc*'`; `npm view @therocketcode/gsd-core dist-tags` |
+| No pre-release since 1.7.0. npm dist-tags: `{ next: '1.7.0-rc.6', latest: '1.18.0' }`. | `git tag -l '*-rc*'`; `npm view @opengsd/gsd-core dist-tags` |
 | Release flow: `release.yml` `create` cuts `release/X.Y.0` **from `next`** and bumps the version; `finalize` runs `install-smoke`, three test shards, a coverage gate, promotes `CHANGELOG`, tags `vX.Y.Z` on the release branch, `npm publish --provenance` to `latest` (environment `npm-publish`), creates the GitHub Release, runs `Verify publish`, then opens and `--admin --merge`s the release→`main` PR, then runs `sync-next-version.cjs`. | `.github/workflows/release.yml` lines ~140-175 (create), ~560-990 (finalize) |
 | Hotfix: `hotfix/X.Y.Z` is cut from the prior stable tag, then `fix:`/`chore:` commits from `origin/next` are cherry-picked by `git cherry` (fallback source `origin/main`). `rc` is rejected for hotfixes, so a hotfix has no soak stage. | `release.yml` lines 48-60, 177-215 |
 | Back-merge: `auto-backmerge.yml` fires on every push to `main`, builds `chore/backmerge-main-to-next-<sha>` with `git merge -s ours --no-commit --no-ff origin/main`, overlays `main`'s `CHANGELOG.md` and the `.changeset` deletions, runs a safety net for main-only changes, syncs the version, opens a PR, and `gh pr merge --admin --merge`s it. Stated purpose: "so `main` becomes an ancestor of `next`", "the invariant that keeps the next `release → main` merge clean". | `.github/workflows/auto-backmerge.yml` lines 3-20, 80-110, 151-161, 244-253 |
 | `main` is also used by: `version-gate.yml` (`canary-version-leak` job on PRs into `main`), `pr-target-policy.cjs` (the five head-branch patterns allowed to target `main`), and `push: [main]` triggers in `test.yml` and `install-smoke.yml`. | those files |
-| Live protection of `main` (classic): `required_signatures: true`, **`allow_force_pushes: true`**, `enforce_admins: false`, no required reviews, no required checks, no linear history. The three rulesets are all `enforcement: evaluate`; `gh api repos/TheRocketCodeMX/gsd-core/rules/branches/main` and `.../next` return no active rules. `main-protection` targets `~DEFAULT_BRANCH`, which is `next`, not `main`. | `gh api repos/$R/branches/main/protection`; `gh api repos/$R/rulesets`; `gh api repos/$R/rules/branches/next` |
+| Live protection of `main` (classic): `required_signatures: true`, **`allow_force_pushes: true`**, `enforce_admins: false`, no required reviews, no required checks, no linear history. The three rulesets are all `enforcement: evaluate`; `gh api repos/open-gsd/gsd-core/rules/branches/main` and `.../next` return no active rules. `main-protection` targets `~DEFAULT_BRANCH`, which is `next`, not `main`. | `gh api repos/$R/branches/main/protection`; `gh api repos/$R/rulesets`; `gh api repos/$R/rules/branches/next` |
 | ADR-230 already records this gap ("there is no CI gate on `main` at all"), and that its stated motive was the rebase treadmill, which ADR-415 then partly reversed by setting `strict: true` on `next`. | `docs/adr/230-introduce-next-integration-branch.md` (status block) |
 | `next` (classic): `strict: true`, 1 approving review, `require_code_owner_reviews: false`, 7 required contexts. | `gh api repos/$R/branches/next/protection` |
 | `CODEOWNERS` is one wildcard line, advisory by its own header. | `.github/CODEOWNERS` |
 
 ### 2.2 Is Actions spend real money here? [M][D]
 
-- `gh api repos/TheRocketCodeMX/gsd-core --jq .private` is `false`: **public repository**. "The use of standard GitHub-hosted runners is free: In public repositories." [D: https://docs.github.com/en/billing/concepts/product-billing/github-actions, fetched 2026-10-21]. The org is on the Team plan (3 seats) [M: `gh api orgs/open-gsd --jq .plan`]; Team includes 3,000 minutes a month for *private* repos [D same page].
+- `gh api repos/open-gsd/gsd-core --jq .private` is `false`: **public repository**. "The use of standard GitHub-hosted runners is free: In public repositories." [D: https://docs.github.com/en/billing/concepts/product-billing/github-actions, fetched 2026-10-21]. The org is on the Team plan (3 seats) [M: `gh api orgs/open-gsd --jq .plan`]; Team includes 3,000 minutes a month for *private* repos [D same page].
 - `gh api repos/$R/actions/workflows/test.yml/timing` returns `{"billable":{}}` [M]. **Billable minutes are not available for a public repo.** Everything below is *runner-minutes* computed from job `started_at` to `completed_at`, with a *list-price equivalent* for scale. It is not an invoice.
 - Rates [D: https://docs.github.com/en/billing/reference/actions-runner-pricing, fetched 2026-10-21]: Linux 2-core $0.006/min, Windows 2-core $0.010/min, macOS 3/4-core $0.062/min. The current billing pages publish per-minute rates, not "1x / 2x / 10x" multipliers; the ratios (Windows 1.67x, macOS 10.3x of Linux) are my arithmetic. The older multiplier wording is **UNVERIFIED** on the current pages.
 - What does bite on a public repo: concurrency caps. Team plan: 60 concurrent jobs, **5 concurrent macOS jobs**; Free is 20 / 5 [D: https://docs.github.com/en/actions/reference/limits]. And developer wall-clock: median green PR `Tests` run 31.5 min, p90 65.4 min [M, train memo §2.2].
@@ -61,7 +61,7 @@ Repo `TheRocketCodeMX/gsd-core`, **public**, default branch `next`. Window: **20
 
 ### 2.3 Measured spend [M]
 
-Commands (rerunnable; `$R=TheRocketCodeMX/gsd-core`):
+Commands (rerunnable; `$R=open-gsd/gsd-core`):
 
 ```bash
 # all runs, paged in 12-hour windows so no window exceeds the 1000-result cap (31,811 unique runs):
@@ -112,7 +112,7 @@ Coverage and limits of the data:
 | Reverts on `next` in 30 days | 1 of 255 first-parent commits (a CI-tooling change, not a fix) | train memo §2.2 (not re-run) |
 | Fix-forward frequency | **UNVERIFIED.** My re-count of `fix:` subjects and follow-ups was blocked by a local hook (`measure-dont-infer-guard`, a text-count guard) and I did not route around it. The train memo also found no reliable commit-message signal. | |
 | `next` push `Tests` red | 12 of 231 (5.2%); 12 separate episodes | train memo §2.2; matches my 12 failures |
-| September audit (#4990) | 26 of 300 `next` push runs red; 24 of 120 merges landed BEHIND via admin merge; #4540 and #4549 each green, combined tree red (`SIZE: workflow tier hard caps`, all three OSes) | `gh issue view 4990 -R TheRocketCodeMX/gsd-core` |
+| September audit (#4990) | 26 of 300 `next` push runs red; 24 of 120 merges landed BEHIND via admin merge; #4540 and #4549 each green, combined tree red (`SIZE: workflow tier hard caps`, all three OSes) | `gh issue view 4990 -R open-gsd/gsd-core` |
 | Typical fix PR | median 5 files, 199 changed lines, 7.0 commits | train memo §2.2 |
 | Structural limits on a fix's reach | **None.** No PR size cap (the `*-size*` tests guard workflow and agent file sizes, not PR diffs). `CODEOWNERS` is one advisory wildcard. `require_code_owner_reviews: false`. No active ruleset. No path-based label routing. | `ls .github/workflows`; `git ls-files tests`; `.github/CODEOWNERS`; protection JSON |
 | Staged rollout | Dead: `next` dist-tag at 1.7.0-rc.6; no `-rc` tag since 1.7.0; each recent release's three `Release` dispatches fall within the same day (e.g. 1.15.0: 2026-09-26, 14:34Z to 20:49Z, tag at 21:08Z) | `npm view`; `git tag -l '*-rc*'`; `Release` runs in the run list |

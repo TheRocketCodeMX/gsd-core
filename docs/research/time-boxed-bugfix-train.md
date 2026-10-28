@@ -34,12 +34,12 @@ Source labels: **[M]** measured in this repo (command given), **[D]** GitHub doc
 
 ## 2. Evidence: how bad is "chasing `next`"
 
-Repo: `TheRocketCodeMX/gsd-core`. Window unless stated: **2026-09-21 to 2026-10-21** (30 days). Every figure is re-derivable with the commands below. GitHub's search API and run listings cap at 1000 results, so longer windows were truncated and are not used.
+Repo: `open-gsd/gsd-core`. Window unless stated: **2026-09-21 to 2026-10-21** (30 days). Every figure is re-derivable with the commands below. GitHub's search API and run listings cap at 1000 results, so longer windows were truncated and are not used.
 
 ### 2.1 Commands
 
 ```bash
-R=TheRocketCodeMX/gsd-core
+R=open-gsd/gsd-core
 # merged PRs into next (search capped at 1000: it started at 2026-08-04), then restrict to the window:
 gh pr list -R $R --state merged --base next --search "merged:>=2026-07-23" --limit 1000 \
   --json number,title,createdAt,mergedAt,labels,author,headRefName,isCrossRepository
@@ -89,7 +89,7 @@ Reading, not conclusion: the median fix PR merges within hours, so for most fixe
 
 ### 2.3 Evidence already in the tracker
 
-Issue #4990 (closed) audited the same problem in September 2026: "24 of 120 merges landed while BEHIND `next` (strict up-to-date bypassed by admin merge)", for example #4540 merged one commit behind #4549, both touching `execute-plan.md`, "and the combined tree (tested by neither PR) broke the `SIZE: workflow tier hard caps` gate on all three OSes". It also counted 26 red of 300 `next` push runs. That is the **semantic-conflict-between-green-PRs** failure mode, observed here, not hypothetical. Read with `gh issue view 4990 -R TheRocketCodeMX/gsd-core`.
+Issue #4990 (closed) audited the same problem in September 2026: "24 of 120 merges landed while BEHIND `next` (strict up-to-date bypassed by admin merge)", for example #4540 merged one commit behind #4549, both touching `execute-plan.md`, "and the combined tree (tested by neither PR) broke the `SIZE: workflow tier hard caps` gate on all three OSes". It also counted 26 red of 300 `next` push runs. That is the **semantic-conflict-between-green-PRs** failure mode, observed here, not hypothetical. Read with `gh issue view 4990 -R open-gsd/gsd-core`.
 
 ### 2.4 What I could not measure
 

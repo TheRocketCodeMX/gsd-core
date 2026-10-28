@@ -468,6 +468,8 @@ The fork version replaces upstream wholesale; during realignment keep the fork f
 
 ~223 files differ from the base **only** by the six branding forms (`@therocketcode/gsd-core` → `@therocketcode/gsd-core`, `TheRocketCodeMX/gsd-core` → `TheRocketCodeMX/gsd-core`, `therocketcode-gsd-core` → `therocketcode-gsd-core`, the escaped/encoded variants). Do not track them here — after any upstream merge, run `./scripts/sync-upstream.sh` (whole tree) and the identity-drift lint. This includes all runtime-launcher `npx @…/gsd-core` one-liners across workflows/agents, README translations, docs/, `gsd-core/bin/lib/package-identity.cjs`, `gsd-core/bin/check-latest-version.cjs`, `gsd-core/workflows/update.md`, `src/phase-lifecycle.cts`, `src/validate.cts`, and similar.
 
+**Never rebranded — upstream attribution (align-1.19.0, matrix119-A F6):** `docs/research/` is upstream's own evidence corpus (measurements of `open-gsd/gsd-core`: npm dist-tags, PR and issue numbers, branch protection, Actions spend). The whole-tree rebrand had rewritten its coordinates so the pages stated upstream's facts as the fork's (`main-vs-next-branch-model.md`, `time-boxed-bugfix-train.md`, `3875-ack-sweep-automation-failure.md`, `2026-08-30-coverage-merge-oom.md`). They are restored to upstream's text and `scripts/sync-upstream.sh` skips `docs/research/` in both whole-tree and per-file mode (`ATTRIBUTION_KEEP_RE`), so they stay upstream-identical and cannot recur.
+
 ---
 
 ## Generated / regenerable (no restore; regenerate post-port)
