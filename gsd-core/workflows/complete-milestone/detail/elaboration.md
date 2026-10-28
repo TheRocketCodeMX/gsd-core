@@ -136,9 +136,9 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 $ARGUMENTS
 GSD_ARGS_END
    GSD_ARGS=${GSD_ARGS%$'\n'}
-   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); WS_FLAG=${GSD_WS:+--ws=${GSD_WS##* }}
+   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1) # Step 2b: workstream for the capsule path
    NEXT_LABEL="[next milestone label, e.g. v1.3]"
-   INIT_CAP=$(gsd_run query init.complete-milestone ${WS_FLAG:+"$WS_FLAG"})
+   INIT_CAP=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
    if [[ "$INIT_CAP" == @file:* ]]; then INIT_CAP=$(cat "${INIT_CAP#@file:}"); fi
    # The workstream (from --ws or the active pointer) is the one init resolved STATE.md under.
    CAPSULE=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const m=String(o.state_path||'').match(/\/\.planning\/workstreams\/([^/]+)\/STATE\.md$/);process.stdout.write(String(o.project_root||'.')+'/.planning/milestones/next/'+(m?m[1]+'-':'')+process.argv[2]+'-CAPSULE.md')" "$INIT_CAP" "$NEXT_LABEL")
@@ -150,8 +150,8 @@ GSD_ARGS_END
 $ARGUMENTS
 GSD_ARGS_END
    GSD_ARGS=${GSD_ARGS%$'\n'}
-   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); WS_FLAG=${GSD_WS:+--ws=${GSD_WS##* }}
-   [ "$(gsd_run query config-get commit_docs --raw ${WS_FLAG:+"$WS_FLAG"} 2>/dev/null)" = false ] || git add -- "[forward_capsule path printed above]"
+   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1) # Step 2b: workstream for the capsule commit
+   [ "$(gsd_run query config-get commit_docs --raw ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)" = false ] || git add -- "[forward_capsule path printed above]"
    ```
 4. Set `closeout_type=override_closeout` and record in the MILESTONES.md entry: `Known verification overrides: {N} newly acknowledged, {M} carried forward from a prior close (see STATE.md Deferred Items)` — `{N}` is the count of items acknowledged in step 2 (the pre-acknowledgment audit JSON's `counts.total`) and `{M}` is that same audit JSON's `acknowledged.total` (items a PRIOR close already suppressed and still are).
 5. Proceed with milestone close.
