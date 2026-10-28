@@ -125,3 +125,146 @@ describe('#93 context verify resolves phases across layouts', () => {
     } finally { cleanup(dir); }
   });
 });
+
+// ─── context.md fences honour --ws (pre-ship matrix119-B F1) ──────────────────
+//
+// `/gsd-context` was only half workstream-aware: (a) the flush commit hard-coded
+// `.planning/STATE.md`, so the workstream STATE.md that `state.record-session` had just
+// written stayed modified and uncommitted; (b) with `--ws` typed but no active pointer the
+// flush's `state.record-session` got no `--ws`, printed `{"error":"STATE.md not found"}` with
+// rc 0, and the session position was silently never recorded; (c) seed's verify-at-birth
+// fence dropped `--ws` ("no matching CONTEXT file found"). The fences below are extracted
+// VERBATIM from the shipped context.md and executed in bash against the real gsd-tools; only
+// the runtime's `$ARGUMENTS` substitution and the operator's `<placeholder>` fills are applied.
+
+describe('context.md fences honour --ws (matrix119-B F1)', () => {
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { gitOrThrow, throwIfFailed } = require('./helpers/git-fixture.cjs');
+  const { scanFencedBlocks } = require(path.resolve(__dirname, '..', 'gsd-core', 'bin', 'lib', 'markdown-sectionizer.cjs'));
+  const ROOT = path.resolve(__dirname, '..');
+  const wf = fs.readFileSync(path.join(ROOT, 'gsd-core', 'workflows', 'context.md'), 'utf-8');
+  const lines = wf.split(/\r?\n/);
+  const fences = scanFencedBlocks(lines)
+    .filter((b) => /^bash\b/.test(b.infoString))
+    .map((b) => lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n'));
+  const fenceWith = (needle) => {
+    const hit = fences.find((f) => f.includes(needle));
+    assert.ok(hit, `context.md has no bash fence containing ${needle}`);
+    return hit;
+  };
+  const step1 = fenceWith('_GSD_SHIM_NAME=');
+  const flush = fenceWith('docs(context): flush knowledge checkpoint');
+  const seedVerify = fenceWith('gsd_run context verify --phase "${N}"');
+  const shell = os.platform() === 'win32' ? null : 'bash';
+  const CAP = '## Verified Facts\n\n- ok [anchor: ext:x "y"]\n';
+
+  function makeProject({ ws }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-context-ws-'));
+    const put = (rel, body) => {
+      const f = path.join(dir, rel);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, body);
+    };
+    put('.planning/PROJECT.md', '# Project\n');
+    put('.planning/config.json', '{\n  "commit_docs": true\n}\n');
+    put('.planning/MASTER-CONTEXT.md', CAP);
+    const base = ws ? `.planning/workstreams/${ws}` : '.planning';
+    put(`${base}/ROADMAP.md`, '# Roadmap\n\n### Phase 4: Threads\n');
+    put(`${base}/REQUIREMENTS.md`, '# Requirements\n');
+    put(`${base}/STATE.md`, '---\nmilestone: v1.1\n---\n# State\n\n## Session Continuity\n\nLast session: 2026-01-01\nStopped At: old\nResume File: None\n');
+    put(`${base}/phases/04-threads/04-CONTEXT.md`, CAP);
+    gitOrThrow(['init', '-q'], { cwd: dir });
+    gitOrThrow(['config', 'user.email', 't@example.com'], { cwd: dir });
+    gitOrThrow(['config', 'user.name', 't'], { cwd: dir });
+    gitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    gitOrThrow(['add', '.'], { cwd: dir });
+    gitOrThrow(['commit', '-q', '-m', 'init'], { cwd: dir });
+    return dir;
+  }
+
+  function run(dir, fence, args, extraEnv = {}) {
+    const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ...extraEnv };
+    if (!('GSD_WORKSTREAM' in extraEnv)) delete env.GSD_WORKSTREAM;
+    delete env.GSD_SESSION_KEY;
+    const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
+    const script = fence.includes(marker) ? fence.replace(marker, () => `\n${args}\nGSD_ARGS_END`) : fence;
+    const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
+    throwIfFailed(r, 'bash <context.md fence>');
+    return r.stdout + r.stderr;
+  }
+
+  function runFlush(dir, args, capsuleRel, extraEnv) {
+    for (const ph of ['<one line: current position>', '<active capsule path>', '<capsule>']) {
+      assert.ok(flush.includes(ph), `flush fence must keep the operator placeholder ${ph}`);
+    }
+    const filled = flush
+      .split('<one line: current position>').join('04-02 executing')
+      .split('<active capsule path>').join(capsuleRel)
+      .split('<capsule>').join(capsuleRel);
+    return run(dir, filled, args, extraEnv);
+  }
+
+  const headFiles = (dir) => gitOrThrow(['show', '--name-only', '--format=%s', 'HEAD'], { cwd: dir }).trim().split('\n').slice(1).filter(Boolean).sort();
+  const porcelain = (dir) => gitOrThrow(['status', '--porcelain'], { cwd: dir }).trim();
+  const wsCapsule = '.planning/workstreams/community/phases/04-threads/04-CONTEXT.md';
+  const wsState = '.planning/workstreams/community/STATE.md';
+
+  test('Step 1 resolves the workstream ROADMAP.md under --ws (the seed/scout guard reads it)', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'community' });
+    try {
+      assert.match(run(dir, step1, 'seed --milestone --auto --ws community'), /context_paths: .*roadmap=\S*\/\.planning\/workstreams\/community\/ROADMAP\.md/);
+    } finally { cleanup(dir); }
+  });
+
+  test('(b) flush with --ws and no pointer records the session in the workstream STATE.md and commits it', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'community' });
+    try {
+      fs.appendFileSync(path.join(dir, wsCapsule), '\n## Orchestrator curation (2026-10-28)\n\n- learned\n');
+      const out = runFlush(dir, 'flush --ws community', wsCapsule);
+      assert.doesNotMatch(out, /NOT recorded/);
+      assert.match(fs.readFileSync(path.join(dir, wsState), 'utf-8'), /04-02 executing/);
+      assert.deepEqual(headFiles(dir), [wsCapsule, wsState].sort());
+      assert.equal(porcelain(dir), '', 'nothing left modified');
+    } finally { cleanup(dir); }
+  });
+
+  test('(a) flush under an active workstream (GSD_WORKSTREAM pointer) commits the workstream STATE.md', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'community' });
+    try {
+      runFlush(dir, 'flush', wsCapsule, { GSD_WORKSTREAM: 'community' });
+      assert.match(fs.readFileSync(path.join(dir, wsState), 'utf-8'), /04-02 executing/);
+      assert.ok(headFiles(dir).includes(wsState), `HEAD must stage ${wsState}: ${headFiles(dir)}`);
+      assert.equal(porcelain(dir), '', 'workstream STATE.md must not be left modified');
+    } finally { cleanup(dir); }
+  });
+
+  test('(b) a record-session that wrote nothing is reported, never silent', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'community' });
+    try {
+      // No pointer and no --ws in a workstream-only project: there is no root STATE.md.
+      const out = runFlush(dir, 'flush', wsCapsule);
+      assert.match(out, /flush_session: NOT recorded/);
+    } finally { cleanup(dir); }
+  });
+
+  test('flat project: flush still records and commits the root .planning/STATE.md', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    try {
+      const cap = '.planning/phases/04-threads/04-CONTEXT.md';
+      const out = runFlush(dir, 'flush', cap);
+      assert.doesNotMatch(out, /NOT recorded/);
+      assert.ok(headFiles(dir).includes('.planning/STATE.md'), `HEAD: ${headFiles(dir)}`);
+      assert.equal(porcelain(dir), '');
+    } finally { cleanup(dir); }
+  });
+
+  test('(c) seed verify-at-birth threads --ws to context verify', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'community' });
+    try {
+      const out = run(dir, seedVerify, 'seed --phase 4 --ws community', { N: '4' });
+      assert.doesNotMatch(out, /no matching CONTEXT file found/);
+      assert.match(out, /workstreams\/community\/phases\/04-threads\/04-CONTEXT\.md/);
+    } finally { cleanup(dir); }
+  });
+});
