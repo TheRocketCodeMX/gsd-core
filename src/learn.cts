@@ -122,7 +122,7 @@ function writeProgress(prog: Progress): void {
   const body = [
     '# Learning Progress',
     '',
-    '> Tracked by `/gsd:learn`. The machine state is the JSON block below — edit via the command, not by hand.',
+    '> Tracked by `/gsd-learn`. The machine state is the JSON block below — edit via the command, not by hand.',
     '',
     '```json',
     JSON.stringify(prog, null, 2),
