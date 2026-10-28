@@ -1291,7 +1291,16 @@ function buildCodexHookWindowsShimIR(scriptAbsPath: string, absoluteRunnerToken:
   const scriptQuoted = JSON.stringify(targetAbs);
   const cmdPath = scriptAbsPath.replace(/\.js$/, '.cmd');
   const hookCommand = JSON.stringify(shellCmdProjection.posixNormalize(cmdPath));
-  const runnerQuoted = JSON.stringify(interpreter);
+  // #4838: node is resolved when the hook fires. The install-time path dies when a
+  // version manager (WinGet) removes the versioned directory on upgrade, and a
+  // shim that only knew that path failed silently until the installer re-ran.
+  // Order: explicit GSD_NODE_PATH; the install-time path while it still exists
+  // (keeps the #3662 minimal-PATH guarantee); node.exe on PATH. `where $PATH:`
+  // searches PATH only, never the current directory, so repo content cannot
+  // become the runner. `%` is doubled so cmd.exe cannot expand a variable out
+  // of an install path.
+  const bakedBat = JSON.stringify(interpreter).slice(1, -1).replace(/%/g, '%%');
+  const scriptBat = scriptQuoted.replace(/%/g, '%%');
   return {
     invocation: { interpreter, target: scriptAbsPath },
     cmdPath,
@@ -1299,7 +1308,16 @@ function buildCodexHookWindowsShimIR(scriptAbsPath: string, absoluteRunnerToken:
     eol: { cmd: '\r\n' },
     passthroughArgs: true,
     render: {
-      cmd: () => `@ECHO OFF\r\n@SETLOCAL\r\n@${runnerQuoted} ${scriptQuoted} %*\r\n`,
+      cmd: () => [
+        '@ECHO OFF',
+        '@SETLOCAL',
+        '@SET "GSD_NODE="',
+        '@IF DEFINED GSD_NODE_PATH IF EXIST "%GSD_NODE_PATH%" SET "GSD_NODE=%GSD_NODE_PATH%"',
+        `@IF NOT DEFINED GSD_NODE IF EXIST "${bakedBat}" SET "GSD_NODE=${bakedBat}"`,
+        '@IF NOT DEFINED GSD_NODE FOR /F "delims=" %%N IN (\'where $PATH:node.exe 2^>NUL\') DO @IF NOT DEFINED GSD_NODE SET "GSD_NODE=%%N"',
+        `@"%GSD_NODE%" ${scriptBat} %*`,
+        '',
+      ].join('\r\n'),
     },
   };
 }
@@ -1599,10 +1617,10 @@ function configuredEntrypointsForHook(
   const bash = resolveBashExecutable(opts);
   if (isShellHook) {
     // An unresolved bash must still surface as an interpreterCandidates entry
-    // (the literal token, same as the portableHooks runner below) so
+    // (the sentinel token, same as the portableHooks runner below) so
     // validateConfiguredEntrypoints reports 'unresolved-interpreter' instead
     // of silently skipping the check because the field is absent.
-    return [{ ...target, interpreterCandidates: [bash === null ? 'bash' : bash] }];
+    return [{ ...target, interpreterCandidates: [bash === null ? UNRESOLVED_BASH_SENTINEL : bash] }];
   }
 
   // #4249: check the SAME stable alias buildNodeRunnerChainToken bakes as its
@@ -1625,7 +1643,7 @@ function configuredEntrypointsForHook(
     runtime,
     configPath,
     scriptPath: path.join(configDir, 'hooks', NODE_RUNNER_RESOLVER_HOOK),
-    interpreterCandidates: bash === null ? ['bash'] : [bash],
+    interpreterCandidates: bash === null ? [UNRESOLVED_BASH_SENTINEL] : [bash],
     platform,
   };
   return [runner, { ...target, interpreterCandidates: nodeCandidates }];
@@ -1643,6 +1661,20 @@ function recordConfiguredHookCommand(
     );
   }
   return command;
+}
+
+// #5100: the two null-runner branches of buildHookCommand share this. No
+// command was ever built, so track() (which needs one) cannot record the
+// hook — push the entry directly instead, so the gate sees it rather than
+// the hook going silently unregistered.
+function recordUnresolvedBashEntrypoint(
+  configDir: string,
+  hookName: string,
+  opts: BuildHookCommandOpts,
+): void {
+  if (opts.configuredEntrypoints) {
+    opts.configuredEntrypoints.push(...configuredEntrypointsForHook(configDir, hookName, opts));
+  }
 }
 
 function buildHookCommand(configDir: string, hookName: string, opts?: BuildHookCommandOpts): string | null {
@@ -1672,15 +1704,9 @@ function buildHookCommand(configDir: string, hookName: string, opts?: BuildHookC
     const runner = resolveBashRunner(opts);
     if (runner === null) {
       // #4249 (antigravity review): this early return skips `track()` below,
-      // so an unresolved bash on win32 (no Git Bash found) previously left
-      // this hook silently unregistered with nothing for
-      // validateConfiguredEntrypoints to reject — configuredEntrypointsForHook's
-      // own 'unresolved bash must still surface' comment describes intent this
-      // return never reached. Push the entry directly (no `command`, since
-      // none was ever built) so the gate actually sees it.
-      if (opts.configuredEntrypoints) {
-        opts.configuredEntrypoints.push(...configuredEntrypointsForHook(configDir, hookName, opts));
-      }
+      // which needs a command that was never built — record the entry
+      // directly so the gate can reject it.
+      recordUnresolvedBashEntrypoint(configDir, hookName, opts);
       return null;
     }
 
@@ -1726,9 +1752,13 @@ function buildHookCommand(configDir: string, hookName: string, opts?: BuildHookC
       configDir,
       homeDir: os.homedir(),
     });
-    // Absolute Git-Bash discovery on win32 when available (#580); `bash` on
-    // PATH otherwise — the same assumption .sh hooks already make.
-    const resolverRunner = resolveBashRunner(opts) || 'bash';
+    // #5100: same contract as the .sh early return. A bare `bash` is how
+    // win32 reaches WSL's System32 launcher, and the gate used to accept it.
+    const resolverRunner = resolveBashRunner(opts);
+    if (resolverRunner === null) {
+      recordUnresolvedBashEntrypoint(configDir, hookName, opts);
+      return null;
+    }
     return track(shellCmdProjection.projectShellCommandText({
       runnerToken: resolverRunner,
       argTokens: [
@@ -2610,6 +2640,14 @@ interface ApplySettingsJsonHooksOpts {
   hookOpts: BuildHookCommandOpts;
   localCmd: (hookFile: string) => string | null;
   localShellCmd: (hookFile: string) => string | null;
+  /**
+   * #4840: false when the runtime declares `context-warnings` unsupported
+   * (`hostBehaviors.unsupportedFeatures`) — it has no statusline writer for the
+   * metrics bridge file `gsd-context-monitor.js` reads, so the hook could never
+   * warn. The monitor is then not registered, and a registration left by an
+   * earlier install is stripped. Absent means supported.
+   */
+  contextWarnings?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -2685,6 +2723,9 @@ const SETTINGS_JSON_HOOK_ROWS: readonly SettingsJsonHookRow[] = deepFreeze([
   // Guard: only register if the hook file was actually installed (#1754, #1817).
   { file: 'gsd-check-update.js', event: 'SessionStart', command: { opts: 'updateCheckCommand' },
     configuredMessage: 'Configured update check hook', skipLabel: 'update check hook' },
+  // #5465: persists the gsd-core bin directory on PATH through $CLAUDE_ENV_FILE (SessionStart-only).
+  { file: 'gsd-path-export.js', event: 'SessionStart', timeout: 5, command: { build: 'js' },
+    configuredMessage: 'Configured PATH persistence hook', skipLabel: 'PATH persistence hook' },
   { file: 'gsd-context-monitor.js', event: 'post', matcher: 'Bash|Edit|Write|MultiEdit|Agent|Task', timeout: 10,
     command: { opts: 'contextMonitorCommand' },
     configuredMessage: 'Configured context window monitor hook', skipLabel: 'context monitor hook',
@@ -2836,6 +2877,32 @@ function pushHookGroup(entries: any[], matcher: string | undefined, command: str
   entries.push(matcher === undefined ? { hooks: [hook] } : { matcher, hooks: [hook] });
 }
 
+/** #4840: the hook that reads the statusline's metrics bridge file. */
+const CONTEXT_MONITOR_HOOK = 'gsd-context-monitor.js';
+
+/**
+ * #4840: remove GSD-managed registrations of `stem` from one event's groups,
+ * leaving user-authored hooks (even in the same group) untouched. Returns
+ * whether anything was removed. A group left with no hooks is dropped.
+ */
+function stripManagedHookRegistrations(entries: any[], stem: string): boolean {
+  let removed = false;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (!entry || !Array.isArray(entry.hooks)) continue;
+    const kept = entry.hooks.filter((h: HookEntry) => {
+      const managed = referencesHook(h as Record<string, unknown>, stem)
+        && isManagedHookCommand((h as { command?: string }).command, { surface: 'settings-json', includeLegacyAliases: true });
+      if (managed) removed = true;
+      return !managed;
+    });
+    if (kept.length === entry.hooks.length) continue;
+    if (kept.length === 0) entries.splice(i, 1);
+    else entry.hooks = kept;
+  }
+  return removed;
+}
+
 function applySettingsJsonHookTables(settings: any, opts: ApplySettingsJsonHooksOpts, tables: SettingsJsonHookTables): void {
   const { runtime, postToolEvent, hookEvents, extendedHookEvents, hooksSurface, targetDir, hookOpts } = opts;
 
@@ -2890,6 +2957,12 @@ function applySettingsJsonHookTables(settings: any, opts: ApplySettingsJsonHooks
       settings.hooks[key] = [];
     }
     const entries: any[] = settings.hooks[key];
+    if (row.file === CONTEXT_MONITOR_HOOK && opts.contextWarnings === false) {
+      if (stripManagedHookRegistrations(entries, hookStem(row.file))) {
+        console.log(`  ${green}✓${reset} Removed stale context monitor hook (${_capabilityTitle(runtime)} has no context metrics writer, #4840)`);
+      }
+      continue;
+    }
     const command = resolveRowCommand(row, opts);
     if ('build' in row.command && row.command.build === 'sh') shellCommands[row.file] = command;
 
@@ -3020,7 +3093,7 @@ function buildKimiHookEntryToml(spec: KimiHookEntrySpec): string | null {
  * unmatched (all tools) instead, which only widens when it fires, it never
  * narrows incorrectly.
  */
-function buildKimiHooksTomlBlock(targetDir: string, opts: { hookOpts: BuildHookCommandOpts }): string | null {
+function buildKimiHooksTomlBlock(targetDir: string, opts: { hookOpts: BuildHookCommandOpts; contextWarnings?: boolean }): string | null {
   const { hookOpts } = opts;
   const cmd = (hookName: string): string | null => {
     if (!fs.existsSync(path.join(targetDir, 'hooks', hookName))) return null;
@@ -3042,7 +3115,8 @@ function buildKimiHooksTomlBlock(targetDir: string, opts: { hookOpts: BuildHookC
     { event: 'PreToolUse', command: cmd('gsd-validate-commit.sh'), matcher: 'Shell', timeout: kimiBlockingGuardTimeout('gsd-validate-commit.sh') },
 
     // PostToolUse
-    { event: 'PostToolUse', command: cmd('gsd-context-monitor.js'), timeout: 10 },
+    // #4840: no metrics writer on kimi, so the warning registration is skipped (a block from an earlier install is replaced wholesale).
+    { event: 'PostToolUse', command: opts.contextWarnings === false ? null : cmd('gsd-context-monitor.js'), timeout: 10 },
     { event: 'PostToolUse', command: cmd('gsd-phase-boundary.sh'), matcher: 'WriteFile|StrReplaceFile', timeout: 5 },
     { event: 'PostToolUse', command: cmd('gsd-read-injection-scanner.js'), matcher: 'ReadFile', timeout: 5 },
     { event: 'PostToolUse', command: cmd('gsd-graphify-update.sh'), matcher: 'Shell', timeout: 5 },
@@ -3118,10 +3192,11 @@ function stripKimiHooksTomlBlock(content: string): string | null {
 function writeKimiHooksToml(
   configPath: string,
   targetDir: string,
-  opts: { hookOpts: BuildHookCommandOpts },
+  opts: { hookOpts: BuildHookCommandOpts; contextWarnings?: boolean },
 ): { changed: boolean; path: string; entryCount: number; configuredEntrypoints: ConfiguredEntrypoint[] } {
   const configuredEntrypoints: ConfiguredEntrypoint[] = [];
   const trackedOpts = {
+    contextWarnings: opts.contextWarnings,
     hookOpts: {
       ...opts.hookOpts,
       configPath,
@@ -3275,9 +3350,44 @@ type ConfiguredEntrypointValidationResult =
   | { ok: true }
   | { ok: false; invalid: ConfiguredEntrypointInvalid[] };
 
+// #5100: the writer emits the bare `bash` token when the Git Bash policy
+// finds nothing, and the gate resolves that token through the same policy —
+// never a PATH scan. One shared definition so the two sides cannot drift.
+const UNRESOLVED_BASH_SENTINEL = 'bash';
+const WIN32_BARE_BASH_TOKENS = [UNRESOLVED_BASH_SENTINEL, 'bash.exe'];
+
+function isWin32BareBashToken(candidate: string, platform?: string): boolean {
+  if ((platform || process.platform) !== 'win32') return false;
+  // Equality already rejects any path: a string holding a separator can never
+  // equal a bare token, so no explicit separator guard is needed here.
+  return WIN32_BARE_BASH_TOKENS.includes(candidate.trim().toLowerCase());
+}
+
+// #5100: the literal `bash` sentinel means "Git Bash policy found nothing"
+// (#4249). Resolve that token through resolveBashExecutable, never a PATH
+// scan — WSL's System32\bash.exe is on PATH and cannot see Windows paths.
+function win32BareBashResolves(
+  candidate: string,
+  platform: string | undefined,
+  deps: { env?: NodeJS.ProcessEnv; existsSync?: (p: string) => boolean },
+): boolean | null {
+  if (!isWin32BareBashToken(candidate, platform)) return null;
+  return resolveBashExecutable({
+    platform: 'win32',
+    env: deps.env,
+    existsSync: deps.existsSync,
+  }) !== null;
+}
+
 function validateConfiguredEntrypoints(
   entries: ConfiguredEntrypoint[],
-  deps: { statSync?: typeof fs.statSync; accessSync?: typeof fs.accessSync; resolveExecutableBinary?: typeof resolveExecutableBinary } = {},
+  deps: {
+    statSync?: typeof fs.statSync;
+    accessSync?: typeof fs.accessSync;
+    resolveExecutableBinary?: typeof resolveExecutableBinary;
+    env?: NodeJS.ProcessEnv;
+    existsSync?: (p: string) => boolean;
+  } = {},
 ): ConfiguredEntrypointValidationResult {
   const statSync = deps.statSync ?? fs.statSync;
   const accessSync = deps.accessSync ?? fs.accessSync;
@@ -3330,9 +3440,11 @@ function validateConfiguredEntrypoints(
         invalid.push({ runtime: entry.runtime, configPath: entry.configPath, role: 'script', path: entry.scriptPath, reason: 'not-executable' });
       }
     }
-    if (entry.interpreterCandidates && !entry.interpreterCandidates.some(candidate =>
-      resolve(candidate, { platform: entry.platform, requireExecutable: true }) !== null,
-    )) {
+    if (entry.interpreterCandidates && !entry.interpreterCandidates.some(candidate => {
+      const bareBash = win32BareBashResolves(candidate, entry.platform, deps);
+      if (bareBash !== null) return bareBash;
+      return resolve(candidate, { platform: entry.platform, requireExecutable: true }) !== null;
+    })) {
       invalid.push({ runtime: entry.runtime, configPath: entry.configPath, role: 'interpreter', path: entry.interpreterCandidates.join(' | '), reason: 'unresolved-interpreter' });
     }
   }
@@ -3435,6 +3547,11 @@ export = {
   resolveBashExecutable,
   resolveBashRunner,
   NODE_RUNNER_RESOLVER_HOOK,
+  // #5100: the literal the writer records for an unresolved Git Bash and the
+  // gate resolves through the Git Bash policy. Exported so a consumer that
+  // needs to recognise that entry imports it rather than respelling it;
+  // bin/install.js keys on the entry having no command instead.
+  UNRESOLVED_BASH_SENTINEL,
 
   // Atomic write seam (shared with bin/install.js so all writes participate
   // in install.js's _cleanTmpFiles() scoped temp-cleanup).

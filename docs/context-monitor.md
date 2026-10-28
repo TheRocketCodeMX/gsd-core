@@ -26,6 +26,8 @@ The hook is part of the [`context` capability](../gsd-core/references/context-li
 
 Debounce: `DEBOUNCE_CALLS` (5) tool uses between repeated warnings. A `warn → urge` escalation bypasses the debounce and fires once.
 
+`used_pct` is read from the statusline bridge file as written. Since upstream #4985 the statusline puts it on the auto-compact scale (a percentage of the point where Claude Code auto-compacts, or of the model window when auto-compact is off), so 90/95 mean "close to compaction", which is the moment a knowledge flush is worth suggesting.
+
 ## Tone contract (CI-linted)
 
 `tests/feat-context-hook.test.cjs` asserts the messages this hook emits **never** contain "CRITICAL", "URGENT", "immediately", or "STOP". The mechanism was never the problem — the upstream *tone* ("CONTEXT CRITICAL… STOP") derailed agents. The calm curation purpose is the whole point: a knowledge checkpoint, not an emergency save.
@@ -46,9 +48,11 @@ Keys live in the `context_lifecycle` config slice (flat `context_lifecycle.*` or
 | `context_lifecycle.hook_warn_pct` | `90` | `used_pct` threshold for the first calm flush suggestion. |
 | `context_lifecycle.hook_urge_pct` | `95` | `used_pct` threshold for the single firmer repeat. |
 
+Upstream's `hooks.context_warning_threshold` / `hooks.context_critical_threshold` (#4285) stay registered and accepted by `config-set`, but this hook does **not** read them: they are percentages *remaining* that drive upstream's warner, and mapping them onto the calm `used_pct` thresholds would change what an existing value means. Tune the nudge with the two `context_lifecycle` keys above.
+
 ## Multi-runtime
 
-On Claude Code and Antigravity the nudge ships as this hook (plus the PreCompact reminder). On other runtimes there is no hook — run `/gsd-context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
+On Claude Code the nudge ships as this hook: the metrics-driven `PostToolUse` suggestion plus the PreCompact reminder. Since upstream #4840 the tool-event registration is made only on hosts that install the statusline bridge writer. A host that declares `context-warnings` unsupported in its capability descriptor (Antigravity among them) gets no `PostToolUse` registration, because nothing would write the metrics file, and keeps the PreCompact reminder where it declares that event. On other runtimes there is no hook — run `/gsd-context flush` manually at a natural break; the re-anchor procedure is carried as ambient practice in the generated instruction files. The *practice* is identical everywhere; only the delivery differs.
 
 ---
 

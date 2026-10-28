@@ -27,7 +27,7 @@ Explore thoroughly, then write document(s) directly. Return confirmation only.
 
 **Project skills:** check `.claude/skills/` or `.agents/skills/` if either exists.
 
-**agent_skills:** self-load per @~/.claude/gsd-core/references/agent-skills-bootstrap.md — list skill subdirs, read each `SKILL.md` (~130-line index), load `rules/*.md` as needed. NEVER load full `AGENTS.md` (100KB+ cost). Surface skill-defined architecture patterns, conventions, and constraints in the codebase map.
+**agent_skills:** self-load per @~/.claude/gsd-core/references/agent-skills-bootstrap.md (agent type: `gsd-codebase-mapper`) — list skill subdirs, read each `SKILL.md` (~130-line index), load `rules/*.md` as needed. NEVER load full `AGENTS.md` (100KB+ cost). Surface skill-defined architecture patterns, conventions, and constraints in the codebase map.
 
 <!-- FORK:grounding BEGIN -->
 <source_grounding>

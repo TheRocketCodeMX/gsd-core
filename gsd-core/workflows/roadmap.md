@@ -30,26 +30,30 @@ Valid GSD subagent types (use the exact name — do not fall back to 'general-pu
 **Runtime shim (REQUIRED — copy-paste verbatim):**
 
 ```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
 # Workstream scope (#4456/#4545, references/workstream-flag.md): parse the `--ws <name>`
 # this skill was started with (canonical per-fence idiom — every fence below re-parses
 # it, fences are separate shells) and resolve every planning path from init.new-milestone.
 # PROJECT.md is shared at the root; REQUIREMENTS/ROADMAP/STATE live under the workstream.
 # No workstream → the root .planning/ files, exactly as before.
-GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 _gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
 PROJECT_PATH=$(_gsd_field "$INIT" project_path); REQUIREMENTS_PATH=$(_gsd_field "$INIT" requirements_path); ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path)
 CONFIG_PATH=$(_gsd_field "$INIT" config_path); MILESTONES_PATH=$(_gsd_field "$INIT" milestones_path); RESEARCH_DIR=$(_gsd_field "$INIT" research_dir)
-AUTO_MODE=false; case " $ARGUMENTS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
+AUTO_MODE=false; case " $GSD_ARGS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
 # #74: an autonomous project (mode: yolo / workflow.auto_advance: true) must not
 # stall at this boundary when invoked WITHOUT the flag — consult the consolidated
 # record (chain flag OR workflow.auto_advance), the same read advance.md and the
 # discuss-phase family use. Flag-only derivation left headless pods printing a
 # human handoff no one is there to read.
 [ "$AUTO_MODE" = true ] || AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
-MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
-RESET_PHASES=false; case " $ARGUMENTS " in *" --reset-phase-numbers "*) RESET_PHASES=true;; esac
+MILESTONE_MODE=false; case " $GSD_ARGS " in *" --milestone "*) MILESTONE_MODE=true;; esac
+RESET_PHASES=false; case " $GSD_ARGS " in *" --reset-phase-numbers "*) RESET_PHASES=true;; esac
 AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)
 # #3602: bind the roadmapper's model here (dynamic_routing / model_profile), never
 # inherit it silently. Empty or "inherit" → omit `model=` at the spawn (#2517).
@@ -71,10 +75,14 @@ Stop.
 ## Step 2: Decide the mode (idempotency guard — mirrors plan-phase §1.6)
 
 ```bash
-GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 ROADMAP_PATH=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};process.stdout.write(String(o.roadmap_path||''))" "$INIT")
-MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
+MILESTONE_MODE=false; case " $GSD_ARGS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 MODE=create
 if [ -f "$ROADMAP_PATH" ]; then
   if grep -q 'Elaborated against strategy' "$ROADMAP_PATH"; then
@@ -216,7 +224,11 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 **Commit** (after approval or in auto) with the message matching the mode:
 
 ```bash
-GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 _gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
 ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path); REQUIREMENTS_PATH=$(_gsd_field "$INIT" requirements_path)

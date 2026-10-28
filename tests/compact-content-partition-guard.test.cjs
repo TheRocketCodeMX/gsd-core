@@ -146,9 +146,9 @@ function realignmentUpstreamParents(mergeBaseSha) {
 
 function rebrandUpstream(text) {
   return text
-    .replace(/@opengsd\/gsd-core/g, '@therocketcode/gsd-core')
-    .replace(/open-gsd\/gsd-core/g, 'TheRocketCodeMX/gsd-core')
-    .replace(/opengsd-gsd-core/g, 'therocketcode-gsd-core');
+    .replace(/@therocketcode\/gsd-core/g, '@therocketcode/gsd-core')
+    .replace(/TheRocketCodeMX\/gsd-core/g, 'TheRocketCodeMX/gsd-core')
+    .replace(/therocketcode-gsd-core/g, 'therocketcode-gsd-core');
 }
 
 // Fork lines this realignment deliberately did NOT carry verbatim, each with the upstream

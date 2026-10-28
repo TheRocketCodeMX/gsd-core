@@ -194,6 +194,10 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "defaultHomeIncludeRoot": ".gemini/antigravity",
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "projectInstructionFile": "GEMINI.md",
         "noPathRewrite": true,
         "hookPathStyle": "raw",
@@ -428,6 +432,9 @@ const capabilities = {
       "permissionWriter": null,
       "extendedHookEvents": [],
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "commandBodyConverter": "convertClaudeToAugmentMarkdown",
         "mcpCompanion": "settings-json",
         "contentRewriteProfile": "slash-lookahead-own-derived"
@@ -1055,6 +1062,9 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reportCommandsDir": true,
         "contentRewriteProfile": "slash-bare-own-tilde-bare"
       }
@@ -1065,7 +1075,7 @@ const capabilities = {
     "role": "reviewer",
     "version": "2.7.1",
     "title": "CodeRabbit",
-    "description": "CodeRabbit CLI — cross-AI /gsd:review reviewer lane only; not a GSD install target (no runtime body, no artifacts). Reviews the working-tree diff (`coderabbit review --prompt-only`), not the source tree, and accepts neither a prompt nor a model flag; findings are down-weighted in consensus (evidenceClass: diff-only).",
+    "description": "CodeRabbit CLI — cross-AI /gsd-review reviewer lane only; not a GSD install target (no runtime body, no artifacts). Reviews the working-tree diff (`coderabbit review --prompt-only`), not the source tree, and accepts neither a prompt nor a model flag; findings are down-weighted in consensus (evidenceClass: diff-only).",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -1483,6 +1493,7 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "defaultHomeIncludeRoot": ".copilot",
         "reapplyCommand": "/gsd-update --reapply",
         "agentFileExtension": ".agent.md",
         "skipSharedHooksInstall": true,
@@ -1704,12 +1715,12 @@ const capabilities = {
       "workflow.plan_drift_precheck": {
         "type": "boolean",
         "default": true,
-        "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
+        "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd-plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd-map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
       },
       "workflow.context_drift_precheck": {
         "type": "boolean",
         "default": true,
-        "description": "Enable the non-blocking context-drift pre-check at plan:pre, before /gsd:plan-phase reuses an existing RESEARCH.md/PATTERNS.md/VALIDATION.md/SPEC.md. Compares each artifact's effective last-changed time (git commit time, falling back to mtime for uncommitted edits) against CONTEXT.md's own — an artifact that predates CONTEXT.md's newest decision was derived from a premise that has since changed. Warn-only by default (see workflow.context_drift_action); never blocks planning on its own."
+        "description": "Enable the non-blocking context-drift pre-check at plan:pre, before /gsd-plan-phase reuses an existing RESEARCH.md/PATTERNS.md/VALIDATION.md/SPEC.md. Compares each artifact's effective last-changed time (git commit time, falling back to mtime for uncommitted edits) against CONTEXT.md's own — an artifact that predates CONTEXT.md's newest decision was derived from a premise that has since changed. Warn-only by default (see workflow.context_drift_action); never blocks planning on its own."
       },
       "workflow.context_drift_action": {
         "type": "enum",
@@ -2039,6 +2050,9 @@ const capabilities = {
       "extendedHookEvents": [],
       "extensionEvents": "hermes",
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "skillFrontmatterVersion": true,
         "skillsManifestPrefix": "skills/gsd/",
         "trackCategoryDescription": true,
@@ -2361,6 +2375,10 @@ const capabilities = {
         "promptFlag": "--prompt"
       },
       "hostBehaviors": {
+        "retargetsGsdCoreProsePath": true,
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reapplyCommand": "/skill:gsd-update --reapply",
         "localInstallDeferred": true,
         "verificationStyle": "kimi",
@@ -2477,6 +2495,9 @@ const capabilities = {
         "promptFlag": "--prompt"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reapplyCommand": "/skill:gsd-update --reapply",
         "localInstallDeferred": true,
         "verificationStyle": "kimi-code",
@@ -2546,7 +2567,7 @@ const capabilities = {
     "role": "feature",
     "version": "2.7.1",
     "title": "Learn teaching system",
-    "description": "The /gsd:learn teaching system: concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
+    "description": "The /gsd-learn teaching system: concept catalog graph, per-user learning progress, and the `gsd-tools learn` command family (catalog, node, progress-read, progress-update, next). Teaching itself is inline in the agent; this capability owns the catalog index and the persisted progress state.",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -2633,7 +2654,7 @@ const capabilities = {
     "role": "reviewer",
     "version": "2.7.1",
     "title": "llama.cpp",
-    "description": "llama.cpp server — cross-AI /gsd:review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.llama_cpp_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq. Capability id/folder are kebab (`llama-cpp`, required by KEBAB_RE); `reviewer.slug` stays snake (`llama_cpp`) to match the shipped roster and the `review.llama_cpp_host` config key (ADR-2782's three-namespace trap).",
+    "description": "llama.cpp server — cross-AI /gsd-review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.llama_cpp_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq. Capability id/folder are kebab (`llama-cpp`, required by KEBAB_RE); `reviewer.slug` stays snake (`llama_cpp`) to match the shipped roster and the `review.llama_cpp_host` config key (ADR-2782's three-namespace trap).",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -2699,7 +2720,7 @@ const capabilities = {
     "role": "reviewer",
     "version": "2.7.1",
     "title": "LM Studio",
-    "description": "LM Studio local model server — cross-AI /gsd:review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.lm_studio_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq. Capability id/folder are kebab (`lm-studio`, required by KEBAB_RE); `reviewer.slug` stays snake (`lm_studio`) to match the shipped roster and the `review.lm_studio_host` config key (ADR-2782's three-namespace trap).",
+    "description": "LM Studio local model server — cross-AI /gsd-review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.lm_studio_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq. Capability id/folder are kebab (`lm-studio`, required by KEBAB_RE); `reviewer.slug` stays snake (`lm_studio`) to match the shipped roster and the `review.lm_studio_host` config key (ADR-2782's three-namespace trap).",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -2989,7 +3010,7 @@ const capabilities = {
     "role": "reviewer",
     "version": "2.7.1",
     "title": "Ollama",
-    "description": "Ollama local model server — cross-AI /gsd:review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.ollama_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq.",
+    "description": "Ollama local model server — cross-AI /gsd-review reviewer lane only; not a GSD install target (no runtime body, no artifacts). OpenAI-compatible HTTP transport against a user-configured `review.ollama_host` (POST /v1/chat/completions); model discovered via GET /v1/models piped through jq.",
     "tier": "full",
     "requires": [],
     "engines": {
@@ -3145,8 +3166,8 @@ const capabilities = {
         "commandSurface": "slash-file",
         "dispatch": {
           "namedDispatch": true,
-          "nested": "undocumented",
-          "maxDepth": "undocumented",
+          "nested": false,
+          "maxDepth": 1,
           "background": false,
           "subagentToolkit": "full",
           "backgroundDispatch": false,
@@ -3178,6 +3199,11 @@ const capabilities = {
           "dir": "plugins",
           "file": "gsd-core.js",
           "source": ".opencode/plugins/gsd-core.js"
+        },
+        "nativeCliPlugin": {
+          "dir": "plugins/gsd-statusline",
+          "file": "tui.tsx",
+          "source": ".opencode/plugins/gsd-statusline/tui.tsx"
         },
         "skipHomePrefixSubstitution": true,
         "skipSettingsUi": true,
@@ -3288,7 +3314,7 @@ const capabilities = {
         },
         "fragment": {
           "path": "fragments/plan-pre.md",
-          "inline": "<pattern_mapping_context>\n**Phase:** {phase_number} - {phase_name}\n**Phase directory:** {phase_dir}\n**Padded phase:** {padded_phase}\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd:discuss-phase)\n- {research_path} (Technical Research)\n</required_reading>\n\n**Output file:** {phase_dir}/{padded_phase}-PATTERNS.md\n\nExtract the list of files to be created/modified from CONTEXT.md and RESEARCH.md. For each file, classify by role and data flow, find the closest existing analog in the codebase, extract concrete code excerpts, and produce PATTERNS.md.\n</pattern_mapping_context>\n"
+          "inline": "<pattern_mapping_context>\n**Phase:** {phase_number} - {phase_name}\n**Phase directory:** {phase_dir}\n**Padded phase:** {padded_phase}\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd-discuss-phase)\n- {research_path} (Technical Research)\n</required_reading>\n\n**Output file:** {phase_dir}/{padded_phase}-PATTERNS.md\n\nExtract the list of files to be created/modified from CONTEXT.md and RESEARCH.md. For each file, classify by role and data flow, find the closest existing analog in the codebase, extract concrete code excerpts, and produce PATTERNS.md.\n</pattern_mapping_context>\n"
         },
         "produces": [
           "PATTERNS.md"
@@ -3308,7 +3334,7 @@ const capabilities = {
     "role": "runtime",
     "version": "2.7.1",
     "title": "pi",
-    "description": "pi (pi.dev) — bun-runtime programmatic-CLI; TS ExtensionAPI (registerCommand/registerTool/registerProvider/pi.on); single native-extension file at ~/.pi/agent/extensions/gsd.js (.js, not .cjs — pi's extension auto-discovery accepts only .ts/.js, #2470); no shared-settings hook surface; tier-2 support.",
+    "description": "pi (pi.dev) — node-runtime programmatic-CLI (managed pi 1.3.0 install); TS ExtensionAPI (registerCommand/registerTool/registerProvider/pi.on); single native-extension file at ~/.pi/agent/extensions/gsd.js (.js, not .cjs — pi's extension auto-discovery accepts only .ts/.js, #2470); no shared-settings hook surface; tier-2 support.",
     "tier": "core",
     "requires": [],
     "engines": {
@@ -3326,8 +3352,48 @@ const capabilities = {
       "localConfigDir": ".pi",
       "configFormat": "none",
       "artifactLayout": {
-        "global": [],
-        "local": []
+        "global": [
+          {
+            "kind": "skills",
+            "destSubpath": "skills",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "converter": "convertClaudeCommandToPiSkill"
+          },
+          {
+            "kind": "agents",
+            "destSubpath": "agents",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "excludeSuffixes": [
+              ".compact.md"
+            ],
+            "converter": "convertClaudeAgentToPiAgent"
+          }
+        ],
+        "local": [
+          {
+            "kind": "skills",
+            "destSubpath": "skills",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "converter": "convertClaudeCommandToPiSkill"
+          },
+          {
+            "kind": "agents",
+            "destSubpath": "agents",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "excludeSuffixes": [
+              ".compact.md"
+            ],
+            "converter": "convertClaudeAgentToPiAgent"
+          }
+        ]
       },
       "triggerPrecedence": [
         "skills",
@@ -3359,8 +3425,8 @@ const capabilities = {
         "hookBus": "host",
         "stateIO": "session-log-append",
         "transport": "native-extension",
-        "runtime": "bun",
-        "effortSurface": "undocumented"
+        "runtime": "node",
+        "effortSurface": "argv"
       },
       "hostBehaviors": {
         "nativePlugin": {
@@ -3369,6 +3435,7 @@ const capabilities = {
           "source": "pi/gsd.cjs"
         },
         "pluginOnlyInstall": true,
+        "contentRewriteProfile": "slash-lookahead-tilde-restore",
         "sharedHooksDirName": "gsd-hooks"
       }
     }
@@ -3548,6 +3615,9 @@ const capabilities = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "skillPriorityFrontmatter": true,
         "brandingRewrites": {
           "CLAUDE.md": "QWEN.md",
@@ -3705,7 +3775,7 @@ const capabilities = {
         },
         "fragment": {
           "path": "fragments/plan-pre.md",
-          "inline": "<objective>\nResearch how to implement Phase {phase_number}: {phase_name}\nAnswer: \"What do I need to know to PLAN this phase well?\"\n</objective>\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd:discuss-phase)\n- {requirements_path} (Project requirements)\n- {state_path} (Project decisions and history)\n</required_reading>\n\n${AGENT_SKILLS_RESEARCHER}\n\n<additional_context>\n**Phase description:** {phase_description}\n**Phase requirement IDs (MUST address):** {phase_req_ids}\n\n**Project instructions:** Read ./CLAUDE.md or ./.claude/CLAUDE.md if either exists; follow project-specific guidelines.\n**Project skills:** Check .claude/skills/ or .agents/skills/ directory if either exists. Read SKILL.md files and account for project skill patterns.\n</additional_context>\n\n<output>\nWrite to: {phase_dir}/{phase_num}-RESEARCH.md\n</output>\n"
+          "inline": "<objective>\nResearch how to implement Phase {phase_number}: {phase_name}\nAnswer: \"What do I need to know to PLAN this phase well?\"\n</objective>\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd-discuss-phase)\n- {requirements_path} (Project requirements)\n- {state_path} (Project decisions and history)\n</required_reading>\n\n${AGENT_SKILLS_RESEARCHER}\n\n<additional_context>\n**Phase description:** {phase_description}\n**Phase requirement IDs (MUST address):** {phase_req_ids}\n\n**Project instructions:** Read ./CLAUDE.md or ./.claude/CLAUDE.md if either exists; follow project-specific guidelines.\n**Project skills:** Check .claude/skills/ or .agents/skills/ directory if either exists. Read SKILL.md files and account for project skill patterns.\n</additional_context>\n\n<output>\nWrite to: {phase_dir}/{phase_num}-RESEARCH.md\n</output>\n"
         },
         "produces": [
           "RESEARCH.md"
@@ -4569,7 +4639,7 @@ const byLoopPoint = {
         },
         "fragment": {
           "path": "fragments/plan-pre.md",
-          "inline": "<objective>\nResearch how to implement Phase {phase_number}: {phase_name}\nAnswer: \"What do I need to know to PLAN this phase well?\"\n</objective>\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd:discuss-phase)\n- {requirements_path} (Project requirements)\n- {state_path} (Project decisions and history)\n</required_reading>\n\n${AGENT_SKILLS_RESEARCHER}\n\n<additional_context>\n**Phase description:** {phase_description}\n**Phase requirement IDs (MUST address):** {phase_req_ids}\n\n**Project instructions:** Read ./CLAUDE.md or ./.claude/CLAUDE.md if either exists; follow project-specific guidelines.\n**Project skills:** Check .claude/skills/ or .agents/skills/ directory if either exists. Read SKILL.md files and account for project skill patterns.\n</additional_context>\n\n<output>\nWrite to: {phase_dir}/{phase_num}-RESEARCH.md\n</output>\n"
+          "inline": "<objective>\nResearch how to implement Phase {phase_number}: {phase_name}\nAnswer: \"What do I need to know to PLAN this phase well?\"\n</objective>\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd-discuss-phase)\n- {requirements_path} (Project requirements)\n- {state_path} (Project decisions and history)\n</required_reading>\n\n${AGENT_SKILLS_RESEARCHER}\n\n<additional_context>\n**Phase description:** {phase_description}\n**Phase requirement IDs (MUST address):** {phase_req_ids}\n\n**Project instructions:** Read ./CLAUDE.md or ./.claude/CLAUDE.md if either exists; follow project-specific guidelines.\n**Project skills:** Check .claude/skills/ or .agents/skills/ directory if either exists. Read SKILL.md files and account for project skill patterns.\n</additional_context>\n\n<output>\nWrite to: {phase_dir}/{phase_num}-RESEARCH.md\n</output>\n"
         },
         "produces": [
           "RESEARCH.md"
@@ -4603,7 +4673,7 @@ const byLoopPoint = {
         },
         "fragment": {
           "path": "fragments/plan-pre.md",
-          "inline": "<pattern_mapping_context>\n**Phase:** {phase_number} - {phase_name}\n**Phase directory:** {phase_dir}\n**Padded phase:** {padded_phase}\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd:discuss-phase)\n- {research_path} (Technical Research)\n</required_reading>\n\n**Output file:** {phase_dir}/{padded_phase}-PATTERNS.md\n\nExtract the list of files to be created/modified from CONTEXT.md and RESEARCH.md. For each file, classify by role and data flow, find the closest existing analog in the codebase, extract concrete code excerpts, and produce PATTERNS.md.\n</pattern_mapping_context>\n"
+          "inline": "<pattern_mapping_context>\n**Phase:** {phase_number} - {phase_name}\n**Phase directory:** {phase_dir}\n**Padded phase:** {padded_phase}\n\n<required_reading>\n- {context_path} (USER DECISIONS from /gsd-discuss-phase)\n- {research_path} (Technical Research)\n</required_reading>\n\n**Output file:** {phase_dir}/{padded_phase}-PATTERNS.md\n\nExtract the list of files to be created/modified from CONTEXT.md and RESEARCH.md. For each file, classify by role and data flow, find the closest existing analog in the codebase, extract concrete code excerpts, and produce PATTERNS.md.\n</pattern_mapping_context>\n"
         },
         "produces": [
           "PATTERNS.md"
@@ -5430,13 +5500,13 @@ const configSchema = {
     "owner": "drift",
     "type": "boolean",
     "default": true,
-    "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd:plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd:map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
+    "description": "Enable the non-blocking codebase drift pre-check at plan:pre, before /gsd-plan-phase spawns the planner. When enabled, a stale STRUCTURE.md (drift elements exceeding drift_threshold) is surfaced up front as a warn-only advisory pointing to /gsd-map-codebase; it never blocks planning and never spawns the mapper agent. Separate from schema_drift_gate so autonomous/CI runs can silence the plan-time advisory while keeping the execute:wave:post gates enabled."
   },
   "workflow.context_drift_precheck": {
     "owner": "drift",
     "type": "boolean",
     "default": true,
-    "description": "Enable the non-blocking context-drift pre-check at plan:pre, before /gsd:plan-phase reuses an existing RESEARCH.md/PATTERNS.md/VALIDATION.md/SPEC.md. Compares each artifact's effective last-changed time (git commit time, falling back to mtime for uncommitted edits) against CONTEXT.md's own — an artifact that predates CONTEXT.md's newest decision was derived from a premise that has since changed. Warn-only by default (see workflow.context_drift_action); never blocks planning on its own."
+    "description": "Enable the non-blocking context-drift pre-check at plan:pre, before /gsd-plan-phase reuses an existing RESEARCH.md/PATTERNS.md/VALIDATION.md/SPEC.md. Compares each artifact's effective last-changed time (git commit time, falling back to mtime for uncommitted edits) against CONTEXT.md's own — an artifact that predates CONTEXT.md's newest decision was derived from a premise that has since changed. Warn-only by default (see workflow.context_drift_action); never blocks planning on its own."
   },
   "workflow.context_drift_action": {
     "owner": "drift",
@@ -5921,6 +5991,10 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "defaultHomeIncludeRoot": ".gemini/antigravity",
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "projectInstructionFile": "GEMINI.md",
         "noPathRewrite": true,
         "hookPathStyle": "raw",
@@ -6072,6 +6146,9 @@ const runtimes = {
       "permissionWriter": null,
       "extendedHookEvents": [],
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "commandBodyConverter": "convertClaudeToAugmentMarkdown",
         "mcpCompanion": "settings-json",
         "contentRewriteProfile": "slash-lookahead-own-derived"
@@ -6494,6 +6571,9 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reportCommandsDir": true,
         "contentRewriteProfile": "slash-bare-own-tilde-bare"
       }
@@ -6779,6 +6859,7 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "defaultHomeIncludeRoot": ".copilot",
         "reapplyCommand": "/gsd-update --reapply",
         "agentFileExtension": ".agent.md",
         "skipSharedHooksInstall": true,
@@ -7031,6 +7112,9 @@ const runtimes = {
       "extendedHookEvents": [],
       "extensionEvents": "hermes",
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "skillFrontmatterVersion": true,
         "skillsManifestPrefix": "skills/gsd/",
         "trackCategoryDescription": true,
@@ -7301,6 +7385,10 @@ const runtimes = {
         "promptFlag": "--prompt"
       },
       "hostBehaviors": {
+        "retargetsGsdCoreProsePath": true,
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reapplyCommand": "/skill:gsd-update --reapply",
         "localInstallDeferred": true,
         "verificationStyle": "kimi",
@@ -7417,6 +7505,9 @@ const runtimes = {
         "promptFlag": "--prompt"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "reapplyCommand": "/skill:gsd-update --reapply",
         "localInstallDeferred": true,
         "verificationStyle": "kimi-code",
@@ -7576,8 +7667,8 @@ const runtimes = {
         "commandSurface": "slash-file",
         "dispatch": {
           "namedDispatch": true,
-          "nested": "undocumented",
-          "maxDepth": "undocumented",
+          "nested": false,
+          "maxDepth": 1,
           "background": false,
           "subagentToolkit": "full",
           "backgroundDispatch": false,
@@ -7609,6 +7700,11 @@ const runtimes = {
           "dir": "plugins",
           "file": "gsd-core.js",
           "source": ".opencode/plugins/gsd-core.js"
+        },
+        "nativeCliPlugin": {
+          "dir": "plugins/gsd-statusline",
+          "file": "tui.tsx",
+          "source": ".opencode/plugins/gsd-statusline/tui.tsx"
         },
         "skipHomePrefixSubstitution": true,
         "skipSettingsUi": true,
@@ -7685,7 +7781,7 @@ const runtimes = {
     "role": "runtime",
     "version": "2.7.1",
     "title": "pi",
-    "description": "pi (pi.dev) — bun-runtime programmatic-CLI; TS ExtensionAPI (registerCommand/registerTool/registerProvider/pi.on); single native-extension file at ~/.pi/agent/extensions/gsd.js (.js, not .cjs — pi's extension auto-discovery accepts only .ts/.js, #2470); no shared-settings hook surface; tier-2 support.",
+    "description": "pi (pi.dev) — node-runtime programmatic-CLI (managed pi 1.3.0 install); TS ExtensionAPI (registerCommand/registerTool/registerProvider/pi.on); single native-extension file at ~/.pi/agent/extensions/gsd.js (.js, not .cjs — pi's extension auto-discovery accepts only .ts/.js, #2470); no shared-settings hook surface; tier-2 support.",
     "tier": "core",
     "requires": [],
     "engines": {
@@ -7703,8 +7799,48 @@ const runtimes = {
       "localConfigDir": ".pi",
       "configFormat": "none",
       "artifactLayout": {
-        "global": [],
-        "local": []
+        "global": [
+          {
+            "kind": "skills",
+            "destSubpath": "skills",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "converter": "convertClaudeCommandToPiSkill"
+          },
+          {
+            "kind": "agents",
+            "destSubpath": "agents",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "excludeSuffixes": [
+              ".compact.md"
+            ],
+            "converter": "convertClaudeAgentToPiAgent"
+          }
+        ],
+        "local": [
+          {
+            "kind": "skills",
+            "destSubpath": "skills",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "converter": "convertClaudeCommandToPiSkill"
+          },
+          {
+            "kind": "agents",
+            "destSubpath": "agents",
+            "prefix": "gsd-",
+            "nesting": "flat",
+            "recursive": false,
+            "excludeSuffixes": [
+              ".compact.md"
+            ],
+            "converter": "convertClaudeAgentToPiAgent"
+          }
+        ]
       },
       "triggerPrecedence": [
         "skills",
@@ -7736,8 +7872,8 @@ const runtimes = {
         "hookBus": "host",
         "stateIO": "session-log-append",
         "transport": "native-extension",
-        "runtime": "bun",
-        "effortSurface": "undocumented"
+        "runtime": "node",
+        "effortSurface": "argv"
       },
       "hostBehaviors": {
         "nativePlugin": {
@@ -7746,6 +7882,7 @@ const runtimes = {
           "source": "pi/gsd.cjs"
         },
         "pluginOnlyInstall": true,
+        "contentRewriteProfile": "slash-lookahead-tilde-restore",
         "sharedHooksDirName": "gsd-hooks"
       }
     }
@@ -7848,6 +7985,9 @@ const runtimes = {
         "effortSurface": "undocumented"
       },
       "hostBehaviors": {
+        "unsupportedFeatures": [
+          "context-warnings"
+        ],
         "skillPriorityFrontmatter": true,
         "brandingRewrites": {
           "CLAUDE.md": "QWEN.md",

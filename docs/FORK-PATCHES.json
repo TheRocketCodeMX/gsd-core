@@ -4,16 +4,6 @@
  "comment": "Machine-readable fork-delta manifest. One entry per (path, feature). mode=markers: the file contains exactly `markers` balanced FORK:<feature> BEGIN/END comment pairs around fork-owned blocks. mode=anchors-only: no inline markers (size-budgeted, JSON/YAML, frontmatter, in-fence, or in-sentence edits); the anchors pin load-bearing fork literals. mode=whole-file: the fork version replaces upstream wholesale. Every anchor is a JS regex (multiline) that MUST match the file content and would not appear in pristine upstream. Guarded by tests/fork-delta-manifest.test.cjs; consumed by the v2.0.0 upstream realignment (Epic #13).",
  "patches": [
   {
-   "path": ".github/workflows/release.yml",
-   "feature": "release",
-   "mode": "anchors-only",
-   "anchors": [
-    "FORK \\(release\\): 30, not upstream 20",
-    "FORK \\(release\\): npm trusted publishing \\(OIDC",
-    "Check npm CLI supports trusted publishing \\(npm >= 11\\.5\\.1\\)"
-   ]
-  },
-  {
    "path": ".gitignore",
    "feature": "identity",
    "mode": "anchors-only",
@@ -650,15 +640,6 @@
     "ai-test-quality\\.md",
     "falsifiability gate",
     "Coverage debt"
-   ]
-  },
-  {
-   "path": "gsd-core/workflows/autonomous.md",
-   "feature": "grounding",
-   "mode": "anchors-only",
-   "anchors": [
-    "query grounding required",
-    "Canonical References"
    ]
   },
   {
@@ -1923,6 +1904,15 @@
    "anchors": [
     "FORK:provenance BEGIN",
     "tool-provenance\\.md"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/autonomous/templates/minimal-context.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "query grounding required",
+    "Canonical References"
    ]
   },
   {
