@@ -997,18 +997,21 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       const cleanupFence = forkRoadmapSkill
         ? extractFenceContaining(content, '## 10. Create Roadmap', '## 10.5.', 'rm -f .planning/.gsd-ws-arg')
         : step10Fence;
+      // Fork: roadmap.md re-derives MODE from the roadmap as committed at HEAD (matrix119-B F5 —
+      // fences are separate shells); the stubbed /ws and /root paths are not git history, so the
+      // derived subject is the create one. Subject derivation itself is covered, against real
+      // git fixtures, in tests/roadmap-after-strategy.test.cjs.
       const commitMsg = forkRoadmapSkill
-        ? 'docs: extend roadmap for milestone ([N] phases added)'
+        ? 'docs: create roadmap ([N] phases)'
         : 'docs: create milestone v[X.Y] roadmap ([N] phases)';
 
       function runStep10(gsdWsArg, rootPaths, wsPaths, fence = step10Fence) {
         fs.writeFileSync(path.join(tmpDir, '.planning', '.gsd-ws-arg'), gsdWsArg);
         // The fork's roadmap.md re-parses --ws from its own typed text (what new-milestone's
-        // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it); MODE is the
-        // Step-2 value for the milestone-extend path.
+        // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it).
         // #5143: roadmap.md captures its typed text through the quoted heredoc, so the
         // typed `--milestone <ws>` is spliced where the runtime puts it (withTypedArguments).
-        const env = { ...runtimeDirEnv, MODE: 'extend' };
+        const env = { ...runtimeDirEnv };
         const typedFence = forkRoadmapSkill && fence.includes('\n$ARGUMENTS\nGSD_ARGS_END')
           ? withTypedArguments(fence, `--milestone ${gsdWsArg}`.trim())
           : fence;

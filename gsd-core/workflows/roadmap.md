@@ -232,6 +232,15 @@ GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/
 INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 _gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
 ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path); REQUIREMENTS_PATH=$(_gsd_field "$INIT" requirements_path)
+# Fences are separate shells: Step 2's MODE is gone here. Re-derive it from the roadmap as
+# committed BEFORE this run (HEAD) — the working-tree file was just written by the roadmapper,
+# so re-running Step 2's on-disk test now would misread create as elaborate. No committed
+# roadmap → create; a committed one → extend under --milestone, else elaborate.
+MILESTONE_MODE=false; case " $GSD_ARGS " in *" --milestone "*) MILESTONE_MODE=true;; esac
+MODE=create
+if [ -n "$(git ls-tree --name-only HEAD -- "$ROADMAP_PATH" 2>/dev/null)" ]; then
+  if [ "$MILESTONE_MODE" = true ]; then MODE=extend; else MODE=elaborate; fi
+fi
 if [ "$MODE" = extend ]; then MSG="docs: extend roadmap for milestone ([N] phases added)";
 elif [ "$MODE" = elaborate ]; then MSG="docs: elaborate roadmap against strategy";
 else MSG="docs: create roadmap ([N] phases)"; fi
