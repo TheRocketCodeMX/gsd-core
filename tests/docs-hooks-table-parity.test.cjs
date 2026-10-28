@@ -64,6 +64,7 @@ const EXPECTED_SURFACE_HOOKS = [
   // is registered on the surface by src/runtime-hooks-surface.cts (FORK:grounding) and
   // rostered in the docs hook tables; upstream's pin does not know it.
   'gsd-grounding-index-refresh.js',
+  'gsd-path-export.js',
   'gsd-phase-boundary.sh',
   'gsd-prompt-guard.js',
   'gsd-read-guard.js',

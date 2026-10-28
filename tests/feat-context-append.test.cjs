@@ -159,3 +159,118 @@ describe('forward routing: phase-end promotion + cross-milestone capsule (Task 1
     assert.match(wf, /milestones\/consumed/, 'consumed capsule is moved aside');
   });
 });
+
+// ─── complete-milestone Step 2b: the forward capsule is committed (pre-ship matrix119-B F3) ──
+//
+// The fork's Step 2b wrote `.planning/milestones/next/<label>-CAPSULE.md` but no commit fence
+// staged it, so it stayed untracked after the close (flat and --ws). And `milestones/next/` is
+// shared at the root while new-milestone Step 3.1 consumes any label match, so two workstreams'
+// next labels collided. The fork's resolve + stage fences (elaboration.md 2b) and upstream's own
+// close fences (safety commit → git rm → final commit) are extracted VERBATIM and run in order.
+
+describe('complete-milestone Step 2b forward capsule is committed and workstream-unique (matrix119-B F3)', () => {
+  const os = require('node:os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { gitOrThrow, throwIfFailed } = require('./helpers/git-fixture.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const ROOT = path.resolve(__dirname, '..');
+  const { scanFencedBlocks } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'markdown-sectionizer.cjs'));
+  const bashFences = (md) => {
+    const lines = md.split(/\r?\n/);
+    return scanFencedBlocks(lines)
+      .filter((b) => /^bash\b/.test(b.infoString))
+      .map((b) => lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n'));
+  };
+  const detail = bashFences(read('gsd-core/workflows/complete-milestone/detail/elaboration.md'));
+  const spine = bashFences(read('gsd-core/workflows/complete-milestone.md'));
+  const pick = (fences, needle, where) => {
+    const hit = fences.find((f) => f.includes(needle));
+    assert.ok(hit, `${where} has no bash fence containing ${needle}`);
+    return hit;
+  };
+  const shell = os.platform() === 'win32' ? null : 'bash';
+  const LABEL_PH = '[next milestone label, e.g. v1.3]';
+  const PATH_PH = '[forward_capsule path printed above]';
+
+  function makeProject({ ws }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cm-capsule-'));
+    const put = (rel, body) => {
+      const f = path.join(dir, rel);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, body);
+    };
+    put('.planning/PROJECT.md', '# Project\n');
+    put('.planning/config.json', '{\n  "commit_docs": true\n}\n');
+    const base = ws ? `.planning/workstreams/${ws}` : '.planning';
+    put(`${base}/ROADMAP.md`, '# Roadmap\n');
+    put(`${base}/STATE.md`, '---\nmilestone: v1.2\n---\n# State\n');
+    put(`${base}/REQUIREMENTS.md`, '# Requirements\n');
+    put(`${base}/MILESTONES.md`, '# Milestones\n');
+    gitOrThrow(['init', '-q'], { cwd: dir });
+    gitOrThrow(['config', 'user.email', 't@example.com'], { cwd: dir });
+    gitOrThrow(['config', 'user.name', 't'], { cwd: dir });
+    gitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    gitOrThrow(['add', '.'], { cwd: dir });
+    gitOrThrow(['commit', '-q', '-m', 'init'], { cwd: dir });
+    return dir;
+  }
+
+  function run(dir, fence, args) {
+    const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir };
+    delete env.GSD_WORKSTREAM;
+    delete env.GSD_SESSION_KEY;
+    const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
+    const script = (fence.includes(marker) ? fence.replace(marker, () => `\n${args}\nGSD_ARGS_END`) : fence)
+      .split('[X.Y]').join('1.2');
+    const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
+    throwIfFailed(r, 'bash <complete-milestone fence>');
+    return r.stdout;
+  }
+
+  function close(dir, args) {
+    const resolve = pick(detail, 'forward_capsule:', 'elaboration.md');
+    assert.ok(resolve.includes(LABEL_PH), `resolve fence must keep the ${LABEL_PH} placeholder`);
+    const out = run(dir, resolve.split(LABEL_PH).join('v1.3'), args);
+    const m = out.match(/^forward_capsule: (\S+)$/m);
+    assert.ok(m, `resolve fence printed no forward_capsule line:\n${out}`);
+    const capsule = m[1];
+    fs.mkdirSync(path.dirname(capsule), { recursive: true });
+    fs.writeFileSync(capsule, '---\nmilestone: v1.3\n---\n# Milestone v1.3 — Forward Capsule\n');
+    const stage = pick(detail, PATH_PH, 'elaboration.md');
+    run(dir, stage.split(PATH_PH).join(capsule), args);
+    // Upstream's own close commits, verbatim: safety commit (path-scoped), git rm, final commit.
+    run(dir, pick(spine, 'chore: archive v[X.Y] milestone files', 'complete-milestone.md'), args);
+    run(dir, pick(spine, 'git rm "$REQUIREMENTS_PATH"', 'complete-milestone.md'), args);
+    run(dir, pick(spine, 'git commit -m "chore: remove REQUIREMENTS.md', 'complete-milestone.md'), args);
+    return path.relative(dir, capsule).split(path.sep).join('/');
+  }
+
+  const tracked = (dir, rel) => gitOrThrow(['ls-tree', '-r', '--name-only', 'HEAD', '--', rel], { cwd: dir }).trim();
+  const dirty = (dir) => gitOrThrow(['status', '--porcelain', '--', '.planning/milestones'], { cwd: dir }).trim();
+
+  test('workstream (--ws search): the capsule label is workstream-prefixed and the close commits it', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: 'search' });
+    try {
+      const rel = close(dir, 'v1.2 --ws search');
+      assert.equal(rel, '.planning/milestones/next/search-v1.3-CAPSULE.md');
+      assert.equal(tracked(dir, rel), rel, 'capsule must be in HEAD after the close');
+      assert.equal(dirty(dir), '', 'nothing under milestones/ left untracked');
+    } finally { cleanup(dir); }
+  });
+
+  test('flat project: the capsule keeps the bare label and the close commits it', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    try {
+      const rel = close(dir, 'v1.2');
+      assert.equal(rel, '.planning/milestones/next/v1.3-CAPSULE.md');
+      assert.equal(tracked(dir, rel), rel, 'capsule must be in HEAD after the close');
+      assert.equal(dirty(dir), '');
+    } finally { cleanup(dir); }
+  });
+
+  test('new-milestone Step 3.1 matches the workstream-prefixed label under a workstream', () => {
+    const wf = read('gsd-core/workflows/new-milestone.md');
+    assert.match(wf, /<workstream>-<version>-CAPSULE\.md/, 'Step 3.1 must name the workstream-prefixed label');
+  });
+});

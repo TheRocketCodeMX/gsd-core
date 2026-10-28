@@ -304,10 +304,11 @@
         "context-drift.test.cjs",
         "context-enrichment.test.cjs",
         "context-index-sync.test.cjs",
+        "context-monitor-host-contract.test.cjs",
         "fix-2289-context-monitor-event-allowlist.test.cjs"
       ],
       "issue": "FORK",
-      "justification": "FORK: the context capability (context-lifecycle program) owns context-enrichment; upstream's fix-2289 suite shares the derived `context` prefix, and upstream's own context-index-sync (#2950) and context-drift (#4147) suites bucket into the same cluster under the #3227 prefix rule."
+      "justification": "FORK: the context capability (context-lifecycle program) owns context-enrichment; upstream's fix-2289 suite shares the derived `context` prefix, and upstream's own context-index-sync (#2950), context-drift (#4147) and context-monitor-host-contract (#4840, the metrics-writer registration rule) suites bucket into the same cluster under the #3227 prefix rule."
     }
   }
 }

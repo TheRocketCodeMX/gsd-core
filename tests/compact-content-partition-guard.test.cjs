@@ -144,46 +144,28 @@ function realignmentUpstreamParents(mergeBaseSha) {
   return parents;
 }
 
+// The upstream coordinates are assembled from parts on purpose: scripts/sync-upstream.sh
+// rewrites every literal upstream coordinate in the tree, and a literal here would be turned
+// into a no-op replace by the next whole-tree rebrand (it was, at align-1.19.0).
+const UPSTREAM_SCOPE = 'open' + 'gsd';
+const UPSTREAM_ORG = 'open-' + 'gsd';
+const REBRAND_PAIRS = [
+  [new RegExp(`@${UPSTREAM_SCOPE}/gsd-core`, 'g'), '@therocketcode/gsd-core'],
+  [new RegExp(`${UPSTREAM_ORG}/gsd-core`, 'g'), 'TheRocketCodeMX/gsd-core'],
+  [new RegExp(`${UPSTREAM_SCOPE}-gsd-core`, 'g'), 'therocketcode-gsd-core'],
+];
+
 function rebrandUpstream(text) {
-  return text
-    .replace(/@opengsd\/gsd-core/g, '@therocketcode/gsd-core')
-    .replace(/open-gsd\/gsd-core/g, 'TheRocketCodeMX/gsd-core')
-    .replace(/opengsd-gsd-core/g, 'therocketcode-gsd-core');
+  return REBRAND_PAIRS.reduce((acc, [re, to]) => acc.replace(re, to), text);
 }
 
-// Fork lines this realignment deliberately did NOT carry verbatim, each with the upstream
-// change that resolved it (align-1.16.0; recorded in the fork-delta manifest and the wave
-// report). Matched by line prefix. Inert once the realignment merge is behind the base.
-const REALIGNMENT_RESOLVED_FORK_LINES = {
-  'execute-phase': [
-    ['7. **Handle failures:** classify BEFORE branching (#3095) — read', 'superseded: the size-only step-7 extraction retired; upstream #4405/#4217 Step 7 is theirs inline'],
-  ],
-  'new-project': [
-    ['- **If `NEXT_STRATEGY` is set:** auto-advance **into the strategy chain** — exit and dispatch `Skill(skill="gsd-${NEXT_STRATEGY}", args="--auto")` (the Skill tool, never a `SlashCommand` — an interpolated `/gsd:${…}` name', 'reworded (pre-ship matrix B/F8): the prose no longer spells an unconvertible colon token (#4324); same rule'],
-    ['/gsd:${NEXT_STRATEGY} — [one-line purpose]', 'pre-ship matrix B/F8: printed as `/gsd-${NEXT_STRATEGY}` (an interpolated colon-form name is invisible to the install-time converter)'],
-  ],
-  'plan-phase': [
-    ['Read `frontend`, `hasUiSpec`, and `block` from `GATE`. `frontend` honors', 'reworded onto upstream #5170 "Otherwise read `frontend`, …" sentence (same fork clause appended)'],
-  ],
-  'verify-work': [
-    ['INIT=$(gsd_run query init.verify-work "${PHASE_ARG}" ${GSD_WS})  # phase arg is POSITIONAL', 're-placed on upstream #4772 `${GSD_WS:+--ws=…}` form (same fork comment)'],
-    ['**Determine final status — the runtime is the authority.**', 'superseded by upstream #5105 `uat.complete-session` (fork pending-certifier rule moved into src/uat.cts)'],
-    ['Re-read the completion signal from the runtime, which parses the UAT file', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['DONE=$(gsd_run query init.verify-work "${phase_number}" ${GSD_WS})', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['if [[ "$DONE" == @file:* ]]; then DONE=$(cat "${DONE#@file:}"); fi', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['UAT_BLOCKERS=$(printf \'%s\' "$DONE"', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['if UAT_BLOCKERS is non-empty (any blocker names this phase\'s UAT file', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['# A crash-truncated entry, a still-out CERT-2 handover, or an unresolved item remains.', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['# Name the blockers in the session note; do NOT mark complete.', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['else if pending_count > 0 OR blocked_count > 0 OR skipped_no_reason > 0:', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['# Every entry has a definitive passing/closed result AND the runtime agrees.', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['where `pending_count` / `blocked_count` / `skipped_no_reason` are the local', 'superseded by upstream #5105 `uat.complete-session`'],
-    ['gsd_run query commit "test({phase_num}): complete UAT - {passed} passed, {issues} issues" --files', 'superseded: the verb commits the UAT file; the fork commits the certification artifacts in a separate CERT_FILES call'],
-    ['If execution verification is waiting only on human UAT and this session recorded zero issues, canonicalize the report before the shared completion predicate — **conditionally**:', 'upstream #4663 rewrote the intro; the fork condition is carried in the flip itself'],
-    ['if [ "$VERIFICATION_STATUS_VALUE" = "human_needed" ] && [ "$BEHAVIOR_UNVERIFIED" -eq 0 ]', 'merged onto upstream #4663 `phase uat-passed --uat-only` flip (fork conditions added to it)'],
-    ['PHASE_VERIFICATION_STATUS="passed"', 'upstream #4663 flip re-reads verification.status instead'],
-  ],
-};
+// Fork lines a realignment deliberately did NOT carry verbatim, each with the upstream
+// change that resolved it, keyed by split name and matched by line prefix. Entries only
+// apply while their realignment merge is inside merge-base..HEAD, so each pull starts from
+// an empty table: the align-1.16.0 entries were pruned at align-1.19.0, whose merge added
+// no new detail/ split. Add rows here (and in the wave report) only for a split the
+// current realignment introduces.
+const REALIGNMENT_RESOLVED_FORK_LINES = {};
 
 function isResolvedForkLine(splitName, line) {
   return (REALIGNMENT_RESOLVED_FORK_LINES[splitName] || []).some(([prefix]) => line.startsWith(prefix));
