@@ -227,10 +227,16 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
   function run(dir, fence, args, extraEnv = {}) {
     // Later fences rely on the `gsd_run` shim the Step-1 fence exports onto PATH (CLAUDE_ENV_FILE).
     const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
-    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ARGUMENTS: args, ...extraEnv };
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ...extraEnv };
     delete env.GSD_WORKSTREAM;
     delete env.GSD_SESSION_KEY;
-    const r = runHook('-c', [fence], { interpreter: 'bash', cwd: dir, env });
+    // #5143: each fence captures the typed text once through a quoted heredoc whose body is
+    // the `$ARGUMENTS` token; the runtime puts the typed text there. Emulate that substitution
+    // (and only that) so the extracted fence runs as deployed.
+    const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
+    assert.ok(fence.includes(marker), 'roadmap.md fence must carry the argument capture block');
+    const script = fence.replace(marker, () => `\n${args}\nGSD_ARGS_END`);
+    const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
     throwIfFailed(r, 'bash <roadmap.md fence>');
     return r.stdout;
   }

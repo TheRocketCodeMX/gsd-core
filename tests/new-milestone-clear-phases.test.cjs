@@ -1003,11 +1003,16 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
 
       function runStep10(gsdWsArg, rootPaths, wsPaths, fence = step10Fence) {
         fs.writeFileSync(path.join(tmpDir, '.planning', '.gsd-ws-arg'), gsdWsArg);
-        // The fork's roadmap.md re-parses --ws from its own $ARGUMENTS (what new-milestone's
+        // The fork's roadmap.md re-parses --ws from its own typed text (what new-milestone's
         // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it); MODE is the
         // Step-2 value for the milestone-extend path.
-        const env = { ...runtimeDirEnv, ARGUMENTS: `--milestone ${gsdWsArg}`.trim(), MODE: 'extend' };
-        const script = stubGsdRun(rootPaths, wsPaths) + fence;
+        // #5143: roadmap.md captures its typed text through the quoted heredoc, so the
+        // typed `--milestone <ws>` is spliced where the runtime puts it (withTypedArguments).
+        const env = { ...runtimeDirEnv, MODE: 'extend' };
+        const typedFence = forkRoadmapSkill && fence.includes('\n$ARGUMENTS\nGSD_ARGS_END')
+          ? withTypedArguments(fence, `--milestone ${gsdWsArg}`.trim())
+          : fence;
+        const script = stubGsdRun(rootPaths, wsPaths) + typedFence;
         const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env });
         throwIfFailed(r, 'bash <step10 fence>');
         return r.stdout;

@@ -53,6 +53,7 @@ Hook text that reaches the model (advisories and block reasons) has control char
 | `gsd-context-monitor.js` | PostToolUse, SubagentStop, Stop | unsupported: it reads context metrics the Claude statusline writes; Pi has no statusline to produce them |
 | `gsd-agent-isolation-guard.js` | PreToolUse | unsupported: it guards the isolation argument of Claude's `Agent` call; `gsd_dispatch` has no such parameter |
 | `gsd-config-reload.js` | FileChanged | unsupported: Pi 1.3.0 has no file-change event for extensions |
+| `gsd-grounding-index-refresh.js` | FileChanged | unsupported: Pi 1.3.0 has no file-change event for extensions; the grounding sources are still read on demand through `gsd-tools query grounding required` (fork grounding hook) |
 | `gsd-check-update.js` | SessionStart | unsupported: its cache is read only by the Claude statusline and update banner; Pi updates through the installer or `pi update` |
 | `gsd-statusline.js`, `gsd-update-banner.js` | statusLine | unsupported: Pi extensions have no statusline command |
 | `gsd-check-update-worker.js`, `gsd-node-runner.sh` | internal | not run on their own |

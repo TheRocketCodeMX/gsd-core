@@ -39,30 +39,6 @@
    ]
   },
   {
-   "path": "agents/gsd-advisor-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-ai-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-assumptions-analyzer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
    "path": "agents/gsd-code-reviewer.compact.md",
    "feature": "fidelity",
    "mode": "markers",
@@ -100,30 +76,6 @@
    "anchors": [
     "<source_grounding>",
     "exploration-and-adaptability\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-doc-classifier.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-doc-synthesizer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-domain-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -263,14 +215,6 @@
    "anchors": [
     "untrusted-input-boundary\\.md",
     "Source grounding \\(before any web research\\)"
-   ]
-  },
-  {
-   "path": "agents/gsd-research-synthesizer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -1057,6 +1001,30 @@
    ]
   },
   {
+   "path": "pi/gsd.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "'gsd-grounding-index-refresh\\.js': \\[\\{ claude: 'FileChanged', status: 'unsupported'"
+   ]
+  },
+  {
+   "path": "docs/reference/pi-parity-matrix.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "\\| `gsd-grounding-index-refresh\\.js` \\| FileChanged \\| unsupported"
+   ]
+  },
+  {
+   "path": "docs/reference/pi-hook-parity.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "\\| `gsd-grounding-index-refresh\\.js` \\| FileChanged \\| unsupported"
+   ]
+  },
+  {
    "path": "package.json",
    "feature": "identity",
    "mode": "anchors-only",
@@ -1347,7 +1315,8 @@
    "markers": 2,
    "anchors": [
     "realignmentUpstreamParents",
-    "REALIGNMENT_RESOLVED_FORK_LINES"
+    "REALIGNMENT_RESOLVED_FORK_LINES",
+    "UPSTREAM_SCOPE = 'open' \\+ 'gsd'"
    ]
   },
   {
@@ -1364,6 +1333,15 @@
    "mode": "anchors-only",
    "anchors": [
     "the fork context-monitor hook does not consume hooks\\.context_\\*_threshold"
+   ]
+  },
+  {
+   "path": "tests/gsd-statusline.test.cjs",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "the monitor nudges a flush before compaction",
+    "the calm nudge never uses the upstream warner tone"
    ]
   },
   {

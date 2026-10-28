@@ -26,7 +26,7 @@ This manifest is the safety net for the v2.0.0 Upstream Realignment (Epic #13):
 | `no-context-fork` | Removal of `context: fork` from heavy skills (it breaks subagent spawning) |
 | `identity` | Fork identity: npm coordinate, repo slug, legacy-cleanup extension, rider config lines |
 | `windows-ledger` | Mechanical closure for upstream's own broken-windows ledger (#1950): a `reason` column on `fixed`, the `amend` verb, the `reconcile` repair verb, and the hardening that followed review (waived-reason guard, duplicate-id rejection, surplus-positional usage errors, disjoint `repaired`/`normalized`, and a `command-exit-zero` ship-gate predicate reading the cross-checked `windows status` in place of the hand-editable-frontmatter comparison). **upstream-PR candidate** — this fixes upstream's feature rather than diverging from it; the delta should DISSOLVE the moment upstream adopts it, so keep the four entries below reviewable as a single portable patch and delete them on absorption |
-| `release` | Fork release plumbing: NPM token auth, update-changelog-preview tooling, sync-upstream script. The changeset-payload shipping + dual-layout requires are **upstream-absorbed** (#935/#938: upstream installs `scripts/changeset/` as a sibling of `gsd-core/`, so the repo-relative requires resolve installed) |
+| `release` | Fork release plumbing: update-changelog-preview tooling, sync-upstream script (the release-workflow patches were superseded by upstream at align-1.19.0). The changeset-payload shipping + dual-layout requires are **upstream-absorbed** (#935/#938: upstream installs `scripts/changeset/` as a sibling of `gsd-core/`, so the repo-relative requires resolve installed) |
 
 A file may carry blocks from more than one feature; it then has one FORK-PATCHES entry **per feature**.
 
@@ -109,6 +109,8 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `tests/auto-advance-endings.test.cjs`
 - `tests/testing-certification-wiring.test.cjs`
 - `tests/fix-regate6-uat-superseded-and-certifier-token.test.cjs`
+- `tests/cicd-rung-ladder.test.cjs` (cicd-strategy rung ladder contract; listed at align-1.19.0, it predates the realignment)
+- `tests/ship-certification-sweep-contract.test.cjs` (ship preflight 7 certification sweep; listed at align-1.19.0, it predates the realignment)
 
 ### fidelity — quality contract + execute-phase guards
 
@@ -204,6 +206,7 @@ The feature itself is upstream-native as of v1.6.1 (`gsd-core/workflows/list-see
 - `docs/FORK-DELTA.md`
 - `docs/FORK-PATCHES.json`
 - `tests/fork-delta-manifest.test.cjs`
+- `tests/realign-2-0-0-update-matrix.install.test.cjs` (hermetic fork-tag → this-tree update/uninstall matrix; align-1.19.0 added A6b: every fork skill is GSD-owned under upstream #5161 and replaced on update)
 
 ### realignment-extracted (Epic #13) — new files created DURING the v2.0.0 port
 
@@ -248,13 +251,14 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `.gitignore` | grounding | anchors-only | align-1.16.0: the compiled gate module is gitignored like every other tsc-generated lib file |
 | `scripts/lint-allow-test-rule-refs.unverified-ceiling.json` | identity | anchors-only | align-1.16.0: unverified ceiling = upstream 284 + 6 fork marker-bearing test files (unchanged since origin/next) that the v1.14–1.16 detection now counts as unverified |
 | `scripts/lint-allow-test-rule-refs.effective-ceiling.json` | identity | anchors-only | effective ceiling = upstream base (64 at v1.16.0) + the fork's 5 structural sites carried since align-1.11.0 |
-| `scripts/lint-test-file-count.allowlist.json` | identity | anchors-only | the three fork test clusters (`context`, `milestone` +1, `roadmap` +1) re-allowlisted on top of upstream's list each realignment, with fork justifications |
+| `scripts/lint-test-file-count.allowlist.json` | identity | anchors-only | the three fork test clusters (`context`, `milestone` +1, `roadmap` +1) re-allowlisted on top of upstream's list each realignment, with fork justifications; align-1.19.0 adds upstream's `context-monitor-host-contract.test.cjs` (#4840) to the fork `context` cluster |
 | `tests/config.platform.test.cjs` | identity | anchors-only | align-1.16.0: the fork's #21 P1-3 'fresh config-new-project output is warning-free' test moved here from tests/config.test.cjs — upstream #5074's platform-split invariant forbids the USERPROFILE (windows-env-var) signal in the base file |
 | `scripts/docs-guard-registry.cjs` | identity | anchors-only | fork docs-guard readers registered (align-1.13.0 docs-guard registration), re-placed on upstream's list |
 | `scripts/lint-docs-guard-registration.exempt-baseline.cjs` | identity | anchors-only | fork heuristic false positives baselined (align-1.13.0), re-placed on upstream's baseline |
 | `tests/helpers/process-seam.cjs` | identity | anchors-only | align-1.16.0: `spawnSeam` forwards an opt-in `maxBuffer` (spawnSync defaults to 1 MiB) so the emitted-attribution trailer read survives a realignment-sized `merge-base..HEAD` range (459 upstream commits ≈ 2 MB of `%B`); callers that pass nothing keep the default |
-| `tests/compact-content-partition-guard.test.cjs` | identity | markers (2) | align-1.16.0: check 1 (completeness) is realignment-aware. A `Merge upstream vX.Y.Z` commit in `merge-base..HEAD` brings in splits upstream already completeness-checked against its own pre-split spine; for those, the check narrows to the FORK's lines (base-spine lines absent from the upstream spine at the previous sync point, rebrand-normalized), looks for them in spine ∪ detail ∪ `<name>/steps/*.md`, and honours a per-line `REALIGNMENT_RESOLVED_FORK_LINES` list naming the upstream change that resolved each deliberately-not-verbatim fork line. Inert once the merge is behind the base — prune the list at the next realignment |
+| `tests/compact-content-partition-guard.test.cjs` | identity | markers (2) | align-1.16.0: check 1 (completeness) is realignment-aware. A `Merge upstream vX.Y.Z` commit in `merge-base..HEAD` brings in splits upstream already completeness-checked against its own pre-split spine; for those, the check narrows to the FORK's lines (base-spine lines absent from the upstream spine at the previous sync point, rebrand-normalized), looks for them in spine ∪ detail ∪ `<name>/steps/*.md`, and honours a per-line `REALIGNMENT_RESOLVED_FORK_LINES` list naming the upstream change that resolved each deliberately-not-verbatim fork line. Inert once the merge is behind the base — prune the list at the next realignment. align-1.19.0: the align-1.16.0 list was pruned to `{}` (this merge adds no new `detail/` split), and `rebrandUpstream` builds the upstream coordinates from parts because the whole-tree rebrand had turned its literal patterns into no-op replaces |
 | `tests/config.test.cjs` | context-monitor | anchors-only | align-1.16.0: upstream #4285's "absent threshold resolves to the hook's own constant" pin requires `hooks/gsd-context-monitor.js` to export WARNING_THRESHOLD/CRITICAL_THRESHOLD; the fork's whole-file calm hook has neither, so that one test is skipped with a FORK reason (the #4285 config-key validation tests still run) |
+| `tests/gsd-statusline.test.cjs` | context-monitor | anchors-only | align-1.19.0: upstream #4985's auto-compact meter test drives `hooks/gsd-context-monitor.js` and expects the upstream CRITICAL warner. The meter half is unchanged; the monitor half asserts the fork's calm nudge fires before compaction on the same scale (STATE.md gate, urge level, no CRITICAL tone) |
 | `tests/prompt-injection-scan.security.test.cjs` | fidelity | anchors-only | align-1.16.0: `gsd-core/workflows/code-review.md` joins `SIZE_ONLY_WORKFLOWS` (exempt from the 50K size heuristic only, still fully injection-scanned): upstream's body is 49,961 B and the fork's source-fidelity inputs + rebrand put it at ~50.3K |
 | `tests/hook-registration-table.test.cjs` | grounding | anchors-only | align-1.16.0: upstream #5207's edge-shape test assumes one extended row per event; the fork registers two on FileChanged (config-reload + grounding-index refresh), so events are de-duplicated and the repaired list holds one entry per row |
 | `tests/fixtures/hook-registration/run-scenarios.cjs` | grounding | anchors-only | align-1.16.0: the #5207 scenario driver installs and passes a command for the fork's `gsd-grounding-index-refresh.js` row |
@@ -271,14 +275,9 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-security-auditor.compact.md` | strategy | markers | align-1.16.0: the compact persona variant (upstream #4407/#4553, served to non-Claude AGENTS-native runtimes when `workflow.compact_content` is on) carries the same fork block(s) verbatim as its canonical sibling — SECURITY-STRATEGY.md read in load_context. Upstream's compact guard only enforces `gsd:protected` parity, so without these the fork contract silently vanished under compact mode |
 | `agents/gsd-ui-checker.compact.md` | fidelity | markers (2) | align-1.16.0: the compact persona variant (upstream #4407/#4553, served to non-Claude AGENTS-native runtimes when `workflow.compact_content` is on) carries the same fork block(s) verbatim as its canonical sibling — FRONTEND-ARCHITECTURE / Mode inputs + design-override principle. Upstream's compact guard only enforces `gsd:protected` parity, so without these the fork contract silently vanished under compact mode |
 | `agents/gsd-ui-researcher.compact.md` | fidelity | markers (2) | align-1.16.0: the compact persona variant (upstream #4407/#4553, served to non-Claude AGENTS-native runtimes when `workflow.compact_content` is on) carries the same fork block(s) verbatim as its canonical sibling — Mode design-input + FRONTEND-ARCHITECTURE inputs. Upstream's compact guard only enforces `gsd:protected` parity, so without these the fork contract silently vanished under compact mode |
-| `agents/gsd-advisor-researcher.md` | fidelity | anchors-only | one-line `untrusted-input-boundary.md` import |
-| `agents/gsd-ai-researcher.md` | fidelity | anchors-only | one-line import |
-| `agents/gsd-assumptions-analyzer.md` | fidelity | anchors-only | one-line import |
+<!-- SUPERSEDED (align-1.19.0): the one-line untrusted-input-boundary import on seven research/analysis agents (advisor-researcher, ai-researcher, assumptions-analyzer, doc-classifier, doc-synthesizer, domain-researcher, research-synthesizer) — upstream has shipped that exact line in every one of them since before v1.13.0, and each file now carries zero fork delta against the rebranded upstream body, so the anchors pinned nothing fork-owned; the seven manifest entries were removed. The agents that still carry fork blocks (phase-researcher, project-researcher, ui-researcher and their compact twins) keep their entries. -->
 | `agents/gsd-code-reviewer.md` | fidelity | markers | Contract-conformance dimension 4 (+1 rewritten sentence, anchors) |
 | `agents/gsd-codebase-mapper.md` | grounding | markers | `<source_grounding>` block |
-| `agents/gsd-doc-classifier.md` | fidelity | anchors-only | one-line import |
-| `agents/gsd-doc-synthesizer.md` | fidelity | anchors-only | one-line import |
-| `agents/gsd-domain-researcher.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-executor.md` | fidelity, context | markers | senior-quality contract, Mode awareness, TEST-INTEGRITY RULE; mirror-deviations-to-frontmatter instruction (1 context marker pair) |
 | `agents/gsd-integration-checker.md` | fidelity | markers | seam/telemetry + design-source stance |
 | `agents/gsd-intel-updater.md` | grounding | markers | `<source_grounding>` block |
@@ -287,7 +286,6 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `agents/gsd-plan-checker.md` | fidelity | anchors-only | 983/1000-line LARGE budget; Canonical-References row + 3 gate bullets |
 | `agents/gsd-planner.md` | fidelity | anchors-only | size-gated (XL); senior-quality + Mode paras + Ship-Fast caveat |
 | `agents/gsd-project-researcher.md` | fidelity | markers | source-grounding para; one-line import (anchor) |
-| `agents/gsd-research-synthesizer.md` | fidelity | anchors-only | one-line import |
 | `agents/gsd-roadmapper.md` | strategy | markers | cross-cutting/elaborate-mode, design-aware UI hints, discovery artifacts |
 | `agents/gsd-security-auditor.md` | strategy | markers | SECURITY-STRATEGY parent bullet |
 | `agents/gsd-ui-checker.md` | fidelity | markers | FE-architecture/Mode tables + design-override principle |
@@ -343,6 +341,9 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 | `gsd-core/workflows/ultraplan-phase.md` | grounding | markers | grounding carried into the cloud prompt (in-fence part: anchors) |
 | `hooks/hooks.json` | grounding | anchors-only | JSON; grounding-index-refresh matcher entry |
 | `hooks/managed-hooks-registry.cjs` | grounding | anchors-only | one array line |
+| `pi/gsd.cjs` | grounding | anchors-only | align-1.19.0: upstream #5560 requires a Pi disposition for every managed hook; the fork grounding FileChanged hook is recorded `unsupported` (Pi 1.3.0 has no file-change event; the sources are still read on demand through `gsd-tools query grounding required`) |
+| `docs/reference/pi-parity-matrix.md` | grounding | anchors-only | align-1.19.0: the #5561 reference page must list every non-bridged hook; the grounding hook row (same reason as `pi/gsd.cjs`) |
+| `docs/reference/pi-hook-parity.md` | grounding | anchors-only | align-1.19.0: the grounding hook row on the Pi hook-parity table (same reason as `pi/gsd.cjs`) |
 | `package.json` | identity | anchors-only | JSON; fork name/author/repo + **zero runtime dependencies** (upstream's `dependencies` block deliberately removed). v1.9.0: `@anthropic-ai/claude-agent-sdk` added as a **devDependency** only — the #2590 backend gate resolves the installed SDK version by walking node_modules, and upstream's test needs it resolvable in-repo; nothing ships (no `dependencies` block). v1.11.0: `engines.node` PINNED at `>=22.0.0` — upstream bumped to `>=24.0.0`; the fork's release gates and consumer environments run Node 22 and the full suite is green there (revisit at the next upstream pull). v1.13.0: upstream still pins `>=24`; fork keeps `>=22` (suite green on 22) |
 | `scripts/build-hooks.js` | grounding | anchors-only | one `HOOKS_TO_COPY` line — `gsd-grounding-index-refresh.js` must ship to `hooks/dist/` so the installer copies it AND records it in `gsd-file-manifest.json` (without it, bug #941's detect-custom-files false-positive fires on the fork hook). Lost to `--theirs` in the v1.10.0 realignment; pinned here so the next pull catches it |
 | `scripts/prompt-injection-scan.sh` | fidelity | anchors-only | allowlist entry for untrusted-input-boundary.md |
@@ -456,8 +457,8 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 
 The fork version replaces upstream wholesale; during realignment keep the fork file and reconcile upstream changes into it by hand (not vice versa):
 
-- `hooks/gsd-context-monitor.js` — the fork's **calm knowledge-flush nudge** (part of the `context` capability). Same PostToolUse/PreCompact mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests `/gsd-context flush`; on PreCompact it emits a final flush + re-anchor reminder. Main-session-only, gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`, calm-by-contract (CI-linted tone). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation.
-- `docs/context-monitor.md` — rewritten to document the revived calm knowledge-flush nudge (thresholds, tone contract, config keys).
+- `hooks/gsd-context-monitor.js` — the fork's **calm knowledge-flush nudge** (part of the `context` capability). Same PostToolUse/PreCompact mechanism as upstream, opposite tone: at high `used_pct` (90/95) it suggests `/gsd-context flush`; on PreCompact it emits a final flush + re-anchor reminder. Main-session-only, gated on `.planning/STATE.md` + `context_lifecycle.hook_enabled`, calm-by-contract (CI-linted tone). Kept wired/managed so updates overwrite any previously-active version. Never take the upstream implementation. align-1.19.0: still matches the hook contract. Upstream #4985 puts the bridge `used_pct` on the auto-compact scale, so 90/95 now mean "close to compaction". #4840 registers the tool-event monitor only on hosts with a statusline writer, which is install-side and also applies to the fork hook. Upstream's `hooks.context_warning_threshold` / `context_critical_threshold` (#4285) are deliberately **not read**: they are percentages remaining for upstream's warner. The fork tunes with `context_lifecycle.hook_warn_pct` / `hook_urge_pct`, and the doc says so.
+- `docs/context-monitor.md` — rewritten to document the revived calm knowledge-flush nudge (thresholds, tone contract, config keys). align-1.19.0: notes the #4985 scale, the #4840 host rule and the decision not to read the #4285 keys.
 - `gsd-core/references/scout-codebase.md` — upstream's lazy map-selection table was rewritten into the fork's mandatory-exploration doctrine (parallel explorer agents, rationalization-killers, confirm-or-refute gate); the map-selection table survives inside it.
 - `CHANGELOG.md` — fork-owned release history (fork versions 1.5.0+). Keep ours; upstream's changelog is not merged.
 

@@ -885,7 +885,11 @@ describe('context meter resolves the auto-compact window the way Claude Code doe
     return { used: match ? parseInt(match[1], 10) : null, bridge, bridgePath, sessionId, env };
   }
 
-  test('settings autoCompactWindow (what /autocompact saves) sets 100%, and the monitor goes CRITICAL before compaction', (t) => {
+  // FORK (context-monitor): the fork ships the calm knowledge-flush nudge as hooks/gsd-context-monitor.js
+  // (whole-file in the fork-delta manifest), never upstream's CRITICAL warner. The meter half of this test is
+  // upstream's and unchanged; the monitor half asserts the fork's nudge fires before compaction on the same
+  // auto-compact scale (#4985): main-session gate (.planning/STATE.md), the urge level, and no CRITICAL tone.
+  test('settings autoCompactWindow (what /autocompact saves) sets 100%, and the monitor nudges a flush before compaction', (t) => {
     // The reported case: /autocompact 650k on a 1M model, 383 tokens before
     // Claude Code compacts at 650,000 − 33,000 = 617,000. It read 74% and the
     // monitor stayed silent.
@@ -902,13 +906,17 @@ describe('context meter resolves the auto-compact window the way Claude Code doe
     assert.strictEqual(bridge.used_tokens, 616_927);
     assert.ok(bridge.remaining_percentage <= 1, `bridge remaining must count down to the threshold, got ${bridge.remaining_percentage}`);
 
+    fs.mkdirSync(path.join(dirs.proj, '.planning'), { recursive: true });
+    fs.writeFileSync(path.join(dirs.proj, '.planning', 'STATE.md'), '# State\n');
     const r = runHookSeam(monitorPath, [], {
       input: JSON.stringify({ session_id: sessionId, cwd: dirs.proj, hook_event_name: 'PostToolUse', tool_name: 'Bash' }),
       env,
       timeoutMs: STATUSLINE_HOOK_TIMEOUT_MS,
     });
     const message = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-    assert.match(message, /^CONTEXT CRITICAL: Usage at 100% \(617k of 617k usable tokens\)/);
+    assert.match(message, /^Context is 100% used\. Good moment for a knowledge checkpoint/);
+    assert.match(message, /will not survive compaction/, 'at >= hook_urge_pct the single firmer repeat fires');
+    assert.doesNotMatch(message, /CRITICAL/, 'the calm nudge never uses the upstream warner tone');
   });
 
   test('CLAUDE_CODE_AUTO_COMPACT_WINDOW=150000 on a 200K model: 100,000 tokens is 85%', (t) => {

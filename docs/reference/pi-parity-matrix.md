@@ -46,6 +46,7 @@ Every hook script has a recorded Pi disposition, and so does every event and scr
 | `gsd-agent-isolation-guard.js` | PreToolUse | unsupported | guards the isolation argument of Claude's Agent call; `gsd_dispatch` has no isolation parameter and a dispatched role runs flat in its own process |
 | `gsd-context-monitor.js` | PostToolUse, SubagentStop, Stop | unsupported | reads the context metrics the Claude statusline writes; Pi has no statusline to produce them |
 | `gsd-config-reload.js` | FileChanged | unsupported | Pi 1.3.0 has no file-change event for extensions |
+| `gsd-grounding-index-refresh.js` | FileChanged | unsupported | Pi 1.3.0 has no file-change event for extensions; the grounding sources are still read on demand through `gsd-tools query grounding required` (fork grounding hook) |
 | `gsd-check-update-worker.js`, `gsd-node-runner.sh` | none | internal | helpers of other hooks, not events |
 | `gsd-cursor-*.js`, `gsd-windsurf-*.js` | none | not-applicable | hooks for Cursor and Windsurf only |
 

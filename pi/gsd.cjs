@@ -534,6 +534,9 @@ const PI_HOOK_DISPOSITIONS = Object.freeze({
     { claude: 'Stop', status: 'unsupported', reason: 'same metrics source as PostToolUse' },
   ],
   'gsd-config-reload.js': [{ claude: 'FileChanged', status: 'unsupported', reason: 'Pi 1.3.0 has no file-change event for extensions' }],
+  // FORK (grounding #11): the fork's FileChanged Sources-of-Truth refresh. Workflows still read the
+  // live source set through `gsd-tools query grounding required`; only the instant mid-session push is lost.
+  'gsd-grounding-index-refresh.js': [{ claude: 'FileChanged', status: 'unsupported', reason: 'Pi 1.3.0 has no file-change event for extensions; the grounding sources are still read on demand through gsd-tools query grounding required' }],
   'gsd-node-runner.sh': [{ claude: null, status: 'internal', reason: 'portable node resolver for managed Claude hook commands; Pi runs hooks through its own bridge' }],
   'gsd-cursor-post-tool.js': [{ claude: null, status: 'not-applicable', reason: 'Cursor-specific hook' }],
   'gsd-cursor-pre-tool.js': [{ claude: null, status: 'not-applicable', reason: 'Cursor-specific hook' }],
