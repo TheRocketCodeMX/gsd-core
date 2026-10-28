@@ -146,7 +146,7 @@ AskUserQuestion(
 <!-- FORK:context BEGIN -->
 ## 3.1. Consume the Matching Forward Capsule
 
-If Step 1 detected capsules, match the now-confirmed milestone label/version against each `<label>-CAPSULE.md`. If exactly one matches, read it and fold its `## Carried-forward decisions & deferrals`, `## Verified Facts`, and `## Open questions` into this milestone's context (they seed requirements in Step 9 and MASTER-CONTEXT.md when reseeded), then mark it consumed by moving it to `.planning/milestones/consumed/` (create that directory if absent). Leave non-matching capsules untouched in `milestones/next/`; if nothing matches, skip silently.
+If Step 1 detected capsules, match the now-confirmed milestone label/version against each `<label>-CAPSULE.md` — under a workstream (`--ws <name>` or the active one) the label is `<workstream>-<version>-CAPSULE.md` (complete-milestone Step 2b writes that form, since `milestones/next/` is shared at the root); in a flat project it is the bare `<version>-CAPSULE.md`; never consume another workstream's capsule. If exactly one matches, read it and fold its `## Carried-forward decisions & deferrals`, `## Verified Facts`, and `## Open questions` into this milestone's context (they seed requirements in Step 9 and MASTER-CONTEXT.md when reseeded), then mark it consumed by moving it to `.planning/milestones/consumed/` (create that directory if absent). Leave non-matching capsules untouched in `milestones/next/`; if nothing matches, skip silently.
 <!-- FORK:context END -->
 
 ## 3.5. Verify Milestone Understanding

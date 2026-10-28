@@ -130,7 +130,29 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
    | deferred_items | {phase}/{file}: {text} | acknowledged | {date} | {milestone} |
    ```
    One row per item actually acknowledged in step 2 (omit categories with nothing to disclose this close). `{date}` is today's date; `{milestone}` is `MILESTONE_VERSION`. Sanitize all slug/status/text values via `sanitizeForDisplay()` before writing. Never inject raw file content into STATE.md.
-2b. **Route each acknowledged deferral forward — IN ADDITION to the STATE.md entry above.** Offer to append each acknowledged item into `.planning/milestones/next/<label>-CAPSULE.md` (where `<label>` is the next milestone, e.g. the next version) under `## Carried-forward decisions & deferrals`, so the next milestone's opening inherits it. If that capsule does not exist, create it from `~/.claude/gsd-core/templates/milestone-capsule.md` (fill the frontmatter `milestone`/`context_provenance` and `## Why this milestone`). Sanitize values via `sanitizeForDisplay()` as above.
+2b. **Route each acknowledged deferral forward — IN ADDITION to the STATE.md entry above.** Offer to append each acknowledged item into the next milestone's forward capsule `.planning/milestones/next/<label>-CAPSULE.md` under `## Carried-forward decisions & deferrals`, so the next milestone's opening inherits it. `<label>` is the next milestone (e.g. the next version); `milestones/next/` is shared at the root, so under a workstream the label is `<workstream>-<version>` (new-milestone Step 3.1 matches the same form) and two workstreams can never collide. Resolve the path — do not hand-build it:
+   ```bash
+   IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+   GSD_ARGS=${GSD_ARGS%$'\n'}
+   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); WS_FLAG=${GSD_WS:+--ws=${GSD_WS##* }}
+   NEXT_LABEL="[next milestone label, e.g. v1.3]"
+   INIT_CAP=$(gsd_run query init.complete-milestone $WS_FLAG)
+   if [[ "$INIT_CAP" == @file:* ]]; then INIT_CAP=$(cat "${INIT_CAP#@file:}"); fi
+   # The workstream (from --ws or the active pointer) is the one init resolved STATE.md under.
+   CAPSULE=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const m=String(o.state_path||'').match(/\/\.planning\/workstreams\/([^/]+)\/STATE\.md$/);process.stdout.write(String(o.project_root||'.')+'/.planning/milestones/next/'+(m?m[1]+'-':'')+process.argv[2]+'-CAPSULE.md')" "$INIT_CAP" "$NEXT_LABEL")
+   echo "forward_capsule: $CAPSULE"
+   ```
+   If that capsule does not exist, create it from `~/.claude/gsd-core/templates/milestone-capsule.md` (fill the frontmatter `milestone`/`context_provenance` and `## Why this milestone`). Sanitize values via `sanitizeForDisplay()` as above. Then stage it so the close's own final commit (`git_commit_milestone`) carries it — the safety commit's `query commit --files` is path-scoped and leaves it staged:
+   ```bash
+   IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+   GSD_ARGS=${GSD_ARGS%$'\n'}
+   GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); WS_FLAG=${GSD_WS:+--ws=${GSD_WS##* }}
+   [ "$(gsd_run query config-get commit_docs --raw $WS_FLAG 2>/dev/null)" = false ] || git add -- "[forward_capsule path printed above]"
+   ```
 4. Set `closeout_type=override_closeout` and record in the MILESTONES.md entry: `Known verification overrides: {N} newly acknowledged, {M} carried forward from a prior close (see STATE.md Deferred Items)` — `{N}` is the count of items acknowledged in step 2 (the pre-acknowledgment audit JSON's `counts.total`) and `{M}` is that same audit JSON's `acknowledged.total` (items a PRIOR close already suppressed and still are).
 5. Proceed with milestone close.
 
