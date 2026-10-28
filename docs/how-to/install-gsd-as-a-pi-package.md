@@ -2,15 +2,17 @@
 
 Install GSD in [Pi](https://pi.dev) with Pi's own package manager instead of the gsd-core installer.
 
-**You need:** Pi 1.3.0 or later and Node.js 24 or later.
+**You need:** Pi 1.3.0 or later and Node.js 22 or later (the `engines.node` floor of `@therocketcode/gsd-core`).
 
 ## Install
 
-1. Install the package, pinned to a version:
+1. Install the package:
 
    ```bash
-   pi install npm:@therocketcode/gsd-core@1.18.0
+   pi install npm:@therocketcode/gsd-core
    ```
+
+   To pin a version, append it to the spec, for example `pi install npm:@therocketcode/gsd-core@2.8.0`.
 
    Add `-l` to install it for the current project only (Pi writes the declaration to `.pi/settings.json` and loads it after you trust the project).
 2. Restart Pi. The package registers the `/gsd` command, the `gsd_invoke` tool and one skill per GSD command.
