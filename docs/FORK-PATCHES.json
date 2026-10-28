@@ -173,7 +173,6 @@
    "markers": 2,
    "anchors": [
     "engineering-standards\\.md",
-    "untrusted-input-boundary\\.md",
     "design-ingestion\\.md"
    ]
   },
@@ -203,7 +202,6 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "untrusted-input-boundary\\.md",
     "Source grounding \\(before any web research\\)"
    ]
   },
@@ -213,7 +211,6 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "untrusted-input-boundary\\.md",
     "Source grounding \\(before any web research\\)"
    ]
   },
@@ -284,8 +281,7 @@
    "markers": 2,
    "anchors": [
     "FRONTEND-ARCHITECTURE\\.md",
-    "design-ingestion\\.md",
-    "untrusted-input-boundary\\.md"
+    "design-ingestion\\.md"
    ]
   },
   {
@@ -295,8 +291,7 @@
    "markers": 2,
    "anchors": [
     "FRONTEND-ARCHITECTURE\\.md",
-    "design-ingestion\\.md",
-    "untrusted-input-boundary\\.md"
+    "design-ingestion\\.md"
    ]
   },
   {
@@ -1105,8 +1100,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "untrusted-input-boundary\\.md",
-    "antigravity-reviewer\\.test\\.cjs"
+    "antigravity-reviewer\\.test\\.cjs",
+    "'tests/core-utils\\.test\\.cjs'"
    ]
   },
   {

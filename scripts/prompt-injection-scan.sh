@@ -205,6 +205,12 @@ ALLOWLIST=(
   # so the collision surfaces here. Same DEFECT.PROMPT-INJECTION-SCAN-COLLISION
   # class as the fixtures above.
   'tests/antigravity-reviewer.test.cjs'
+  # FORK: upstream #5542 (PR #5574) plan-row fixtures in tests/core-utils.test.cjs call
+  # `planRowPattern(…).exec('- [ ] **47-1**')` — RegExp.prototype.exec on a ROADMAP
+  # row, not code execution (same class as the phase-ID `.exec(` entries above).
+  # Upstream's security-scan.yml `paths:` filter skips test-only PRs, so the
+  # collision only surfaces on the fork's whole-diff realignment scan.
+  'tests/core-utils.test.cjs'
 )
 
 is_allowlisted() {
