@@ -132,10 +132,10 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
    One row per item actually acknowledged in step 2 (omit categories with nothing to disclose this close). `{date}` is today's date; `{milestone}` is `MILESTONE_VERSION`. Sanitize all slug/status/text values via `sanitizeForDisplay()` before writing. Never inject raw file content into STATE.md.
 2b. **Route each acknowledged deferral forward — IN ADDITION to the STATE.md entry above.** Offer to append each acknowledged item into the next milestone's forward capsule `.planning/milestones/next/<label>-CAPSULE.md` under `## Carried-forward decisions & deferrals`, so the next milestone's opening inherits it. `<label>` is the next milestone (e.g. the next version); `milestones/next/` is shared at the root, so under a workstream the label is `<workstream>-<version>` (new-milestone Step 3.1 matches the same form) and two workstreams can never collide. Resolve the path — do not hand-build it:
    ```bash
-   IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
-   GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_ARGS=${GSD_ARGS%$'\n'}
    GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1) # Step 2b: workstream for the capsule path
    NEXT_LABEL="[next milestone label, e.g. v1.3]"
    INIT_CAP=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
@@ -146,10 +146,10 @@ GSD_ARGS_END
    ```
    If that capsule does not exist, create it from `~/.claude/gsd-core/templates/milestone-capsule.md` (fill the frontmatter `milestone`/`context_provenance` and `## Why this milestone`). Sanitize values via `sanitizeForDisplay()` as above. Then stage it so the close's own final commit (`git_commit_milestone`) carries it — the safety commit's `query commit --files` is path-scoped and leaves it staged:
    ```bash
-   IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
-   GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_ARGS=${GSD_ARGS%$'\n'}
    GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1) # Step 2b: workstream for the capsule commit
    [ "$(gsd_run query config-get commit_docs --raw ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)" = false ] || git add -- "[forward_capsule path printed above]"
    ```
