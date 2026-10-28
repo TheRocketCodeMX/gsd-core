@@ -30,6 +30,15 @@ function extractBashBlocks(content) {
   return blocks;
 }
 
+// #5143: a workflow fence captures the typed text through a quoted heredoc whose
+// body is the `$ARGUMENTS` token; the runtime puts the typed text there. Emulate
+// that substitution (and only that) so the extracted fence runs as deployed.
+function withTypedArguments(fence, typed) {
+  const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
+  assert.ok(fence.includes(marker), 'fence must carry the argument capture block');
+  return fence.replace(marker, () => `\n${typed}\nGSD_ARGS_END`);
+}
+
 describe('phases clear command', () => {
   let tmpDir;
 
@@ -689,7 +698,7 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
     });
 
     function runStep1(argumentsValue) {
-      const script = `ARGUMENTS=${JSON.stringify(argumentsValue)}\n${step1Fence}\n` +
+      const script = `${withTypedArguments(step1Fence, argumentsValue)}\n` +
         'printf \'GSD_WS=[%s]\\nMILESTONE_ARG=[%s]\\n\' "$GSD_WS" "$MILESTONE_ARG"';
       const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env: runtimeDirEnv });
       throwIfFailed(r, 'bash <step1 fence>');
@@ -862,7 +871,7 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       test('ws mode: forwards --ws alongside --reset-phase-numbers', () => {
         fs.writeFileSync(path.join(tmpDir, '.planning', '.gsd-ws-arg'), '--ws search');
         const gsdRunStub = 'gsd_run() { if [ "$1" = "query" ] && [ "$2" = "init.new-milestone" ]; then printf "gsd_run_call:%s\\n" "$*" >&2; echo "{}"; else echo "{}"; fi; }\n';
-        const script = `ARGUMENTS="--reset-phase-numbers"\n${gsdRunStub}${step7Fence}`;
+        const script = `${gsdRunStub}${withTypedArguments(step7Fence, '--reset-phase-numbers')}`;
         const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env: runtimeDirEnv });
         throwIfFailed(r, 'bash <step7 fence>');
         assert.match(r.stderr, /gsd_run_call:query init\.new-milestone --reset-phase-numbers --ws=search\s*$/m,
@@ -988,17 +997,25 @@ describe('new-milestone.md: workstream-aware PROJECT.md guard (#2308)', () => {
       const cleanupFence = forkRoadmapSkill
         ? extractFenceContaining(content, '## 10. Create Roadmap', '## 10.5.', 'rm -f .planning/.gsd-ws-arg')
         : step10Fence;
+      // Fork: roadmap.md re-derives MODE from the roadmap as committed at HEAD (matrix119-B F5 —
+      // fences are separate shells); the stubbed /ws and /root paths are not git history, so the
+      // derived subject is the create one. Subject derivation itself is covered, against real
+      // git fixtures, in tests/roadmap-after-strategy.test.cjs.
       const commitMsg = forkRoadmapSkill
-        ? 'docs: extend roadmap for milestone ([N] phases added)'
+        ? 'docs: create roadmap ([N] phases)'
         : 'docs: create milestone v[X.Y] roadmap ([N] phases)';
 
       function runStep10(gsdWsArg, rootPaths, wsPaths, fence = step10Fence) {
         fs.writeFileSync(path.join(tmpDir, '.planning', '.gsd-ws-arg'), gsdWsArg);
-        // The fork's roadmap.md re-parses --ws from its own $ARGUMENTS (what new-milestone's
-        // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it); MODE is the
-        // Step-2 value for the milestone-extend path.
-        const env = { ...runtimeDirEnv, ARGUMENTS: `--milestone ${gsdWsArg}`.trim(), MODE: 'extend' };
-        const script = stubGsdRun(rootPaths, wsPaths) + fence;
+        // The fork's roadmap.md re-parses --ws from its own typed text (what new-milestone's
+        // `Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")` hands it).
+        // #5143: roadmap.md captures its typed text through the quoted heredoc, so the
+        // typed `--milestone <ws>` is spliced where the runtime puts it (withTypedArguments).
+        const env = { ...runtimeDirEnv };
+        const typedFence = forkRoadmapSkill && fence.includes('\n$ARGUMENTS\nGSD_ARGS_END')
+          ? withTypedArguments(fence, `--milestone ${gsdWsArg}`.trim())
+          : fence;
+        const script = stubGsdRun(rootPaths, wsPaths) + typedFence;
         const r = runHookSeam('-c', [script], { interpreter: 'bash', cwd: tmpDir, env });
         throwIfFailed(r, 'bash <step10 fence>');
         return r.stdout;

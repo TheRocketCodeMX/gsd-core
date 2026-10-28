@@ -4,16 +4,6 @@
  "comment": "Machine-readable fork-delta manifest. One entry per (path, feature). mode=markers: the file contains exactly `markers` balanced FORK:<feature> BEGIN/END comment pairs around fork-owned blocks. mode=anchors-only: no inline markers (size-budgeted, JSON/YAML, frontmatter, in-fence, or in-sentence edits); the anchors pin load-bearing fork literals. mode=whole-file: the fork version replaces upstream wholesale. Every anchor is a JS regex (multiline) that MUST match the file content and would not appear in pristine upstream. Guarded by tests/fork-delta-manifest.test.cjs; consumed by the v2.0.0 upstream realignment (Epic #13).",
  "patches": [
   {
-   "path": ".github/workflows/release.yml",
-   "feature": "release",
-   "mode": "anchors-only",
-   "anchors": [
-    "FORK \\(release\\): 30, not upstream 20",
-    "FORK \\(release\\): npm trusted publishing \\(OIDC",
-    "Check npm CLI supports trusted publishing \\(npm >= 11\\.5\\.1\\)"
-   ]
-  },
-  {
    "path": ".gitignore",
    "feature": "identity",
    "mode": "anchors-only",
@@ -46,30 +36,6 @@
    "anchors": [
     "@therocketcode/gsd-core",
     "What this fork adds"
-   ]
-  },
-  {
-   "path": "agents/gsd-advisor-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-ai-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-assumptions-analyzer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -110,30 +76,6 @@
    "anchors": [
     "<source_grounding>",
     "exploration-and-adaptability\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-doc-classifier.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-doc-synthesizer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
-   ]
-  },
-  {
-   "path": "agents/gsd-domain-researcher.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -231,7 +173,6 @@
    "markers": 2,
    "anchors": [
     "engineering-standards\\.md",
-    "untrusted-input-boundary\\.md",
     "design-ingestion\\.md"
    ]
   },
@@ -261,7 +202,6 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "untrusted-input-boundary\\.md",
     "Source grounding \\(before any web research\\)"
    ]
   },
@@ -271,16 +211,7 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "untrusted-input-boundary\\.md",
     "Source grounding \\(before any web research\\)"
-   ]
-  },
-  {
-   "path": "agents/gsd-research-synthesizer.md",
-   "feature": "fidelity",
-   "mode": "anchors-only",
-   "anchors": [
-    "untrusted-input-boundary\\.md"
    ]
   },
   {
@@ -350,8 +281,7 @@
    "markers": 2,
    "anchors": [
     "FRONTEND-ARCHITECTURE\\.md",
-    "design-ingestion\\.md",
-    "untrusted-input-boundary\\.md"
+    "design-ingestion\\.md"
    ]
   },
   {
@@ -361,8 +291,7 @@
    "markers": 2,
    "anchors": [
     "FRONTEND-ARCHITECTURE\\.md",
-    "design-ingestion\\.md",
-    "untrusted-input-boundary\\.md"
+    "design-ingestion\\.md"
    ]
   },
   {
@@ -650,15 +579,6 @@
     "ai-test-quality\\.md",
     "falsifiability gate",
     "Coverage debt"
-   ]
-  },
-  {
-   "path": "gsd-core/workflows/autonomous.md",
-   "feature": "grounding",
-   "mode": "anchors-only",
-   "anchors": [
-    "query grounding required",
-    "Canonical References"
    ]
   },
   {
@@ -1076,6 +996,30 @@
    ]
   },
   {
+   "path": "pi/gsd.cjs",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "'gsd-grounding-index-refresh\\.js': \\[\\{ claude: 'FileChanged', status: 'unsupported'"
+   ]
+  },
+  {
+   "path": "docs/reference/pi-parity-matrix.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "\\| `gsd-grounding-index-refresh\\.js` \\| FileChanged \\| unsupported"
+   ]
+  },
+  {
+   "path": "docs/reference/pi-hook-parity.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "\\| `gsd-grounding-index-refresh\\.js` \\| FileChanged \\| unsupported"
+   ]
+  },
+  {
    "path": "package.json",
    "feature": "identity",
    "mode": "anchors-only",
@@ -1156,8 +1100,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "untrusted-input-boundary\\.md",
-    "antigravity-reviewer\\.test\\.cjs"
+    "antigravity-reviewer\\.test\\.cjs",
+    "'tests/core-utils\\.test\\.cjs'"
    ]
   },
   {
@@ -1366,7 +1310,8 @@
    "markers": 2,
    "anchors": [
     "realignmentUpstreamParents",
-    "REALIGNMENT_RESOLVED_FORK_LINES"
+    "REALIGNMENT_RESOLVED_FORK_LINES",
+    "UPSTREAM_SCOPE = 'open' \\+ 'gsd'"
    ]
   },
   {
@@ -1383,6 +1328,15 @@
    "mode": "anchors-only",
    "anchors": [
     "the fork context-monitor hook does not consume hooks\\.context_\\*_threshold"
+   ]
+  },
+  {
+   "path": "tests/gsd-statusline.test.cjs",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "the monitor nudges a flush before compaction",
+    "the calm nudge never uses the upstream warner tone"
    ]
   },
   {
@@ -1923,6 +1877,15 @@
    "anchors": [
     "FORK:provenance BEGIN",
     "tool-provenance\\.md"
+   ]
+  },
+  {
+   "path": "gsd-core/workflows/autonomous/templates/minimal-context.md",
+   "feature": "grounding",
+   "mode": "anchors-only",
+   "anchors": [
+    "query grounding required",
+    "Canonical References"
    ]
   },
   {

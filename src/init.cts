@@ -17,6 +17,8 @@ import { collectSection } from './markdown-sectionizer.cjs';
 import io = require('./io.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- config-loader.cjs is an export= CommonJS module
 import configLoader = require('./config-loader.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- capability-ledger.cjs is an export= CommonJS module
+import capabilityLedger = require('./capability-ledger.cjs');
 import { findProjectRoot } from './project-root.cjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- model-resolver.cjs is an export= CommonJS module
 import modelResolver = require('./model-resolver.cjs');
@@ -134,6 +136,7 @@ const {
   diagnoseUnresolvedActiveWorkstream,
   describeUnresolvedWorkstreamReason,
   findContextMdIn,
+  findPhaseSpecIn,
   resolvePhaseIdConvention,
   worktreesOptedOut,
 } = planningWorkspace;
@@ -252,16 +255,60 @@ function slugifyPhaseName(phaseName: string | null): string | null {
 }
 
 /**
+ * #4854: the one place that decides which name an `init` verb emits as
+ * `phase_name`. When a phase directory exists, `searchPhaseInDir` derives
+ * `phaseInfo.phase_name` from the directory-name remainder — already slugified
+ * (`phase.add` writes `${num}-${slug}` dirs), so it comes out byte-identical to
+ * `phase_slug`. The ROADMAP carries the curated display name
+ * (`### Phase N: <Name>`), so it wins; the disk-derived name is the fallback
+ * for a phase the ROADMAP does not describe, then `null`. #3171 fixed this
+ * inline for `init execute-phase` only; plan-phase (whose `phase_name` reaches
+ * STATE.md through `state planned-phase --name`), verify-work, code-review,
+ * discuss-phase-assumptions and phase-op read the raw disk value. `phase_slug`
+ * is deliberately not routed through here — it stays disk-derived.
+ */
+function resolvePhaseDisplayName(
+  phaseInfo: Record<string, unknown> | null,
+  roadmapPhase: Record<string, unknown> | null,
+): string | null {
+  return (roadmapPhase?.['phase_name'] as string | undefined)
+    || (phaseInfo?.['phase_name'] as string | undefined)
+    || null;
+}
+
+/**
+ * #5629: the phase SPEC as init facts, for every init payload a SPEC-consuming workflow parses
+ * (discuss-phase via `phase-op`, discuss-phase-assumptions, plan-phase). `has_spec` is always present;
+ * `spec_path` (absolute, posix) only when a plain `NN-SPEC.md` exists. One predicate (`findPhaseSpecIn`, shared
+ * with the context-drift gate) decides, so a UI-SPEC or AI-SPEC is never mistaken for the requirements lock and
+ * no workflow globs for it. A phase with no directory yet, or one that cannot be read, has no SPEC.
+ */
+function phaseSpecFacts(phaseDirAbs: string | null): { has_spec: boolean; spec_path?: string } {
+  if (!phaseDirAbs) return { has_spec: false };
+  let files: string[];
+  try {
+    files = fs.readdirSync(phaseDirAbs);
+  } catch {
+    return { has_spec: false };
+  }
+  // Scoped to THIS phase's own artifacts first (#3511), like the sibling artifact lookups: a misfiled
+  // `02-SPEC.md` in phase 03's directory must not win (the context-drift gate scopes the same way).
+  const spec = findPhaseSpecIn(scopeToPhase(files, path.basename(phaseDirAbs)));
+  return spec ? { has_spec: true, spec_path: toPosixPath(path.join(phaseDirAbs, spec)) } : { has_spec: false };
+}
+
+/**
  * #2994 (review finding, DEFECT.GENERATIVE-FIX): shared archived/not-found
  * fallback applied identically by `cmdInitExecutePhase`, `cmdInitPlanPhase`,
  * `cmdInitVerifyWork`, `cmdInitCodeReview`, `cmdInitReview`, and
  * `cmdInitDiscussPhaseAssumptions` — 6 call sites previously reproducing the
  * exact same two-branch control flow verbatim (only the synthetic
  * replacement object's field set differs per caller, supplied here via
- * `buildFallback`). `cmdInitPhaseOp` is deliberately left untouched (CRITICAL
- * blast radius, 179 dependents) even though it follows the same shape, since
- * its own fallback object differs by one field (`has_reviews` absent) and is
- * not a byte-identical copy.
+ * `buildFallback`). `cmdInitPhaseOp` does not use this helper (its own fallback
+ * object differs by one field, `has_reviews` absent, so it is not a
+ * byte-identical copy), but since #4854 it resolves `roadmapPhase` once up
+ * front like the others, so `resolvePhaseDisplayName` sees it in the ordinary
+ * case too.
  *
  * Behavior-preserving by construction: every original call site either (a)
  * unconditionally computed `roadmapPhase` once up front and then applied
@@ -732,6 +779,29 @@ function detectGitCreateTag(cwd: string): boolean {
 }
 
 /**
+ * `git.repo_tagging` ground truth (#5706, epic #3628): the milestone tagging
+ * mode exposed to `complete-milestone.md`. Only the documented `per_repo`
+ * opts in; an absent key or any other stored value reads as the default
+ * `single` (today's behavior), matching `loadConfig`'s resolution.
+ */
+function detectRepoTagging(cwd: string): 'single' | 'per_repo' {
+  return readConfigJsonValue(cwd, ['git', 'repo_tagging']) === 'per_repo' ? 'per_repo' : 'single';
+}
+
+/**
+ * The configured `planning.sub_repos` (#5706): an array of non-empty repo
+ * names, possibly empty. A legacy top-level `sub_repos` is honored when the
+ * nested key is absent, the same flat-then-nested order `loadConfig` applies.
+ * Non-string members are dropped; any degraded read yields `[]`.
+ */
+function detectSubRepos(cwd: string): string[] {
+  const nested = readConfigJsonValue(cwd, ['planning', 'sub_repos']);
+  const raw = nested !== undefined ? nested : readConfigJsonValue(cwd, ['sub_repos']);
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((name): name is string => typeof name === 'string' && name.trim() !== '');
+}
+
+/**
  * `state:phase-mvp-mode` ground truth (design doc §Behavior table: ROADMAP.md
  * `**Mode:** mvp` for the CURRENT phase). Bounded, non-throwing — an absent
  * `phaseNumber`, an absent ROADMAP.md, an absent phase heading, or a phase
@@ -1111,7 +1181,7 @@ function cmdInitExecutePhase(
     // the human-curated display name (`### Phase N: <Name>`); prefer it,
     // matching the no-disk fallback above. phase_slug stays disk-derived — it
     // correctly feeds branch-name construction below and is unchanged here.
-    phase_name: (roadmapPhase?.['phase_name']) || (phaseInfo?.['phase_name']) || null,
+    phase_name: resolvePhaseDisplayName(phaseInfo, roadmapPhase),
     phase_slug: phaseInfo?.['phase_slug'] || null,
     phase_req_ids,
 
@@ -1256,7 +1326,7 @@ function cmdInitPlanPhase(
 
   const phaseDirPlan = (phaseInfo?.['directory'] as string | undefined) || null;
   const phaseNumberPlan = (phaseInfo?.['phase_number'] as string | undefined) || null;
-  const phaseNamePlan = (phaseInfo?.['phase_name'] as string | undefined) || null;
+  const phaseNamePlan = resolvePhaseDisplayName(phaseInfo, roadmapPhase);
   const rawProjectCodePlan = (config.project_code as string) || '';
   let expectedPhaseDirPlan: string | null = null;
   if (!phaseDirPlan && phaseNumberPlan && phaseNamePlan) {
@@ -1345,6 +1415,9 @@ function cmdInitPlanPhase(
     state_path: fs.existsSync(statePath) ? toPosixPath(statePath) : null,
     roadmap_path: fs.existsSync(roadmapPath) ? toPosixPath(roadmapPath) : null,
     requirements_path: fs.existsSync(requirementsPath) ? toPosixPath(requirementsPath) : null,
+
+    // #5629: the phase SPEC (plan-phase lifts its Edge Coverage from it; no workflow globs for it).
+    ...phaseSpecFacts(phaseInfo?.['directory'] ? path.join(cwd, phaseInfo['directory'] as string) : null),
 
     patterns_path: null,
   };
@@ -2134,7 +2207,7 @@ function cmdInitVerifyWork(cwd: string, phase: string, raw: boolean): void {
     // itself stays relative — evaluateUatPassed above still joins it against cwd.
     phase_dir: phaseDir ? toPosixPath(path.join(cwd, phaseDir)) : null,
     phase_number: phaseInfo?.['phase_number'] || null,
-    phase_name: phaseInfo?.['phase_name'] || null,
+    phase_name: resolvePhaseDisplayName(phaseInfo, roadmapPhase),
 
     // #2376: verify-work.md's plan_gap_closure step reads these instead of
     // hardcoding '.planning/STATE.md' / '.planning/ROADMAP.md' literals.
@@ -2223,7 +2296,7 @@ function cmdInitCodeReview(
 
   const phaseDir = (phaseInfo?.['directory'] as string | undefined) || null;
   const phaseNumber = (phaseInfo?.['phase_number'] as string | undefined) || null;
-  const phaseName = (phaseInfo?.['phase_name'] as string | undefined) || null;
+  const phaseName = resolvePhaseDisplayName(phaseInfo, roadmapPhase);
 
   const fallow = detectFallowConfig(cwd);
 
@@ -2377,7 +2450,7 @@ function cmdInitDiscussPhaseAssumptions(
 
   const phaseDir = (phaseInfo?.['directory'] as string | undefined) || null;
   const phaseNumber = (phaseInfo?.['phase_number'] as string | undefined) || null;
-  const phaseName = (phaseInfo?.['phase_name'] as string | undefined) || null;
+  const phaseName = resolvePhaseDisplayName(phaseInfo, roadmapPhase);
 
   // #2994: mirrors discuss-phase-assumptions.md's own auto_advance step
   // resolver — `--auto` flag OR the consolidated `check auto-mode --pick
@@ -2406,6 +2479,9 @@ function cmdInitDiscussPhaseAssumptions(
 
     roadmap_exists: fs.existsSync(path.join(planningDir(cwd), 'ROADMAP.md')),
     planning_exists: fs.existsSync(planningDir(cwd)),
+
+    // #5629: the phase SPEC, so assumptions mode honours it like the default flow does.
+    ...phaseSpecFacts(phaseDir ? path.join(cwd, phaseDir) : null),
   };
 
   // #2994 (Phase 6.3): additive, optional field — degrades to null, never throws.
@@ -2440,8 +2516,11 @@ function cmdInitPhaseOp(cwd: string, phase: string, raw: boolean): void {
     return;
   }
 
+  // #4854: resolved once, up front (a pure read — guardedGetRoadmapPhase has no side effects),
+  // so the ordinary case (phase dir on disk, not archived) also sees the ROADMAP display name.
+  const roadmapPhase = guardedGetRoadmapPhase(cwd, phase, config.project_code);
+
   if (phaseInfo?.['archived']) {
-    const roadmapPhase = guardedGetRoadmapPhase(cwd, phase, config.project_code);
     if (roadmapPhase?.['found']) {
       const phaseName = roadmapPhase['phase_name'] as string | null;
       phaseInfo = {
@@ -2465,7 +2544,6 @@ function cmdInitPhaseOp(cwd: string, phase: string, raw: boolean): void {
   }
 
   if (!phaseInfo) {
-    const roadmapPhase = guardedGetRoadmapPhase(cwd, phase, config.project_code);
     if (roadmapPhase?.['found']) {
       const phaseName = roadmapPhase['phase_name'] as string | null;
       phaseInfo = {
@@ -2490,7 +2568,7 @@ function cmdInitPhaseOp(cwd: string, phase: string, raw: boolean): void {
 
   const phaseDir = (phaseInfo?.['directory'] as string | undefined) || null;
   const phaseNumber = (phaseInfo?.['phase_number'] as string | undefined) || null;
-  const phaseName = (phaseInfo?.['phase_name'] as string | undefined) || null;
+  const phaseName = resolvePhaseDisplayName(phaseInfo, roadmapPhase);
   const rawProjectCode = (config.project_code as string) || '';
   let expectedPhaseDir: string | null = null;
   if (!phaseDir && phaseNumber && phaseName) {
@@ -2552,6 +2630,9 @@ function cmdInitPhaseOp(cwd: string, phase: string, raw: boolean): void {
     state_path: fs.existsSync(statePath) ? toPosixPath(statePath) : null,
     roadmap_path: fs.existsSync(roadmapPath) ? toPosixPath(roadmapPath) : null,
     requirements_path: fs.existsSync(requirementsPath) ? toPosixPath(requirementsPath) : null,
+
+    // #5629: the phase SPEC (discuss-phase reads it from here; no workflow globs for it).
+    ...phaseSpecFacts(phaseDir ? path.join(cwd, phaseDir) : null),
   };
 
   if (phaseInfo?.['directory']) {
@@ -3626,10 +3707,24 @@ function cmdInitCompleteMilestone(
     milestones_path: fs.existsSync(milestonesPath) ? toPosixPath(milestonesPath) : null,
     project_path: fs.existsSync(projectPath) ? toPosixPath(projectPath) : null,
     requirements_path: fs.existsSync(requirementsPath) ? toPosixPath(requirementsPath) : null,
+    // #5706 (epic #3628): the repositories configured for this project and the
+    // milestone tagging mode, so the workflow reads both from one init call.
+    sub_repos: detectSubRepos(cwd),
+    repo_tagging: detectRepoTagging(cwd),
   };
 
+  // #5195: `state:flat-mode` gates the PROJECT.md evolution review. PROJECT.md
+  // is shared across workstreams (the `projectPath` comment above), so a
+  // workstream's milestone close must not rewrite or stage it — the same
+  // decision `cmdInitNewMilestone` applies to its Part A (#2308), resolved from
+  // the same authority (`GSD_WORKSTREAM` env, else the stored pointer) so the
+  // gate cannot disagree with the workstream-scoped paths returned above.
+  // Read-only peek: no self-heal side effect from building a report field (#3579).
+  const workstreamActive = !!(resolveEnvWorkstream() ?? peekActiveWorkstream(cwd));
   result['section_manifest'] = buildSectionManifestField(cwd, null, options, 'complete-milestone', {
     gitCreateTag,
+    workstreamActive,
+    flatMode: !workstreamActive,
   });
 
   output(withProjectRoot(cwd, result), raw);
@@ -4533,6 +4628,7 @@ function cmdAgentSkills(
   agentType: string | undefined,
   raw: boolean,
   jsonMode: boolean,
+  skillsOnly = false,
 ): void {
   if (!agentType) {
     output('', raw, '');
@@ -4571,8 +4667,13 @@ function cmdAgentSkills(
   // (a real exit code) instead of a prose config-get gate. Compact is tried
   // first when requested; a missing compact sibling falls back to canonical
   // with the fallback disclosed in the payload itself, never a silent switch.
+  //
+  // #5122: `skillsOnly` (the CLI's `--skills-only`) is the agent's own
+  // self-load. It wants configured skills and nothing else, so it skips the
+  // fallback on every runtime — otherwise a non-Claude agent reads its own
+  // persona back into itself as if it were a skills block.
   let agentPayloadVariant: 'compact' | 'canonical' | null = null;
-  if (!block) {
+  if (!block && !skillsOnly) {
     const runtime = (config && (config['runtime'] as string)) || process.env['GSD_RUNTIME'] || 'claude';
     if (runtime !== 'claude') {
       const agentCheck = checkAgentsInstalled(runtime, projectRoot) as unknown as { agents_dir?: string } | null;
@@ -4896,7 +4997,7 @@ function buildSkillManifest(cwd: string, skillsDir: string | null = null): Skill
       if (!entry.isDirectory()) continue;
 
       const skillMdPath = path.join(rootPath, entry.name, 'SKILL.md');
-      const content = platformReadSync(skillMdPath);
+      const content = capabilityLedger.readSkillFile(skillMdPath);
       if (content !== null) {
         if (pushSkillEntry(`${entry.name}/SKILL.md`, content, skillMdPath)) skillCount++;
       }
@@ -4918,7 +5019,7 @@ function buildSkillManifest(cwd: string, skillsDir: string | null = null): Skill
       for (const nested of nestedEntries) {
         if (!nested.isDirectory()) continue;
         const nestedSkillMd = path.join(nestedSkillsDir, nested.name, 'SKILL.md');
-        const nestedContent = platformReadSync(nestedSkillMd);
+        const nestedContent = capabilityLedger.readSkillFile(nestedSkillMd);
         if (nestedContent === null) continue;
         // Use forward-slash separator explicitly so manifest paths are posix-style
         // on all platforms, matching the flat-layout behaviour above.

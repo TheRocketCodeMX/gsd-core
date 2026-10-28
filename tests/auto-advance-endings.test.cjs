@@ -101,7 +101,8 @@ describe('fork workflow endings are autonomous-run safe (#74)', () => {
   test('roadmap.md derives AUTO_MODE from the flag OR the config record — never flag-only (the viken stall)', () => {
     const body = read('gsd-core/workflows/roadmap.md');
     // The flag parse stays (fast path, no tool spawn when the flag is present)…
-    assert.match(body, /AUTO_MODE=false; case " \$ARGUMENTS " in \*" --auto "\*/, 'flag parse preserved');
+    // #5143: the flag is parsed from the once-captured $GSD_ARGS (quoted-heredoc capture), never a $ARGUMENTS splice.
+    assert.match(body, /AUTO_MODE=false; case " \$GSD_ARGS " in \*" --auto "\*/, 'flag parse preserved');
     // …and the record consult joins it: an unflagged invocation on a yolo /
     // auto_advance project must still resolve AUTO_MODE=true.
     assert.match(

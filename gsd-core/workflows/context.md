@@ -19,21 +19,33 @@ Modes:
 **Runtime shim (REQUIRED — copy-paste verbatim):**
 
 ```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
-MODE=""; case " $ARGUMENTS " in *" seed "*) MODE=seed;; *" scout "*) MODE=scout;; *" flush "*) MODE=flush;; *" master "*) MODE=master;; esac
-PHASE=$(printf '%s\n' "$ARGUMENTS" | sed -n 's/.*--phase[= ]*\([^ ]*\).*/\1/p')
-MILESTONE_MODE=false; case " $ARGUMENTS " in *" --milestone "*) MILESTONE_MODE=true;; esac
+MODE=""; case " $GSD_ARGS " in *" seed "*) MODE=seed;; *" scout "*) MODE=scout;; *" flush "*) MODE=flush;; *" master "*) MODE=master;; esac
+PHASE=$(printf '%s\n' "$GSD_ARGS" | sed -n 's/.*--phase[= ]*\([^ ]*\).*/\1/p')
+MILESTONE_MODE=false; case " $GSD_ARGS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 ENABLED=$(gsd_run query config-get context_lifecycle.enabled --raw 2>/dev/null || echo true)
 DATE=$(date +%Y-%m-%d)
+# Workstream scope (references/workstream-flag.md): parse `--ws <name>` (every fence below
+# re-parses it — fences are separate shells) and resolve ROADMAP/STATE from init.resume.
+# No workstream → the root .planning/ files, exactly as before.
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+_gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
+ROADMAP_PATH=$(_gsd_field "$INIT" roadmap_path); STATE_PATH=$(_gsd_field "$INIT" state_path)
+echo "context_paths: ws=${GSD_WS##* } roadmap=$ROADMAP_PATH state=$STATE_PATH"
 ```
 
 **Guards:**
 - `ENABLED` is `false` → print `Context lifecycle is disabled (context_lifecycle.enabled: false).` and stop.
 - No `.planning/` directory → `No GSD project here — nothing to seed or flush.` Stop.
-- No `MODE` → print `Usage: /gsd:context <seed|scout|flush|master> [--milestone] [--phase <N>]` and stop.
-- seed/scout with no ROADMAP.md → `No roadmap yet — run /gsd:roadmap first, then seed.` Stop.
+- No `MODE` → print `Usage: /gsd:context <seed|scout|flush|master> [--milestone] [--phase <N>] [--ws <name>]` and stop.
+- seed/scout with no ROADMAP.md at `ROADMAP_PATH` (workstream-scoped under `--ws` or an active workstream) → `No roadmap yet — run /gsd:roadmap first, then seed.` Stop.
 
-Then execute the matching mode below, end-to-end.
+Then execute the matching mode below, end-to-end. `GSD_WS` (`--ws <name>` or empty) is threaded into every `gsd_run` call below that reads or writes workstream-scoped files.
 
 ## Mode: seed
 
@@ -46,7 +58,11 @@ Then execute the matching mode below, end-to-end.
 **3. Per phase** — resolve paths, then branch on what exists:
 
 ```bash
-GSD_WS=$(echo " $ARGUMENTS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.phase-op "${N}" ${GSD_WS:+--ws=${GSD_WS##* }}); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 # parse: phase_dir, padded_phase → CAPSULE="${phase_dir}/${padded_phase}-CONTEXT.md"
 # Decide absence MECHANICALLY with test -f; consult provenance ONLY for existing files.
@@ -74,7 +90,12 @@ Never inflate the stamp: it is the defense that lets downstream calibrate trust.
 **7. Verify at birth, then commit:**
 
 ```bash
-gsd_run context verify --phase "${N}"   # per capsule; after a milestone seed: gsd_run context verify --milestone (covers MASTER too)
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+gsd_run context verify --phase "${N}" ${GSD_WS:+--ws=${GSD_WS##* }}   # per capsule; after a milestone seed: gsd_run context verify --milestone ${GSD_WS:+--ws=${GSD_WS##* }} (covers MASTER too)
 ```
 
 Fix every claim that fails at birth — correct the path/substring or demote the claim — and re-run until clean. Then commit (`query commit` honors `commit_docs`):
@@ -106,9 +127,21 @@ A **calm knowledge checkpoint** — the context-monitor hook's target, also invo
 3. **Session position + commit:**
 
 ```bash
-gsd_run query state.record-session --stopped-at "<one line: current position>" --resume-file "<active capsule path>"
-gsd_run query commit "docs(context): flush knowledge checkpoint" --files .planning/MASTER-CONTEXT.md <capsule> .planning/STATE.md
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+INIT=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+_gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
+STATE_PATH=$(_gsd_field "$INIT" state_path)
+REC=$(gsd_run query state.record-session --stopped-at "<one line: current position>" --resume-file "<active capsule path>" ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)
+# state.record-session exits 0 even when it wrote nothing (e.g. {"error":"STATE.md not found"}) — check the result.
+[ "$(_gsd_field "$REC" recorded)" = true ] || echo "flush_session: NOT recorded — state.record-session returned ${REC:-<no output>} (state_path=${STATE_PATH:-<unresolved>})"
+gsd_run query commit "docs(context): flush knowledge checkpoint" --files .planning/MASTER-CONTEXT.md <capsule> ${STATE_PATH:+"$STATE_PATH"}
 ```
+
+If the fence printed `flush_session: NOT recorded`, say so in the flush summary — the session position was not saved (wrong or missing `--ws`, or no STATE.md) — rather than reporting a clean checkpoint.
 
 No interaction is normally needed; if a genuine choice arises (e.g. two candidate active phases), AskUserQuestion (TEXT_MODE: numbered list).
 
@@ -124,7 +157,12 @@ Guard: no MASTER file → AskUserQuestion (header "Master") — "No MASTER-CONTE
 4. **Verify + commit:**
 
 ```bash
-gsd_run context verify --milestone
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+gsd_run context verify --milestone ${GSD_WS:+--ws=${GSD_WS##* }}
 gsd_run query commit "docs(context): curate MASTER-CONTEXT" --files .planning/MASTER-CONTEXT.md
 ```
 

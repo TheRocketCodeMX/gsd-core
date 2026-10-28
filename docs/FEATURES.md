@@ -202,6 +202,7 @@
   - [Stated Failing Direction](#167-stated-failing-direction)
   - [Runtime Identity](#168-runtime-identity)
   - [Context Drift Gate](#3348-context-drift-gate)
+  - [Per-Repository Release Mapping](#3628-per-repository-release-mapping)
   - ["Failure Is a Value" — Strict Argv Rejection and the `--pick` Absence Contract](#3884-failure-is-a-value--strict-argv-rejection-and-the---pick-absence-contract)
   - [No Silent Swallow, No Verdict From Dropped Data](#3885-no-silent-swallow-no-verdict-from-dropped-data)
   - [Runtime Marker Resolution, Derived Codex Sandbox, and In-Phase Short-Form Dependencies](#3897-runtime-marker-resolution-derived-codex-sandbox-and-in-phase-short-form-dependencies)
@@ -1296,7 +1297,7 @@ fix(03-01): correct auth token expiry
 - Codex emits `service_tier: flex` for light-tier agents; GSD skills appear in the Codex `/skills` picker via `SKILL.md` (no `agents/openai.yaml` sidecar is emitted — doing so caused duplicate autocomplete entries, #1326)
 
 **Native packaging:**
-- **Claude Code:** GSD Core ships a `.claude-plugin/plugin.json` manifest, enabling installation and lifecycle management via `claude plugin install|enable|disable|update gsd-core`. Commands load under the `/gsd-core:` namespace (e.g. `/gsd-core:plan-phase`), avoiding slash-command collisions with the classic npm installer which uses `/gsd:`. Always-on guard and update hooks are wired automatically via `hooks/hooks.json`. The plugin path is additive — the npm installer (`npx @therocketcode/gsd-core`) remains fully supported.
+- **Claude Code:** GSD Core ships a `.claude-plugin/plugin.json` manifest, enabling installation and lifecycle management via `claude plugin install|enable|disable|update gsd-core`. Workflows load as skills under the `/gsd-core:` namespace (e.g. `/gsd-core:gsd-plan-phase`), avoiding slash-command collisions with the classic npm installer which uses `/gsd:`. Each workflow is registered once, as its `gsd-<name>` skill — the same name workflows use to invoke one another — so the always-on listing carries no duplicate entries (#4860). Always-on guard and update hooks are wired automatically via `hooks/hooks.json`. The plugin path is additive — the npm installer (`npx @therocketcode/gsd-core`) remains fully supported.
 
 ---
 
@@ -1311,7 +1312,7 @@ fix(03-01): correct auth token expiry
 - REQ-HOOK-04: All hooks MUST respect `CLAUDE_CONFIG_DIR` env var
 - REQ-HOOK-05: All hooks MUST include 3-second stdin timeout guard
 - REQ-HOOK-06: All hooks MUST fail silently on any error
-- REQ-HOOK-07: Context usage MUST normalize for autocompact buffer (16.5% reserved)
+- REQ-HOOK-07: The context meter's 100% MUST be the token count at which Claude Code auto-compacts — the window from `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else the `autoCompactWindow` setting `/autocompact` saves (per model under `modelSettings`, or top-level), else the model window, minus the 33k auto-compact buffer and lowered by `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` — and MUST be the model window when auto-compact is off (`autoCompactEnabled: false` in settings, or `DISABLE_AUTO_COMPACT` / `DISABLE_COMPACT`). The bridge's `remaining_percentage` MUST count down to the same point, so the context monitor warns before compaction
 - REQ-HOOK-08: Update banner MUST be opt-in and silent unless an update is available (PR #2795)
 
 **Statusline Display:**
@@ -2302,6 +2303,8 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 - REQ-COMMUNITY-03: `gsd-session-state.sh` MUST track session state transitions
 - REQ-COMMUNITY-04: `gsd-phase-boundary.sh` MUST enforce phase boundary checks
 
+**Hosts:** Claude Code and the other settings-file runtimes register these hooks natively. On OpenCode (1.x and 2.x) the GSD plugin runs `gsd-validate-commit.sh` (before `bash`/`shell` calls), `gsd-phase-boundary.sh` (after `write`/`edit`) and `gsd-session-state.sh` (once per session, handed to the model with its first request); `gsd-graphify-update.sh` runs after `bash`/`shell` calls when `graphify.auto_update` is on. Kilo does not run them.
+
 **Config:**
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -2968,8 +2971,8 @@ With `features.global_learnings: true`, phase completion runs the extraction for
 
 `check tdd-red-evidence` selects a parser by the captured report format. Node's
 built-in runner and Vitest (`tap` and `tap-flat`) share the TAP adapter; Maven
-Surefire and Failsafe share the JUnit XML adapter; `swift test` (swift-testing)
-and Python `unittest` text output have their own adapters. The command name does not
+Surefire and Failsafe share the JUnit XML adapter; `swift test` (swift-testing),
+Python `unittest` and `go test` text output have their own adapters. The command name does not
 select or bypass validation. Reports from other producers can use these same
 formats. Unsupported or malformed reports return `INVALID_RED` with
 `evidence.report_errors`; configure a supported reporter before proceeding.
@@ -2983,7 +2986,8 @@ No runner-specific TAP summary counters are required.
 The gate rejects incomplete plans/documents, bailouts, skipped/TODO/cancelled targets,
 and ambiguous names. Qualify repeated TAP names with their suite path, and
 repeated JUnit class names with their package, and repeated `unittest` methods
-with their `module.Class.method` id. A swift-testing target is its display name
+with their `module.Class.method` id, and a `go test` name that fails in two packages
+with `import/path.TestName`. A swift-testing target is its display name
 or its function name; repeated swift-testing names cannot be qualified and
 block GREEN. Evidence counts are individual
 tests, excluding suite-closing TAP points; a `unittest` method with failing
@@ -2991,6 +2995,16 @@ subTests or a parameterized swift-testing test counts once. `evidence.matched_te
 persisted `failing_test` identify the target failure rather than an unrelated
 first failure. Report freshness and whether the assertion tests the intended
 behavior still require executor inspection; the parser cannot establish them.
+
+A `go test` package that does not compile or load (`FAIL <pkg> [build failed]` or
+`[setup failed]`) asserted nothing, usually because the test names a symbol that does
+not exist yet. The whole run is refused as `build_failure`, ahead of the generic
+`invalid_record`, even if another package genuinely failed.
+
+Which paths count as test files is one list, `src/tdd-test-files.cts`, shared by the
+behavior-adding check and the RED-commit pathspec in `execute-phase.md` (a test pins the
+two together): `*.test.*`, `*.spec.*`, `tests/` or `test/` and `__tests__/` directories,
+`*_test.go`, `test_*.py`, `*_test.py`, `*_test.exs`, `*_spec.rb` and `*_test.rb`.
 
 The upstream parsers (`tap-parser` and `saxes`) ship as reproducible bundles,
 including license notices, so installed runtimes need no `node_modules`.
@@ -3932,7 +3946,7 @@ See [Resolve verify-command path findings](how-to/resolve-verify-command-path-fi
 
 **Known limits:** no sandbox — once enabled, nothing constrains which origins are reached ([ADR-1244](adr/1244-capability-ecosystem.md) D5); DOM observation only, no screenshot diffing, accessibility audit, or performance tracing.
 
-**Reference:** [Configuration](CONFIGURATION.md) · [Enable live-DOM verification](how-to/enable-live-dom-verification.md) · [Explanation](explanation/live-dom-uat-capability.md) · [Agents](AGENTS.md)
+**Reference:** [Configuration](CONFIGURATION.md) · [Enable live-DOM verification](how-to/enable-live-dom-verification.md) · [Explanation](explanation/live-dom-uat-capability.md) · [Agents](reference/agents.md)
 
 ---
 
@@ -4056,6 +4070,30 @@ phase's `CONTEXT.md` after that artifact was derived from it. Deterministic — 
 time (falling back to mtime for uncommitted edits), no model call. Sibling to the existing
 codebase-drift and schema-drift gates in the `drift` capability. Configure with
 `workflow.context_drift_precheck` (on/off) and `workflow.context_drift_action` (`warn`/`block`).
+
+---
+
+### 3628. Per-Repository Release Mapping
+
+**Command:** `/gsd-complete-milestone`
+
+**Config key:** `git.repo_tagging` (`single` default, `per_repo`)
+
+**Purpose:** A milestone that ships across several independently versioned repositories cannot be described by one `v[X.Y]` tag. A GSD milestone version names planned work in `.planning/`; each repository has its own release version, and some repositories may not be released at all. This feature records what each repository actually released against the milestone ([ADR-3628](adr/3628-milestone-release-mapping.md), epic #3628).
+
+**Behavior:** With `git.repo_tagging: per_repo` and a non-empty `planning.sub_repos`, milestone completion collects one release map entry per repository (status, release, reference, environment, tag choice), checks every requested tag before writing anything, shows one consolidated confirmation, creates the local annotated tags with `milestone release-tags`, and archives the map with `milestone complete --release-map`. No shared tag is created in the current directory on this path. Skipped and unreleased repositories stay in the archived map without receiving a tag.
+
+**Push:** Nothing is pushed by default. Each repository's tag is a separate confirmation naming the repository, the tag, the remote and its URL; a decline or failed push affects that repository only.
+
+**Compatibility:** `single` keeps the existing step unchanged, and `git.create_tag` keeps its meaning. With `per_repo`, `git.create_tag: false` still records the map and creates no tags. Archives without a map continue to parse.
+
+**Requirements:**
+- REQ-RELEASE-MAP-01: Tags MUST NOT be created before every requested tag has passed preflight.
+- REQ-RELEASE-MAP-02: An existing tag at a different commit MUST NOT be overwritten.
+- REQ-RELEASE-MAP-03: No tag MAY be pushed without a confirmation that names the repository and the remote.
+- REQ-RELEASE-MAP-04: The archived map MUST be stored by recorded value, not derived from `planning.sub_repos` at read time.
+
+**Reference:** [How to tag a multi-repository milestone](how-to/tag-a-multi-repo-milestone.md) · [Configuration Reference](CONFIGURATION.md#per-repository-release-mapping) · [CLI tools](CLI-TOOLS.md)
 
 ---
 
@@ -4542,7 +4580,12 @@ from the tracker at execution time instead of reading it inline out of `PLAN.md`
   A resolver that is declared but fails — tracker unreachable, id not found, timeout, malformed
   JSON — makes `task resolve-content` itself **exit non-zero**, which `execute-plan.md` treats as
   a **hard halt**: stop, surface the tracker-id/prefix/stderr, never fall back to stale
-  `PLAN.md` content.
+  `PLAN.md` content. An unsafe id (leading `-` or control characters) is rejected the same way, before any resolver is spawned.
+- **Decision-coverage gates also resolve tracker-held bodies.** `check decision-coverage-plan` and
+  `check decision-coverage-verify` resolve each `tracker-id` task through the same seam and count
+  the resolved `action`/`verify`/`acceptance_criteria`/`read_first`/`done` text as plan text. A
+  declared resolver that fails, times out or returns ambiguous/malformed output blocks the plan
+  gate and reports the verify gate unreadable. Plans without `tracker-id` are unchanged.
 - `execute:task` is a new dispatch shape below wave granularity, deliberately **not** one of the
   12 existing loop extension points (`discuss:pre` … `ship:post`) and not routed through
   `gsd_run loop render-hooks <point>` / `activeHooks`. It exists because the existing

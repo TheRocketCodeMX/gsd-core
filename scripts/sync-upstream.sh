@@ -32,16 +32,34 @@ rebrand() {
     "$@"
 } # FORK: added in Phase 2 — .secretscanignore owner form (@open-gsd/maintainers → @TheRocketCodeMX/maintainers)
 
+# FORK: align-1.19.0 (matrix119-A F6) — upstream-attribution paths are never rebranded.
+# docs/research/ holds upstream's own evidence documents: measurements of open-gsd/gsd-core
+# (npm dist-tags, PR/issue numbers, branch protection, Actions spend). Rewriting their
+# coordinates made them state upstream's facts as the fork's. They stay upstream-identical.
+ATTRIBUTION_KEEP_RE='^(\./)?docs/research/'
+keep_attribution() {
+  local f
+  for f in "$@"; do
+    if [[ "$f" =~ $ATTRIBUTION_KEEP_RE ]]; then
+      echo "Skipped (upstream attribution, never rebranded): $f" >&2
+    else
+      printf '%s\n' "$f"
+    fi
+  done
+}
+
 if [ "$#" -gt 0 ]; then
-  rebrand "$@"
-  echo "Rebranded $# file(s)."
+  mapfile -t files < <(keep_attribution "$@")
+  if [ "${#files[@]}" -gt 0 ]; then rebrand "${files[@]}"; fi
+  echo "Rebranded ${#files[@]} file(s)."
 else
   # whole tree: text files only, excluding reference clones / deps / git.
   # FORK: added in Phase 2 — exclude this script itself: its own sed patterns contain the
   # upstream coordinate and a whole-tree pass would rewrite them into no-ops (self-clobber).
-  mapfile -t files < <(grep -rIlE 'opengsd|open-gsd' \
+  mapfile -t candidates < <(grep -rIlE 'opengsd|open-gsd' \
     --exclude-dir=_reference --exclude-dir=node_modules --exclude-dir=.git \
     --exclude=sync-upstream.sh . || true)
+  mapfile -t files < <(keep_attribution "${candidates[@]}")
   if [ "${#files[@]}" -gt 0 ]; then
     rebrand "${files[@]}"
     echo "Rebranded ${#files[@]} file(s) across the tree."

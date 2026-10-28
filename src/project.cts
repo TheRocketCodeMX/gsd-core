@@ -46,6 +46,38 @@ interface StrategyStep {
    * recorded, so the advance driver must read this flag, not only `status`.
    */
   skipped: boolean;
+  /**
+   * matrix119-A F9: true when the step cell is not a known strategy skill name
+   * (KNOWN_STRATEGY_STEPS). PROJECT.md can come from a cloned repo, and step names
+   * flow into `Skill(skill="gsd-<step>")` dispatches, so an invalid row is reported
+   * (never silently dropped) and is never the next target.
+   */
+  invalid: boolean;
+}
+
+/**
+ * The step names a `## Strategy Plan` row may carry: the canonical strategy spine
+ * (gsd-core/references/strategy-flow.md, "Canonical spine") plus `map-codebase`,
+ * the brownfield-extend exploration strategy-flow.md prepends. Each is a shipped
+ * `gsd-<name>` skill. tests/project-query-verbs.test.cjs keeps this in step with
+ * the spine line.
+ */
+const KNOWN_STRATEGY_STEPS: ReadonlySet<string> = new Set([
+  'legacy-inventory',
+  'discover-product',
+  'model-domain',
+  'recommend-architecture',
+  'security-strategy',
+  'frontend-architecture',
+  'testing-strategy',
+  'infrastructure-strategy',
+  'cicd-strategy',
+  'map-codebase',
+]);
+const STEP_NAME_RE = /^[a-z][a-z0-9-]*$/;
+
+function isValidStrategyStep(step: string): boolean {
+  return STEP_NAME_RE.test(step) && KNOWN_STRATEGY_STEPS.has(step);
 }
 
 interface SkipLedgerEntry {
@@ -227,12 +259,13 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
     if (/^step$/i.test(step) || /^-+$/.test(step)) continue;        // header / separator
     if (/^\[.*\]$/.test(step) || /^\[.*\]$/.test(status)) continue; // unfilled placeholder
     const skipped = /^skipped$/i.test(status) || ledger.has(step.toLowerCase());
-    steps.push({ step, status, skipped });
+    steps.push({ step, status, skipped, invalid: !isValidStrategyStep(step) });
   }
 
   // #86: a ledgered skip is a decision — never the next target, even though its
-  // row keeps the `recommended` status it was planned with.
-  const next = steps.find((s) => /^recommended$/i.test(s.status) && !s.skipped);
+  // row keeps the `recommended` status it was planned with. matrix119-A F9: an
+  // invalid step name is never the next target either.
+  const next = steps.find((s) => /^recommended$/i.test(s.status) && !s.skipped && !s.invalid);
   const next_recommended = next ? next.step : null;
 
   output(

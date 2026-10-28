@@ -274,7 +274,7 @@ describe('#86 strategy-plan honours ledgered skips', () => {
 
   test('advance.md chain-hop rule reads the `skipped` flag, not only the row status', () => {
     const advance = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'strategy-chain', 'modes', 'advance.md'), 'utf8');
-    assert.match(advance, /steps:\[\{step,status,skipped\}\]/, 'the documented strategy-plan shape names the skipped flag');
+    assert.match(advance, /steps:\[\{step,status,skipped,invalid\}\]/, 'the documented strategy-plan shape names the skipped flag');
     assert.match(advance, /`skipped: true`/, 'rule 2 must exclude ledgered skips via the flag');
   });
 });
@@ -336,5 +336,74 @@ describe('#92 project verbs resolve the shared root PROJECT.md under a workstrea
     const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
     assert.strictEqual(o.found, true);
     assert.strictEqual(o.next_recommended, 'recommend-architecture');
+  });
+});
+
+// ─── matrix119-A F9: step names are validated before they are emitted ──────────
+//
+// A PROJECT.md from a cloned repo is untrusted input. strategy-plan returned its step
+// names verbatim, and next_recommended flows into `Skill(skill="gsd-${NEXT_STRATEGY}")`
+// and printed `/gsd-${...}` pointers. A step must name a known strategy skill; any other
+// row is reported with `invalid: true` (never silently dropped) and is never the next target.
+
+describe('matrix119-A F9: strategy-plan validates step names', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const HOSTILE = `# T
+
+## Strategy Plan
+**Archetype:** backend service
+
+| Step | Status |
+|---|---|
+| x$(touch PWNED-plan) | recommended |
+| Model-Domain; rm -rf / | recommended |
+| not-a-strategy-skill | recommended |
+| security-strategy | recommended |
+| cicd-strategy | recommended |
+
+## Requirements
+`;
+
+  test('hostile and unknown rows are marked invalid, kept in steps, and skipped by next_recommended', () => {
+    writeProject(tmpDir, HOSTILE);
+    const r = runGsdTools('project strategy-plan', tmpDir);
+    assert.ok(r.success, `failed: ${r.error}`);
+    const o = JSON.parse(r.output);
+    assert.strictEqual(o.steps.length, 5, 'invalid rows are reported, not dropped');
+    const byStep = Object.fromEntries(o.steps.map((s) => [s.step, s]));
+    assert.strictEqual(byStep['x$(touch PWNED-plan)'].invalid, true);
+    assert.strictEqual(byStep['Model-Domain; rm -rf /'].invalid, true);
+    assert.strictEqual(byStep['not-a-strategy-skill'].invalid, true);
+    assert.strictEqual(byStep['security-strategy'].invalid, false);
+    assert.strictEqual(o.next_recommended, 'security-strategy');
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'PWNED-plan')));
+  });
+
+  test('--raw never emits an invalid step name', () => {
+    writeProject(tmpDir, HOSTILE);
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'security-strategy');
+    writeProject(tmpDir, `# T\n\n## Strategy Plan\n\n| Step | Status |\n|---|---|\n| x$(touch PWNED-plan) | recommended |\n\n## Requirements\n`);
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), '', 'only an invalid row → no target');
+  });
+
+  test('every step of the canonical strategy spine (strategy-flow.md) is accepted', () => {
+    const flow = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'references', 'strategy-flow.md'), 'utf-8');
+    const m = flow.match(/Canonical spine \(from `strategy-chain\.md`\):[ \t]{0,4}`([^`]{1,400})`/);
+    assert.ok(m, 'strategy-flow.md must state the canonical spine');
+    const spine = m[1].split('→').map((s) => s.trim()).filter((s) => s && s !== 'build');
+    assert.ok(spine.length >= 9, `spine parsed too short: ${spine}`);
+    const rows = spine.map((s) => `| ${s} | recommended |`).join('\n');
+    writeProject(tmpDir, `# T\n\n## Strategy Plan\n\n| Step | Status |\n|---|---|\n${rows}\n\n## Requirements\n`);
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.deepStrictEqual(o.steps.filter((s) => s.invalid).map((s) => s.step), [], 'no canonical step may be rejected');
+    assert.strictEqual(o.next_recommended, spine[0]);
+  });
+
+  test('advance.md chain hop skips rows flagged invalid', () => {
+    const advance = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'strategy-chain', 'modes', 'advance.md'), 'utf-8');
+    assert.match(advance, /invalid: true/, 'the chain-hop rule must exclude invalid rows');
   });
 });

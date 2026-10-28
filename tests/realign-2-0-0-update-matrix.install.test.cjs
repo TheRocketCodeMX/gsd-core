@@ -217,6 +217,31 @@ function assertNoBlockedMigrations(result, label) {
 
 const IS_WINDOWS = process.platform === 'win32';
 
+// The fork-authored skills. Each ships as commands/gsd/<stem>.md, so upstream #5161's
+// first-party ownership leg owns its gsd-<stem> dir: an update must REPLACE every one of
+// them and uninstall must remove them (A9). A dir the prune treated as user-owned would
+// instead be kept with its old body and named as not GSD-owned.
+const FORK_SKILLS = [
+  'gsd-cicd-strategy', 'gsd-context', 'gsd-discover-product', 'gsd-frontend-architecture',
+  'gsd-infrastructure-strategy', 'gsd-learn', 'gsd-legacy-inventory', 'gsd-model-domain',
+  'gsd-recommend-architecture', 'gsd-roadmap', 'gsd-security-strategy', 'gsd-testing-strategy',
+];
+
+/** hashTree with every occurrence of `home` folded to a placeholder (installed bodies embed absolute paths). */
+function hashTreeHomeFolded(dir, home) {
+  const out = new Map();
+  const walk = (d, rel) => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, entry.name);
+      const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(full, relPath);
+      else out.set(relPath, crypto.createHash('sha256').update(fs.readFileSync(full, 'utf-8').split(home).join('<HOME>')).digest('hex'));
+    }
+  };
+  walk(dir, '');
+  return out;
+}
+
 describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
   const runnable = tagAvailable() && !IS_WINDOWS;
   // Windows: the v1.14.0 build step drives the tag tree's POSIX-flavored
@@ -233,6 +258,7 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
   let cellAPlanningBefore; // hash map of .planning before the update
   let cellAClaudeMdBefore;
   let cellAUpdateResult;
+  let cellAForkSkillsBefore; // fork skill dir name -> hash map, as v1.14.0 installed it
   let cellBHome;
   let cellBProject;
   let cellBPlanningBefore;
@@ -308,6 +334,12 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
       '1.14.0',
       'Cell A precondition: v1.14.0 must be the installed version before the update',
     );
+
+    cellAForkSkillsBefore = new Map();
+    for (const name of FORK_SKILLS) {
+      const dir = path.join(cellAHome, '.claude', 'skills', name);
+      if (fs.existsSync(dir)) cellAForkSkillsBefore.set(name, hashTree(dir));
+    }
 
     seedPlanningProject(cellAProject);
     cellAPlanningBefore = hashTree(path.join(cellAProject, '.planning'));
@@ -444,6 +476,35 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
       .map((e) => e.name)
       .sort();
     assert.deepEqual(installedSkills, sourceSkills, 'installed skills must mirror the source tree after update');
+  });
+
+  test('A6b (#5161): every fork skill is GSD-owned, so the update replaced each one with this tree\'s body', { skip: !runnable }, () => {
+    // Precondition: the old fork install really wrote fork skills, so this proves replacement, not creation.
+    assert.ok(
+      cellAForkSkillsBefore.size >= 10,
+      `Cell A precondition: v1.14.0 must install the fork skills it shipped; found ${[...cellAForkSkillsBefore.keys()].join(', ') || 'none'}`,
+    );
+    const updateLog = `${cellAUpdateResult.stdout}\n${cellAUpdateResult.stderr}`;
+    for (const name of FORK_SKILLS) {
+      assert.ok(!new RegExp(`skills/${name}\\b[^\\n]*(not GSD-owned|GSD does not own|kept)`, 'i').test(updateLog),
+        `the update must not keep ${name} as a user skill:\n${updateLog}`);
+    }
+    const freshHome = createTempDir('gsd-realign-fresh-home-');
+    const freshProject = createTempDir('gsd-realign-fresh-proj-');
+    try {
+      const fresh = runInstaller(INSTALL_2, ['--claude', '--global'], { cwd: freshProject, home: freshHome });
+      assert.equal(fresh.code, 0, `fresh install of this tree failed.\n${fresh.stdout}\n${fresh.stderr}`);
+      for (const name of FORK_SKILLS) {
+        const updated = path.join(cellAHome, '.claude', 'skills', name);
+        const reference = path.join(freshHome, '.claude', 'skills', name);
+        assert.ok(fs.existsSync(reference), `a fresh install must ship ${name}`);
+        assert.ok(fs.existsSync(updated), `the updated install must carry ${name}`);
+        assertTreesIdentical(hashTreeHomeFolded(reference, freshHome), hashTreeHomeFolded(updated, cellAHome), `fork skill ${name} after update`);
+      }
+    } finally {
+      cleanup(freshHome);
+      cleanup(freshProject);
+    }
   });
 
   test('A7: .planning/ and project CLAUDE.md are byte-identical across the update', { skip: !runnable }, () => {

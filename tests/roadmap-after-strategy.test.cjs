@@ -227,10 +227,16 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
   function run(dir, fence, args, extraEnv = {}) {
     // Later fences rely on the `gsd_run` shim the Step-1 fence exports onto PATH (CLAUDE_ENV_FILE).
     const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
-    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ARGUMENTS: args, ...extraEnv };
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ...extraEnv };
     delete env.GSD_WORKSTREAM;
     delete env.GSD_SESSION_KEY;
-    const r = runHook('-c', [fence], { interpreter: 'bash', cwd: dir, env });
+    // #5143: each fence captures the typed text once through a quoted heredoc whose body is
+    // the `$ARGUMENTS` token; the runtime puts the typed text there. Emulate that substitution
+    // (and only that) so the extracted fence runs as deployed.
+    const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
+    assert.ok(fence.includes(marker), 'roadmap.md fence must carry the argument capture block');
+    const script = fence.replace(marker, () => `\n${args}\nGSD_ARGS_END`);
+    const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
     throwIfFailed(r, 'bash <roadmap.md fence>');
     return r.stdout;
   }
@@ -259,10 +265,15 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
       const wsDir = path.join(dir, '.planning', 'workstreams', 'notif');
       assert.match(run(dir, step2, '--milestone --ws notif'), /roadmap_mode: create/);
       fs.writeFileSync(path.join(wsDir, 'ROADMAP.md'), '# Roadmap\n\n### Phase 1: Push\n');
+      // The prior milestone's roadmap is committed history, as it is in a real project.
+      gitOrThrow(['add', '.'], { cwd: dir });
+      gitOrThrow(['commit', '-q', '-m', 'v1.0 roadmap'], { cwd: dir });
       assert.match(run(dir, step2, '--milestone --ws notif'), /roadmap_mode: extend/);
+      fs.appendFileSync(path.join(wsDir, 'ROADMAP.md'), '\n### Phase 2: Digest\n');
       fs.appendFileSync(path.join(wsDir, 'STATE.md'), '\nroadmapped\n');
       fs.appendFileSync(path.join(wsDir, 'REQUIREMENTS.md'), '\n| NOTIF-01 | Phase 1 |\n');
-      run(dir, commit, '--milestone --ws notif', { MODE: 'extend' });
+      // No MODE handed in: fences are separate shells, so the commit fence must re-derive it (matrix119-B F5).
+      run(dir, commit, '--milestone --ws notif');
       const files = committedFiles(dir);
       assert.equal(files[0], 'docs: extend roadmap for milestone ([N] phases added)');
       assert.deepEqual(files.slice(1).filter(Boolean).sort(), [
@@ -285,7 +296,7 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
       fs.writeFileSync(path.join(dir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n### Phase 1: Core\n');
       fs.appendFileSync(path.join(dir, '.planning', 'STATE.md'), '\nroadmapped\n');
       fs.appendFileSync(path.join(dir, '.planning', 'REQUIREMENTS.md'), '\n| CORE-01 | Phase 1 |\n');
-      run(dir, commit, '--auto', { MODE: 'create' });
+      run(dir, commit, '--auto');
       const files = committedFiles(dir);
       assert.equal(files[0], 'docs: create roadmap ([N] phases)');
       assert.deepEqual(files.slice(1).filter(Boolean).sort(), [
@@ -293,6 +304,24 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
         '.planning/ROADMAP.md',
         '.planning/STATE.md',
       ]);
+    } finally { cleanup(dir); }
+  });
+
+  // Pre-ship matrix119-B F5: the commit fence tested $MODE, which only the Step-2 fence sets, so
+  // every subject read "create roadmap". It now re-derives the mode from the roadmap as committed
+  // before this run (HEAD) — the working-tree file was just written by the roadmapper.
+  test('flat elaborate: an existing committed roadmap rewritten by the roadmapper commits as elaborate, not create', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    try {
+      const roadmap = path.join(dir, '.planning', 'ROADMAP.md');
+      fs.writeFileSync(roadmap, '# Roadmap\n\n### Phase 1: Core\n');
+      fs.writeFileSync(path.join(dir, '.planning', 'SECURITY-STRATEGY.md'), '# Security\n');
+      gitOrThrow(['add', '.'], { cwd: dir });
+      gitOrThrow(['commit', '-q', '-m', 'coarse roadmap'], { cwd: dir });
+      assert.match(run(dir, step2, '--auto'), /roadmap_mode: elaborate/);
+      fs.writeFileSync(roadmap, '# Roadmap\n\n**Elaborated against strategy:** SECURITY-STRATEGY.md (2026-10-28)\n\n### Phase 1: Core\n');
+      run(dir, commit, '--auto');
+      assert.equal(committedFiles(dir)[0], 'docs: elaborate roadmap against strategy');
     } finally { cleanup(dir); }
   });
 
