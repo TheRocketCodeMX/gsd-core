@@ -908,6 +908,30 @@ function extractSquashBuriedTrailers(rawBody, { cwd, timeoutMs }) {
   return { hash, growth };
 }
 
+// #5734: `.github/workflows/release.yml` titles the release -> main merge PR
+// `chore: merge release v<version> to main`, and GitHub appends ` (#<pr>)` when it
+// squashes it. That one commit re-carries every acknowledgment its squashed commits
+// already had checked against their own diff when they landed on `next`, so in the
+// main -> next back-merge range it is history, not a declaration about that PR's own
+// diff — and two release commits that acknowledged one key with different reasons
+// would read as an ambiguous declaration. Anchored whole-subject match: a subject that
+// merely mentions a release merge is an ordinary commit and keeps its acks.
+const RELEASE_MERGE_SUBJECT_RE = /^chore: merge release v\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)? to main(?: \(#\d+\))?$/;
+
+/** True iff `subject` is the release -> main merge commit's subject. */
+function isReleaseMergeSubject(subject) {
+  return RELEASE_MERGE_SUBJECT_RE.test(String(subject).trim());
+}
+
+/**
+ * The subject of a raw `%B` body the way `%s` renders it: the first paragraph with its
+ * line breaks folded to spaces, so the `%s` pass and the `%B` pass classify one commit
+ * identically even for a wrapped subject.
+ */
+function subjectOfBody(body) {
+  return body.split('\n\n', 1)[0].replace(/\n/g, ' ');
+}
+
 // Record/field/value separators for the `git log --format` trailer extraction below.
 // ASCII control characters (RS/US/GS) so they can never collide with real trailer
 // content, following the precedent at gsd-core/workflows/ship.md:312 (`%x1f`/`%x1e` for
@@ -991,8 +1015,11 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
     throw new Error(`emitted-ack-trailer: could not list merge commits over the range: ${err.message}`);
   }
   // FORK:identity END
+  // The subject leads each record (#5734) so a release -> main merge commit can be
+  // recognised and left out; see `isReleaseMergeSubject`.
   const format =
-    `${ACK_TRAILER_RECORD_SEP}%(trailers:key=${ACK_TRAILER_HASH},valueonly,separator=${ackValueSepHex})`
+    `${ACK_TRAILER_RECORD_SEP}%s${ACK_TRAILER_FIELD_SEP}`
+    + `%(trailers:key=${ACK_TRAILER_HASH},valueonly,separator=${ackValueSepHex})`
     + `${ACK_TRAILER_FIELD_SEP}%(trailers:key=${ACK_TRAILER_GROWTH},valueonly,separator=${ackValueSepHex})`;
 
   let raw;
@@ -1009,7 +1036,8 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
   // starts with one, by construction of the `--format` string above.
   const records = normalized.split(ACK_TRAILER_RECORD_SEP).slice(1);
   for (const record of records) {
-    const [hashField = '', growthFieldRaw = ''] = record.split(ACK_TRAILER_FIELD_SEP);
+    const [subject = '', hashField = '', growthFieldRaw = ''] = record.split(ACK_TRAILER_FIELD_SEP);
+    if (isReleaseMergeSubject(subject)) continue;
     const growthField = growthFieldRaw.replace(/\n+$/, ''); // git's own between-commit newline
     for (const v of hashField.split(ACK_TRAILER_VALUE_SEP)) if (v !== '') hashValues.push(v);
     for (const v of growthField.split(ACK_TRAILER_VALUE_SEP)) if (v !== '') growthValues.push(v);
@@ -1034,6 +1062,7 @@ function readAckTrailers({ baseRef, headRef = 'HEAD', cwd = REPO_ROOT, timeoutMs
   }
   const bodyRecords = rawBodies.replace(/\r/g, '').split(ACK_TRAILER_RECORD_SEP).slice(1);
   for (const body of bodyRecords) {
+    if (isReleaseMergeSubject(subjectOfBody(body))) continue;
     const recovered = extractSquashBuriedTrailers(body, { cwd, timeoutMs });
     hashValues.push(...recovered.hash);
     growthValues.push(...recovered.growth);
@@ -1090,6 +1119,7 @@ function resolveAttributionInputs(attributionBase, {
 
 module.exports = {
   REPO_ROOT,
+  isReleaseMergeSubject,
   FIXTURE_SUBDIR,
   MANIFEST_FAMILIES,
   MINIMUM_MANIFEST_FAMILIES,

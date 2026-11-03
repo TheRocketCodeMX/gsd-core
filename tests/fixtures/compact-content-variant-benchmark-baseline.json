@@ -23,14 +23,14 @@
       "reductionPct": 20.54
     },
     "agents/gsd-code-fixer.md": {
-      "offTokens": 11129,
-      "onTokens": 6971,
-      "reductionPct": 37.36
+      "offTokens": 11341,
+      "onTokens": 7133,
+      "reductionPct": 37.1
     },
     "agents/gsd-code-reviewer.md": {
-      "offTokens": 5661,
-      "onTokens": 4794,
-      "reductionPct": 15.32
+      "offTokens": 6476,
+      "onTokens": 5613,
+      "reductionPct": 13.33
     },
     "agents/gsd-codebase-mapper.md": {
       "offTokens": 5509,
@@ -169,8 +169,8 @@
     }
   },
   "aggregate": {
-    "offTokens": 129940,
-    "onTokens": 102246,
-    "reductionPct": 21.31
+    "offTokens": 130967,
+    "onTokens": 103227,
+    "reductionPct": 21.18
   }
 }
