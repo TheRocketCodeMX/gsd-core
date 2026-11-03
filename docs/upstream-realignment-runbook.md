@@ -26,7 +26,7 @@ The fork is upstream plus a registered set of fork patches: `docs/FORK-PATCHES.j
    - `anchors-only`: re-apply from `git diff $(git merge-base origin/next upstream-vX.Y.Z) origin/next -- <path>`; the anchors are tripwires.
    - `whole-file`: ours.
    - Working method: theirs + `git apply --reject` of the fork delta, then hand-place each `.rej` hunk against the upstream text.
-3. **Identity is ours**: `@therocketcode` names and npx hints, CODEOWNERS, plugin manifests. `scripts/sync-upstream.sh` does the bulk rebrand; check it did not clobber a file that must contain the upstream name literally (build such names from parts).
+3. **Identity is ours**: `@therocketcode` names and npx hints, CODEOWNERS and `.github/MAINTAINERS` (fork logins only), plugin manifests. `scripts/sync-upstream.sh` does the bulk rebrand; check it did not clobber a file that must contain the upstream name literally (build such names from parts).
 4. **Mechanical classes**: `capabilities/*/capability.json` theirs + the fork version + fork-pinned deltas; generated files from either side, then `npm run regen:derived` after all source edits and again at the end; allowlists theirs, then let the lints name fork additions; `tests/fixtures/**` theirs unless they assert fork identity; `npm run gen:install-tree` last.
 5. **Supersession**: when upstream ships what a fork patch did, drop the fork copy, remove its manifest entry and add `<!-- SUPERSEDED (align-X.Y.Z): … -->` to FORK-DELTA (basename-free wording — a lint flags deleted basenames).
 6. **Size caps** (agent, workflow, ADR-857 ceilings): compress fork blocks into pointers to reference/step files. Raise a ceiling only when upstream's own body leaves zero headroom, and mirror the raise in every test that pins it.

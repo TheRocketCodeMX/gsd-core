@@ -238,3 +238,39 @@ describe('consistency: FORK-DELTA.md and FORK-PATCHES.json pin the same modified
     assert.deepEqual([...jsonWhole].sort(), [...wholeFile].sort());
   });
 });
+
+// ─── (f) identity: the maintainer list is the fork's ─────────────────────────
+// .github/MAINTAINERS (upstream #5607) names the logins whose PRs pass the
+// advisory `Reviewed or maintainer` check without a second reviewer. Upstream
+// ships its own maintainer there; an upstream merge that brings it back fails
+// every fork PR. The anchors pin our login; this pins that NO other login rides
+// in: every maintainer must be a fork CODEOWNERS owner. Parsed with upstream's
+// own reader so the two can never disagree about what a login line is.
+
+describe('identity: .github/MAINTAINERS lists only fork maintainers', () => {
+  const { parseMaintainers } = require('../scripts/reviewed-or-maintainer-policy.cjs');
+
+  function codeOwners() {
+    const owners = new Set();
+    for (const line of fs.readFileSync(path.join(ROOT, '.github', 'CODEOWNERS'), 'utf8').split(/\r?\n/)) {
+      if (/^\s*(#|$)/.test(line)) continue;
+      for (const token of line.trim().split(/\s+/).slice(1)) {
+        if (token.startsWith('@') && !token.includes('/')) owners.add(token.slice(1).toLowerCase());
+      }
+    }
+    return owners;
+  }
+
+  test('MAINTAINERS parses, and every login is a .github/CODEOWNERS owner', () => {
+    const parsed = parseMaintainers(fs.readFileSync(path.join(ROOT, '.github', 'MAINTAINERS'), 'utf8'));
+    assert.equal(parsed.ok, true, 'MAINTAINERS must parse with at least one login');
+    assert.deepEqual(parsed.invalid, [], 'MAINTAINERS must carry no malformed lines');
+    const owners = codeOwners();
+    assert.ok(owners.size > 0, 'CODEOWNERS must name at least one fork owner');
+    const foreign = [...parsed.logins].filter((login) => !owners.has(login));
+    assert.deepEqual(
+      foreign, [],
+      `MAINTAINERS lists logins that are not fork CODEOWNERS owners (an upstream merge brought them back?): ${foreign.join(', ')}`,
+    );
+  });
+});
