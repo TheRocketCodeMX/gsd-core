@@ -104,6 +104,14 @@ echo "roadmap_mode: $MODE"
 **Determine the phase-template mode** (Vertical MVP vs Horizontal Layers). `new-project` persists the user's Step-7.5 choice as a `<!-- roadmap-mode: ... -->` marker in PROJECT.md so the deferred roadmap honors it (PROJECT.md is shared, so the root path is `{project_path}` in every mode):
 
 ```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+# Fences are separate shells: Step 1's AUTO_MODE is gone here. Re-derive it exactly as Step 1 does.
+AUTO_MODE=false; case " $GSD_ARGS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
+[ "$AUTO_MODE" = true ] || AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
 PROJECT_MODE=$(grep -oiE 'roadmap-mode:[[:space:]]*[a-z]+' .planning/PROJECT.md 2>/dev/null | head -1 | grep -oiE '(mvp|standard)' | tr 'A-Z' 'a-z')
 if [ -z "$PROJECT_MODE" ]; then [ "$AUTO_MODE" = true ] && PROJECT_MODE=mvp || PROJECT_MODE=standard; fi
 ```

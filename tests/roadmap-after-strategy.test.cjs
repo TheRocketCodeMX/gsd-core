@@ -325,6 +325,31 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
     } finally { cleanup(dir); }
   });
 
+  // Pre-ship matrix120-B F4: the template-mode fence fell back to `[ "$AUTO_MODE" = true ] && mvp`,
+  // but AUTO_MODE is set only in the Step-1 fence — a separate shell — so a yolo + auto_advance
+  // project with no roadmap-mode marker always got the standard template. Run verbatim in its own
+  // shell (only the `$ARGUMENTS` substitution applied).
+  test('template mode: the auto → MVP default is computed in the fence that uses it (separate shell)', { skip: shell ? false : 'bash fences' }, () => {
+    const templateMode = fenceWith('PROJECT_MODE=$(');
+    const projectMode = (dir, args) => {
+      const out = run(dir, `${templateMode}\necho "PROJECT_MODE=$PROJECT_MODE"`, args);
+      return (out.match(/^PROJECT_MODE=(\S*)$/m) || [])[1];
+    };
+    const dir = makeProject({ ws: null });
+    try {
+      const project = path.join(dir, '.planning', 'PROJECT.md');
+      const config = path.join(dir, '.planning', 'config.json');
+      fs.writeFileSync(project, '# Project\n');
+      fs.writeFileSync(config, JSON.stringify({ commit_docs: true, mode: 'yolo', workflow: { auto_advance: true } }));
+      assert.equal(projectMode(dir, ''), 'mvp', 'yolo + auto_advance, no marker → MVP template');
+      fs.writeFileSync(config, JSON.stringify({ commit_docs: true, mode: 'interactive' }));
+      assert.equal(projectMode(dir, '--auto'), 'mvp', '--auto, no marker → MVP template');
+      assert.equal(projectMode(dir, ''), 'standard', 'interactive, no flag, no marker → standard');
+      fs.writeFileSync(project, '# Project\n\n<!-- roadmap-mode: standard -->\n');
+      assert.equal(projectMode(dir, '--auto'), 'standard', 'the persisted Step-7.5 choice wins over auto');
+    } finally { cleanup(dir); }
+  });
+
   test('onward dispatches and pointers carry ${GSD_WS}', () => {
     assert.ok(roadmapSkill.includes('Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")'));
     assert.ok(roadmapSkill.includes('/gsd:discuss-phase 1 ${GSD_WS}'));
