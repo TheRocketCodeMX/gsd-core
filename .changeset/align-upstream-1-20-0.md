@@ -22,3 +22,13 @@ Fork-side changes in this realignment:
 
 - **`gsd-code-reviewer` moves from the DEFAULT agent-size tier to LARGE.** Upstream's own body is now 37 bytes under the DEFAULT cap, which leaves no room for the fork's contract-conformance pointer.
 - **`engines.node` stays `>=22.0.0`.** Upstream still requires Node 24.
+- **`context verify` finds custom-id and bracket-id phase capsules.** It picks the capsule the same way `init.phase-op` does, so `--phase AUTH` finds `AUTH-CONTEXT.md`, and `--milestone` no longer skips it. A capsule belonging to another phase in the same directory is no longer accepted.
+- **`/gsd-roadmap` picks the MVP template under `mode: yolo` with `workflow.auto_advance`.** The template step re-reads the typed flags and config itself instead of relying on a variable set in an earlier shell.
+- **Fork workflow git calls ignore an inherited `GIT_DIR` (#5548 idiom).** The roadmap commit, `/gsd-legacy-inventory`, `/gsd-cicd-strategy`, the complete-milestone capsule stage and the verifier fidelity gates now clear `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` before calling git, the same way upstream workflows do.
+- **`.github/MAINTAINERS` names the fork maintainer**, so the advisory "Reviewed or maintainer" check passes on maintainer PRs.
+
+Known issues (upstream, unchanged in the fork — waiting for upstream):
+
+- **On a milestone started with `--reset-phase-numbers` and a shared Progress table, `phase complete` and `roadmap update-plan-progress` write the shipped milestone's Progress row instead of the live one.** Before 1.20.0 this was cosmetic; with the new ship gate, `/gsd-ship` then refuses the phase with `PHASE_NOT_COMPLETE`, and re-running `/gsd-verify-work` repeats the same write. Until upstream fixes it, mark the live row `Complete` by hand.
+- **On a `phase_id_convention: "bracket"` project, `phase complete` does not tick the phase's checklist entry**, so `/gsd-ship` refuses it the same way. Bracket ids remain the opt-in convention the 2.7.0 notes said not to migrate production projects to yet.
+- **Uninstall still removes every `skills/gsd-*` directory**, including one of your own that update reported as preserved. Back such a directory up before you uninstall.
