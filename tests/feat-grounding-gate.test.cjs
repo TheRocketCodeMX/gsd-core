@@ -50,7 +50,7 @@ describe('grounding citation + cross-check', () => {
   });
 });
 
-const { execFileSync } = require('node:child_process');
+const { runNode } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const { cleanup } = require('./helpers.cjs');
@@ -58,11 +58,8 @@ const TOOLS = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
 const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 function runGate(dir, phaseDir) {
-  try {
-    return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS }));
-  } catch (e) {
-    return JSON.parse((e.stdout || '{}').trim() || '{}');
-  }
+  const r = runNode([TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+  return JSON.parse(r.stdout.trim() || '{}');
 }
 
 function gateProject(planBody, config) {
@@ -184,7 +181,7 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
   // ADR-959 capability path — no hardcoded `case 'grounding'` remains in
   // gsd-tools.cjs. The workflow.grounding_gate key federates from the
   // capability's config slice (moved OUT of both central manifests).
-  const { execFileSync } = require('node:child_process');
+  const { assertSeamExit, formatSeamResult } = require('./helpers/process-seam.cjs');
   const fs = require('node:fs');
   const os = require('node:os');
   const { cleanup } = require('./helpers.cjs');
@@ -216,7 +213,11 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-grounding-cap-'));
     fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
     fs.writeFileSync(path.join(dir, '.planning', 'config.json'), '{}');
-    const run = (args) => execFileSync(process.execPath, [TOOLS, ...args], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS });
+    const run = (args) => {
+      const r = runNode([TOOLS, ...args], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+      assertSeamExit(assert, r, 0, `gsd-tools ${args.join(' ')}`);
+      return r.stdout;
+    };
 
     const required = JSON.parse(run(['grounding', 'required']));
     assert.ok(Array.isArray(required.required), 'resolver output shape preserved');
@@ -231,21 +232,14 @@ describe('grounding capability dispatch (Rocket capability pack, issue #25)', ()
   });
 
   test('an unknown grounding verb exits 1 with the exact legacy message and sdk_unknown_command reason', () => {
-    try {
-      execFileSync(process.execPath, [TOOLS, 'grounding', 'bogus'], {
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, GSD_JSON_ERRORS: '1' },
-        timeout: PROBE_TIMEOUT_MS,
-      });
-      assert.fail('expected non-zero exit');
-    } catch (err) {
-      if (err.code === 'ERR_ASSERTION') throw err;
-      assert.equal(err.status, 1);
-      const parsed = JSON.parse(err.stderr.toString());
-      assert.equal(parsed.ok, false);
-      assert.equal(parsed.reason, 'sdk_unknown_command');
-      assert.equal(parsed.message, 'Unknown grounding subcommand. Available: required');
-    }
+    const r = runNode([TOOLS, 'grounding', 'bogus'], {
+      env: { ...process.env, GSD_JSON_ERRORS: '1' },
+      timeoutMs: PROBE_TIMEOUT_MS,
+    });
+    assert.equal(r.exitCode, 1, formatSeamResult(r));
+    const parsed = JSON.parse(r.stderr);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.reason, 'sdk_unknown_command');
+    assert.equal(parsed.message, 'Unknown grounding subcommand. Available: required');
   });
 });

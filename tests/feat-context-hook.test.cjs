@@ -18,7 +18,7 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode, assertSeamExit } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -72,11 +72,9 @@ function makeProject({ gsdActive = true, config = null } = {}) {
 function runHook({ sid, cwd, event }) {
   const payload = { session_id: sid, cwd };
   if (event) payload.hook_event_name = event;
-  return execFileSync(process.execPath, [HOOK], {
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-    timeout: PROBE_TIMEOUT_MS,
-  });
+  const r = runNode([HOOK], { input: JSON.stringify(payload), timeoutMs: PROBE_TIMEOUT_MS });
+  assertSeamExit(assert, r);
+  return r.stdout;
 }
 
 // Parse the hook's stdout into { hookEventName, additionalContext } or null when empty.

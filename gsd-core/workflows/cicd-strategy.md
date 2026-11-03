@@ -35,6 +35,8 @@ ls .planning/CICD-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ## Step 2: Load context
 
 ```bash
+# #5548: drop inherited repo-location vars (set inside git hooks) so cwd, not GIT_DIR, picks ROOT.
+unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE GIT_IMPLICIT_WORK_TREE GIT_GRAFT_FILE GIT_INDEX_FILE GIT_NO_REPLACE_OBJECTS GIT_REPLACE_REF_BASE GIT_PREFIX GIT_SHALLOW_FILE GIT_COMMON_DIR
 cat .planning/TEST-STRATEGY.md 2>/dev/null || true
 cat .planning/INFRA-STRATEGY.md 2>/dev/null || true
 cat .planning/SECURITY-STRATEGY.md 2>/dev/null || true   # authoritative for data classification → BLAST RADIUS. Never re-interview what this already answers.

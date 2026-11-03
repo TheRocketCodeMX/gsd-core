@@ -150,6 +150,8 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
+   # #5548: drop inherited repo-location vars (set inside git hooks) so cwd, not GIT_DIR, picks ROOT.
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE GIT_IMPLICIT_WORK_TREE GIT_GRAFT_FILE GIT_INDEX_FILE GIT_NO_REPLACE_OBJECTS GIT_REPLACE_REF_BASE GIT_PREFIX GIT_SHALLOW_FILE GIT_COMMON_DIR
    GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1) # Step 2b: workstream for the capsule commit
    [ "$(gsd_run query config-get commit_docs --raw ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)" = false ] || git add -- "[forward_capsule path printed above]"
    ```

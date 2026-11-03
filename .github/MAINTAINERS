@@ -8,5 +8,6 @@
 # The check reads this file from the BASE branch (the workflow checks out the
 # base sha), not from the PR, so a PR cannot add its own author here.
 #
-# Initially the sole maintainer while the queue is being trialled.
-trek-e
+# Fork maintainers (TheRocketCodeMX) — the same set CODEOWNERS names. This list is
+# fork identity: an upstream merge must not bring upstream's maintainers back.
+bricemacias

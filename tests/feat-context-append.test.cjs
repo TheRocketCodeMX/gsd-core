@@ -215,9 +215,9 @@ describe('complete-milestone Step 2b forward capsule is committed and workstream
     return dir;
   }
 
-  function run(dir, fence, args) {
+  function run(dir, fence, args, extraEnv = {}) {
     const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
-    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir };
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir, ...extraEnv };
     delete env.GSD_WORKSTREAM;
     delete env.GSD_SESSION_KEY;
     const marker = '\n$ARGUMENTS\nGSD_ARGS_END';
@@ -267,6 +267,33 @@ describe('complete-milestone Step 2b forward capsule is committed and workstream
       assert.equal(tracked(dir, rel), rel, 'capsule must be in HEAD after the close');
       assert.equal(dirty(dir), '');
     } finally { cleanup(dir); }
+  });
+
+  // Pre-ship matrix120-B F5 (upstream #5548's idiom): with GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE
+  // exported at another repo (a git hook or wrapper), the stage fence's raw `git add` staged the
+  // capsule into THAT repo's index. Scrubbed first, it stages into the cwd repo.
+  test('an inherited GIT_DIR / GIT_INDEX_FILE does not redirect the capsule staging', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cm-decoy-'));
+    try {
+      gitOrThrow(['init', '-q'], { cwd: decoy });
+      fs.writeFileSync(path.join(decoy, 'decoy.txt'), 'decoy\n');
+      gitOrThrow(['add', '.'], { cwd: decoy });
+      gitOrThrow(['-c', 'user.name=z', '-c', 'user.email=z@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'decoy'], { cwd: decoy });
+      const resolve = pick(detail, 'forward_capsule:', 'elaboration.md');
+      const out = run(dir, resolve.split(LABEL_PH).join('v1.3'), 'v1.2');
+      const capsule = out.match(/^forward_capsule: (\S+)$/m)[1];
+      fs.mkdirSync(path.dirname(capsule), { recursive: true });
+      fs.writeFileSync(capsule, '---\nmilestone: v1.3\n---\n# Milestone v1.3 — Forward Capsule\n');
+      run(dir, pick(detail, PATH_PH, 'elaboration.md').split(PATH_PH).join(capsule), 'v1.2', {
+        GIT_DIR: path.join(decoy, '.git'),
+        GIT_WORK_TREE: decoy,
+        GIT_INDEX_FILE: path.join(decoy, '.git', 'index'),
+      });
+      const staged = (cwd) => gitOrThrow(['diff', '--cached', '--name-only'], { cwd }).trim();
+      assert.equal(staged(dir), '.planning/milestones/next/v1.3-CAPSULE.md', 'the capsule is staged in the cwd repo');
+      assert.equal(staged(decoy), '', 'nothing is staged into the inherited repo');
+    } finally { cleanup(dir); cleanup(decoy); }
   });
 
   test('new-milestone Step 3.1 matches the workstream-prefixed label under a workstream', () => {

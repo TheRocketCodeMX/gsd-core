@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode, assertSeamExit } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -12,13 +12,9 @@ const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 const TOOLS_PATH = path.resolve(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
 
 function runLearn(args, env = {}) {
-  const out = execFileSync(process.execPath, [TOOLS_PATH, 'learn', ...args], {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, ...env },
-    timeout: PROBE_TIMEOUT_MS,
-  });
-  return JSON.parse(out.trim());
+  const r = runNode([TOOLS_PATH, 'learn', ...args], { env: { ...process.env, ...env }, timeoutMs: PROBE_TIMEOUT_MS });
+  assertSeamExit(assert, r, 0, `learn ${args.join(' ')}`);
+  return JSON.parse(r.stdout.trim());
 }
 
 describe('learn catalog', () => {
@@ -110,18 +106,9 @@ describe('learn capability dispatch (Rocket capability pack, issue #25)', () => 
   // equivalence with the old inline case arm.
 
   function runLearnErr(args, env = {}) {
-    try {
-      execFileSync(process.execPath, [TOOLS_PATH, 'learn', ...args], {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, ...env },
-        timeout: PROBE_TIMEOUT_MS,
-      });
-      assert.fail(`expected non-zero exit for: learn ${args.join(' ')}`);
-    } catch (err) {
-      if (err.code === 'ERR_ASSERTION') throw err;
-      return { status: err.status, stderr: err.stderr ? err.stderr.toString() : '' };
-    }
+    const r = runNode([TOOLS_PATH, 'learn', ...args], { env: { ...process.env, ...env }, timeoutMs: PROBE_TIMEOUT_MS });
+    assert.notEqual(r.exitCode, 0, `expected non-zero exit for: learn ${args.join(' ')}`);
+    return { status: r.exitCode, stderr: r.stderr };
   }
 
   test('the learn family is owned by learn in the capability registry', () => {

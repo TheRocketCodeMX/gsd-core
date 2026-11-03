@@ -126,6 +126,56 @@ describe('#93 context verify resolves phases across layouts', () => {
   });
 });
 
+// matrix120-B F3: a custom-id phase (`phase_naming: custom`, upstream #5186) keeps its capsule as
+// `<padded_phase>-CONTEXT.md` — `AUTH-CONTEXT.md`, not a numeric token. `init.phase-op` reports it
+// as `context_path`, and the context.md seed writes it from `padded_phase`; `context verify` must
+// find that same file (`--phase`) and list it (`--milestone`), or seed's verify-at-birth loops on
+// "no matching CONTEXT file found".
+describe('matrix120-B F3: context verify resolves custom-id phase capsules', () => {
+  const { createCustomPhaseProject, addCustomPhase, runCustomPhaseCommand, runGsdTools } = require('./helpers.cjs');
+  const CAPSULE = '## Verified Facts\n\n- ok [anchor: ext:x "y"]\n';
+  const real = (p) => fs.realpathSync(p);
+
+  for (const code of [null, 'CA']) {
+    test(`custom id AUTH${code ? ` with project_code ${code}` : ''}: --phase finds init.phase-op's capsule, --milestone lists it`, () => {
+      const cwd = createCustomPhaseProject(code);
+      try {
+        const dir = addCustomPhase(cwd, 'AUTH', 'Auth Hardening', code);
+        const op = runCustomPhaseCommand(cwd, ['query', 'init.phase-op', 'AUTH']);
+        // The name the context.md seed fence writes: "${phase_dir}/${padded_phase}-CONTEXT.md".
+        const capsule = path.join(path.resolve(cwd, op.phase_dir), `${op.padded_phase}-CONTEXT.md`);
+        assert.equal(real(path.dirname(capsule)), real(path.join(cwd, dir)));
+        fs.writeFileSync(capsule, CAPSULE);
+        const after = runCustomPhaseCommand(cwd, ['query', 'init.phase-op', 'AUTH']);
+        assert.equal(real(path.resolve(cwd, after.context_path)), real(capsule), 'init.phase-op reports the capsule');
+
+        const r = runGsdTools(['context', 'verify', '--phase', 'AUTH'], cwd);
+        assert.ok(r.success, `context verify --phase AUTH failed: ${r.error}`);
+        assert.equal(real(JSON.parse(r.output).file), real(capsule));
+
+        const numeric = path.join(cwd, '.planning', 'phases', '03-rooms', '03-CONTEXT.md');
+        fs.mkdirSync(path.dirname(numeric), { recursive: true });
+        fs.writeFileSync(numeric, CAPSULE);
+        const m = runGsdTools(['context', 'verify', '--milestone'], cwd);
+        assert.ok(m.success, `context verify --milestone failed: ${m.error}`);
+        const files = JSON.parse(m.output).map((x) => real(x.file)).sort();
+        assert.deepEqual(files, [real(capsule), real(numeric)].sort(), '--milestone lists the custom-id capsule too');
+      } finally { cleanup(cwd); }
+    });
+  }
+
+  test('a capsule from another phase in the same directory is not this phase\'s capsule', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-crf3-'));
+    try {
+      const pdir = path.join(dir, '.planning', 'phases', '04-threads');
+      fs.mkdirSync(pdir, { recursive: true });
+      fs.writeFileSync(path.join(pdir, '05-CONTEXT.md'), CAPSULE);
+      const { errs } = run(['context', 'verify', '--phase', '4'], dir);
+      assert.match(errs.join(' '), /no matching CONTEXT file found/);
+    } finally { cleanup(dir); }
+  });
+});
+
 // ─── context.md fences honour --ws (pre-ship matrix119-B F1) ──────────────────
 //
 // `/gsd-context` was only half workstream-aware: (a) the flush commit hard-coded
