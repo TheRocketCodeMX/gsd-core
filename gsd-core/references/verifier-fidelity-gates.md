@@ -8,6 +8,8 @@ Extracted from `agents/gsd-verifier.md` Step 7 (anti-pattern scan) to respect th
 - A **test-file edit accompanying a non-test task** — when the phase's stated work is not "add/change tests" yet `*-SUMMARY.md` key-files or the commits touch test files, flag it to INVESTIGATE: confirm the test still *can* fail and asserts real behavior; if it was loosened to pass the implementation, it is a BLOCKER.
 
 ```bash
+# #5548: drop inherited repo-location vars (set inside git hooks) so cwd, not GIT_DIR, picks ROOT.
+unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE GIT_IMPLICIT_WORK_TREE GIT_GRAFT_FILE GIT_INDEX_FILE GIT_NO_REPLACE_OBJECTS GIT_REPLACE_REF_BASE GIT_PREFIX GIT_SHALLOW_FILE GIT_COMMON_DIR
 git diff ${DIFF_BASE:-HEAD~1}..HEAD -- '*test*' '*spec*' 2>/dev/null | grep -nE '^\-.*(assert|expect|EXPECT)|\+.*(skip|xit|\.only|assert\s*\(?\s*[Tt]rue|return;?\s*//.*skip)'
 ```
 

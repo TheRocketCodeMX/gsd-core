@@ -325,6 +325,35 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
     } finally { cleanup(dir); }
   });
 
+  // Pre-ship matrix120-A F4 / B F5 (upstream #5548's idiom): a git hook or wrapper exports
+  // GIT_DIR / GIT_WORK_TREE. The commit fence's raw `git ls-tree HEAD` then read the OTHER repo's
+  // HEAD (no roadmap there → "create"), while the commit itself (gsd_run, scrubbed upstream) landed
+  // here. With the fence scrubbing them first, the subject follows the cwd repo.
+  test('commit fence: an inherited GIT_DIR / GIT_WORK_TREE does not redirect the mode probe', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = makeProject({ ws: null });
+    const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-roadmap-decoy-'));
+    try {
+      gitOrThrow(['init', '-q'], { cwd: decoy });
+      fs.writeFileSync(path.join(decoy, 'decoy.txt'), 'decoy\n');
+      gitOrThrow(['add', '.'], { cwd: decoy });
+      gitOrThrow(['-c', 'user.name=z', '-c', 'user.email=z@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'decoy'], { cwd: decoy });
+      const decoyHead = gitOrThrow(['rev-parse', 'HEAD'], { cwd: decoy }).trim();
+      const roadmap = path.join(dir, '.planning', 'ROADMAP.md');
+      fs.writeFileSync(roadmap, '# Roadmap\n\n### Phase 1: Core\n');
+      fs.writeFileSync(path.join(dir, '.planning', 'SECURITY-STRATEGY.md'), '# Security\n');
+      gitOrThrow(['add', '.'], { cwd: dir });
+      gitOrThrow(['commit', '-q', '-m', 'coarse roadmap'], { cwd: dir });
+      fs.writeFileSync(roadmap, '# Roadmap\n\n**Elaborated against strategy:** SECURITY-STRATEGY.md (2026-11-03)\n\n### Phase 1: Core\n');
+      run(dir, commit, '--auto', {
+        GIT_DIR: path.join(decoy, '.git'),
+        GIT_WORK_TREE: decoy,
+        GIT_INDEX_FILE: path.join(decoy, '.git', 'index'),
+      });
+      assert.equal(committedFiles(dir)[0], 'docs: elaborate roadmap against strategy');
+      assert.equal(gitOrThrow(['rev-parse', 'HEAD'], { cwd: decoy }).trim(), decoyHead, 'the decoy repo is untouched');
+    } finally { cleanup(dir); cleanup(decoy); }
+  });
+
   // Pre-ship matrix120-B F4: the template-mode fence fell back to `[ "$AUTO_MODE" = true ] && mvp`,
   // but AUTO_MODE is set only in the Step-1 fence — a separate shell — so a yolo + auto_advance
   // project with no roadmap-mode marker always got the standard template. Run verbatim in its own

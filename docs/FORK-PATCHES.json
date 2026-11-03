@@ -622,7 +622,8 @@
    "mode": "anchors-only",
    "anchors": [
     "Route each acknowledged deferral forward",
-    "-CAPSULE\\.md"
+    "-CAPSULE\\.md",
+    "^\\s*unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE"
    ]
   },
   {
