@@ -1,7 +1,7 @@
 'use strict';
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -27,8 +27,8 @@ function fixture(planGrounding, gateOff) {
   return { dir, phaseDir };
 }
 function gate(dir, phaseDir) {
-  try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
-  catch (e) { return JSON.parse((e.stdout || '{}').trim() || '{}'); }
+  const r = runNode([TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+  return JSON.parse(r.stdout.trim() || '{}');
 }
 
 describe('grounding — planted discrepancy + ablation (the realistic proof)', () => {

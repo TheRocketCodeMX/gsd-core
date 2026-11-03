@@ -16,7 +16,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -80,8 +80,8 @@ describe('DESIGN-INVENTORY × shipped template (the escaped class)', () => {
       return { dir, phaseDir };
     }
     function gate(dir, phaseDir) {
-      try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
-      catch (e) { return JSON.parse((e.stdout || '{}').trim() || '{}'); }
+      const r = runNode([TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+      return JSON.parse(r.stdout.trim() || '{}');
     }
     const honoring = project('- DESIGN-INVENTORY · address @ signup → design / single input');
     assert.equal(gate(honoring.dir, honoring.phaseDir).passed, true, 'honoring must pass end-to-end');
@@ -128,9 +128,8 @@ describe('LEGACY-INVENTORY × shipped template — mechanical row-check (#21 P1-
     fs.writeFileSync(path.join(dir, '.planning', 'LEGACY-INVENTORY.md'), inventory());
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'),
       '## Grounding\n- LEGACY-INVENTORY · ghost subsystem → Rebuild + new\n\n## Tasks\n- build\n');
-    let out;
-    try { out = JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
-    catch (e) { out = JSON.parse((e.stdout || '{}').trim() || '{}'); }
+    const r = runNode([TOOLS, 'query', 'check.grounding-plan', phaseDir], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+    const out = JSON.parse(r.stdout.trim() || '{}');
     assert.equal(out.passed, false, 'fabricated behavior citation must block end-to-end');
     cleanup(dir);
   });

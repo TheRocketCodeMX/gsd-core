@@ -4,7 +4,7 @@
 // unrelated file it is a silent no-op.
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode, assertSeamExit } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -17,13 +17,13 @@ const HOOK = path.resolve(__dirname, '..', 'hooks', 'gsd-grounding-index-refresh
 // child's index write against this test's directory teardown (and lock the dir on
 // Windows). The hook's contract under test is the additionalContext injection.
 function runHook(event, env) {
-  const out = execFileSync(process.execPath, [HOOK], {
+  const r = runNode([HOOK], {
     input: JSON.stringify(event),
-    encoding: 'utf8',
     env: { ...process.env, GSD_GROUNDING_NO_REFRESH_SPAWN: '1', ...env },
-    timeout: PROBE_TIMEOUT_MS,
+    timeoutMs: PROBE_TIMEOUT_MS,
   });
-  return out.trim();
+  assertSeamExit(assert, r);
+  return r.stdout.trim();
 }
 
 function mkProject() {
@@ -39,7 +39,7 @@ function mkProject() {
 describe('gsd-grounding-index-refresh FileChanged hook', () => {
   test('the hook script exists and is valid JS', () => {
     assert.ok(fs.existsSync(HOOK));
-    execFileSync(process.execPath, ['--check', HOOK], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
+    assertSeamExit(assert, runNode(['--check', HOOK], { timeoutMs: PROBE_TIMEOUT_MS }));
   });
 
   test('a strategy-doc change → injects the active sources as additionalContext', () => {
