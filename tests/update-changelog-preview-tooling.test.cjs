@@ -17,7 +17,7 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode, assertSeamExit } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -46,12 +46,14 @@ const FIXTURE_CHANGELOG = [
 ].join('\n');
 
 function runExtract(cliPath, changelogPath) {
-  return execFileSync(process.execPath, [
+  const r = runNode([
     cliPath, 'extract',
     '--from', '1.7.2',
     '--to', '1.7.3',
     '--changelog', changelogPath,
-  ], { encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+  ], { timeoutMs: PROBE_TIMEOUT_MS });
+  assertSeamExit(assert, r, 0, 'changeset extract');
+  return r.stdout;
 }
 
 describe('update workflow changelog preview tooling (changeset cli)', () => {

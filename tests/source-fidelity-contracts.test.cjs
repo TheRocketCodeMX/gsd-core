@@ -212,3 +212,117 @@ describe('MIXTURE: the gap-map is the shared approved-change allowlist', () => {
     has(WF('legacy-inventory.md'), 'design-delta');
   });
 });
+
+// ─── #5548 repo-location scrub in fork fences (pre-ship matrix120-A F4 / B F5) ─────────────────
+//
+// A git hook or wrapper exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE. Upstream #5548 scrubs them
+// in execGit and in pr-branch.md's workflow fence; the fork's own fences that run raw git did not,
+// so they measured (or staged into) the OTHER repo. Each fence below runs VERBATIM in bash, from the
+// project's cwd, with those variables exported at a second "decoy" repo; the answer must be the
+// cwd repo's. The scrub line itself is upstream's, read from pr-branch.md, never re-typed here.
+describe('fork fences that run raw git ignore an inherited GIT_DIR / GIT_WORK_TREE (#5548 idiom)', () => {
+  const os = require('node:os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { gitOrThrow } = require('./helpers/git-fixture.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const { scanFencedBlocks } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'markdown-sectionizer.cjs'));
+  const shell = os.platform() === 'win32' ? null : 'bash';
+
+  const bashFences = (rel) => {
+    const lines = read(rel).split(/\r?\n/);
+    return scanFencedBlocks(lines)
+      .filter((b) => /^bash\b/.test(b.infoString))
+      .map((b) => lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n'));
+  };
+  const fenceWith = (rel, needle) => {
+    const hit = bashFences(rel).find((f) => f.includes(needle));
+    assert.ok(hit, `${rel} has no bash fence containing ${needle}`);
+    return hit;
+  };
+  const SCRUB = bashFences(WF('pr-branch.md')).join('\n').split('\n').find((l) => /^unset GIT_ALTERNATE_OBJECT_DIRECTORIES /.test(l.trim()));
+
+  // The fork-owned fences that run raw git (the shared runtime shim excepted: it is upstream's).
+  const FORK_GIT_FENCES = [
+    [WF('roadmap.md'), 'git ls-tree --name-only HEAD'],
+    [WF('legacy-inventory.md'), 'git ls-files | wc -l'],
+    [WF('cicd-strategy.md'), 'MERGES_90D='],
+    [WF('complete-milestone/detail/elaboration.md'), 'git add -- "[forward_capsule path printed above]"'],
+    [REF('verifier-fidelity-gates.md'), "git diff ${DIFF_BASE:-HEAD~1}..HEAD"],
+  ];
+
+  function repo(prefix, commits) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    gitOrThrow(['init', '-q'], { cwd: dir });
+    gitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    for (const { author, files } of commits) {
+      for (const [rel, body] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), body);
+      }
+      gitOrThrow(['add', '-A'], { cwd: dir });
+      gitOrThrow(['-c', `user.name=${author}`, '-c', `user.email=${author}@example.com`, 'commit', '-q', '-m', `c by ${author}`], { cwd: dir });
+    }
+    return dir;
+  }
+  const decoyEnv = (decoy) => ({
+    GIT_DIR: path.join(decoy, '.git'),
+    GIT_WORK_TREE: decoy,
+    GIT_INDEX_FILE: path.join(decoy, '.git', 'index'),
+  });
+  function run(dir, fence, extraEnv) {
+    const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, ...extraEnv };
+    delete env.GSD_WORKSTREAM;
+    delete env.GSD_SESSION_KEY;
+    return runHook('-c', [fence], { interpreter: 'bash', cwd: dir, env }).stdout;
+  }
+
+  test('every fork-owned fence that runs raw git carries upstream\'s #5548 scrub line verbatim', () => {
+    assert.ok(SCRUB, 'upstream pr-branch.md no longer carries the #5548 unset line — re-derive the idiom');
+    for (const [rel, needle] of FORK_GIT_FENCES) {
+      const fence = fenceWith(rel, needle);
+      const lines = fence.split('\n').map((l) => l.trim());
+      const at = lines.indexOf(SCRUB.trim());
+      assert.ok(at !== -1, `${rel}: the fence running \`${needle}\` must carry upstream's #5548 scrub line`);
+      const firstGit = lines.findIndex((l) => !l.startsWith('#') && !l.startsWith('_GSD_SHIM_NAME=') && /(^|[\s;&|(`!])git\s+[a-z]/.test(l));
+      assert.ok(firstGit === -1 || at < firstGit, `${rel}: the scrub must run before the fence's first raw git call`);
+    }
+  });
+
+  test('legacy-inventory Step 1 counts the cwd repo\'s tracked files', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = repo('gsd-gd-li-', [{ author: 'a', files: { 'a.txt': 'a', 'b.txt': 'b', 'c.txt': 'c' } }]);
+    const decoy = repo('gsd-gd-decoy-', [{ author: 'z', files: { 'z.txt': 'z' } }]);
+    try {
+      const out = run(dir, fenceWith(WF('legacy-inventory.md'), 'git ls-files | wc -l'), decoyEnv(decoy));
+      const counts = out.split('\n').map((l) => l.trim()).filter((l) => /^\d+$/.test(l));
+      assert.deepEqual(counts, ['3'], `expected the cwd repo's 3 tracked files, got:\n${out}`);
+    } finally { cleanup(dir); cleanup(decoy); }
+  });
+
+  test('cicd-strategy Step 2 measures the cwd repo\'s history, not the inherited one', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = repo('gsd-gd-ci-', [
+      { author: 'ana', files: { 'a.txt': '1' } },
+      { author: 'bo', files: { 'a.txt': '2' } },
+      { author: 'ana', files: { 'a.txt': '3' } },
+      { author: 'cy', files: { 'a.txt': '4' } },
+    ]);
+    const decoy = repo('gsd-gd-decoy-', [{ author: 'z', files: { 'z.txt': 'z' } }]);
+    try {
+      const out = run(dir, fenceWith(WF('cicd-strategy.md'), 'MERGES_90D='), decoyEnv(decoy));
+      assert.match(out, /^MERGES_90D=\s*4$/m, out);
+      assert.match(out, /^CONTRIBUTORS_90D=\s*3$/m, out);
+    } finally { cleanup(dir); cleanup(decoy); }
+  });
+
+  test('the verifier reward-hacking diff reads the cwd repo\'s last commit', { skip: shell ? false : 'bash fences' }, () => {
+    const dir = repo('gsd-gd-vf-', [
+      { author: 'a', files: { 'tests/a.test.js': "test('x', () => {\n  expect(sum(1, 1)).toBe(2);\n});\n" } },
+      { author: 'a', files: { 'tests/a.test.js': "test('x', () => {\n});\n" } },
+    ]);
+    const decoy = repo('gsd-gd-decoy-', [{ author: 'z', files: { 'z.txt': 'z' } }]);
+    try {
+      const out = run(dir, fenceWith(REF('verifier-fidelity-gates.md'), 'git diff ${DIFF_BASE:-HEAD~1}..HEAD'), decoyEnv(decoy));
+      assert.match(out, /expect\(sum\(1, 1\)\)/, `the deleted assertion must be flagged, got:\n${out}`);
+    } finally { cleanup(dir); cleanup(decoy); }
+  });
+});

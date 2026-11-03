@@ -4,7 +4,7 @@
 'use strict';
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode } = require('./helpers/process-seam.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -43,8 +43,8 @@ describe('grounding — source-direct citation verification', () => {
     return dir;
   }
   function gate(dir) {
-    try { return JSON.parse(execFileSync(process.execPath, [TOOLS, 'query', 'check.grounding-plan', path.join(dir, '.planning', 'phase')], { cwd: dir, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS })); }
-    catch (e) { return JSON.parse((e.stdout || '{}').trim() || '{}'); }
+    const r = runNode([TOOLS, 'query', 'check.grounding-plan', path.join(dir, '.planning', 'phase')], { cwd: dir, timeoutMs: PROBE_TIMEOUT_MS });
+    return JSON.parse(r.stdout.trim() || '{}');
   }
 
   test('a SOURCE citation whose fact is really in the file → passes', () => {

@@ -955,7 +955,7 @@ describe('issue #3210: execute-phase auto-mode carve-out exempts precondition-un
 describe('execute-phase 5.7: post-merge gate result crosses the block boundary (e2e-4 F2)', () => {
   const os = require('node:os');
   const { beforeEach, afterEach } = require('node:test');
-  const { execFileSync } = require('node:child_process');
+  const { spawnSync } = require('node:child_process');
 
   const GATE_PATH = path.join(
     __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-merge-gate.md',
@@ -1012,17 +1012,22 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
   // Behavioral: run the real block in a fresh shell, exactly as the runtime does.
   // gsd_run is stubbed (this test is about the guard, not about the tools it calls);
   // everything else is the shipped text.
+  // align-1.20.0: upstream #5221 captures roadmap.update-plan-progress into PROGRESS
+  // and stops unless jq reads an accepted envelope, so the stub answers that verb with
+  // {"updated":true} and announces itself on stderr; the returned text is stdout + stderr.
   function runTracking(tmp, { testExit, record }) {
     if (record !== undefined) {
       fs.writeFileSync(path.join(tmp, RECORD), JSON.stringify({ test_exit: record }));
     }
     const script =
-      'set +e\ngsd_run() { echo "STUB gsd_run $*"; }\n' +
+      'set +e\ngsd_run() { echo "STUB gsd_run $*" >&2; case "$2" in roadmap.update-plan-progress) echo \'{"updated":true}\';; esac; }\n' +
       (testExit === undefined ? '' : `TEST_EXIT=${testExit}\n`) +
       trackingBlock();
     const scriptPath = path.join(tmp, 'tracking.sh');
     fs.writeFileSync(scriptPath, script);
-    return execFileSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+    const r = spawnSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+    assert.strictEqual(r.status, 0, `tracking block exited ${r.status}:\n${r.stdout}${r.stderr}`);
+    return r.stdout + r.stderr;
   }
 
   let tmp;

@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { runNode, assertSeamExit } = require('./helpers/process-seam.cjs');
 const { isBuiltin } = require('node:module');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,8 +15,8 @@ const { PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
 
 describe('learn visual companion (vendored, zero-install)', () => {
   test('server.cjs and helper.js parse as valid JS', () => {
-    execFileSync(process.execPath, ['--check', SERVER], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
-    execFileSync(process.execPath, ['--check', path.join(VISUAL, 'helper.js')], { stdio: 'pipe', timeout: PROBE_TIMEOUT_MS });
+    assertSeamExit(assert, runNode(['--check', SERVER], { timeoutMs: PROBE_TIMEOUT_MS }));
+    assertSeamExit(assert, runNode(['--check', path.join(VISUAL, 'helper.js')], { timeoutMs: PROBE_TIMEOUT_MS }));
   });
 
   test('server.cjs requires ONLY Node built-ins (zero third-party dependencies)', () => {

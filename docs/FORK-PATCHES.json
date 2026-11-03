@@ -4,6 +4,23 @@
  "comment": "Machine-readable fork-delta manifest. One entry per (path, feature). mode=markers: the file contains exactly `markers` balanced FORK:<feature> BEGIN/END comment pairs around fork-owned blocks. mode=anchors-only: no inline markers (size-budgeted, JSON/YAML, frontmatter, in-fence, or in-sentence edits); the anchors pin load-bearing fork literals. mode=whole-file: the fork version replaces upstream wholesale. Every anchor is a JS regex (multiline) that MUST match the file content and would not appear in pristine upstream. Guarded by tests/fork-delta-manifest.test.cjs; consumed by the v2.0.0 upstream realignment (Epic #13).",
  "patches": [
   {
+   "path": ".github/CODEOWNERS",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "^\\*\\s+@bricemacias\\s*$"
+   ]
+  },
+  {
+   "path": ".github/MAINTAINERS",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "^bricemacias$",
+    "^# Fork maintainers \\(TheRocketCodeMX\\)"
+   ]
+  },
+  {
    "path": ".gitignore",
    "feature": "identity",
    "mode": "anchors-only",
@@ -605,7 +622,8 @@
    "mode": "anchors-only",
    "anchors": [
     "Route each acknowledged deferral forward",
-    "-CAPSULE\\.md"
+    "-CAPSULE\\.md",
+    "^\\s*unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE"
    ]
   },
   {
@@ -1241,7 +1259,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream"
+    "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream",
+    "gsd-code-reviewer outgrew DEFAULT in the upstream v1\\.20\\.0 realignment"
    ]
   },
   {
@@ -1788,6 +1807,14 @@
    "mode": "anchors-only",
    "anchors": [
     "post-merge gate result crosses the block boundary"
+   ]
+  },
+  {
+   "path": "tests/gate-consumer-exit-awareness.test.cjs",
+   "feature": "gate-handoff",
+   "mode": "anchors-only",
+   "anchors": [
+    "const WAVE_TRACKING = 'gsd-core/workflows/execute-phase/steps/post-wave-tracking-update\\.md'"
    ]
   },
   {

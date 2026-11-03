@@ -74,5 +74,26 @@ if [ "$name" != "@therocketcode/gsd-core" ]; then
   echo "WARNING: package.json name is '$name' (expected @therocketcode/gsd-core) — fix it before publishing." >&2
 fi
 
+# FORK: align-1.20.0 — the maintainer list (.github/MAINTAINERS, upstream #5607) is fork identity.
+# The rebrand above only rewrites coordinates, never logins, so an upstream merge can bring
+# upstream's maintainers back. Every login there must be a fork CODEOWNERS owner
+# (tests/fork-delta-manifest.test.cjs pins the same rule).
+if [ -f .github/MAINTAINERS ] && [ -f .github/CODEOWNERS ]; then
+  foreign="$(node -e '
+    const fs = require("fs");
+    const { parseMaintainers } = require("./scripts/reviewed-or-maintainer-policy.cjs");
+    const owners = new Set(fs.readFileSync(".github/CODEOWNERS", "utf8").split(/\r?\n/)
+      .filter((l) => !/^\s*(#|$)/.test(l))
+      .flatMap((l) => l.trim().split(/\s+/).slice(1))
+      .filter((t) => t.startsWith("@") && !t.includes("/"))
+      .map((t) => t.slice(1).toLowerCase()));
+    const { logins } = parseMaintainers(fs.readFileSync(".github/MAINTAINERS", "utf8"));
+    process.stdout.write([...logins].filter((l) => !owners.has(l)).join(" "));
+  ' 2>/dev/null || echo "(unreadable)")"
+  if [ -n "$foreign" ]; then
+    echo "WARNING: .github/MAINTAINERS lists non-fork login(s): $foreign — keep only the fork maintainers (FORK-DELTA identity row)." >&2
+  fi
+fi
+
 echo ""
 echo "Next: npm run generate:identity && npm run build:lib && npm run test:unit && npm run check:identity-drift && npm run lint"
