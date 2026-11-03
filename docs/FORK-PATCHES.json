@@ -1241,7 +1241,8 @@
    "feature": "fidelity",
    "mode": "anchors-only",
    "anchors": [
-    "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream"
+    "gsd-executor and gsd-plan-checker outgrew LARGE in the upstream",
+    "gsd-code-reviewer outgrew DEFAULT in the upstream v1\\.20\\.0 realignment"
    ]
   },
   {
@@ -1788,6 +1789,14 @@
    "mode": "anchors-only",
    "anchors": [
     "post-merge gate result crosses the block boundary"
+   ]
+  },
+  {
+   "path": "tests/gate-consumer-exit-awareness.test.cjs",
+   "feature": "gate-handoff",
+   "mode": "anchors-only",
+   "anchors": [
+    "const WAVE_TRACKING = 'gsd-core/workflows/execute-phase/steps/post-wave-tracking-update\\.md'"
    ]
   },
   {

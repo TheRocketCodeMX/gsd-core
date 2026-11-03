@@ -27,6 +27,10 @@ const NO_COMMITS = '{"status":"resolved","commits":[]}';
 const EXECUTE_PHASE = 'gsd-core/workflows/execute-phase.md';
 const RECONCILE = 'gsd-core/workflows/execute-phase/steps/completion-reconciliation.md';
 const EXECUTE_PLAN = 'gsd-core/workflows/execute-plan.md';
+// FORK: the fork moved execute-phase's wave tracking write (the #381 cross-shell gate
+// hand-off) out of the host into this step file; execute-phase.md only reads it. The
+// #5221 decline guard lives there, so the wave-tracking rows below read the fragment.
+const WAVE_TRACKING = 'gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md';
 
 describe('safe_resume_gate: an unresolvable plan scope fails closed instead of reading as "no commits" (execute-phase.md)', { skip: SKIP }, () => {
   const lines = () => span(EXECUTE_PHASE, 'PLAN_COMMITS=$(gsd_run check evaluation-scope', 'PLAN_COMMITS=$(printf');
@@ -387,7 +391,7 @@ describe('roadmap.update-plan-progress: only a missing_phase_details decline sto
   for (const [name, file] of [
     ['gsd-executor', 'agents/gsd-executor.md'],
     ['execute-plan', EXECUTE_PLAN],
-    ['execute-phase wave tracking', EXECUTE_PHASE],
+    ['execute-phase wave tracking', WAVE_TRACKING],
   ]) {
     const run = (stdout, rc) => runBash(span(file, marker, marker), { stdout, rc }, {
       preamble: ['PHASE=3; PHASE_NUMBER=3; PLAN=01; plan_id=01'],
@@ -443,7 +447,7 @@ describe('roadmap.update-plan-progress: only a missing_phase_details decline sto
   });
 
   test('a decline names the three causes, so a missing jq is not reported as a missing ROADMAP entry', () => {
-    for (const file of ['agents/gsd-executor.md', EXECUTE_PLAN, EXECUTE_PHASE]) {
+    for (const file of ['agents/gsd-executor.md', EXECUTE_PLAN, WAVE_TRACKING]) {
       const [line] = span(file, marker, marker);
       assert.match(line, /missing_phase_details decline, failed query, or jq not installed/);
     }

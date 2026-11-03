@@ -99,7 +99,7 @@ const LARGE_AGENTS = new Set([
   'gsd-roadmapper',
   // FORK: gsd-code-reviewer outgrew DEFAULT in the upstream v1.20.0 realignment —
   // upstream's own body grew to 24,539 bytes with #4100 (Necessity) + #4101
-  // (CI/CD) + #4559, 37 under the DEFAULT cap, leaving no room for the fork's
+  // (CI/CD), 37 under the DEFAULT cap, leaving no room for the fork's
   // marked fidelity pointer (Contract Conformance dimension 5 + the
   // engineering-standards mandatory read, ~960 B; the checklist itself already
   // lives in gsd-core/references/code-review-contract-conformance.md). Same
