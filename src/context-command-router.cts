@@ -43,12 +43,15 @@ import cjsCommandRouterAdapter = require('./cjs-command-router-adapter.cjs');
 import planningWorkspace = require('./planning-workspace.cjs');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import phaseLocator = require('./phase-locator.cjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import phaseId = require('./phase-id.cjs');
 
 const { ERROR_REASON } = io;
 const { makeInvalidArgs } = commandRoutingHub;
 const { routeHubCommandFamily } = cjsCommandRouterAdapter;
-const { planningDir, planningPaths, resolvePhaseIdConvention } = planningWorkspace;
+const { planningDir, planningPaths, resolvePhaseIdConvention, findContextMdIn } = planningWorkspace;
 const { findPhaseInternal, listAllPhaseDirs } = phaseLocator;
+const { scopeToPhase } = phaseId;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,17 +80,18 @@ const _defaultCore: CoreModule = { output: io.output };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// A phase capsule is `<phase-token>-CONTEXT.md` (`01-CONTEXT.md`, `02.1-CONTEXT.md`) inside its
-// phase directory — the directory name may be legacy (`01-foundation`) or bracket-migrated
-// (`CA.01-01-foundation`), but the capsule keeps its plain numeric token in both.
-const CAPSULE_RE = /^\d+(?:\.\d+)*-CONTEXT\.md$/;
-
+// A phase capsule is the file `init.phase-op` reports as the phase's `context_path` — the one the
+// context.md seed writes as `${padded_phase}-CONTEXT.md` and the planner reads. matrix120-B F3: it
+// is resolved through the same upstream seams init uses, never a filename grammar of our own: the
+// listing is scoped to this phase's own artifacts (`scopeToPhase` — numeric `01-CONTEXT.md`,
+// dotted `02.1-CONTEXT.md`, bracket-migrated dirs and custom ids like `AUTH-CONTEXT.md`, #5186),
+// then `findContextMdIn` picks the capsule. The old numeric-only filter never saw a custom-id
+// capsule, and took another phase's `05-CONTEXT.md` sitting in phase 04's directory. Sorted first
+// so the pick is deterministic rather than readdir-order dependent.
 function capsulesIn(dir: string): string[] {
-  try {
-    return fs.readdirSync(dir).filter((f) => CAPSULE_RE.test(f)).sort().map((f) => path.join(dir, f));
-  } catch {
-    return [];
-  }
+  const { files } = findContextMdIn(dir);
+  const capsule = findContextMdIn(scopeToPhase([...files].sort(), path.basename(dir)));
+  return capsule ? [path.join(dir, capsule)] : [];
 }
 
 // #93: resolve the phase directory through upstream's convention-aware phase locator — the
