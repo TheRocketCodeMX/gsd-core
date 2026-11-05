@@ -200,6 +200,7 @@ module.exports = {
   "tests/kimi-upgrades.test.cjs",
   "tests/kimi-variant-disambiguation.test.cjs",
   "tests/launcher-homes-derivation.test.cjs",
+  "tests/learn-visual.test.cjs",
   "tests/lint-phase-arg-assignment.test.cjs",
   "tests/lint-workflow-shellcheck-fetch.test.cjs",
   "tests/live-config-guard.test.cjs",

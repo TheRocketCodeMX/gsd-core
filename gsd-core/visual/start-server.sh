@@ -114,6 +114,30 @@ umask 077
 SESSION_ID="$$-$(date +%s)"
 
 if [[ -n "$PROJECT_DIR" ]]; then
+  # align-1.20.1 (upstream #5757): <project>/.gsd is tool-owned, and upstream now has ONE
+  # owner for it (gsd-core/bin/lib/gsd-tool-dir.cjs). Route through it before writing
+  # here: it refuses a .gsd symlink or ancestor redirect (the session key in .last-token
+  # must never be written outside the project) and seeds/extends .gsd/.gitignore, so a
+  # session dir never shows up as untracked or gets swept into `git add -A`.
+  # Git Bash hands POSIX paths (/c/...) that Windows node cannot open, so convert them
+  # first; a Windows-like shell without cygpath keeps the plain mkdir below.
+  GSD_TOOL_DIR_LIB="${SCRIPT_DIR}/../bin/lib/gsd-tool-dir.cjs"
+  GSD_TOOL_DIR_PROJECT="$PROJECT_DIR"
+  GSD_TOOL_DIR_USABLE="true"
+  if is_windows_like_shell; then
+    if command -v cygpath >/dev/null 2>&1; then
+      GSD_TOOL_DIR_LIB="$(cygpath -w "$GSD_TOOL_DIR_LIB")"
+      GSD_TOOL_DIR_PROJECT="$(cygpath -w "$PROJECT_DIR")"
+    else
+      GSD_TOOL_DIR_USABLE="false"
+    fi
+  fi
+  if [[ "$GSD_TOOL_DIR_USABLE" == "true" && -f "$GSD_TOOL_DIR_LIB" ]]; then
+    if ! node -e 'require(process.argv[1]).ensureToolOwnedGsdDir(process.argv[2], { marker: "# gsd-core learn visual companion", rules: ["/learn-visual/", "/.gitignore"] })' "$GSD_TOOL_DIR_LIB" "$GSD_TOOL_DIR_PROJECT" >/dev/null 2>&1; then
+      echo '{"error": "Refusing to store session files under <project>/.gsd: it is a symlink or resolves outside the project. Remove the link, or start without --project-dir."}'
+      exit 1
+    fi
+  fi
   SESSION_DIR="${PROJECT_DIR}/.gsd/learn-visual/${SESSION_ID}"
   # Persist the bound port and key per project so a restart reuses them and an
   # already-open browser tab reconnects to the same URL with a valid cookie.

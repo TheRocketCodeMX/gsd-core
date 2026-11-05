@@ -379,6 +379,23 @@
    ]
   },
   {
+   "path": "commands/gsd/new-project.md",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "^\\*\\*After this command:\\*\\* Run the first step your `## Strategy Plan` recommends",
+    "requires: \\[[^\\]]*\\broadmap\\]"
+   ]
+  },
+  {
+   "path": "commands/gsd/new-milestone.md",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "^\\*\\*After:\\*\\* Run the milestone.s first recommended `## Strategy Plan` step"
+   ]
+  },
+  {
    "path": "commands/gsd/ns-manage.md",
    "feature": "learn",
    "mode": "anchors-only",
@@ -1368,11 +1385,27 @@
   },
   {
    "path": "tests/emitted-attribution.test.cjs",
-   "feature": "release",
+   "feature": "identity",
    "mode": "anchors-only",
    "anchors": [
-    "FORK:release",
-    "promotion PR to main: differential gate is next-keyed"
+    "payloadReader\\(SAME_REPO\\.toUpperCase\\(\\)"
+   ]
+  },
+  {
+   "path": "tests/merge-commit-pr.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "full_name: REPO\\.toUpperCase\\(\\)"
+   ]
+  },
+  {
+   "path": "tests/release-pipeline-pr.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "owner: 'TheRocketCodeMX', repo: 'gsd-core'",
+    "headRepo: 'THEROCKETCODEMX/GSD-CORE'"
    ]
   },
   {
