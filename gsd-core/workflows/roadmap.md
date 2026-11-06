@@ -276,10 +276,24 @@ Seeding quality is stamped honestly — a thin session produces `artifact-distil
 
 **If `MILESTONE_MODE=true`:** do NOT chain. Return control to the caller (`new-milestone` finishes its own remaining steps — todo linking, on-ramp). Print a one-line confirmation and stop.
 
-**Else if `AUTO_MODE=true`:** the roadmap now exists → land in the build loop by dispatching the first phase's discussion via the **Skill** tool (never an Agent spawn):
+**Otherwise resolve the phase to start on** — the active milestone's next phase from `roadmap.analyze` (milestone-scoped and convention-aware, never a hard-coded `1`: after `/gsd:new-milestone` phase 1 is archived, and milestone-prefixed ids start at `1-01`):
+
+```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+FIRST_PHASE=$(gsd_run query roadmap.analyze ${GSD_WS:+--ws=${GSD_WS##* }} --pick next_phase 2>/dev/null)
+echo "FIRST_PHASE=${FIRST_PHASE}"
+```
+
+If `FIRST_PHASE` is empty (every phase of the milestone is already planned or done), print `Next: /gsd:progress ${GSD_WS}` and stop.
+
+**Else if `AUTO_MODE=true`:** the roadmap now exists → land in the build loop by dispatching that phase's discussion via the **Skill** tool (never an Agent spawn):
 
 ```
-Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")
+Skill(skill="gsd-discuss-phase", args="${FIRST_PHASE} --auto ${GSD_WS}")
 ```
 
 **Else (interactive standalone / chain-end pointer):** print the next-step pointer and stop:
@@ -289,13 +303,13 @@ Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")
 
 ## ▶ Next Up
 
-**Phase 1: [Phase Name]** — [Goal from ROADMAP.md]
+**Phase ${FIRST_PHASE}: [Phase Name]** — [Goal from ROADMAP.md]
 
 /clear then:
 
-/gsd:discuss-phase 1 ${GSD_WS} — gather context and clarify approach
+/gsd:discuss-phase ${FIRST_PHASE} ${GSD_WS} — gather context and clarify approach
 
-Also: /gsd:plan-phase 1 ${GSD_WS} — skip discussion, plan directly
+Also: /gsd:plan-phase ${FIRST_PHASE} ${GSD_WS} — skip discussion, plan directly
 
 ---
 ```
@@ -305,7 +319,7 @@ Also: /gsd:plan-phase 1 ${GSD_WS} — skip discussion, plan directly
 <success_criteria>
 - [ ] Exactly one ROADMAP.md write path per transition (create / elaborate / extend / current), chosen by the idempotency guard.
 - [ ] When strategy artifacts exist, the produced ROADMAP.md carries `**Elaborated against strategy:**` so plan-phase §1.6 evaluates `skip` (born-elaborated).
-- [ ] Auto mode chains to `gsd-discuss-phase 1`; interactive prints the `/gsd:discuss-phase 1` pointer; `--milestone` returns to the caller without chaining.
+- [ ] Auto mode chains to `gsd-discuss-phase` on the active milestone's next phase (`roadmap.analyze`, never a hard-coded `1`); interactive prints that `/gsd:discuss-phase` pointer; `--milestone` returns to the caller without chaining.
 - [ ] Every planning path (guard, mode detection, roadmapper reading list, commit) is resolved from `init.new-milestone` with `--ws` forwarded — PROJECT.md shared at the root, REQUIREMENTS/ROADMAP/STATE workstream-scoped; flat mode resolves to the root `.planning/` files.
 - [ ] The `gsd-roadmapper` agent is spawned (never re-implemented) and the roadmapper agent + §1.6 gate are left untouched.
 </success_criteria>

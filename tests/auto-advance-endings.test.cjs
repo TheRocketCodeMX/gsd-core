@@ -111,9 +111,10 @@ describe('fork workflow endings are autonomous-run safe (#74)', () => {
       'roadmap must OR-in the consolidated auto-mode record (chain flag OR workflow.auto_advance)',
     );
     // The auto branch dispatches per advance.md's documented contract…
-    assert.match(body, /Skill\(skill="gsd-discuss-phase", args="1 --auto(?: \$\{GSD_WS\})?"\)/, "advance.md's contract: dispatch discuss-phase 1 --auto (forwarding the workstream when one is active)");
+    // matrix1201-B F1: the phase is the active milestone's next phase (roadmap.analyze), never a hard-coded 1.
+    assert.match(body, /Skill\(skill="gsd-discuss-phase", args="\$\{FIRST_PHASE\} --auto(?: \$\{GSD_WS\})?"\)/, "advance.md's contract: dispatch discuss-phase on the resolved first phase with --auto (forwarding the workstream when one is active)");
     // …and the interactive human block is preserved byte-for-byte in its key lines.
-    assert.match(body, /\/gsd:discuss-phase 1(?: \$\{GSD_WS\})? — gather context and clarify approach/, 'human pointer preserved (forwarding the workstream when one is active)');
+    assert.match(body, /\/gsd:discuss-phase \$\{FIRST_PHASE\}(?: \$\{GSD_WS\})? — gather context and clarify approach/, 'human pointer preserved (forwarding the workstream when one is active)');
     assert.match(body, /## ▶ Next Up/, 'human Next Up block preserved');
     // The milestone guard still precedes chaining (new-milestone must get control back).
     assert.match(body, /If `MILESTONE_MODE=true`:\*\* do NOT chain/, 'milestone-mode no-chain guard preserved');
@@ -162,5 +163,66 @@ describe('tool-provenance law (#74 fix 2)', () => {
     const additive = bulletPaths(mdSection('Additive files'));
     assert.ok(additive.includes('gsd-core/references/tool-provenance.md'), 'reference registered');
     assert.ok(additive.includes('tests/auto-advance-endings.test.cjs'), 'this test registered');
+  });
+});
+
+// Pre-ship matrix1201-B F2: legacy-inventory always handed off to gsd-new-project. Reached from
+// /gsd-new-milestone (Step 4.5 "rewrite/refactor of an existing area → legacy-inventory first"),
+// new-project then stopped with "project already initialized" and the chain stalled. The Step-8
+// fence now picks the hand-off from the same init.new-project fields new-project's own refusal
+// reads. Run verbatim against the real gsd-tools.
+describe('legacy-inventory hand-off follows project state (matrix1201-B F2)', () => {
+  const os = require('node:os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const { scanFencedBlocks } = require('../gsd-core/bin/lib/markdown-sectionizer.cjs');
+  const body = read('gsd-core/workflows/legacy-inventory.md');
+  const lines = body.split(/\r?\n/);
+  const fence = scanFencedBlocks(lines)
+    .filter((b) => /^bash\b/.test(b.infoString))
+    .map((b) => lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n'))
+    .find((f) => f.includes('LI_HANDOFF='));
+  const handoff = (dir, args = '') => {
+    const PATH = [path.join(ROOT, 'gsd-core', 'bin'), process.env.PATH].join(path.delimiter);
+    const env = { ...process.env, PATH, RUNTIME_DIR: ROOT, HOME: dir, USERPROFILE: dir };
+    delete env.GSD_WORKSTREAM;
+    delete env.GSD_SESSION_KEY;
+    // The runtime puts the typed text where the quoted-heredoc capture holds `$ARGUMENTS`.
+    const script = fence.replace('\n$ARGUMENTS\nGSD_ARGS_END', () => `\n${args}\nGSD_ARGS_END`);
+    const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
+    return (r.stdout.match(/LI_HANDOFF=(\S+)/) || [])[1];
+  };
+  const project = (files) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-li-handoff-'));
+    fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
+    for (const f of files) fs.writeFileSync(path.join(dir, '.planning', f), `# ${f}\n`);
+    return dir;
+  };
+
+  test('Step 8 has a hand-off fence and both hand-offs', () => {
+    assert.ok(fence, 'legacy-inventory.md Step 8 carries the LI_HANDOFF fence');
+    assert.match(body, /CURRENT=legacy-inventory/, 'the initialized-project branch continues the strategy chain');
+  });
+
+  test('no project or an interrupted bootstrap → new-project; an initialized project → the chain', { skip: os.platform() === 'win32' ? 'bash fences' : false }, () => {
+    const cases = [
+      [[], 'new-project'],
+      [['PROJECT.md', 'REQUIREMENTS.md'], 'new-project'],
+      [['PROJECT.md', 'REQUIREMENTS.md', 'ROADMAP.md', 'STATE.md', 'MILESTONES.md'], 'chain'],
+    ];
+    for (const [files, want] of cases) {
+      const dir = project(files);
+      try { assert.equal(handoff(dir, '--auto'), want, `files [${files.join(', ')}]`); } finally { cleanup(dir); }
+    }
+  });
+
+  test('a workstream project is judged under the --ws it was started with', { skip: os.platform() === 'win32' ? 'bash fences' : false }, () => {
+    const dir = project(['PROJECT.md']);
+    try {
+      const ws = path.join(dir, '.planning', 'workstreams', 'notif');
+      fs.mkdirSync(ws, { recursive: true });
+      for (const f of ['REQUIREMENTS.md', 'ROADMAP.md', 'STATE.md', 'MILESTONES.md']) fs.writeFileSync(path.join(ws, f), `# ${f}\n`);
+      assert.equal(handoff(dir, '--auto --ws notif'), 'chain');
+    } finally { cleanup(dir); }
   });
 });

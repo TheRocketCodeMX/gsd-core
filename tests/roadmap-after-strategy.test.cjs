@@ -111,7 +111,7 @@ describe('gsd-roadmap skill: owns the roadmapper spawn, born-elaborated, chains 
 
   test('auto mode chains onward to discuss-phase; --milestone returns without chaining', () => {
     assert.ok(
-      /Skill\(skill="gsd-discuss-phase", args="1 --auto \$\{GSD_WS\}"\)/.test(roadmapSkill),
+      /Skill\(skill="gsd-discuss-phase", args="\$\{FIRST_PHASE\} --auto \$\{GSD_WS\}"\)/.test(roadmapSkill),
       'roadmap.md must chain to discuss-phase in auto mode'
     );
     assert.ok(
@@ -379,9 +379,52 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
     } finally { cleanup(dir); }
   });
 
+  // Pre-ship matrix1201-B F1: Step 5 hard-coded phase 1. After /gsd-new-milestone (chain end ->
+  // gsd-roadmap --auto, elaborate) phase 1 is an ARCHIVED phase of a shipped milestone, and under
+  // milestone-prefixed ids there is no phase "1" at all (the first is 1-01), so discuss-phase ran on
+  // a shipped phase or printed "Phase 1 not found". The route fence now asks roadmap.analyze (the
+  // milestone-scoped, convention-aware owner) for the active milestone's next phase. Run verbatim.
+  test('route: the onward phase is the active milestone next phase, never a hard-coded 1', { skip: shell ? false : 'bash fences' }, () => {
+    const route = fenceWith('FIRST_PHASE=');
+    const firstPhase = (dir, args) => (run(dir, route, args).match(/^FIRST_PHASE=(\S*)$/m) || [])[1];
+    const dir = makeProject({ ws: null });
+    try {
+      const planning = path.join(dir, '.planning');
+      const archived = path.join(planning, 'milestones', 'v1.0-phases', '01-foundation');
+      fs.mkdirSync(archived, { recursive: true });
+      fs.writeFileSync(path.join(archived, '01-01-PLAN.md'), '# plan\n');
+      fs.writeFileSync(path.join(planning, 'STATE.md'), '---\nmilestone: v1.1\n---\n# State\n');
+      fs.writeFileSync(path.join(planning, 'ROADMAP.md'), [
+        '# Roadmap', '', '<details>', '<summary>v1.0 MVP (Phases 1-2) — SHIPPED</summary>', '',
+        '- [x] **Phase 1: Foundation**', '- [x] **Phase 2: Auth**', '', '</details>', '',
+        '### 🚧 v1.1 Payments', '', '- [ ] **Phase 3: Checkout**', '- [ ] **Phase 4: Refunds**', '',
+        '### Phase 3: Checkout', '**Goal**: pay', '', '### Phase 4: Refunds', '**Goal**: refund', '',
+      ].join('\n'));
+      assert.equal(firstPhase(dir, '--auto'), '3', 'after a shipped milestone the route targets the new milestone, not archived phase 1');
+      fs.writeFileSync(path.join(planning, 'config.json'), JSON.stringify({ commit_docs: true, phase_id_convention: 'milestone-prefixed' }));
+      fs.writeFileSync(path.join(planning, 'STATE.md'), '---\nmilestone: v2.0\n---\n# State\n');
+      fs.writeFileSync(path.join(planning, 'ROADMAP.md'), [
+        '# Roadmap', '', '## Milestone v2.0 Payments', '', '- [ ] **Phase 2-01: Checkout**', '- [ ] **Phase 2-02: Refunds**', '',
+        '### Phase 2-01: Checkout', '**Goal**: pay', '', '### Phase 2-02: Refunds', '**Goal**: refund', '',
+      ].join('\n'));
+      assert.equal(firstPhase(dir, ''), '2-01', 'milestone-prefixed ids route to the whole M-NN id');
+    } finally { cleanup(dir); }
+    const ws = makeProject({ ws: 'notif' });
+    try {
+      const wsDir = path.join(ws, '.planning', 'workstreams', 'notif');
+      fs.writeFileSync(path.join(wsDir, 'ROADMAP.md'), '# Roadmap\n\n- [ ] **Phase 1: Push**\n- [ ] **Phase 2: Digest**\n\n### Phase 1: Push\n**Goal**: push\n\n### Phase 2: Digest\n**Goal**: digest\n');
+      const done = path.join(wsDir, 'phases', '01-push');
+      fs.mkdirSync(done, { recursive: true });
+      fs.writeFileSync(path.join(done, '01-01-PLAN.md'), '# plan\n');
+      fs.writeFileSync(path.join(done, '01-01-SUMMARY.md'), '# summary\n');
+      fs.writeFileSync(path.join(done, '01-VERIFICATION.md'), '---\nstatus: passed\n---\n');
+      assert.equal(firstPhase(ws, '--auto --ws notif'), '2', 'the workstream roadmap is read under --ws');
+    } finally { cleanup(ws); }
+  });
+
   test('onward dispatches and pointers carry ${GSD_WS}', () => {
-    assert.ok(roadmapSkill.includes('Skill(skill="gsd-discuss-phase", args="1 --auto ${GSD_WS}")'));
-    assert.ok(roadmapSkill.includes('/gsd:discuss-phase 1 ${GSD_WS}'));
+    assert.ok(roadmapSkill.includes('Skill(skill="gsd-discuss-phase", args="${FIRST_PHASE} --auto ${GSD_WS}")'));
+    assert.ok(roadmapSkill.includes('/gsd:discuss-phase ${FIRST_PHASE} ${GSD_WS}'));
     assert.ok(newMilestone.includes('Skill(skill="gsd-roadmap", args="--milestone ${GSD_WS}")'));
     assert.ok(advance.includes('Skill(skill="gsd-roadmap", args="--auto ${GSD_WS}")'));
   });
