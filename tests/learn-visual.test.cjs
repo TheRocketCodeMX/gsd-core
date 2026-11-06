@@ -86,8 +86,11 @@ describe('learn visual companion (vendored, zero-install)', () => {
   test('learn Step 5 start line reaches the installed companion, never <project>/gsd-core', (t) => {
     if (process.platform === 'win32') { t.skip('stub start scripts need POSIX bash paths'); return; }
     const wf = fs.readFileSync(path.resolve(__dirname, '..', 'gsd-core', 'workflows', 'learn.md'), 'utf8');
-    const step5 = wf.slice(wf.indexOf('## Step 5'));
-    const fence = (step5.match(/```bash\n([\s\S]*?)```/) || [])[1];
+    const { scanFencedBlocks } = require('../gsd-core/bin/lib/markdown-sectionizer.cjs');
+    const lines = wf.split(/\r?\n/);
+    const step5 = lines.findIndex((l) => l.startsWith('## Step 5'));
+    const block = scanFencedBlocks(lines).find((b) => b.openLineIdx > step5 && /^bash\b/.test(b.infoString));
+    const fence = block && lines.slice(block.openLineIdx + 1, block.closeLineIdx).join('\n');
     assert.ok(fence, 'learn.md Step 5 has a bash fence');
     assert.doesNotMatch(fence, /_GSD_RUNTIME_ROOT\}\/gsd-core\/visual/, 'the project root is not the install');
     const root = createTempDir('gsd-learn-step5-');
