@@ -99,7 +99,7 @@ Fork-owned wholesale — upstream has no version of these. During realignment, *
 - `gsd-core/workflows/testing-strategy/steps/suite-tune-up.md`
 - `capabilities/strategy/capability.json`
 - `src/project-command-router.cts`
-- `src/project.cts` (align-1.19.0, matrix119-A F9: `strategy-plan` validates each step name against `KNOWN_STRATEGY_STEPS` — the canonical spine plus `map-codebase` — flags others `invalid: true` and never makes them `next_recommended`; `advance.md`'s chain hop skips them too)
+- `src/project.cts` (align-1.19.0, matrix119-A F9: `strategy-plan` validates each step name against `KNOWN_STRATEGY_STEPS` — the canonical spine plus `map-codebase` — flags others `invalid: true` and never makes them `next_recommended`; `advance.md`'s chain hop skips them too; align-1.20.1, matrix1201-B F3: a `map-codebase` row reads `done` once the codebase map is complete, because upstream's map-codebase never runs `strategy-done`)
 - `tests/feat-project-strategy-done.test.cjs`
 - `tests/mid-strategy-chain-route.test.cjs` (#87: `/gsd-next` mid-chain route in `smart-entry.md`)
 - `tests/project-query-verbs.test.cjs`
