@@ -21,6 +21,9 @@ const { output, error } = io;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import planningWorkspace = require('./planning-workspace.cjs');
 const { planningDir } = planningWorkspace;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- onboard-projection.cjs is an export= CommonJS module
+import onboardProjection = require('./onboard-projection.cjs');
+const { listCodebaseMapFiles, REQUIRED_CODEBASE_MAP_FILES } = onboardProjection;
 import { platformWriteSync } from './shell-command-projection.cjs';
 import { splitLines } from './text-lines.cjs';
 
@@ -229,6 +232,17 @@ function cmdProjectMode(cwd: string, raw: boolean): void {
 
 // ─── project.strategy-plan ──────────────────────────────────────────────────────
 
+/**
+ * matrix1201-B F3: `map-codebase` is upstream's workflow and never runs `strategy-done`, so
+ * its row would stay `recommended` after mapping and /gsd-next would route back to it. The
+ * step is satisfied by its artifact: a complete codebase map (the same seven documents
+ * new-project's `has_codebase_map` counts) reads as `done`. Read-only: PROJECT.md is untouched.
+ */
+function stepStatus(cwd: string, step: string, status: string): string {
+  if (step !== 'map-codebase' || /^(done|skipped)$/i.test(status)) return status;
+  return listCodebaseMapFiles(cwd).length === REQUIRED_CODEBASE_MAP_FILES.length ? 'done' : status;
+}
+
 function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
   const content = readProjectContent(cwd);
   const empty: StrategyPlanResult = {
@@ -259,7 +273,7 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
     if (/^step$/i.test(step) || /^-+$/.test(step)) continue;        // header / separator
     if (/^\[.*\]$/.test(step) || /^\[.*\]$/.test(status)) continue; // unfilled placeholder
     const skipped = /^skipped$/i.test(status) || ledger.has(step.toLowerCase());
-    steps.push({ step, status, skipped, invalid: !isValidStrategyStep(step) });
+    steps.push({ step, status: stepStatus(cwd, step, status), skipped, invalid: !isValidStrategyStep(step) });
   }
 
   // #86: a ledgered skip is a decision — never the next target, even though its

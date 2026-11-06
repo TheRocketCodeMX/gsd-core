@@ -99,13 +99,24 @@ LEGACY-INVENTORY.md written — predecessor inventoried.
   Infra: [reuse plan recorded / from-scratch]
 ```
 
-**Then route (#74 — an autonomous run must not stall here):** consult the consolidated auto-mode record — the same read `advance.md` and the discuss-phase family use:
+**Then route (#74 — an autonomous run must not stall here):** consult the consolidated auto-mode record — the same read `advance.md` and the discuss-phase family use — and the project state, which picks the hand-off:
 
 ```bash
-AUTO_MODE=$(gsd_run query check auto-mode --pick active 2>/dev/null || echo "false")
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
+# new-project refuses an initialized project, so a run reached from /gsd:new-milestone (or any initialized project) continues the chain.
+_li() { gsd_run query init.new-project ${GSD_WS:+--ws=${GSD_WS##* }} --pick "$1" 2>/dev/null; }
+LI_HANDOFF=new-project; [ "$(_li project_exists)" = true ] && [ "$(_li init_incomplete)" = false ] && LI_HANDOFF=chain
+echo "AUTO_MODE=$AUTO_MODE LI_HANDOFF=$LI_HANDOFF"
 ```
 
-**If `AUTO_MODE` is `true`** (the `--auto` flag, an active chain, or `workflow.auto_advance` on the config record): announce the hop and dispatch via the **Skill** tool (never an `Agent` spawn — flat-chain rule, #686):
+**If `LI_HANDOFF` is `chain`** (the project is already initialized — e.g. `/gsd:new-milestone` recommended this inventory): follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=legacy-inventory` — in auto mode it dispatches the next `## Strategy Plan` step (or `gsd-roadmap --auto` when none remains); interactive prints `Next: /gsd-${NEXT_STRATEGY}` with `NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw)`, or `Next: /gsd:roadmap` when that is empty. Stop there.
+
+**Otherwise (`LI_HANDOFF` is `new-project`) — if `AUTO_MODE` is `true`** (the `--auto` flag, an active chain, or `workflow.auto_advance` on the config record): announce the hop and dispatch via the **Skill** tool (never an `Agent` spawn — flat-chain rule, #686):
 
 ```
 Skill(skill="gsd-new-project", args="--auto")
@@ -133,5 +144,5 @@ Next: /gsd:new-project — it derives requirements from (design) ∪ (old-system
 - Three-way gap map (four buckets); every old capability covered or dropped-with-sign-off
 - Salvage dispositions recorded (default Rebuild; FE rewritten); characterization gates flagged
 - Precedence applied; reuse-infra plan recorded when applicable
-- LEGACY-INVENTORY.md written + committed (when commit_docs is true); user directed to /gsd:new-project
+- LEGACY-INVENTORY.md written + committed (when commit_docs is true); user directed to /gsd:new-project, or onward along the strategy chain when the project is already initialized
 </success_criteria>

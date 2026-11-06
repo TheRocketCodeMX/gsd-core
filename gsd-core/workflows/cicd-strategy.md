@@ -253,7 +253,7 @@ CICD-STRATEGY.md written — right-sized to the measured facts.
 Next: /gsd:roadmap   (regen the roadmap; the build loop plans against this strategy)
 ```
 
-**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=cicd-strategy` — in `--auto` it runs the terminal transition `/gsd:roadmap` → `/gsd:discuss-phase 1` (advance.md: roadmap, not plan-phase); interactive uses the `Next:` pointer above.
+**Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=cicd-strategy` — in `--auto` it runs the terminal transition `/gsd:roadmap` → `/gsd:discuss-phase` on the next phase (advance.md); interactive uses the `Next:` pointer above.
 
 **Strategy-chain completion (this is the chain's last link — close the loop):**
 1. **Synthesis table** — if other strategy artifacts exist (`PRODUCT-BRIEF`, `DOMAIN-MODEL`, `adr/*`, `TEST-STRATEGY`, `INFRA-STRATEGY`), display a one-line-per-artifact decision summary so the user sees the whole strategized picture in one place.

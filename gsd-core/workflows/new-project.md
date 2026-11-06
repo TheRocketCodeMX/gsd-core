@@ -1010,7 +1010,7 @@ Context is now ready (PROJECT.md + `## Mode` + REQUIREMENTS + any PRODUCT-BRIEF)
 3. **Write `## Strategy Plan`** into PROJECT.md (the archetype line, the ordered recommended steps with status `recommended`, and the skip-ledger scaffold) per the template.
 4. **Present it** and let the user accept / customize / skip-to-build. A declined recommended step → a skip-ledger line (`- <skill> — skipped (<reason>, <date>)`); enforcers note it once, don't re-nag. The build loop honors whatever artifacts exist, so a partial path is safe.
 
-The Step-9 handoff then leads with the **first recommended step** of this plan. (The coarse roadmap below stays coarse; `plan-phase`'s elaboration gate refines it against whatever strategy artifacts get produced.)
+The Step-9 handoff then leads with the **first recommended step** of this plan. (No roadmap is written here: `/gsd:roadmap` creates it once the chain ends, against the strategy artifacts it produced.)
 <!-- FORK:strategy END -->
 
 ## 8. Finalize project context
@@ -1049,7 +1049,7 @@ Present completion summary:
 | Roadmap        | created after your strategy chain |
 | Project guide  | `$INSTRUCTION_FILE`         |
 
-**[N] phases** | **[X] requirements** | Ready to build ✓
+**[X] requirements** | Strategy Plan written ✓
 ```
 
 **Determine the on-ramp from `## Strategy Plan`** (written in Step 7.6):

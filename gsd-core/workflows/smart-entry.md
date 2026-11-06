@@ -72,10 +72,16 @@ if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
   && [ "$(gsd_run query project strategy-plan --pick found 2>/dev/null)" = "true" ]; then
   NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # next step neither done nor skipped (ledgered skips excluded), or empty
   STRATEGY_ROUTE="${NEXT_STRATEGY:-roadmap}"
+elif printf '%s' "$SNAPSHOT" | grep -Eq '"has_roadmap": *true' \
+  && [ "$(gsd_run query roadmap.analyze --pick total_plans 2>/dev/null)" = "0" ]; then
+  # Milestone start (no phase of the active milestone planned): new-milestone's recommended step comes first.
+  STRATEGY_ROUTE=$(gsd_run query project strategy-plan --raw 2>/dev/null); [ -n "$STRATEGY_ROUTE" ] && STRATEGY_MILESTONE=true
 fi
 ```
 
-**If `STRATEGY_ROUTE` is non-empty**, replace the snapshot's situation, summary and actions before the `present` step:
+**If `STRATEGY_MILESTONE=true`** (the roadmap exists; `/gsd:new-milestone` recommended a step): keep the snapshot's actions and put `Run the milestone's strategy step first: {STRATEGY_ROUTE}` → `/gsd-{STRATEGY_ROUTE}` (recommended) in front of them; `summary` = `Milestone strategy step pending — {STRATEGY_ROUTE}`.
+
+**Else, if `STRATEGY_ROUTE` is non-empty**, replace the snapshot's situation, summary and actions before the `present` step:
 - `situation` = `strategy-chain`; `summary` = `Strategy chain in progress — roadmap pending`.
 - `STRATEGY_ROUTE` is a strategy step (anything but `roadmap`): actions = `Continue the strategy chain: {STRATEGY_ROUTE}` → `/gsd-{STRATEGY_ROUTE}` (recommended), `Generate the roadmap now (uses the strategy artifacts so far)` → `/gsd:roadmap`, `Show progress` → `/gsd:progress`.
 - `STRATEGY_ROUTE` = `roadmap` (every Strategy Plan step is done or skipped): actions = `Generate the roadmap` → `/gsd:roadmap` (recommended), `Show progress` → `/gsd:progress`.

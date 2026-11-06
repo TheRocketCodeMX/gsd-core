@@ -37,7 +37,7 @@ Also usable standalone to regenerate a roadmap.
 
 <context>
 **Flags:**
-- `--auto` — auto-approve the roadmap and chain onward into the build loop (`/gsd-discuss-phase 1 --auto`).
+- `--auto` — auto-approve the roadmap and chain onward into the build loop (`/gsd-discuss-phase <next phase> --auto`, the active milestone's next phase).
 - `--milestone` — extend an existing roadmap with the current milestone's phases, then return control to the caller (no onward chain). Used by the new-milestone workflow.
 - `--reset-phase-numbers` — with `--milestone`, restart phase numbering at 1 for the new milestone.
 - `--ws <name>` — scope to a workstream: REQUIREMENTS/ROADMAP/STATE resolve under `.planning/workstreams/<name>/` (PROJECT.md stays shared at the root); forwarded by `new-milestone --ws`. Without it the active workstream pointer, if any, applies, else the root `.planning/` files.
@@ -56,5 +56,5 @@ Arguments: see the `<arguments>` block above.
 <success_criteria>
 - The idempotency guard selects exactly one write path per transition.
 - When strategy artifacts exist, the roadmap carries `**Elaborated against strategy:**` (born-elaborated; §1.6 evaluates `skip`).
-- Auto chains to `/gsd-discuss-phase 1`; interactive prints the pointer; `--milestone` returns without chaining.
+- Auto chains to `/gsd-discuss-phase` on the active milestone's next phase; interactive prints the pointer; `--milestone` returns without chaining.
 </success_criteria>

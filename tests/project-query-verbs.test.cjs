@@ -407,3 +407,57 @@ describe('matrix119-A F9: strategy-plan validates step names', () => {
     assert.match(advance, /invalid: true/, 'the chain-hop rule must exclude invalid rows');
   });
 });
+
+// ─── matrix1201-B F3: the map-codebase step resolves by its artifact ──────────────
+//
+// `map-codebase` is a valid Strategy Plan step (strategy-flow.md prepends it for brownfield-extend),
+// but the upstream map-codebase workflow never runs `strategy-done`, so its row stayed `recommended`
+// after mapping and /gsd-next routed back to it forever. The step is satisfied by a complete
+// codebase map (the seven documents new-project's has_codebase_map counts), so strategy-plan
+// reports it done once that map exists.
+
+describe('matrix1201-B F3: a complete codebase map satisfies the map-codebase step', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  const BROWNFIELD = `# T
+
+## Strategy Plan
+**Archetype:** brownfield extend
+
+| Step | Status |
+|---|---|
+| map-codebase | recommended |
+| testing-strategy | recommended |
+
+## Requirements
+`;
+  const MAP = ['STACK.md', 'ARCHITECTURE.md', 'STRUCTURE.md', 'CONVENTIONS.md', 'TESTING.md', 'INTEGRATIONS.md', 'CONCERNS.md'];
+  const writeMap = (files) => {
+    const dir = path.join(tmpDir, '.planning', 'codebase');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of files) fs.writeFileSync(path.join(dir, f), `# ${f}\n`);
+  };
+
+  test('before mapping, map-codebase is the next step', () => {
+    writeProject(tmpDir, BROWNFIELD);
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'map-codebase');
+  });
+
+  test('a partial map does not satisfy the step', () => {
+    writeProject(tmpDir, BROWNFIELD);
+    writeMap(MAP.slice(0, 4));
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'map-codebase');
+  });
+
+  test('a complete map marks the row done and the route moves on (no /gsd-next loop)', () => {
+    writeProject(tmpDir, BROWNFIELD);
+    writeMap(MAP);
+    const o = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(o.steps.find((s) => s.step === 'map-codebase').status, 'done');
+    assert.strictEqual(o.next_recommended, 'testing-strategy');
+    assert.strictEqual(runGsdTools('project strategy-plan --raw', tmpDir).output.trim(), 'testing-strategy');
+    assert.match(fs.readFileSync(path.join(tmpDir, '.planning', 'PROJECT.md'), 'utf8'), /\| map-codebase \| recommended \|/, 'a read verb never rewrites PROJECT.md');
+  });
+});

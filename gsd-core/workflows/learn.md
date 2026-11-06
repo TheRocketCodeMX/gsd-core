@@ -82,7 +82,9 @@ The companion is a vendored, pure-Node local server (zero install — just Node 
 **Start the server once per session (idempotent — same `--project-dir` reuses the port):**
 
 ```bash
-bash "${_GSD_RUNTIME_ROOT}/gsd-core/visual/start-server.sh" --project-dir "$(pwd)" --open 2>/dev/null || echo "VISUAL_UNAVAILABLE"
+# The companion ships inside the install (beside gsd-tools), never in the project: the resolved gsd-tools first, else the install path.
+_GSD_VISUAL="${GSD_TOOLS:+${GSD_TOOLS%/bin/*}/visual/start-server.sh}"; [ -f "$_GSD_VISUAL" ] || _GSD_VISUAL="$HOME/.claude/gsd-core/visual/start-server.sh"
+bash "$_GSD_VISUAL" --project-dir "$(pwd)" --open 2>/dev/null || echo "VISUAL_UNAVAILABLE"
 ```
 
 On success it prints a JSON line with a `url` and a `screen_dir`. Then, to show a beat:
