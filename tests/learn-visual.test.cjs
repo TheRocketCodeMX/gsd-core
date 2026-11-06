@@ -78,6 +78,51 @@ describe('learn visual companion (vendored, zero-install)', () => {
     }
   });
 
+  // Pre-ship matrix1201-A G2: learn.md Step 5 built the script path from the resolver's
+  // _GSD_RUNTIME_ROOT (the git toplevel), so it pointed at <project>/gsd-core/visual — never
+  // the install — and the `|| echo VISUAL_UNAVAILABLE` fallback hid it on every runtime. The
+  // start line now derives the path from the resolved gsd-tools (GSD_TOOLS → <gsd-core>/bin/…)
+  // and otherwise from the install-rewritten `$HOME/.claude/gsd-core` path. Run verbatim.
+  test('learn Step 5 start line reaches the installed companion, never <project>/gsd-core', (t) => {
+    if (process.platform === 'win32') { t.skip('stub start scripts need POSIX bash paths'); return; }
+    const wf = fs.readFileSync(path.resolve(__dirname, '..', 'gsd-core', 'workflows', 'learn.md'), 'utf8');
+    const step5 = wf.slice(wf.indexOf('## Step 5'));
+    const fence = (step5.match(/```bash\n([\s\S]*?)```/) || [])[1];
+    assert.ok(fence, 'learn.md Step 5 has a bash fence');
+    assert.doesNotMatch(fence, /_GSD_RUNTIME_ROOT\}\/gsd-core\/visual/, 'the project root is not the install');
+    const root = createTempDir('gsd-learn-step5-');
+    try {
+      const stub = (dir, tag) => {
+        fs.mkdirSync(path.join(dir, 'visual'), { recursive: true });
+        fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'bin', 'gsd-tools.cjs'), '');
+        fs.writeFileSync(path.join(dir, 'visual', 'start-server.sh'), `echo "${tag} $*"\n`);
+      };
+      const home = path.join(root, 'home');
+      const project = path.join(root, 'project');
+      const pkg = path.join(root, 'pkg', 'gsd-core');
+      stub(path.join(home, '.claude', 'gsd-core'), 'HOME-INSTALL');
+      stub(pkg, 'TOOLS-INSTALL');
+      stub(path.join(project, 'gsd-core'), 'PROJECT-DECOY');
+      const env = { ...process.env, HOME: home };
+      delete env.GSD_TOOLS;
+      delete env.CLAUDE_CONFIG_DIR;
+      const run = (extra) => runHook('-c', [fence], { interpreter: 'bash', cwd: project, env: { ...env, ...extra }, timeoutMs: PROBE_TIMEOUT_MS });
+      const fresh = run({});
+      assertSeamExit(assert, fresh);
+      assert.match(fresh.stdout, /^HOME-INSTALL --project-dir \S+ --open$/m, 'a fresh shell uses the install path');
+      const resolved = run({ GSD_TOOLS: path.join(pkg, 'bin', 'gsd-tools.cjs') });
+      assert.match(resolved.stdout, /^TOOLS-INSTALL /m, 'the resolved gsd-tools names the install that owns the companion');
+      const stale = run({ GSD_TOOLS: path.join(root, 'nowhere', 'gsd-core', 'bin', 'gsd-tools.cjs') });
+      assert.match(stale.stdout, /^HOME-INSTALL /m, 'a GSD_TOOLS with no companion beside it falls back');
+      for (const r of [fresh, resolved, stale]) {
+        assert.doesNotMatch(r.stdout, /PROJECT-DECOY|VISUAL_UNAVAILABLE/);
+      }
+    } finally {
+      cleanup(root);
+    }
+  });
+
   test('frame is self-contained — no external CDN/font/script URLs', () => {
     const html = fs.readFileSync(FRAME, 'utf8');
     assert.doesNotMatch(html, /<link\b/i, 'frame must not <link> external stylesheets/fonts');
