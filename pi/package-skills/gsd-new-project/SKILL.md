@@ -18,19 +18,20 @@ The text inside `<arguments>` is exactly what the user typed after the command n
 
 <context>
 **Flags:**
-- `--auto` — Automatic mode. After config questions, runs research → requirements → roadmap without further interaction. Expects idea document via @ reference.
+- `--auto` — Automatic mode. After config questions, runs research → requirements → Strategy Plan without further interaction, then chains into the recommended strategy steps and `/skill:gsd-roadmap`. Expects idea document via @ reference.
 </context>
 
 <objective>
-Initialize a new project through unified flow: questioning → research (optional) → requirements → roadmap.
+Initialize a new project through unified flow: questioning → research (optional) → requirements → Strategy Plan. The roadmap comes later, from `/skill:gsd-roadmap`.
 
 **Creates:**
 - `.planning/PROJECT.md` — project context
 - `.planning/config.json` — workflow preferences
 - `.planning/research/` — domain research (optional)
 - `.planning/REQUIREMENTS.md` — scoped requirements
-- `.planning/ROADMAP.md` — phase structure
-- `.planning/STATE.md` — project memory
+- `## Strategy Plan` in PROJECT.md — the strategy steps this project needs
+
+`.planning/ROADMAP.md` and `.planning/STATE.md` are not created here: `/skill:gsd-roadmap` writes them at the end of the strategy chain.
 
 **After this command:** Run the first step your `## Strategy Plan` recommends (the closing panel names it; the chain ends by creating the roadmap with `/skill:gsd-roadmap`), or `/skill:gsd-roadmap` itself when no strategy step is recommended; once the roadmap exists, run `/skill:gsd-discuss-phase 1` to clarify the approach (or `/skill:gsd-plan-phase 1` to plan directly); then `/skill:gsd-execute-phase 1` to execute.
 </objective>

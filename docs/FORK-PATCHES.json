@@ -384,7 +384,8 @@
    "mode": "anchors-only",
    "anchors": [
     "^\\*\\*After this command:\\*\\* Run the first step your `## Strategy Plan` recommends",
-    "requires: \\[[^\\]]*\\broadmap\\]"
+    "requires: \\[[^\\]]*\\broadmap\\]",
+    "are not created here: `/gsd:roadmap` writes them at the end of the strategy chain"
    ]
   },
   {
@@ -844,7 +845,8 @@
     "strategy-flow\\.md",
     "Roadmap-after-strategy caveat",
     "<!-- roadmap-mode: %s -->",
-    "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\""
+    "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\"",
+    "\\*\\*\\[X\\] requirements\\*\\* \\| Strategy Plan written ✓"
    ]
   },
   {
