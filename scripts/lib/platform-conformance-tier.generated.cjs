@@ -21,6 +21,7 @@ module.exports = {
   "tests/audit-command-cutover.test.cjs",
   "tests/audit-workstream-layouts.test.cjs",
   "tests/augment-upgrades.test.cjs",
+  "tests/auto-advance-endings.test.cjs",
   "tests/blocking-guard-budget-parity.test.cjs",
   "tests/broken-windows.test.cjs",
   "tests/capability-cli.test.cjs",
