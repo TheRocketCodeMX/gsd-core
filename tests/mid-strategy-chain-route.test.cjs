@@ -141,6 +141,44 @@ describe('#87 smart-entry routes a mid-strategy-chain project to the strategy ch
   });
 });
 
+// Pre-ship matrix1201-B F4: after /gsd-new-milestone the roadmap already exists (extended for the
+// new milestone), so the no-roadmap route above never fires, and /gsd-next offered discuss/plan
+// although new-milestone's on-ramp says a recommended strategy step comes first. At milestone start
+// (no phase of the active milestone planned yet) a pending recommended step now leads the menu.
+describe('matrix1201-B F4: smart-entry surfaces a milestone strategy step before the build loop', () => {
+  let tmpDir;
+  const MILESTONE_ROADMAP = [
+    '# Roadmap', '', '<details>', '<summary>v1.0 MVP (Phases 1-2) — SHIPPED</summary>', '',
+    '- [x] **Phase 1: Foundation**', '- [x] **Phase 2: Auth**', '', '</details>', '',
+    '### 🚧 v1.1 Payments', '', '- [ ] **Phase 3: Checkout**', '- [ ] **Phase 4: Refunds**', '',
+    '### Phase 3: Checkout', '**Goal**: pay', '', '### Phase 4: Refunds', '**Goal**: refund', '',
+  ].join('\n');
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    write(tmpDir, '.planning/REQUIREMENTS.md', '# Requirements\n\n- [ ] R1\n');
+    write(tmpDir, '.planning/ROADMAP.md', MILESTONE_ROADMAP);
+    write(tmpDir, '.planning/STATE.md', '---\nmilestone: v1.1\nstatus: planning\n---\n# State\n\n## Current Position\n\nPhase: 3\nStatus: Ready to plan\n');
+    write(tmpDir, '.planning/milestones/v1.0-phases/01-foundation/01-01-PLAN.md', '# plan\n');
+  });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('new milestone, nothing planned yet, a step recommended → that step', () => {
+    write(tmpDir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | recommended |'));
+    assert.equal(route(tmpDir), 'security-strategy');
+  });
+
+  test('new milestone, every step done → unchanged (no roadmap fallback: the roadmap exists)', () => {
+    write(tmpDir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | done |'));
+    assert.equal(route(tmpDir), '');
+  });
+
+  test('a phase of the milestone is already planned → unchanged (the build loop has started)', () => {
+    write(tmpDir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | recommended |'));
+    write(tmpDir, '.planning/phases/03-checkout/03-01-PLAN.md', '# plan\n');
+    assert.equal(route(tmpDir), '');
+  });
+});
+
 describe('#87 smart-entry.md fork block contract', () => {
   const text = fs.readFileSync(SMART_ENTRY, 'utf8');
 
