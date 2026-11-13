@@ -8645,7 +8645,6 @@ describe('#4377: --relative-includes emits project-relative @ includes for a loc
     const fs41 = require('node:fs');
     const path41 = require('node:path');
     const os41 = require('node:os');
-    const child41 = require('node:child_process');
     const INSTALL41 = require(path41.join(__dirname, '..', 'bin', 'install.js'));
     const helpers41 = require('./helpers.cjs');
     const { test: t41, describe: d41, beforeEach: be41, afterEach: ae41 } = __issue41;
@@ -8979,17 +8978,18 @@ describe('#4377: --relative-includes emits project-relative @ includes for a loc
           model: { display_name: 'Opus' },
           workspace: { current_dir: tmpDir41 },
         });
-        const res = child41.spawnSync('sh', ['-c', settings.statusLine.command], {
+        // align-1.21.0: through the process seam (upstream #6059-#6063 count raw spawn sites).
+        const res = require('./helpers/process-seam.cjs').runHook('-c', [settings.statusLine.command], {
+          interpreter: 'sh',
           input: payload,
-          encoding: 'utf8',
           // Claude Code spawns the statusline with the process env and no
           // login-profile initialisation — nvm/fnm/volta shims are NOT on PATH.
           env: { HOME: tmpDir41, PATH: '/usr/local/bin:/usr/bin:/bin' },
-          timeout: STAGED_HOOK_SCRIPT_TIMEOUT_MS,
+          timeoutMs: STAGED_HOOK_SCRIPT_TIMEOUT_MS,
         });
         assert41.equal(
-          res.status, 0,
-          `statusline exited ${res.status} under a PATH-less spawn (127 = \`node: not found\`): ${res.stderr}`,
+          res.exitCode, 0,
+          `statusline exited ${res.exitCode} under a PATH-less spawn (127 = \`node: not found\`): ${res.stderr}`,
         );
         assert41.ok(
           typeof res.stdout === 'string' && res.stdout.trim().length > 0,

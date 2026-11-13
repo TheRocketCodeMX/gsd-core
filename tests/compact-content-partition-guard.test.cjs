@@ -83,7 +83,7 @@ function computeMergeBaseSha(baseRef) {
 
 /** FORK (identity): `git merge-base <a> <b>` for two SHAs, or `null` on any failure. */
 function computeMergeBaseShaOf(a, b) {
-  const result = runGit([...safeDirArgs(REPO_ROOT), 'merge-base', a, b], { cwd: REPO_ROOT, timeoutMs: GIT_TIMEOUT_MS });
+  const result = runGit([...safeDirArgs(REPO_ROOT), 'merge-base', a, b], { cwd: REPO_ROOT, timeoutMs: EMITTED_RUNTIME_GIT_TIMEOUT_MS });
   if (result.outcome !== OUTCOME.EXITED || result.exitCode !== 0) return null;
   const sha = result.stdout.trim();
   return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
@@ -132,7 +132,7 @@ function showAtRefOrNull(ref, relPath) {
 function realignmentUpstreamParents(mergeBaseSha) {
   const result = runGit(
     [...safeDirArgs(REPO_ROOT), 'log', '--merges', '--format=%H%x09%P%x09%s', `${mergeBaseSha}..HEAD`],
-    { cwd: REPO_ROOT, timeoutMs: GIT_TIMEOUT_MS },
+    { cwd: REPO_ROOT, timeoutMs: EMITTED_RUNTIME_GIT_TIMEOUT_MS },
   );
   if (result.outcome !== OUTCOME.EXITED || result.exitCode !== 0) return [];
   const parents = [];

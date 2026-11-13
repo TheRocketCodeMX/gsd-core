@@ -1047,7 +1047,7 @@ describe('issue #3210: execute-phase auto-mode carve-out exempts precondition-un
 describe('execute-phase 5.7: post-merge gate result crosses the block boundary (e2e-4 F2)', () => {
   const os = require('node:os');
   const { beforeEach, afterEach } = require('node:test');
-  const { spawnSync } = require('node:child_process');
+  const { runHook } = require('./helpers/process-seam.cjs');
 
   const GATE_PATH = path.join(
     __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-merge-gate.md',
@@ -1117,8 +1117,9 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
       trackingBlock();
     const scriptPath = path.join(tmp, 'tracking.sh');
     fs.writeFileSync(scriptPath, script);
-    const r = spawnSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
-    assert.strictEqual(r.status, 0, `tracking block exited ${r.status}:\n${r.stdout}${r.stderr}`);
+    // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+    const r = runHook(scriptPath, [], { interpreter: 'bash', cwd: tmp, timeoutMs: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+    assert.strictEqual(r.exitCode, 0, `tracking block exited ${r.exitCode}:\n${r.stdout}${r.stderr}`);
     return r.stdout + r.stderr;
   }
 

@@ -923,13 +923,57 @@ describe('FORK: certifier states keep the session partial', () => {
       'result: pass\n\n### 2. Submit Button\nexpected: Submitting shows loading state\nresult: pass',
       'result: pass\n\n### 2. Submit Button\nexpected: Submitting shows loading state\nresult: could-not-prove',
     ));
-    const { execFileSync } = require('child_process');
-    execFileSync('git', ['add', '-A'], { cwd: tmpDir, timeout: GIT_TIMEOUT_MS });
-    execFileSync('git', ['commit', '-q', '-m', 'seed UAT'], { cwd: tmpDir, timeout: GIT_TIMEOUT_MS });
+    // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+    const { runGit } = require('./helpers/process-seam.cjs');
+    for (const args of [['add', '-A'], ['commit', '-q', '-m', 'seed UAT']]) {
+      const g = runGit(args, { cwd: tmpDir, timeoutMs: GIT_TIMEOUT_MS });
+      assert.strictEqual(g.exitCode, 0, `git ${args[0]} failed: ${g.stderr}`);
+    }
     const r = runGsdTools(['query', 'uat.complete-session', '.planning/phases/01-foo/01-UAT.md'], tmpDir);
     assert.ok(r.success, `verb failed: ${r.error || r.output}`);
     const out = JSON.parse(r.output);
     assert.strictEqual(out.status, 'partial');
     assert.match(fs.readFileSync(uatPath, 'utf-8'), /^status: partial$/m);
+  });
+});
+
+// FORK (align-1.21.0): upstream #5845/#6081 makes an execute-phase re-run MERGE into an existing
+// UAT file — recorded results kept verbatim, new human_verification items appended as
+// `result: [pending]`. A re-run over a session that still holds the certifier's blocking rows
+// must leave those rows blocking: the merged file stays partial until each one resolves.
+describe('FORK: an execute-phase re-run merge keeps certifier rows blocking', () => {
+  function mergedRerunUat({ appendedResult }) {
+    return [
+      '---', 'status: testing', 'phase: 01-foo',
+      'started: 2026-01-01T00:00:00Z', 'updated: 2026-01-02T00:00:00Z', '---', '',
+      '## Current Test', '', '[testing complete]', '',
+      '## Tests', '',
+      '### 1. Login Form', 'expected: Form displays with email and password fields', 'result: pass', '',
+      '### 2. Submit Button', 'expected: Submitting shows loading state', 'result: [pending-certifier]', '',
+      '### 3. Export Report', 'expected: The report downloads as CSV', 'result: could-not-prove', '',
+      // appended by the re-run merge (#6081): a new human_verification item
+      '### 4. Session Timeout', 'expected: An idle session signs out after 30 minutes', `result: ${appendedResult}`, '',
+    ].join('\n');
+  }
+
+  test('pure core: merged file with an appended [pending] item → partial', () => {
+    const completeUatSession = loadCompleteUatSession();
+    const result = completeUatSession(mergedRerunUat({ appendedResult: '[pending]' }), { clock: () => new Date('2026-05-05T00:00:00Z') });
+    assert.strictEqual(result.status, 'partial');
+  });
+
+  test('pure core: appended item answered pass, certifier rows still open → partial', () => {
+    const completeUatSession = loadCompleteUatSession();
+    const result = completeUatSession(mergedRerunUat({ appendedResult: 'pass' }), { clock: () => new Date('2026-05-05T00:00:00Z') });
+    assert.strictEqual(result.status, 'partial');
+  });
+
+  test('pure core: once the certifier rows resolve, the merged session completes', () => {
+    const completeUatSession = loadCompleteUatSession();
+    const resolved = mergedRerunUat({ appendedResult: 'pass' })
+      .replace('result: [pending-certifier]', 'result: pass')
+      .replace('result: could-not-prove', 'result: pass');
+    const result = completeUatSession(resolved, { clock: () => new Date('2026-05-05T00:00:00Z') });
+    assert.strictEqual(result.status, 'complete');
   });
 });

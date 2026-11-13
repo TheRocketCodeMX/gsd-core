@@ -539,7 +539,7 @@ export const UNDECLARED_VERBS: readonly string[] = deepFreeze([
  * upstream's own capability families (`graphify`, `intel`, …) their routers
  * (`src/*-command-router.cts`) parse their own flags, so they are undeclared. They
  * are kept apart from UNDECLARED_VERBS so the upstream ratchet (T-C3) keeps counting
- * upstream verbs only; `tests/cli-surface-fork-verbs.test.cjs` runs every fork verb
+ * upstream verbs only; `tests/fork-verbs-strict-args.test.cjs` runs every fork verb
  * with the flags fork workflows pass and fails if one is rejected.
  */
 export const FORK_UNDECLARED_VERBS: readonly string[] = deepFreeze([

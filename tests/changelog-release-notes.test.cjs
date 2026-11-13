@@ -356,7 +356,9 @@ describe('release body budget (#5922)', () => {
 
   test('floor-1 throws BUDGET_TOO_SMALL, floor returns the zero-entry body exactly, floor+1 stays within budget', () => {
     for (const bulletCount of [1, 3]) {
-      const changelog = sectionOf(bulletCount, 'v'.repeat(80));
+      // FORK:identity — the bullet must outweigh the "…and N more" line, whose CHANGELOG link carries
+      // SLUG; sized from the rebranded SLUG so a longer fork slug keeps floor-1 a real refusal.
+      const changelog = sectionOf(bulletCount, 'v'.repeat(80 + SLUG.length));
       const expected = zeroEntryBody(bulletCount);
       const floor = expected.length;
       assert.equal(codeOf(() => buildSized(changelog, { maxChars: floor - 1 })), CHANGELOG_NOTES_ERROR.BUDGET_TOO_SMALL, `n=${bulletCount}`);

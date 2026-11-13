@@ -94,6 +94,7 @@ describe('fork gsd-tools invocations survive strict argument parsing', () => {
     ['learn', 'catalog'],
     ['learn', 'next'],
     ['learn', 'progress-read'],
+    ['learn', 'node', 'ddd'],
     ['learn', 'progress-update', '--id', 'fork-verbs-node', '--status', 'completed', '--lean', 'balanced'],
     // capabilities/strategy + the strategy-chain workflows, smart-entry.md, roadmap.md, legacy-inventory.md
     ['query', 'project', 'mode', '--raw'],
@@ -105,6 +106,7 @@ describe('fork gsd-tools invocations survive strict argument parsing', () => {
     // workflows/ship.md + capabilities/broken-windows (fork amend / reconcile subcommands)
     ['windows', 'status', '--raw'],
     ['windows', 'reconcile'],
+    ['windows', 'amend', 'W-001', '--description', 're-worded entry'],
     // upstream verbs fork workflows call with fork-chosen flags
     ['query', 'uat.complete-session', '.planning/phases/01-foundation/01-UAT.md', '--message', 'test(01): complete UAT'],
     ['query', 'frontmatter', 'get', '.planning/phases/01-foundation/01-UAT.md', '--field', 'status'],
