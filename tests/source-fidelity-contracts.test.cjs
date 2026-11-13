@@ -68,6 +68,23 @@ describe('DOCTRINE: per-source precedence is canonical + complete (no drift)', (
     has(ES, 'blind reproduction');   // legacy under-rework direction
     has(ES, 'fidelity-loss');        // design over-invention direction
   });
+
+  test('autonomous smart discuss rule 5 is mode-aware: vibe = intent, never behaviour to preserve (align-1.21.0 F1)', () => {
+    const SD = REF('autonomous-smart-discuss.md');
+    const rule = read(SD).split('\n').find((l) => l.startsWith('5. **Source fidelity (fork law):**'));
+    assert.ok(rule, `${SD} must carry rule 5 (Source fidelity)`);
+    // Points to the canonical precedence instead of restating it.
+    assert.ok(rule.includes('§ Source precedence in `gsd-core/references/exploration-and-adaptability.md`'), rule);
+    // Legacy pins behaviour only for rows the inventory marks preserve.
+    assert.match(rule, /LEGACY-INVENTORY\.md` \(Parity disposition `preserve`\) → `\(source: legacy\)`/);
+    // A vibe prototype (mode or a harden-intent row) is tagged as intent, never as legacy behaviour.
+    for (const needle of ['code_quality: vibe-coded-to-harden', '`harden-intent`', 'answers intent only', '`(source: vibe)`', 'never as behaviour to preserve']) {
+      assert.ok(rule.includes(needle), `rule 5 must contain ${JSON.stringify(needle)}: ${rule}`);
+    }
+    // The mode token it keys on is the one project mode actually emits.
+    has(TPL('project.md'), 'vibe-coded-to-harden');
+    has(REF('exploration-and-adaptability.md'), 'never pin its behavior as a parity oracle');
+  });
 });
 
 describe('ORACLE: a normalized in-repo, provenance-tagged DESIGN-INVENTORY exists', () => {
