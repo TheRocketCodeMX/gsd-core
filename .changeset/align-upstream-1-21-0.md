@@ -1,7 +1,6 @@
 ---
 type: Changed
-# PLACEHOLDER: `pr: 0` below is not a real PR number. The orchestrator stamps it when the PR is opened.
-pr: 0
+pr: 116
 ---
 
 **The fork is realigned onto upstream open-gsd v1.21.0.** That is 101 upstream commits, merged with 74 conflicts resolved. It is the ninth merge-anchored realignment. Upstream's 1.21.0 notes also re-list fixes that fork 2.10.0 already shipped from v1.20.1 (#5757, #5715, #5683, #5682, #5675, #5676, #5679, #5723); they are not repeated here. Everything below is new since fork 2.10.0.
