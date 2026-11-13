@@ -1942,6 +1942,16 @@
    ]
   },
   {
+   "path": "gsd-core/references/autonomous-smart-discuss.md",
+   "feature": "provenance",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Source fidelity \\(fork law\\)",
+    "\\(source: design\\)"
+   ]
+  },
+  {
    "path": "gsd-core/workflows/autonomous/templates/minimal-context.md",
    "feature": "grounding",
    "mode": "anchors-only",
@@ -2014,6 +2024,24 @@
    "markers": 1,
    "anchors": [
     "Strategy chain in progress \\(roadmap pending\\)"
+   ]
+  },
+  {
+   "path": "src/cli-surface.cts",
+   "feature": "cli-surface",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "FORK_UNDECLARED_VERBS"
+   ]
+  },
+  {
+   "path": "scripts/gen-cli-surface-manifest.cjs",
+   "feature": "cli-surface",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "forkUndeclared: sorted\\(FORK_UNDECLARED_VERBS"
    ]
   }
  ]
