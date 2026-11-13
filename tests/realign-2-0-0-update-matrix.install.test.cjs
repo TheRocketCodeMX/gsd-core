@@ -40,6 +40,7 @@ const { execFileSync } = require('node:child_process');
 const { cleanup, createTempDir, runNpm, isUsageOutput } = require('./helpers.cjs');
 const { HOOKS_TO_COPY } = require('../scripts/build-hooks.js');
 const { GIT_TIMEOUT_MS, PROBE_TIMEOUT_MS } = require('./helpers/timeouts.cjs');
+const { runNode, runGit } = require('./helpers/process-seam.cjs');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const INSTALL_2 = path.join(REPO_ROOT, 'bin', 'install.js');
@@ -53,16 +54,9 @@ const FORK_TAG = 'v1.14.0';
 const FORK_PKG_NAME = '@therocketcode/gsd-core';
 
 function tagAvailable() {
-  try {
-    execFileSync('git', ['rev-parse', '-q', '--verify', `${FORK_TAG}^{commit}`], {
-      cwd: REPO_ROOT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: GIT_TIMEOUT_MS,
-    });
-    return true;
-  } catch (_) {
-    return false;
-  }
+  // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+  const r = runGit(['rev-parse', '-q', '--verify', `${FORK_TAG}^{commit}`], { cwd: REPO_ROOT, timeoutMs: GIT_TIMEOUT_MS });
+  return r.exitCode === 0;
 }
 
 /**
@@ -520,20 +514,18 @@ describe('realign 2.0.0 update matrix — fork v1.14.0 → this tree', () => {
     const tools = path.join(cellAHome, '.claude', 'gsd-core', 'bin', 'gsd-tools.cjs');
     assert.ok(fs.existsSync(tools), 'updated install must ship gsd-core/bin/gsd-tools.cjs');
     // Usage renders (exit 1 by design when no command given).
-    let usage = '';
-    try {
-      execFileSync(process.execPath, [tools], { encoding: 'utf-8', cwd: cellAProject, stdio: ['ignore', 'pipe', 'pipe'], timeout: PROBE_TIMEOUT_MS });
-    } catch (err) {
-      usage = `${err.stdout || ''}${err.stderr || ''}`;
-    }
+    // Through the process seam (align-1.21.0): upstream #6059 counts raw child_process
+    // PROBE_TIMEOUT_MS sites the CI evidence cannot see; seam spawns are measured.
+    const usageRun = runNode([tools], { cwd: cellAProject, timeoutMs: PROBE_TIMEOUT_MS });
+    const usage = `${usageRun.stdout || ''}${usageRun.stderr || ''}`;
     assert.ok(isUsageOutput(usage), `gsd-tools must render usage; got:\n${usage}`);
     // Smoke verb against the seeded project: grounding resolution (fork pillar).
-    const grounding = execFileSync(
-      process.execPath,
+    const groundingRun = runNode(
       [tools, 'query', 'grounding', 'required', '--cwd', cellAProject],
-      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PROBE_TIMEOUT_MS },
+      { timeoutMs: PROBE_TIMEOUT_MS },
     );
-    const parsed = JSON.parse(grounding);
+    assert.equal(groundingRun.exitCode, 0, `grounding required must exit 0: ${groundingRun.stderr}`);
+    const parsed = JSON.parse(groundingRun.stdout);
     assert.ok(Array.isArray(parsed.required), 'grounding required must return a required[] source set');
   });
 

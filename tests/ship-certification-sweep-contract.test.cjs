@@ -30,7 +30,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { runHook } = require('./helpers/process-seam.cjs');
 const { cleanup } = require('./helpers.cjs');
 
 const SHIP_MD = path.join(__dirname, '..', 'gsd-core', 'workflows', 'ship', 'steps', 'certification-sweep.md'); // extracted from ship.md for the byte budget
@@ -63,9 +63,11 @@ function runSweep(files) {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, body);
   }
-  const out = execFileSync('bash', ['-c', SWEEP], { cwd: tmp, encoding: 'utf8', timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+  // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+  const r = runHook('-c', [SWEEP], { interpreter: 'bash', cwd: tmp, timeoutMs: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
   cleanup(tmp);
-  return out.split(/\r?\n/).filter(Boolean);
+  assert.strictEqual(r.exitCode, 0, `sweep exited ${r.exitCode}: ${r.stderr}`);
+  return r.stdout.split(/\r?\n/).filter(Boolean);
 }
 
 // A UAT whose real outcome sits in `## Tests`, but with a fenced example

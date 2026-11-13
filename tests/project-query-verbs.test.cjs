@@ -212,6 +212,19 @@ describe('project strategy-skipped', () => {
     const o = JSON.parse(r.output);
     assert.strictEqual(o.skipped, false);
   });
+  test('a row whose Status is skipped, with no ledger line, is a skip too (matrix1210-B F3)', () => {
+    writeProject(tmpDir, FILLED.replace('| security-strategy | recommended |', '| security-strategy | skipped |'));
+    const r = runGsdTools('project strategy-skipped security-strategy', tmpDir);
+    assert.ok(r.success, `failed: ${r.error}`);
+    const o = JSON.parse(r.output);
+    assert.deepStrictEqual([o.skipped, o.reason, o.date], [true, null, null]);
+    assert.strictEqual(runGsdTools('project strategy-skipped security-strategy --raw', tmpDir).output.trim(), 'true');
+    // strategy-plan agrees on the same row
+    const plan = JSON.parse(runGsdTools('project strategy-plan', tmpDir).output);
+    assert.strictEqual(plan.steps.find((st) => st.step === 'security-strategy').skipped, true);
+    // a different row's status does not leak
+    assert.strictEqual(runGsdTools('project strategy-skipped recommend-architecture --raw', tmpDir).output.trim(), 'false');
+  });
 });
 
 // #86: a ledgered skip must be honoured by the next-target computation — the

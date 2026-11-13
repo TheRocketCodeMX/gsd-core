@@ -32,6 +32,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { HOOK_ON_CRASH, allow, crash } = require('./lib/hook-exit.js');
+// Upstream #5759 (ported align-1.21.0): the one bounded config.json reader every hook uses,
+// so a FIFO/device/oversize .planning/config.json cannot block the tool call this rides in on.
+const { readConfigFileBounded } = require('./lib/config-read.js');
 
 // ADR-3889 / #3911: declared crash policy. This hook is advisory-only and must
 // NEVER block a session — a crash is a silent PASS (exit 0), exactly the
@@ -50,7 +53,7 @@ const DEFAULTS = { enabled: true, warnPct: 90, urgePct: 95 };
 function readConfig(cwd) {
   try {
     const configPath = path.join(cwd, '.planning', 'config.json');
-    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const raw = JSON.parse(readConfigFileBounded(configPath, { required: true }));
     const nested = (raw && typeof raw.context_lifecycle === 'object') ? raw.context_lifecycle : {};
     const get = (flatKey, nestedKey) => {
       if (raw && raw[flatKey] !== undefined) return raw[flatKey];
