@@ -671,6 +671,93 @@ function ignoredByTrackedRules(root, paths) {
   }
 }
 
+// FORK:identity BEGIN
+// Merge-anchored realignment (docs/upstream-realignment-runbook.md): the PR
+// that pulls an upstream release carries a `Merge upstream vX.Y.Z into
+// align/upstream-X.Y.Z` commit, and with it upstream's own `.gitignore` edits,
+// which would switch the refinement off for that PR (align-1.21.0: upstream
+// #5921 deleted force-committed `.gsd/phase/...` files and the bare basenames
+// gave 58 false violations). Those edits are upstream's, not the PR's. A touched
+// `.gitignore` therefore counts as untouched when HEAD's copy is EXACTLY
+// upstream's change (`merge-base(base, U)..U`, U = that merge's second parent)
+// applied to the base copy: a clean `git merge-file` reproduces HEAD byte for
+// byte. Any fork-authored edit or divergence keeps the refinement off, and any
+// git failure answers false (fail closed). The subject recognition mirrors
+// tests/helpers/emitted-runtime.cjs (`readAckTrailers`).
+const REALIGNMENT_MERGE_SUBJECT_RE = /^Merge upstream v(\d+\.\d+\.\d+) into align\/upstream-\1(?![\w.])/;
+
+function realignGit(root, args, encoding = 'utf8') {
+  return cp.execFileSync('git', ['--literal-pathspecs', ...args], {
+    cwd: root,
+    encoding,
+    timeout: 15000,
+    maxBuffer: gitMaxBuffer(),
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+}
+
+/** The blob id of `rel` at `rev`, or null when absent; throws on a non-file entry. */
+function realignBlob(root, rev, rel) {
+  const records = realignGit(root, ['ls-tree', '--full-tree', '-z', rev, '--', rel]).split('\0').filter(Boolean);
+  if (records.length === 0) return null;
+  const tab = records[0].indexOf('\t');
+  const [mode, type, oid] = records[0].slice(0, tab).split(' ');
+  if (records.length !== 1 || records[0].slice(tab + 1) !== rel || type !== 'blob' || mode !== '100644') {
+    throw new Error(`unexpected tree entry for ${sanitizeEcho(rel)}`);
+  }
+  return oid;
+}
+
+/** Does upstream's change to `rel` (`ub` -> `uu`), applied to the PR base copy, give HEAD's copy exactly? */
+function upstreamExplainsGitignore(root, baseSide, upstreamBase, upstream, rel) {
+  const [b, ub, uu, h] = [baseSide, upstreamBase, upstream, 'HEAD'].map((rev) => realignBlob(root, rev, rel));
+  if (b === ub) return h === uu; // same starting point: HEAD must be upstream's copy (also covers add/delete)
+  if ([b, ub, uu, h].includes(null)) return false;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rbn-realign-'));
+  try {
+    for (const [name, oid] of [['base', b], ['upstream-base', ub], ['upstream', uu]]) {
+      fs.writeFileSync(path.join(tmp, name), realignGit(root, ['cat-file', 'blob', oid], null));
+    }
+    const merged = cp.spawnSync('git', ['merge-file', '-p', 'base', 'upstream-base', 'upstream'], {
+      cwd: tmp,
+      env: isolatedGitEnv(tmp),
+      timeout: 15000,
+      maxBuffer: gitMaxBuffer(),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (merged.error || merged.signal || merged.status !== 0) return false;
+    return Buffer.compare(merged.stdout, realignGit(root, ['cat-file', 'blob', h], null)) === 0;
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Is every `.gitignore` change in `<baseRef>...HEAD` exactly the change
+ * upstream made, as brought in by one realignment merge in `<baseRef>..HEAD`?
+ * @param {string} root
+ * @param {string} baseRef
+ * @param {{ status: string, paths: string[] }[]} diffEntries
+ * @returns {boolean} false on any doubt or git failure
+ */
+function gitignoreChangesAreUpstreams(root, baseRef, diffEntries) {
+  try {
+    const rels = [...new Set(diffEntries.flatMap((e) => e.paths).filter((p) => p.split('/').pop() === '.gitignore'))];
+    const baseSide = realignGit(root, ['merge-base', baseRef, 'HEAD']).trim();
+    for (const line of realignGit(root, ['log', '--merges', '--format=%H%x09%s', `${baseRef}..HEAD`]).split('\n')) {
+      const [sha, subject = ''] = line.split('\t');
+      if (!/^[0-9a-f]{40,64}$/.test(sha) || !REALIGNMENT_MERGE_SUBJECT_RE.test(subject)) continue;
+      const upstream = realignGit(root, ['rev-parse', '--verify', '--quiet', `${sha}^2^{commit}`]).trim();
+      const upstreamBase = realignGit(root, ['merge-base', baseRef, upstream]).trim();
+      if (rels.length > 0 && rels.every((rel) => upstreamExplainsGitignore(root, baseSide, upstreamBase, upstream, rel))) return true;
+    }
+  } catch {
+    // fail closed: the refinement stays off
+  }
+  return false;
+}
+// FORK:identity END
+
 /**
  * Which of the deleted paths are gitignored (#3677). Only base-controlled
  * rules count (see the header's "Gitignored-path refinement"):
@@ -696,7 +783,9 @@ function getIgnoredDeletions(root, deletedFiles, baseRef, entries = null) {
     const diffEntries = entries || getDiffEntries(root, baseRef, true);
     const touchesGitignore = diffEntries
       .some((entry) => entry.paths.some((p) => p.split('/').pop() === '.gitignore'));
-    if (touchesGitignore) return new Set();
+    // FORK:identity BEGIN
+    if (touchesGitignore && !gitignoreChangesAreUpstreams(root, baseRef, diffEntries)) return new Set();
+    // FORK:identity END
     // A local (staged or unstaged) edit to a tracked .gitignore is just as
     // un-base-controlled as a committed one.
     if (getDirtyGitignores(root).length > 0) return new Set();
@@ -977,6 +1066,9 @@ module.exports = {
   getDeletedFiles,
   getSurvivingFiles,
   getIgnoredDeletions,
+  // FORK:identity BEGIN
+  gitignoreChangesAreUpstreams,
+  // FORK:identity END
   matchesByFullPath,
   getTrackedIgnoredFiles,
   ignoredByTrackedRules,

@@ -1491,6 +1491,17 @@
    ]
   },
   {
+   "path": "scripts/lint-removed-but-needed.cjs",
+   "feature": "identity",
+   "mode": "markers",
+   "markers": 3,
+   "anchors": [
+    "REALIGNMENT_MERGE_SUBJECT_RE",
+    "function gitignoreChangesAreUpstreams\\(",
+    "touchesGitignore && !gitignoreChangesAreUpstreams\\("
+   ]
+  },
+  {
    "path": "tests/helpers/process-seam.cjs",
    "feature": "identity",
    "mode": "anchors-only",
