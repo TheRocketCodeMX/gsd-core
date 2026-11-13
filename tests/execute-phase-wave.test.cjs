@@ -229,6 +229,98 @@ describe('execute-phase workflow: #2868 stranded-phase resume on discover_and_gr
   });
 });
 
+// #5843: the phase-start STATE.md write (`state.begin-phase`) must come after plan
+// discovery and only when at least one plan will be dispatched. Every run that
+// dispatches nothing (verify-only resume, blocked, not-ready, filtered-empty,
+// finished) used to have rewritten Current Position / Status / Last activity to
+// "Executing, Plan 1 of N" before discovery decided there was nothing to run.
+// allow-test-rule: <runtime-contract-is-the-product> (see #5843) — the workflow .md is the
+// installed AI instruction; step blocks are parsed structurally by <step name>.
+describe('execute-phase workflow: #5843 phase-start STATE write follows plan discovery', () => {
+  function workflow() {
+    return fs.readFileSync(WORKFLOW_PATH, 'utf-8');
+  }
+
+  function stepBlock(content, name) {
+    const open = `<step name="${name}">`;
+    const start = content.indexOf(open);
+    assert.ok(start >= 0, `step ${name} should exist`);
+    const end = content.indexOf('</step>', start);
+    assert.ok(end > start, `step ${name} should be closed`);
+    return content.substring(start, end + '</step>'.length);
+  }
+
+  test('#5843 row 1: validate_phase contains no state.begin-phase call', () => {
+    assert.ok(
+      !/state\.begin-phase/.test(stepBlock(workflow(), 'validate_phase')),
+      'validate_phase runs before plan discovery; the phase-start write must not live there'
+    );
+  });
+
+  test('#5843 row 2: exactly one state.begin-phase call in the whole workflow', () => {
+    const matches = workflow().match(/state\.begin-phase/g) || [];
+    assert.strictEqual(matches.length, 1, 'the phase start is recorded exactly once');
+  });
+
+  test('#5843 row 3: the call lives in discover_and_group_plans after the Execution Plan report', () => {
+    const step = stepBlock(workflow(), 'discover_and_group_plans');
+    const callIdx = step.search(/state\.begin-phase/);
+    assert.ok(callIdx >= 0, 'discover_and_group_plans should hold the state.begin-phase call');
+    const reportIdx = step.indexOf('## Execution Plan');
+    assert.ok(reportIdx >= 0, 'discover_and_group_plans should hold the Execution Plan report');
+    assert.ok(callIdx > reportIdx, 'the call must come after the Execution Plan report');
+  });
+
+  test('#5843 row 4: the call is gated on at least one plan being dispatched', () => {
+    const step = stepBlock(workflow(), 'discover_and_group_plans');
+    const callIdx = step.search(/state\.begin-phase/);
+    assert.ok(callIdx >= 0, 'discover_and_group_plans should hold the state.begin-phase call');
+    const lead = step.substring(Math.max(0, callIdx - 700), callIdx);
+    assert.match(
+      lead,
+      /at least one plan (?:will be|is about to be) dispatched/,
+      'the text introducing the call must name the non-empty post-filter dispatch condition'
+    );
+  });
+
+  test('#5843 row 5: the call precedes cross_ai_delegation and execute_waves', () => {
+    const content = workflow();
+    const callIdx = content.search(/state\.begin-phase/);
+    assert.ok(callIdx >= 0, 'state.begin-phase call should exist');
+    assert.ok(callIdx < content.indexOf('<step name="cross_ai_delegation">'));
+    assert.ok(callIdx < content.indexOf('<step name="execute_waves">'));
+  });
+
+  test('#5843 row 6: the call keeps its --phase, --name and --plans arguments', () => {
+    assert.ok(
+      workflow().includes(
+        'state.begin-phase --phase "${PHASE_NUMBER}" --name "${PHASE_NAME}" --plans "${PLAN_COUNT}"'
+      ),
+      'the begin-phase arguments are unchanged by the move'
+    );
+  });
+
+  test('#5843 row 7: verify-only, blocked and filtered-empty exits all precede the call', () => {
+    const step = stepBlock(workflow(), 'discover_and_group_plans');
+    const callIdx = step.search(/state\.begin-phase/);
+    assert.ok(callIdx >= 0, 'discover_and_group_plans should hold the state.begin-phase call');
+    const arms = [
+      ['verify-only resume', 'continue directly at `aggregate_results`'],
+      ['blocked exit', 'Phase stuck:'],
+      ['filtered-empty exit', 'No matching incomplete plans'],
+      ['2b not-ready exit', 'WAITING on incomplete predecessors'],
+      ['#3684 resume arm', 'resuming at update_roadmap (#3684)'],
+      ['gaps-only refusal STOP', '--gaps-only cannot read gap_closure'],
+      ['wave-safety STOP', 'STOP and tell the user to finish earlier waves first'],
+    ];
+    for (const [label, marker] of arms) {
+      const idx = step.lastIndexOf(marker);
+      assert.ok(idx >= 0, `${label} arm (${marker}) should exist`);
+      assert.ok(idx < callIdx, `${label} arm must appear before the state.begin-phase call`);
+    }
+  });
+});
+
 describe('execute-phase docs: user-facing wave flag', () => {
   test('COMMANDS.md documents --wave usage', () => {
     const content = fs.readFileSync(COMMANDS_DOC_PATH, 'utf-8');
@@ -955,7 +1047,7 @@ describe('issue #3210: execute-phase auto-mode carve-out exempts precondition-un
 describe('execute-phase 5.7: post-merge gate result crosses the block boundary (e2e-4 F2)', () => {
   const os = require('node:os');
   const { beforeEach, afterEach } = require('node:test');
-  const { spawnSync } = require('node:child_process');
+  const { runHook } = require('./helpers/process-seam.cjs');
 
   const GATE_PATH = path.join(
     __dirname, '..', 'gsd-core', 'workflows', 'execute-phase', 'steps', 'post-merge-gate.md',
@@ -1025,8 +1117,9 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
       trackingBlock();
     const scriptPath = path.join(tmp, 'tracking.sh');
     fs.writeFileSync(scriptPath, script);
-    const r = spawnSync('bash', [scriptPath], { cwd: tmp, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
-    assert.strictEqual(r.status, 0, `tracking block exited ${r.status}:\n${r.stdout}${r.stderr}`);
+    // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+    const r = runHook(scriptPath, [], { interpreter: 'bash', cwd: tmp, timeoutMs: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+    assert.strictEqual(r.exitCode, 0, `tracking block exited ${r.exitCode}:\n${r.stdout}${r.stderr}`);
     return r.stdout + r.stderr;
   }
 

@@ -24,7 +24,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { runHook } = require('./helpers/process-seam.cjs');
 
 const HOOK_PATH = path.join(__dirname, '..', 'hooks', 'gsd-context-monitor.js');
 
@@ -73,17 +73,9 @@ function runMonitor(opts) {
   if (gemini) env.GEMINI_API_KEY = 'test-key';
   else delete env.GEMINI_API_KEY;
 
-  let stdout = '';
-  try {
-    stdout = execFileSync(process.execPath, [HOOK_PATH], {
-      input: JSON.stringify(payload),
-      env,
-      encoding: 'utf8',
-      timeout: STAGED_HOOK_SCRIPT_TIMEOUT_MS,
-    });
-  } catch (e) {
-    stdout = e.stdout || '';
-  }
+  // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
+  const run = runHook(HOOK_PATH, [], { input: JSON.stringify(payload), env, timeoutMs: STAGED_HOOK_SCRIPT_TIMEOUT_MS });
+  const stdout = run.stdout || '';
 
   let warnData = null;
   try {

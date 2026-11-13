@@ -68,6 +68,23 @@ describe('DOCTRINE: per-source precedence is canonical + complete (no drift)', (
     has(ES, 'blind reproduction');   // legacy under-rework direction
     has(ES, 'fidelity-loss');        // design over-invention direction
   });
+
+  test('autonomous smart discuss rule 5 is mode-aware: vibe = intent, never behaviour to preserve (align-1.21.0 F1)', () => {
+    const SD = REF('autonomous-smart-discuss.md');
+    const rule = read(SD).split('\n').find((l) => l.startsWith('5. **Source fidelity (fork law):**'));
+    assert.ok(rule, `${SD} must carry rule 5 (Source fidelity)`);
+    // Points to the canonical precedence instead of restating it.
+    assert.ok(rule.includes('§ Source precedence in `gsd-core/references/exploration-and-adaptability.md`'), rule);
+    // Legacy pins behaviour only for rows the inventory marks preserve.
+    assert.match(rule, /LEGACY-INVENTORY\.md` \(Parity disposition `preserve`\) → `\(source: legacy\)`/);
+    // A vibe prototype (mode or a harden-intent row) is tagged as intent, never as legacy behaviour.
+    for (const needle of ['code_quality: vibe-coded-to-harden', '`harden-intent`', 'answers intent only', '`(source: vibe)`', 'never as behaviour to preserve']) {
+      assert.ok(rule.includes(needle), `rule 5 must contain ${JSON.stringify(needle)}: ${rule}`);
+    }
+    // The mode token it keys on is the one project mode actually emits.
+    has(TPL('project.md'), 'vibe-coded-to-harden');
+    has(REF('exploration-and-adaptability.md'), 'never pin its behavior as a parity oracle');
+  });
 });
 
 describe('ORACLE: a normalized in-repo, provenance-tagged DESIGN-INVENTORY exists', () => {
@@ -325,4 +342,37 @@ describe('fork fences that run raw git ignore an inherited GIT_DIR / GIT_WORK_TR
       assert.match(out, /expect\(sum\(1, 1\)\)/, `the deleted assertion must be flagged, got:\n${out}`);
     } finally { cleanup(dir); cleanup(decoy); }
   });
+});
+
+// matrix1210-B F4: Step 2's design branch keys on `design_hint_source: arg` / `design_dismissed`,
+// which only `init.new-project --design <path>` / `--no-design` produce, so Step 1 must forward
+// them from the typed arguments. The Step 1 argument lines run VERBATIM in bash with a stub
+// `gsd_run` that echoes its argv.
+describe('/gsd-new-project forwards --design / --no-design to init.new-project (F4)', () => {
+  const os = require('node:os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const shell = os.platform() === 'win32' ? null : 'bash';
+  const lines = read(WF('new-project.md')).split(/\r?\n/);
+  const pick = (re) => {
+    const hit = lines.find((l) => re.test(l));
+    assert.ok(hit, `new-project.md Step 1 lost the line matching ${re}`);
+    return hit;
+  };
+  const argLines = () => [/^AUTO_PARAM=""; /, /^INIT=\$\(gsd_run query init\.new-project \$AUTO_PARAM\)$/, /^DESIGN_ARG=/].map(pick).join('\n');
+  const initArgv = (gsdArgs) => runHook('-c', [`gsd_run() { printf '%s|' "$@"; }\nGSD_ARGS=${JSON.stringify(gsdArgs)}\n${argLines()}\nprintf '%s' "$INIT"`], {
+    interpreter: 'bash', cwd: os.tmpdir(), env: { ...process.env },
+  }).stdout;
+
+  for (const [args, want] of [
+    ['', 'query|init.new-project|'],
+    ['--auto', 'query|init.new-project|--auto|'],
+    ['--design designs/app.fig', 'query|init.new-project|--design|designs/app.fig|'],
+    ['--auto --design=https://figma.com/file/x', 'query|init.new-project|--auto|--design|https://figma.com/file/x|'],
+    ['--no-design --auto', 'query|init.new-project|--auto|--no-design|'],
+    ['--designer x', 'query|init.new-project|'],
+  ]) {
+    test(`typed arguments ${JSON.stringify(args)} reach init as ${want}`, { skip: shell ? false : 'bash fences' }, () => {
+      assert.equal(initArgv(args), want);
+    });
+  }
 });

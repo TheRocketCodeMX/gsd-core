@@ -339,7 +339,8 @@
     "settingsFilesToClean",
     "_uninstallScopedSettingsFile",
     "hook-exit\\.js",
-    "filename-classification\\.js"
+    "filename-classification\\.js",
+    "'config-read\\.js', 'git-head-tree\\.js', 'secret-read-exemptions\\.js'"
    ]
   },
   {
@@ -846,7 +847,8 @@
     "Roadmap-after-strategy caveat",
     "<!-- roadmap-mode: %s -->",
     "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\"",
-    "\\*\\*\\[X\\] requirements\\*\\* \\| Strategy Plan written ✓"
+    "\\*\\*\\[X\\] requirements\\*\\* \\| Strategy Plan written ✓",
+    "init\\.new-project \\$AUTO_PARAM --design \"\\$DESIGN_ARG\""
    ]
   },
   {
@@ -1490,6 +1492,17 @@
    ]
   },
   {
+   "path": "scripts/lint-removed-but-needed.cjs",
+   "feature": "identity",
+   "mode": "markers",
+   "markers": 3,
+   "anchors": [
+    "REALIGNMENT_MERGE_SUBJECT_RE",
+    "function gitignoreChangesAreUpstreams\\(",
+    "touchesGitignore && !gitignoreChangesAreUpstreams\\("
+   ]
+  },
+  {
    "path": "tests/helpers/process-seam.cjs",
    "feature": "identity",
    "mode": "anchors-only",
@@ -1942,6 +1955,16 @@
    ]
   },
   {
+   "path": "gsd-core/references/autonomous-smart-discuss.md",
+   "feature": "provenance",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "Source fidelity \\(fork law\\)",
+    "\\(source: design\\)"
+   ]
+  },
+  {
    "path": "gsd-core/workflows/autonomous/templates/minimal-context.md",
    "feature": "grounding",
    "mode": "anchors-only",
@@ -2014,6 +2037,41 @@
    "markers": 1,
    "anchors": [
     "Strategy chain in progress \\(roadmap pending\\)"
+   ]
+  },
+  {
+   "path": "src/cli-surface.cts",
+   "feature": "cli-surface",
+   "mode": "markers",
+   "markers": 2,
+   "anchors": [
+    "FORK_UNDECLARED_VERBS"
+   ]
+  },
+  {
+   "path": "scripts/gen-cli-surface-manifest.cjs",
+   "feature": "cli-surface",
+   "mode": "markers",
+   "markers": 1,
+   "anchors": [
+    "forkUndeclared: sorted\\(FORK_UNDECLARED_VERBS"
+   ]
+  },
+  {
+   "path": "tests/changelog-release-notes.test.cjs",
+   "feature": "identity",
+   "mode": "anchors-only",
+   "anchors": [
+    "repeat\\(80 \\+ SLUG\\.length\\)"
+   ]
+  },
+  {
+   "path": "tests/helpers/timeouts.cjs",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "unseenSites: 3, unseenSitesTrackedBy: '#6063'",
+    "perf-317-context-monitor-fs\\.test\\.cjs, which this fork deletes"
    ]
   }
  ]

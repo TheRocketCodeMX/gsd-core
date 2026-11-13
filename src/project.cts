@@ -243,6 +243,26 @@ function stepStatus(cwd: string, step: string, status: string): string {
   return listCodebaseMapFiles(cwd).length === REQUIRED_CODEBASE_MAP_FILES.length ? 'done' : status;
 }
 
+/**
+ * The filled `| Step | Status |` rows of a Strategy Plan section, in order. Skips
+ * the header, separator, and bracketed placeholder rows
+ * (`| [model-domain] | [recommended] |`). Taking the first two cells is robust to
+ * a stray extra column (off-spec but harmless).
+ */
+function parseStrategyRows(section: string): Array<{ step: string; status: string }> {
+  const rows: Array<{ step: string; status: string }> = [];
+  for (const line of section.split('\n')) {
+    if (!line.trim().startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length < 2) continue;
+    const [step, status] = cells;
+    if (/^step$/i.test(step) || /^-+$/.test(step)) continue;        // header / separator
+    if (/^\[.*\]$/.test(step) || /^\[.*\]$/.test(status)) continue; // unfilled placeholder
+    rows.push({ step, status });
+  }
+  return rows;
+}
+
 function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
   const content = readProjectContent(cwd);
   const empty: StrategyPlanResult = {
@@ -258,20 +278,9 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
   const pathMatch = section.match(/\*\*Recommended path:\*\*\s*(.+)/i);
   const recommended_path = pathMatch ? cleanFieldValue(pathMatch[1]) : null;
 
-  // Parse the `| Step | Status |` table; skip header, separator, and bracketed
-  // placeholder rows (`| [model-domain] | [recommended] |`).
   const ledger = parseSkipLedger(section);
   const steps: StrategyStep[] = [];
-  for (const line of section.split('\n')) {
-    if (!line.trim().startsWith('|')) continue;
-    // Split on pipes and drop the empty leading/trailing cells from the outer borders.
-    // Taking the first two cells is robust to a stray extra column (off-spec but harmless).
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (cells.length < 2) continue;
-    const step = cells[0];
-    const status = cells[1];
-    if (/^step$/i.test(step) || /^-+$/.test(step)) continue;        // header / separator
-    if (/^\[.*\]$/.test(step) || /^\[.*\]$/.test(status)) continue; // unfilled placeholder
+  for (const { step, status } of parseStrategyRows(section)) {
     const skipped = /^skipped$/i.test(status) || ledger.has(step.toLowerCase());
     steps.push({ step, status: stepStatus(cwd, step, status), skipped, invalid: !isValidStrategyStep(step) });
   }
@@ -291,6 +300,11 @@ function cmdProjectStrategyPlan(cwd: string, raw: boolean): void {
 
 // ─── project.strategy-skipped ───────────────────────────────────────────────────
 
+/**
+ * Is `<skill>` skipped? A skip-ledger line (with its reason and date) or a
+ * Strategy Plan row whose own Status is `skipped` (reason/date null) — the same
+ * two signals `strategy-plan` reads, so the two verbs agree.
+ */
 function cmdProjectStrategySkipped(cwd: string, skill: string | undefined, raw: boolean): void {
   const target = (skill || '').trim();
   const empty: StrategySkippedResult = {
@@ -307,6 +321,12 @@ function cmdProjectStrategySkipped(cwd: string, skill: string | undefined, raw: 
   const entry = parseSkipLedger(section).get(target.toLowerCase());
   if (entry) {
     output({ found: true, skill: target, skipped: true, reason: entry.reason, date: entry.date }, raw, 'true');
+    return;
+  }
+  // matrix1210-B F3: a row whose own Status is `skipped` is a skip too, the same
+  // rule strategy-plan applies (#86), even without a ledger line (no reason/date).
+  if (parseStrategyRows(section).some((r) => r.step.toLowerCase() === target.toLowerCase() && /^skipped$/i.test(r.status))) {
+    output({ found: true, skill: target, skipped: true, reason: null, date: null }, raw, 'true');
     return;
   }
 

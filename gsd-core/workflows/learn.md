@@ -79,7 +79,7 @@ The `--lean` is read from the learner's beat-5 calibration choice (did they reac
 
 The companion is a vendored, pure-Node local server (zero install — just Node + the learner's existing browser, exactly like superpowers). **You generate the HTML yourself; there are no external rendering tools.** Use it only when a beat genuinely benefits from seeing it (a diagram, code side-by-side), or when the learner asks to *see* it or says they don't get it.
 
-**Start the server once per session (idempotent — same `--project-dir` reuses the port):**
+**Start the server once per session.** Run the start line only once: a second run while the server is up starts another server on a new port. After `stop-server.sh`, a restart with the same `--project-dir` reuses the port:
 
 ```bash
 # The companion ships inside the install (beside gsd-tools), never in the project: the resolved gsd-tools first, else the install path.

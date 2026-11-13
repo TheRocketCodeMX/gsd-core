@@ -182,6 +182,7 @@ const DOCS_GUARD_TESTS = {
   'tests/analyze-dependencies.test.cjs': ['docs/COMMANDS.md'],
   // FORK: auto-advance-endings.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
   'tests/auto-advance-endings.test.cjs': ['docs/FORK-DELTA.md'],
+  'tests/smart-discuss-classification.test.cjs': ['docs/COMMANDS.md'],
   'tests/auto-select-attribute.test.cjs': ['docs/reference/plan-md.md'],
   'tests/autonomous-converge.test.cjs': [
     'docs/COMMANDS.md',
@@ -194,6 +195,7 @@ const DOCS_GUARD_TESTS = {
     'docs/reference/capability-manifest.md',
   ],
   'tests/claude-md.test.cjs': ['docs/COMMANDS.md'],
+  'tests/claude-orchestration-4747.test.cjs': ['docs/how-to/enable-claude-orchestration-workflow-backend.md'],
   'tests/claude-orchestration.test.cjs': ['docs/explanation/claude-orchestration-capability.md'],
   'tests/command-contract.test.cjs': [
     'docs/INVENTORY.md',
@@ -313,6 +315,7 @@ const DOCS_GUARD_TESTS = {
     'docs/pt-BR/context-monitor.md',
     'docs/zh-CN/context-monitor.md',
   ],
+  'tests/gen-cli-surface-manifest.test.cjs': ['docs/CLI-SURFACE-MANIFEST.json'],
   'tests/gen-state-md-docs.test.cjs': [
     'docs/reference/state-md.md',
     'docs/ja-JP/reference/state-md.md',
