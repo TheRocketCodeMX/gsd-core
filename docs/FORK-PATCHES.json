@@ -847,7 +847,8 @@
     "Roadmap-after-strategy caveat",
     "<!-- roadmap-mode: %s -->",
     "Skill\\(skill=\"gsd-\\$\\{NEXT_STRATEGY\\}\"",
-    "\\*\\*\\[X\\] requirements\\*\\* \\| Strategy Plan written ✓"
+    "\\*\\*\\[X\\] requirements\\*\\* \\| Strategy Plan written ✓",
+    "init\\.new-project \\$AUTO_PARAM --design \"\\$DESIGN_ARG\""
    ]
   },
   {

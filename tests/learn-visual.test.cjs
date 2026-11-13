@@ -126,6 +126,16 @@ describe('learn visual companion (vendored, zero-install)', () => {
     }
   });
 
+  // matrix1210-A H7: start-server.sh starts a NEW server on every run (it reuses
+  // .last-port only once the previous server is stopped), so Step 5 must not promise
+  // an idempotent start — it says to run the start line once.
+  test('learn Step 5 does not promise an idempotent start', () => {
+    const wf = fs.readFileSync(path.resolve(__dirname, '..', 'gsd-core', 'workflows', 'learn.md'), 'utf8');
+    const step5 = wf.slice(wf.indexOf('## Step 5'), wf.indexOf('## Step 6'));
+    assert.doesNotMatch(step5, /idempotent/i);
+    assert.match(step5, /Run the start line only once: a second run while the server is up starts another server/);
+  });
+
   test('frame is self-contained — no external CDN/font/script URLs', () => {
     const html = fs.readFileSync(FRAME, 'utf8');
     assert.doesNotMatch(html, /<link\b/i, 'frame must not <link> external stylesheets/fonts');
