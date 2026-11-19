@@ -964,7 +964,10 @@ describe('guard <-> gsd-roadmapper binding (the /gsd:new-milestone collapse path
   // target, so every create/revise spawn must pass all three targets.
   test('new-project and new-milestone pass the init-resolved write targets to every roadmapper spawn (#5859)', () => {
     const want = ['ROADMAP.md: {roadmap_path}', 'STATE.md: {state_path}', 'REQUIREMENTS.md: {requirements_path}'];
-    for (const [file, spawns] of [['new-project.md', 2], ['new-milestone.md', 1]]) {
+    // FORK:strategy — new-project and new-milestone own no roadmapper spawn in this fork: the roadmap is
+    // written after the strategy chain by /gsd-roadmap (create / extend / elaborate) and plan-phase's
+    // §1.6 elaborate pass, so those are the spawns that must carry the init-resolved targets.
+    for (const [file, spawns] of [['roadmap.md', 3], [path.join('plan-phase', 'modes', 'strategy-elaboration.md'), 1]]) {
       const src = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', file), 'utf8');
       const blocks = [...src.matchAll(/<write_targets>([\s\S]{0,400}?)<\/write_targets>/g)].map((m) => m[1]);
       assert.equal(blocks.length, spawns, `${file}: expected ${spawns} <write_targets> block(s), one per roadmapper spawn`);
@@ -972,9 +975,9 @@ describe('guard <-> gsd-roadmapper binding (the /gsd:new-milestone collapse path
         for (const line of want) assert.ok(body.includes(line), `${file}: <write_targets> must name "${line}"`);
       }
     }
-    const milestone = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'new-milestone.md'), 'utf8');
-    assert.match(milestone, /re-spawn roadmapper[^\n]*same `<write_targets>` block/,
-      'new-milestone.md: the Adjust re-spawn must reuse the same <write_targets> block');
+    const milestone = fs.readFileSync(path.join(__dirname, '..', 'gsd-core', 'workflows', 'roadmap.md'), 'utf8');
+    assert.match(milestone, /re-spawn the roadmapper[^\n]*same `<write_targets>` block/,
+      'roadmap.md: the Adjust re-spawn must reuse the same <write_targets> block');
   });
 
   // #5859: the synthesizer commits all the research in one call (its Step 7). A named project keeps

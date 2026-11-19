@@ -64,7 +64,7 @@ PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --p
 : "${PLANNING_ROOT:?}"
 cat "${PLANNING_ROOT}/STATE.md"
 GSD_WS="${GSD_WS:-}"
-PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path)
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path)
 cat "${PROJECT_PATH}"
 ```
 
@@ -89,7 +89,7 @@ cat "${PROJECT_PATH}"
 **Re-anchor (when `.planning/MASTER-CONTEXT.md` exists):**
 
 ```bash
-PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
 [ -n "$PROJECT_PATH" ] && ls "${PROJECT_PATH%/*}/MASTER-CONTEXT.md" 2>/dev/null || true   # next to PROJECT.md: .planning/, or .planning/<name> under GSD_PROJECT
 ```
 

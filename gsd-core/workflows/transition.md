@@ -236,7 +236,7 @@ phase directory — substitute it, as every other step in this file does, before
 # of the placeholder rewrites the path but cannot rewrite this guard into a false hit.
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
-PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"
 PHASE_DIR_REL="${PLANNING_ROOT}/phases/XX-current"
 _GSD_PLACEHOLDER="XX""-current"
 case "$PHASE_DIR_REL" in

@@ -113,6 +113,7 @@ module.exports = {
   "tests/feat-context-append.test.cjs",
   "tests/feat-context-router.test.cjs",
   "tests/features-index-gate.test.cjs",
+  "tests/fork-scoped-fences.test.cjs",
   "tests/fork-verbs-strict-args.test.cjs",
   "tests/gate-contained-path-symlinked-planning.test.cjs",
   "tests/gate-decision-coverage-verify-stderr.test.cjs",

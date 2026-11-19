@@ -759,7 +759,7 @@ done
 # Source-fidelity inputs: hand the reviewer the Mode + the design oracle so its
 # design-fidelity (fidelity-loss) check can actually fire — without these the
 # hook is inert prose (it can't diff the built shape against an oracle it never sees).
-PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
 for ctx in "${PROJECT_PATH}" "${PROJECT_PATH%/*}/DESIGN-INVENTORY.md" "${PHASE_DIR}"/*-UI-SPEC.md; do   # beside PROJECT.md (per scope); unresolved → no match
   [ -f "$ctx" ] && FILES_TO_READ+="- ${ctx} (source-fidelity: \`## Mode\` + the design oracle — diff observable shape, when a provided design exists)\n"
 done

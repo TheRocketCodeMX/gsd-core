@@ -2071,6 +2071,23 @@
     "unseenSites: 3, unseenSitesTrackedBy: '#6063'",
     "perf-317-context-monitor-fs\\.test\\.cjs, which this fork deletes"
    ]
+  },
+  {
+   "path": "tests/gsd-write-guard.test.cjs",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "own no roadmapper spawn in this fork",
+    "\\['roadmap\\.md', 3\\]"
+   ]
+  },
+  {
+   "path": "tests/registry-docs-approved-issue-parity.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "FORK_APPROVAL_LABELS_LINE"
+   ]
   }
  ]
 }

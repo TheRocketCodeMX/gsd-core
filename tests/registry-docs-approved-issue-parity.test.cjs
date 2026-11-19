@@ -140,7 +140,11 @@ function readRepoFile(rel) {
 }
 
 const readDocs = () => Object.fromEntries(DOCS.map((p) => [p, readRepoFile(p)]));
-const readLabels = () => parseApprovalLabels(readRepoFile(WORKFLOW) ?? '');
+// FORK: release — the fork does not ship the auto-close workflow (release plumbing removed at the v1.9.0
+// realignment; FORK-DELTA `release` section, same as ci-pr-mergeability's NEVER_GATED), so its
+// APPROVAL_LABELS line is upstream's, carried here as data; the docs-parity checks still run on the fork's docs.
+const FORK_APPROVAL_LABELS_LINE = "APPROVAL_LABELS: 'approved-feature,approved-enhancement,confirmed-bug'";
+const readLabels = () => parseApprovalLabels(readRepoFile(WORKFLOW) ?? FORK_APPROVAL_LABELS_LINE);
 const sorted = (list) => [...list].sort();
 
 describe('parseApprovalLabels', () => {

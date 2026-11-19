@@ -9706,7 +9706,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
       }
       if (antigravityPermissionsModified) {
         settingsModified = true;
-        console.log(`  ${green}✓${reset} Removed GSD permissions from ${settingsFileToClean}`);
+        console.log(`  ${green}✓${reset} Removed GSD permissions from settings.json`);
       }
     }
 
@@ -9722,7 +9722,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
         delete settings.mcpServers;
       }
       settingsModified = true;
-      console.log(`  ${green}✓${reset} Removed GSD MCP companion server from ${settingsFileToClean}`);
+      console.log(`  ${green}✓${reset} Removed GSD MCP companion server from settings.json`);
     }
 
     if (settingsModified) {

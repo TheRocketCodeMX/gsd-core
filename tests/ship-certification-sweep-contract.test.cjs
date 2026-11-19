@@ -64,10 +64,12 @@ function runSweep(files) {
     fs.writeFileSync(abs, body);
   }
   // align-1.21.0: through the process seam — upstream #6059-#6063 count raw child_process sites per timeout constant (tests/helpers/timeouts.cjs unseenSites).
-  // align-1.22.0: the sweep resolves the scope root through `gsd_run query planning.inspect` (upstream #5861);
-  // a flat-project stub answers with this throwaway project's .planning, as upstream's fence tests do.
-  const stub = 'gsd_run() { printf %s "$PWD/.planning"; }\n';
-  const r = runHook('-c', [stub + SWEEP], { interpreter: 'bash', cwd: tmp, timeoutMs: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
+  // align-1.22.0: the sweep resolves the scope root through `gsd_run query planning.inspect` (upstream #5861).
+  // RUNTIME_DIR points the fence's launcher preamble at this checkout's gsd-tools, so the real verb answers
+  // with this throwaway project's .planning (a flat project); GSD_PROJECT/GSD_WORKSTREAM are cleared.
+  const env = { ...process.env, RUNTIME_DIR: path.join(__dirname, '..') };
+  delete env.GSD_PROJECT; delete env.GSD_WORKSTREAM;
+  const r = runHook('-c', [SWEEP], { interpreter: 'bash', cwd: tmp, env, timeoutMs: GSD_TOOLS_CLI_MODERATE_TIMEOUT_MS });
   cleanup(tmp);
   assert.strictEqual(r.exitCode, 0, `sweep exited ${r.exitCode}: ${r.stderr}`);
   return r.stdout.split(/\r?\n/).filter(Boolean);
