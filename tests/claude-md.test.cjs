@@ -152,8 +152,10 @@ describe('new-project workflow includes CLAUDE.md generation', () => {
     // gsd-roadmap. new-project's final commit now stages only PROJECT + REQUIREMENTS +
     // the instruction file (uses $INSTRUCTION_FILE: AGENTS.md for Codex, CLAUDE.md otherwise).
     assert.ok(
-      content.includes('.planning/PROJECT.md .planning/REQUIREMENTS.md "$INSTRUCTION_FILE"'),
-      'final new-project commit should stage PROJECT, REQUIREMENTS, and the instruction file (ROADMAP/STATE are deferred to gsd-roadmap)'
+      // align-1.22.0: upstream #5861/#5859 stage the init-resolved (scoped) paths; the fork keeps
+      // ROADMAP/STATE out of this commit and stages the scoped PROJECT + REQUIREMENTS instead.
+      content.includes('--files "{project_path}" "{requirements_path}" "$INSTRUCTION_FILE"'),
+      'final new-project commit should stage the scoped PROJECT, REQUIREMENTS, and the instruction file (ROADMAP/STATE are deferred to gsd-roadmap)'
     );
   });
 

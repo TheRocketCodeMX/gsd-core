@@ -12,7 +12,9 @@ same numbering, same advisory contract.
    PR opens: **did every phase in this milestone reach a certification outcome at all?**
 
    ```bash
-   ls -d .planning/phases/*/ 2>/dev/null || true
+   PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+   : "${PLANNING_ROOT:?}"
+   ls -d "${PLANNING_ROOT}"/phases/*/ 2>/dev/null || true
 
    # Read the outcome line from the phase's UAT `## Tests` section ONLY, never
    # the whole file, and skip fenced blocks — so a `certification:` example
@@ -20,7 +22,7 @@ same numbering, same advisory contract.
    # over the phase's real outcome. The FIRST in-`## Tests` line is the record;
    # a second is emitted as `:DUPLICATE:` and flagged, never silently dropped
    # the way `grep -m1` dropped it.
-   for uat in .planning/phases/*/*-UAT.md; do
+   for uat in "${PLANNING_ROOT}"/phases/*/*-UAT.md; do
      [ -e "$uat" ] || continue
      awk -v F="$uat" '
        /^[`][`][`]/ { fence = !fence; next }

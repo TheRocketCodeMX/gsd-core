@@ -2065,9 +2065,10 @@ describe('e2e fix wave — strategy chain (e2e-1 F1/F2/F3/F4/F5/F6/F8)', () => {
   for (const [wf] of CHAIN) {
     test(`${wf.split('/').pop()} commits the discussion log when it exists (F1)`, () => {
       const w = read(wf);
-      assert.match(w, /DLOG=\$\(\[ -f \.planning\/PROJECT-DISCUSSION-LOG\.md \]/,
+      // align-1.22.0: the log sits beside PROJECT.md, resolved per scope (upstream #5861 mechanism).
+      assert.match(w, /DLOG=\$\(\[ -f "\$\{PROJECT_DIR\}\/PROJECT-DISCUSSION-LOG\.md" \]/,
         'conditional DLOG expansion (a missing log must not abort the fail-closed commit)');
-      assert.match(w, /--files [^\n]*\$DLOG/, 'the commit line includes $DLOG');
+      assert.match(w, /--files [^\n]*\$\{DLOG:\+"\$DLOG"\}/, 'the commit line includes $DLOG');
     });
   }
 

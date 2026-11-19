@@ -16,11 +16,13 @@ Recommend an application architecture matched to the project's actual complexity
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 RESPONSE_LANG=$(gsd_run query config-get response_language --raw 2>/dev/null || true)
-ls .planning/PROJECT.md >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
-ls .planning/DOMAIN-MODEL.md >/dev/null 2>&1 && echo "HAS_DOMAIN_MODEL" || echo "NO_DOMAIN_MODEL"
-ls .planning/adr/ 2>/dev/null | grep -cE '^[0-9]{4}-' || true
+ls "${PROJECT_PATH}" >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+echo "PROJECT_DIR=${PROJECT_DIR}"   # every .planning/<artifact> this skill names for a project-level file (PROJECT.md, the strategy docs, adr/, the discussion log) is this directory: .planning, or .planning/<name> under GSD_PROJECT
+ls "${PROJECT_DIR}/DOMAIN-MODEL.md" >/dev/null 2>&1 && echo "HAS_DOMAIN_MODEL" || echo "NO_DOMAIN_MODEL"
+ls "${PROJECT_DIR}/adr/" 2>/dev/null | grep -cE '^[0-9]{4}-' || true
 ```
 
 **If `NO_PROJECT`:** Stop — "No project found. Run /gsd:new-project first." Exit.
@@ -29,14 +31,17 @@ ls .planning/adr/ 2>/dev/null | grep -cE '^[0-9]{4}-' || true
 
 **Text mode** (`--text` OR `workflow.text_mode: true`): replace every `AskUserQuestion` with a plain-text numbered list.
 
-**Next ADR number:** the last command prints how many `NNNN-` ADRs exist; the new one is that count + 1, zero-padded to 4 (e.g. first ADR → `0001`). Create `.planning/adr/` if missing.
+**Next ADR number:** the last command prints how many `NNNN-` ADRs exist; the new one is that count + 1, zero-padded to 4 (e.g. first ADR → `0001`). Create `{PROJECT_DIR}/adr/` if missing.
 
 ## Step 2: Load context
 
 ```bash
-cat .planning/PROJECT.md 2>/dev/null || true
-cat .planning/REQUIREMENTS.md 2>/dev/null || true
-cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_PATH}" 2>/dev/null || true
+cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null || true
+cat "${PROJECT_DIR}/DOMAIN-MODEL.md" 2>/dev/null || true
 ```
 
 **Read `@~/.claude/gsd-core/references/architecture-decision.md` now** — it defines the two axes, the rung-signals, the "tall enough" gates, the Hard-Parts disintegrators/integrators, and the over-/under-engineering meta-tell.
@@ -48,7 +53,9 @@ cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
 **Design-provided mode.** When `query project mode` reports a provided design, the design's structural facts (entity/field shapes, screens→module mapping) are already lifted into `DOMAIN-MODEL.md` / `DESIGN-INVENTORY.md` by `model-domain`; consume them for the module map (Step 4.5) and the seam (Step 5.5) — the design is the authority on the **observable** structure. If `DOMAIN-MODEL.md` is thin and a provided design exists, read it per `@~/.claude/gsd-core/references/design-ingestion.md` before deciding the module map rather than inventing one. DDD still owns the *internal* rung per subdomain (§ Source precedence) — don't let the design's screen count dictate the persistence schema or the Axis-A rung.
 
 ```bash
-ls .planning/codebase/ARCHITECTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+ls "${PLANNING_ROOT}/codebase/ARCHITECTURE.md" >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
 If maps exist, `cat .planning/codebase/ARCHITECTURE.md` (consume STRUCTURE.md/CONCERNS.md as needed); if real source exists but no maps, suggest `/gsd:map-codebase` first. Then run Steps 3–5 in **assess-then-evolve** form:
@@ -135,7 +142,7 @@ Decide and record in the ADR (one short "Service contract & telemetry floor" sub
 
 Once approved, render `@~/.claude/gsd-core/templates/adr.md` (fill `[NNNN]` with the next number, `[DATE]` with today's date, `[PROJECT_TITLE]` from PROJECT.md, Status = Accepted). Fill: Context (complexity + NFRs + team/ops), Decision (Axis A per-subdomain table + Axis B with the three gate answers + tenancy when multi-tenant + the Module map + the **Service contract & telemetry floor** subsection from Step 5.5), Promotion triggers (component → observable condition → response), Consequences (incl. **fitness functions** to enforce boundaries), Alternatives rejected, and the over-/under-engineering check (each non-floor rung ↔ its concrete requirement).
 
-Write to `.planning/adr/NNNN-architecture.md`. Capture *why* and trade-offs, not implementation detail.
+Write to `{PROJECT_DIR}/adr/NNNN-architecture.md` (the directory Step 1 printed). Capture *why* and trade-offs, not implementation detail.
 
 <!-- FORK:context BEGIN -->
 After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md` per `gsd-core/references/context-lifecycle.md` (skip if `context_lifecycle.discussion_logs` is disabled).
@@ -144,11 +151,12 @@ After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md`
 ## Step 7: Commit
 
 ```bash
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 gsd_run project strategy-done recommend-architecture 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
-  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: record architecture decision (ADR-NNNN)" --files .planning/adr/NNNN-architecture.md .planning/PROJECT.md $DLOG
+  DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: record architecture decision (ADR-NNNN)" --files "${PROJECT_DIR}/adr/NNNN-architecture.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"}
 else
   echo "ADR written but not committed (commit_docs is false)."
 fi
@@ -171,7 +179,7 @@ Next: /gsd:security-strategy   (app-wide security posture — thin/scale-to-zero
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=recommend-architecture` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
+**Roadmap reconciliation** (only when `{planning_root}/ROADMAP.md` already exists (`{planning_root}`: the active scope's root, from `planning.inspect`) — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this ADR. Scan it against the module map and topology — if a phase straddles module seams, the walking skeleton is missing/misplaced, or a buy-decision moots a build-phase, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known ADR↔roadmap contradiction unspoken.
 
 </process>
 

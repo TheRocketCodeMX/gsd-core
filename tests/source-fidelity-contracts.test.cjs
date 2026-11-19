@@ -195,7 +195,8 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
   test('code-reviewer is the diff-time fidelity-loss catcher AND is handed the oracle', () => {
     has(AG('gsd-code-reviewer.md'), 'fidelity-loss');
     // The hook is inert unless the spawn prompt actually hands it the oracle (the residual dead READ seam).
-    has(WF('code-review.md'), '.planning/DESIGN-INVENTORY.md');
+    // align-1.22.0: the oracle sits beside PROJECT.md, resolved per scope (upstream #5861 mechanism).
+    has(WF('code-review.md'), '"${PROJECT_PATH%/*}/DESIGN-INVENTORY.md"');
   });
 
   test('the verifier records a structured Design-fit verdict (auditable, not buried in prose)', () => {
@@ -324,6 +325,9 @@ describe('fork fences that run raw git ignore an inherited GIT_DIR / GIT_WORK_TR
       { author: 'cy', files: { 'a.txt': '4' } },
     ]);
     const decoy = repo('gsd-gd-decoy-', [{ author: 'z', files: { 'z.txt': 'z' } }]);
+    // align-1.22.0: the fence resolves the scope root (`planning.inspect`), which needs a project's .planning/ —
+    // cicd-strategy only runs on an initialized project (Step 1 stops on NO_PROJECT). Untracked: no history change.
+    fs.mkdirSync(path.join(dir, '.planning'), { recursive: true });
     try {
       const out = run(dir, fenceWith(WF('cicd-strategy.md'), 'MERGES_90D='), decoyEnv(decoy));
       assert.match(out, /^MERGES_90D=\s*4$/m, out);

@@ -85,7 +85,7 @@ if [ ! -f "$CAPSULE" ]; then echo "ABSENT"; else gsd_run context provenance --fi
 
 Never inflate the stamp: it is the defense that lets downstream calibrate trust.
 
-**6. MASTER-CONTEXT (milestone scope only):** render `gsd-core/templates/master-context.md` → `.planning/MASTER-CONTEXT.md` (same render-direct strip rules) ONLY when cross-phase content exists: multi-repo (`planning.sub_repos` in config), brownfield (**Mode:** in PROJECT.md), an existing investigation/research corpus, or a `rich`-quality session. Otherwise skip — no MASTER means zero re-anchor overhead for small projects. If MASTER already exists, refresh it in place per its curation rules (supersede; never silently drop what is still true).
+**6. MASTER-CONTEXT (milestone scope only):** render `gsd-core/templates/master-context.md` → `MASTER-CONTEXT.md` next to PROJECT.md (`init.resume` `project_path`; `.planning/` unless `GSD_PROJECT` names a project) (same render-direct strip rules) ONLY when cross-phase content exists: multi-repo (`planning.sub_repos` in config), brownfield (**Mode:** in PROJECT.md), an existing investigation/research corpus, or a `rich`-quality session. Otherwise skip — no MASTER means zero re-anchor overhead for small projects. If MASTER already exists, refresh it in place per its curation rules (supersede; never silently drop what is still true).
 
 **7. Verify at birth, then commit:**
 
@@ -134,11 +134,11 @@ GSD_ARGS=${GSD_ARGS%$'\n'}
 GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 _gsd_field() { node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const v=o[process.argv[2]];process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
-STATE_PATH=$(_gsd_field "$INIT" state_path)
+STATE_PATH=$(_gsd_field "$INIT" state_path); PROJECT_PATH=$(_gsd_field "$INIT" project_path); : "${PROJECT_PATH:?}"   # MASTER-CONTEXT.md sits next to PROJECT.md
 REC=$(gsd_run query state.record-session --stopped-at "<one line: current position>" --resume-file "<active capsule path>" ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)
 # state.record-session exits 0 even when it wrote nothing (e.g. {"error":"STATE.md not found"}) — check the result.
 [ "$(_gsd_field "$REC" recorded)" = true ] || echo "flush_session: NOT recorded — state.record-session returned ${REC:-<no output>} (state_path=${STATE_PATH:-<unresolved>})"
-gsd_run query commit "docs(context): flush knowledge checkpoint" --files .planning/MASTER-CONTEXT.md <capsule> ${STATE_PATH:+"$STATE_PATH"}
+gsd_run query commit "docs(context): flush knowledge checkpoint" --files "${PROJECT_PATH%/*}/MASTER-CONTEXT.md" <capsule> ${STATE_PATH:+"$STATE_PATH"}
 ```
 
 If the fence printed `flush_session: NOT recorded`, say so in the flush summary — the session position was not saved (wrong or missing `--ws`, or no STATE.md) — rather than reporting a clean checkpoint.
@@ -163,7 +163,8 @@ GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
 GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 gsd_run context verify --milestone ${GSD_WS:+--ws=${GSD_WS##* }}
-gsd_run query commit "docs(context): curate MASTER-CONTEXT" --files .planning/MASTER-CONTEXT.md
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"
+gsd_run query commit "docs(context): curate MASTER-CONTEXT" --files "${PROJECT_PATH%/*}/MASTER-CONTEXT.md"
 ```
 
 Fix flagged anchors — or annotate them `[STALE — <date>]` — before committing.

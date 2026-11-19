@@ -16,9 +16,11 @@ Establish strategic Domain-Driven Design foundations for a greenfield project: a
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 RESPONSE_LANG=$(gsd_run query config-get response_language --raw 2>/dev/null || true)
-ls .planning/PROJECT.md >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+ls "${PROJECT_PATH}" >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+echo "PROJECT_DIR=${PROJECT_DIR}"   # every .planning/<artifact> this skill names for a project-level file (PROJECT.md, the strategy docs, adr/, the discussion log) is this directory: .planning, or .planning/<name> under GSD_PROJECT
 ```
 
 **If `NO_PROJECT`:** Stop and display:
@@ -35,10 +37,13 @@ Exit.
 ## Step 2: Load context (internal grounding — do not show the user yet)
 
 ```bash
-cat .planning/PRODUCT-BRIEF.md 2>/dev/null || true
-cat .planning/PROJECT.md 2>/dev/null || true
-cat .planning/REQUIREMENTS.md 2>/dev/null || true
-cat .planning/ROADMAP.md 2>/dev/null || true
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_DIR}/PRODUCT-BRIEF.md" 2>/dev/null || true
+cat "${PROJECT_PATH}" 2>/dev/null || true
+cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null || true
+cat "${PLANNING_ROOT}/ROADMAP.md" 2>/dev/null || true
 ```
 
 **Read `@~/.claude/gsd-core/references/domain-modeling.md` now** — it defines the strategic-vs-tactical split, the core/supporting/generic criteria, and the misclassification check you will apply.
@@ -51,8 +56,10 @@ From the project docs, build an internal draft:
 **Brownfield mode (existing code).** Greenfield (define from docs/vision) is the default below. Trigger brownfield when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `.planning/codebase/*.md` exists OR real source is present: **reverse-engineer the domain from the code first, then reconcile** — don't model from a blank slate (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`, "Reverse-engineer, don't re-invent"):
 
 ```bash
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
 gsd_run query project mode 2>/dev/null   # Origin — robust + placeholder-aware (replaces the fragile sed read)
-ls .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+ls "${PLANNING_ROOT}/codebase/ARCHITECTURE.md" "${PLANNING_ROOT}/codebase/STRUCTURE.md" >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
 If maps exist, `cat .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md` (and STACK.md if useful). If real source exists but no maps, suggest `/gsd:map-codebase` first, or skim the source tree directly. Then, *before* drafting from vision:
@@ -73,7 +80,8 @@ Greenfield behavior (draft from docs/vision) remains the default when no code ex
 
 **Check for an existing model:**
 ```bash
-ls .planning/DOMAIN-MODEL.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+ls "${PROJECT_DIR}/DOMAIN-MODEL.md" >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ```
 If `EXISTS` and not `--auto`: ask (AskUserQuestion, header "Domain") whether to **Update** (refresh), **View** (show then Update/Skip), or **Skip** (keep existing — exit with: "Existing DOMAIN-MODEL.md preserved. Next: /gsd:plan-phase"). If `--auto`: update in place.
 
@@ -160,16 +168,17 @@ Render `@~/.claude/gsd-core/templates/domain-model.md` (fill `[DATE]` with today
 - **Bounded Contexts** (filled, candidate-recorded, or explicitly deferred). **Candidate-boundary rule (even without `--event-storming`):** a flagged polyseme OR third-party/legacy upstream vocabulary in the glossary is a *proven* boundary — don't merely defer it. Name the candidate contexts (one line each) and the seam relationship (default **ACL** against a third-party upstream), marked "candidate — refine in planning", noting `--event-storming` would formalize them. Recording only — never "single context assumed" next to a flagged boundary.
 - **Notes for downstream phases** — one line for architecture (e.g., "Core 'X' is high-complexity → expect a richer domain model; rest is CRUD") plus deferred boundaries. **Any polyseme / language conflict flagged in Step 3 MUST appear here**, even when bounded contexts are deferred.
 
-Write to `.planning/DOMAIN-MODEL.md`. **Do not include any architecture recommendation** — only the domain.
+Write to `{PROJECT_DIR}/DOMAIN-MODEL.md` (the directory Step 1 printed). **Do not include any architecture recommendation** — only the domain.
 
 ## Step 7: Commit
 
 ```bash
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 gsd_run project strategy-done model-domain 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
-  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: add domain model (ubiquitous language + subdomain distillation)" --files .planning/DOMAIN-MODEL.md .planning/PROJECT.md $DLOG
+  DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: add domain model (ubiquitous language + subdomain distillation)" --files "${PROJECT_DIR}/DOMAIN-MODEL.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"}
 else
   echo "DOMAIN-MODEL.md written but not committed (commit_docs is false)."
 fi
@@ -190,7 +199,7 @@ Next: /gsd:recommend-architecture   (uses the subdomain complexity) → security
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=model-domain` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
+**Roadmap reconciliation** (only when `{planning_root}/ROADMAP.md` already exists (`{planning_root}`: the active scope's root, from `planning.inspect`) — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md was created before this model existed. Scan it — if a finding invalidates or reshapes a phase (a phase straddling two candidate contexts, a buy-decision making a build-phase moot, a core needing an earlier walking-skeleton), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known contradiction between the model and the roadmap unspoken.
 
 </process>
 

@@ -6,9 +6,12 @@ Loaded by `plan-phase` Step 1.6 **only when `ELAB=stale`** (a coarse roadmap pre
 
 **Detection (run first — gated + idempotent via the marker):**
 ```bash
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"   # strategy artifacts sit next to PROJECT.md
 ELAB=skip
-if [ -f .planning/ROADMAP.md ] && ! grep -q 'Elaborated against strategy' .planning/ROADMAP.md; then
-  for f in .planning/adr/*.md .planning/SECURITY-STRATEGY.md .planning/FRONTEND-ARCHITECTURE.md .planning/TEST-STRATEGY.md .planning/INFRA-STRATEGY.md .planning/CICD-STRATEGY.md; do
+if [ -f "${PLANNING_ROOT}/ROADMAP.md" ] && ! grep -q 'Elaborated against strategy' "${PLANNING_ROOT}/ROADMAP.md"; then
+  for f in "${PROJECT_DIR}"/adr/*.md "${PROJECT_DIR}"/SECURITY-STRATEGY.md "${PROJECT_DIR}"/FRONTEND-ARCHITECTURE.md "${PROJECT_DIR}"/TEST-STRATEGY.md "${PROJECT_DIR}"/INFRA-STRATEGY.md "${PROJECT_DIR}"/CICD-STRATEGY.md; do
     [ -e "$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
   done
 fi
@@ -19,12 +22,12 @@ echo "roadmap_elaboration: $ELAB"
 Elaborate ONCE so phase *boundaries* reflect the locked decisions (Phase 1 absorbs the IaC/CI-CD/security scaffolding; split phases that straddle seams). Per-phase *detail* still comes from canonical_refs at plan time — this gate fixes only **structure**.
 
 - **Non-interactive (auto/autonomous/`--text`):** elaborate automatically; announce what changed.
-- **Interactive:** offer once (AskUserQuestion, header "Roadmap") — "Roadmap predates the strategy decisions (*list them*); elaborate its phase structure before planning? (recommended)". Decline → plan against the coarse roadmap, and append a decline marker `**Elaborated against strategy:** declined (<date>)` to `.planning/ROADMAP.md` so the gate honors the decline (its grep matches) and doesn't re-ask each phase.
+- **Interactive:** offer once (AskUserQuestion, header "Roadmap") — "Roadmap predates the strategy decisions (*list them*); elaborate its phase structure before planning? (recommended)". Decline → plan against the coarse roadmap, and append a decline marker `**Elaborated against strategy:** declined (<date>)` to `{roadmap_path}` so the gate honors the decline (its grep matches) and doesn't re-ask each phase.
 
 Spawn the roadmapper in elaborate-mode (omit `model=` to inherit):
 ```
 Agent(
-  prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon .planning/ROADMAP.md phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker. Return ROADMAP ELABORATED + a change summary.</objective>",
+  prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon {roadmap_path} phases + adjust boundaries against the now-locked strategy artifacts beside PROJECT.md (adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker. Return ROADMAP ELABORATED + a change summary.</objective>\n<write_targets>\n- ROADMAP.md: {roadmap_path}\n- STATE.md: {state_path}\n- REQUIREMENTS.md: {requirements_path}\n</write_targets>",
   subagent_type="gsd-roadmapper",
   description="Elaborate roadmap against strategy"
 )

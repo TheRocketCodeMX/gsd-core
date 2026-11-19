@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import planningWorkspace = require('./planning-workspace.cjs');
 
 interface RequiredSource { id: string; path: string; artifact: string; notes?: string; }
 interface LiteralSource { kind: string; path: string; note: string; }
@@ -55,7 +57,9 @@ function newestAdr(planningDir: string): string | null {
 }
 
 function resolveRequiredSources(cwd: string): ResolveResult {
-  const planning = path.join(cwd, '.planning');
+  // align-1.22.0: the strategy artifacts sit beside PROJECT.md, which upstream #5861 resolves per
+  // project (`planningDir(cwd, null)`: `.planning/<name>` under GSD_PROJECT, shared by workstreams).
+  const planning = planningWorkspace.planningDir(cwd, null);
   const projectPath = path.join(planning, 'PROJECT.md');
   const required: RequiredSource[] = [];
   const pending: string[] = [];

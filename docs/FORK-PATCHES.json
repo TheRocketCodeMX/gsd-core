@@ -333,11 +333,9 @@
   },
   {
    "path": "bin/install.js",
-   "feature": "uninstall-scoped-settings",
+   "feature": "hook-lib-roster",
    "mode": "anchors-only",
    "anchors": [
-    "settingsFilesToClean",
-    "_uninstallScopedSettingsFile",
     "hook-exit\\.js",
     "filename-classification\\.js",
     "'config-read\\.js', 'git-head-tree\\.js', 'secret-read-exemptions\\.js'"
