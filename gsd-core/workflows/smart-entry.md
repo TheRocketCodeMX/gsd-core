@@ -69,7 +69,7 @@ Parse `SNAPSHOT` as JSON. It has the shape:
 SNAPSHOT=$(gsd_run smart-entry --json 2>/dev/null)   # re-read: each fence is its own shell
 STRATEGY_ROUTE=""
 if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"paused"'; then
-  :   # a recorded pause routes to /gsd-resume-work first (upstream #6431); no strategy step jumps ahead of it
+  :   # a recorded pause routes to /gsd:resume-work first (upstream #6431); no strategy step jumps ahead of it
 elif printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
   && printf '%s' "$SNAPSHOT" | grep -Eq '"has_roadmap": *false' \
   && [ "$(gsd_run query project strategy-plan --pick found 2>/dev/null)" = "true" ]; then
