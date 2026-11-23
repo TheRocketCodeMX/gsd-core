@@ -381,3 +381,56 @@ describe('/gsd-new-project forwards --design / --no-design to init.new-project (
     });
   }
 });
+
+// Pre-ship matrix1230-A K8: the fork's source-fidelity lines in code-review's required-reading fence ended on
+// `[ -f "$ctx" ] && …`, so the fence exited 1 whenever the phase had no UI-SPEC (the last candidate), and the
+// list it built was never printed: a fresh-shell agent saw only "Exit code 1". Run the fence ALONE, with the
+// orchestrator's {phase_dir} filled in, and read what it prints.
+describe('code-review source-fidelity inputs: the fence runs alone, exits 0 and prints the oracle list (matrix1230-A K8)', { skip: process.platform === 'win32' ? 'bash fences' : false }, () => {
+  const os = require('node:os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const { scanFencedBlocks } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'markdown-sectionizer.cjs'));
+  const fence = () => {
+    const lines = read(WF('code-review.md')).split(/\r?\n/);
+    const b = scanFencedBlocks(lines).find((x) => x.closeLineIdx !== -1 && /^bash\b/.test(x.infoString)
+      && lines.slice(x.openLineIdx + 1, x.closeLineIdx).some((l) => l.includes('Source-fidelity inputs')));
+    assert.ok(b, 'code-review.md carries the source-fidelity fence');
+    return lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n');
+  };
+  function project(withUiSpec) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-cr-fidelity-'));
+    const phase = path.join(dir, '.planning', 'phases', '02-ui');
+    fs.mkdirSync(phase, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'), '# P\n\n## Mode\n- **Origin:** greenfield\n');
+    fs.writeFileSync(path.join(dir, '.planning', 'config.json'), '{}\n');
+    if (withUiSpec) fs.writeFileSync(path.join(phase, '02-UI-SPEC.md'), '# UI spec\n');
+    return { dir, phase };
+  }
+  function run(dir, phase) {
+    const env = { ...process.env, RUNTIME_DIR: ROOT, HOME: dir,
+      PATH: [path.join(ROOT, 'gsd-core', 'bin'), ...String(process.env.PATH || '').split(path.delimiter)
+        .filter((p) => !p.includes(`${path.sep}.claude${path.sep}gsd-core${path.sep}bin`))].join(path.delimiter) };
+    for (const k of ['GSD_PROJECT', 'GSD_WORKSTREAM', 'GSD_WS', 'GSD_SESSION_KEY']) delete env[k];
+    return runHook('-c', [fence().split('"{phase_dir}"').join(JSON.stringify(phase))], { interpreter: 'bash', cwd: dir, env });
+  }
+
+  test('no UI-SPEC in the phase: exit 0, PROJECT.md listed', () => {
+    const { dir, phase } = project(false);
+    try {
+      const r = run(dir, phase);
+      assert.equal(r.exitCode, 0, `exit ${r.exitCode}: ${r.stderr}`);
+      assert.match(r.stdout, /- \S*\.planning\/PROJECT\.md \(source-fidelity:/);
+      assert.doesNotMatch(r.stdout, /UI-SPEC/);
+    } finally { cleanup(dir); }
+  });
+
+  test('a UI-SPEC in the phase is listed too', () => {
+    const { dir, phase } = project(true);
+    try {
+      const r = run(dir, phase);
+      assert.equal(r.exitCode, 0, r.stderr);
+      assert.match(r.stdout, /- \S*02-ui\/02-UI-SPEC\.md \(source-fidelity:/);
+    } finally { cleanup(dir); }
+  });
+});

@@ -429,3 +429,72 @@ describe('gsd-roadmap honours --ws (upstream #4456/#4545 mechanism, init.new-mil
     assert.ok(advance.includes('Skill(skill="gsd-roadmap", args="--auto ${GSD_WS}")'));
   });
 });
+
+// Pre-ship matrix1230-B F1 / matrix1230-A K5: new-project Step 8's commit (rewritten by the fork when the
+// roadmap moved to /gsd-roadmap) named "$INSTRUCTION_FILE", which only the runtime-detection fence sets.
+// Run alone in a fresh shell it passed an empty pathspec, the commit failed (staging_failed) and
+// PROJECT.md / REQUIREMENTS.md stayed uncommitted. The fence now derives the file from the runtime the
+// orchestrator fills in, and refuses when that placeholder was left unfilled.
+describe('new-project Step 8: the finalize commit runs alone in a fresh shell (matrix1230-B F1)', { skip: process.platform === 'win32' ? 'bash fences' : false }, () => {
+  const os = require('os');
+  const { runHook } = require('./helpers/process-seam.cjs');
+  const { gitOrThrow } = require('./helpers/git-fixture.cjs');
+  const { cleanup } = require('./helpers.cjs');
+  const { scanFencedBlocks } = require('../gsd-core/bin/lib/markdown-sectionizer.cjs');
+
+  function finalizeFence() {
+    const lines = newProject.split(/\r?\n/);
+    const b = scanFencedBlocks(lines).find((x) => x.closeLineIdx !== -1 && /^bash\b/.test(x.infoString)
+      && lines.slice(x.openLineIdx + 1, x.closeLineIdx).some((l) => l.includes('"docs: finalize project context"')));
+    assert.ok(b, 'new-project.md has a bash fence with the finalize commit');
+    return lines.slice(b.openLineIdx + 1, b.closeLineIdx).join('\n');
+  }
+  function project() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-np-finalize-'));
+    for (const [rel, body] of [['.planning/config.json', '{"commit_docs":true}\n'], ['.gitignore', '.home/\n']]) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), body);
+    }
+    for (const a of [['init', '-q'], ['config', 'user.email', 't@example.com'], ['config', 'user.name', 't'], ['config', 'commit.gpgsign', 'false'], ['add', '.'], ['commit', '-qm', 'init']]) gitOrThrow(a, { cwd: dir });
+    fs.writeFileSync(path.join(dir, '.planning', 'PROJECT.md'), '# P\n\n## Strategy Plan\n');
+    fs.writeFileSync(path.join(dir, '.planning', 'REQUIREMENTS.md'), '# R\n');
+    return dir;
+  }
+  function run(dir, script) {
+    const env = { ...process.env, RUNTIME_DIR: ROOT, HOME: path.join(dir, '.home'),
+      PATH: [path.join(ROOT, 'gsd-core', 'bin'), ...String(process.env.PATH || '').split(path.delimiter)
+        .filter((p) => !p.includes(`${path.sep}.claude${path.sep}gsd-core${path.sep}bin`))].join(path.delimiter) };
+    for (const k of ['GSD_PROJECT', 'GSD_WORKSTREAM', 'GSD_WS', 'INSTRUCTION_FILE', 'RUNTIME']) delete env[k];
+    return runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
+  }
+  const fill = (fence, runtime) => fence
+    .split('"{project_path}"').join('".planning/PROJECT.md"')
+    .split('"{requirements_path}"').join('".planning/REQUIREMENTS.md"')
+    .split('RUNTIME="{runtime}"').join(`RUNTIME="${runtime}"`);
+
+  for (const [runtime, file] of [['claude', '.claude/CLAUDE.md'], ['codex', 'AGENTS.md']]) {
+    test(`runtime ${runtime}: commits PROJECT.md, REQUIREMENTS.md and ${file}`, () => {
+      const dir = project();
+      try {
+        fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+        fs.writeFileSync(path.join(dir, file), '# guide\n');   // what Step 8's generate-claude-md wrote
+        const r = run(dir, fill(finalizeFence(), runtime));
+        assert.equal(r.exitCode, 0, r.stderr);
+        const files = gitOrThrow(['show', '--name-only', '--format=%s', 'HEAD'], { cwd: dir }).trim().split('\n');
+        assert.equal(files[0], 'docs: finalize project context', `no finalize commit: ${r.stdout}`);
+        assert.deepEqual(files.slice(1).filter(Boolean).sort(), ['.planning/PROJECT.md', '.planning/REQUIREMENTS.md', file].sort());
+      } finally { cleanup(dir); }
+    });
+  }
+
+  test('an unfilled runtime placeholder fails closed with a message, committing nothing', () => {
+    const dir = project();
+    try {
+      const head = gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+      const r = run(dir, finalizeFence().split('"{project_path}"').join('".planning/PROJECT.md"').split('"{requirements_path}"').join('".planning/REQUIREMENTS.md"'));
+      assert.notEqual(r.exitCode, 0);
+      assert.match(r.stderr, /Fill RUNTIME with the runtime detected above/);
+      assert.equal(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head);
+    } finally { cleanup(dir); }
+  });
+});

@@ -1,7 +1,7 @@
 <purpose>
 GSD smart entry — the state-aware front door. Detect the current project situation via `gsd_run smart-entry --json`, present a short menu of the right next actions, and dispatch to exactly one existing GSD command. This is a launcher/router only; it never does the work itself.
 
-This is a *menu* front door, not a second router. For in-project forward motion (planning → executing → verify-pending) the recommended action is `/gsd:progress --next`, which delegates to the single gated advancement engine (`workflows/next.md`: Route 0 resume-incomplete-phase + Gates 1-3). smart-entry adds value only where `--next` cannot reach: pre-project, remediation (paused/blocked/verify-failed), and lifecycle exits (idle-stranded/complete). See `docs/adr/1787-gsd-next-smart-entry.md`.
+This is a *menu* front door, not a second router. For in-project forward motion (planning → executing → verify-pending) the recommended action is `/gsd:progress --next`, which delegates to the single gated advancement engine (`workflows/next.md`: Gate 0 recorded pause, Route 0 resume-incomplete-phase and Gates 1-3). smart-entry adds value only where `--next` cannot reach: pre-project, remediation (paused/blocked/verify-failed), and lifecycle exits (idle-stranded/complete). See `docs/adr/1787-gsd-next-smart-entry.md`.
 </purpose>
 
 <required_reading>
@@ -66,14 +66,22 @@ Parse `SNAPSHOT` as JSON. It has the shape:
 **Strategy chain in progress (roadmap pending) — checked BEFORE the menu is presented (#87).** The roadmap is generated once, at the end of the strategy chain, by `/gsd:roadmap`. So a project that is mid-chain has PROJECT.md (with a `## Strategy Plan`) and REQUIREMENTS.md but no ROADMAP.md / STATE.md yet. `smart-entry` classifies that shape as `needs-first-phase` ("plan your first phase") although no roadmap exists to plan a phase from. Same route as `progress` / `resume-project`'s mid-chain check:
 
 ```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1); GSD_WS="${_TWS:-$GSD_WS}"   # a typed --ws selects the workstream here too
+SNAPSHOT=$(gsd_run smart-entry --json ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null)   # re-read: each fence is its own shell
 STRATEGY_ROUTE=""
-if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
+if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"paused"'; then
+  :   # a recorded pause routes to /gsd:resume-work first (upstream #6431); no strategy step jumps ahead of it
+elif printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
   && printf '%s' "$SNAPSHOT" | grep -Eq '"has_roadmap": *false' \
   && [ "$(gsd_run query project strategy-plan --pick found 2>/dev/null)" = "true" ]; then
   NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # next step neither done nor skipped (ledgered skips excluded), or empty
   STRATEGY_ROUTE="${NEXT_STRATEGY:-roadmap}"
 elif printf '%s' "$SNAPSHOT" | grep -Eq '"has_roadmap": *true' \
-  && [ "$(gsd_run query roadmap.analyze --pick total_plans 2>/dev/null)" = "0" ]; then
+  && [ "$(gsd_run query roadmap.analyze ${GSD_WS:+--ws=${GSD_WS##* }} --pick total_plans 2>/dev/null)" = "0" ]; then
   # Milestone start (no phase of the active milestone planned): new-milestone's recommended step comes first.
   STRATEGY_ROUTE=$(gsd_run query project strategy-plan --raw 2>/dev/null); [ -n "$STRATEGY_ROUTE" ] && STRATEGY_MILESTONE=true
 fi

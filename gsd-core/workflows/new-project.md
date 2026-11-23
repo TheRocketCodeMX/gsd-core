@@ -48,7 +48,7 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 
 **If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
-**If `agents_installed` is false:** Display a warning before proceeding:
+**If `agents_installed` is `false` (`null` is no warning: the check could not run, see `agents_check_reason`):** Display a warning before proceeding:
 ```text
 ⚠ GSD agents not installed. The following agents are missing from your agents directory:
   {missing_agents joined with newline}
@@ -1027,6 +1027,8 @@ Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=s
 **Persist the choice for the deferred roadmap.** The roadmap is no longer created here — it is generated after the strategy chain by `/gsd:roadmap` (`gsd-roadmap`), which runs in a later session and cannot see this shell variable. Record the choice as a marker in PROJECT.md so the deferred roadmap applies the correct per-phase template:
 
 ```bash
+PROJECT_MODE="{project_mode}"   # mvp | standard, the choice above (this fence is its own shell)
+case "$PROJECT_MODE" in mvp|standard) ;; *) echo "PROJECT_MODE must be mvp or standard, got: $PROJECT_MODE" >&2; exit 1;; esac
 grep -qi 'roadmap-mode:' "{project_path}" 2>/dev/null || printf '\n<!-- roadmap-mode: %s -->\n' "$PROJECT_MODE" >> "{project_path}"
 ```
 
@@ -1060,6 +1062,8 @@ This ensures new projects get the default GSD workflow-enforcement guidance and 
 **Commit project context (ROADMAP.md / STATE.md do not exist yet — they are written later by `/gsd:roadmap`):**
 
 ```bash
+RUNTIME="{runtime}"; case "$RUNTIME" in ""|*[{}]*) echo "Fill RUNTIME with the runtime detected above (each fence is its own shell)." >&2; exit 1;; esac
+INSTRUCTION_FILE=$(gsd_run query project-instruction-file --runtime "$RUNTIME"); : "${INSTRUCTION_FILE:?}"
 gsd_run query commit "docs: finalize project context" --files "{project_path}" "{requirements_path}" "$INSTRUCTION_FILE"
 ```
 

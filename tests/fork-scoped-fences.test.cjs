@@ -126,6 +126,38 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
     });
   }
 
+  // Matrix 1230-B F2: the commit fences re-derived commit_docs without the workstream, so commit_docs:false set
+  // only in workstreams/<ws>/config.json was ignored when --ws was typed (no GSD_WORKSTREAM, no pointer). Each
+  // commit fence now parses the typed --ws and resolves commit_docs in that scope (config-get --ws).
+  for (const [skill, artifact] of STRATEGY_COMMITS) {
+    for (const wsArg of ['--ws ws1', '--ws "ws1"']) {
+      test(`/gsd-${skill} commit step alone with a typed ${wsArg} honours the workstream's commit_docs`, () => {
+        const commitFence = (args) => fence(WF(`${skill}.md`), `strategy-done ${skill}`, args);
+        const target = path.join(dir, '.planning', ...artifact.split('/'));   // PROJECT.md and the strategy docs are shared under workstreams
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `# shared ${artifact}\n`);
+        fs.writeFileSync(path.join(dir, '.planning', 'workstreams', 'ws1', 'config.json'), '{"commit_docs":false}\n');
+        const head = gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+        assert.match(run(dir, commitFence(`--auto ${wsArg}`)), /written but not committed \(commit_docs is false\)/);
+        assert.equal(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head, `${skill}: committed although ws1 sets commit_docs false`);
+        // The root project (no --ws) still commits: its own config says true.
+        run(dir, commitFence('--auto'));
+        assert.notEqual(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head, `${skill}: the root scope must still commit`);
+      });
+    }
+  }
+
+  // Matrix 1230-A K6: transition's suite-health step resolved the root planning tree when --ws was only typed.
+  test('transition suite_health_compare with a typed --ws reads the workstream phase\'s SUMMARY', () => {
+    for (const [scope, mark] of [[path.join('.planning', 'phases', '01-core'), 'ROOTMARK'], [path.join('.planning', 'workstreams', 'ws1', 'phases', '01-core'), 'WSMARK']]) {
+      fs.mkdirSync(path.join(dir, scope), { recursive: true });
+      fs.writeFileSync(path.join(dir, scope, `01-01-SUMMARY-${mark}.md`.replace(`-${mark}`, '')), `---\nsuite-metrics:\n  test_count: 1\n---\n# ${mark}\n`);
+    }
+    const step = (args) => fence(WF('transition.md'), '_GSD_PLACEHOLDER=', args).split('phases/XX-current"').join('phases/01-core"');
+    assert.match(run(dir, step('--ws "ws1"')), /workstreams[\\/]ws1[\\/]phases[\\/]01-core[\\/]01-01-SUMMARY\.md/);
+    assert.match(run(dir, step('')), /\.planning[\\/]phases[\\/]01-core[\\/]01-01-SUMMARY\.md/);
+  });
+
   test('/gsd-testing-strategy Step 2 reads the TESTING-STANDARDS.md it writes and commits (the scoped one), a repo-root file only as fallback', () => {
     const step2 = fence(WF('testing-strategy.md'), 'TESTING_STANDARDS=');
     fs.writeFileSync(path.join(dir, 'TESTING-STANDARDS.md'), 'ROOTMARK repo-wide standards\n');
@@ -158,7 +190,10 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
       assert.ok(fences.length > 0, `${skill}: no planning.inspect fence`);
       for (const b of fences) assert.ok(b.includes('$ARGUMENTS') && b.includes('_TWS='), `${skill}: a planning.inspect fence ignores a typed --ws:\n${b}`);
     }
-    run(dir, `ASVS_LEVEL=2\n${fence(WF('security-strategy.md'), 'config-set workflow.security_asvs_level', '--auto --ws ws1')}`);
+    // align-1.23.0: the fence assigns ASVS_LEVEL from its {asvs_level} placeholder (each fence is its own shell, #381).
+    const asvs = fence(WF('security-strategy.md'), 'config-set workflow.security_asvs_level', '--auto --ws ws1');
+    assert.ok(asvs.includes('ASVS_LEVEL="{asvs_level}"'), 'the ASVS fence assigns the level itself');
+    run(dir, asvs.split('{asvs_level}').join('2'));
     assert.match(fs.readFileSync(path.join(dir, '.planning', 'workstreams', 'ws1', 'config.json'), 'utf8'), /"security_asvs_level": 2/);
     fs.writeFileSync(path.join(dir, '.planning', 'SECURITY-STRATEGY.md'), '# shared security posture\n');
     run(dir, fence(WF('security-strategy.md'), 'strategy-done security-strategy', '--auto --ws ws1'));
@@ -175,6 +210,8 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
 
   for (const [label, args, env, scope] of [
     ['--ws ws1', '--ws ws1', {}, path.join('.planning', 'workstreams', 'ws1')],
+    // align-1.23.0, upstream #6218: a quoted --ws value selects its workstream (the fork fences use upstream's parse).
+    ['--ws "ws1" (quoted)', '--ws "ws1"', {}, path.join('.planning', 'workstreams', 'ws1')],
     ['GSD_PROJECT=beta', '', { GSD_PROJECT: 'beta' }, path.join('.planning', 'beta')],
   ]) {
     test(`/gsd-roadmap Step 4 commit under ${label} stages that scope's ROADMAP, STATE and REQUIREMENTS`, () => {
