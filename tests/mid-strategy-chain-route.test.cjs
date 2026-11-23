@@ -308,6 +308,30 @@ describe('matrix1230-B B1: a pause mid-chain resumes back into the strategy chai
     });
   }
 
+  // Matrix 1230-A K6: the fork route read the root project when --ws was only typed (no GSD_WORKSTREAM, no pointer).
+  test('/gsd-next with a typed --ws routes the workstream\'s chain, not the root\'s (K6)', (t) => {
+    const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gsd-k6-'));
+    t.after(() => cleanup(dir));
+    fs.mkdirSync(path.join(dir, '.home'), { recursive: true });
+    gitOrThrow(['init', '-q'], { cwd: dir });
+    write(dir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | recommended |'));
+    write(dir, '.planning/config.json', '{}\n');
+    // root: building already (a roadmap with a planned phase) → no strategy route
+    write(dir, '.planning/REQUIREMENTS.md', '# Requirements\n\n- [ ] R1\n');
+    write(dir, '.planning/ROADMAP.md', '# Roadmap\n\n## Phases\n\n- [ ] **Phase 1: Foundation**\n\n### Phase 1: Foundation\n**Goal:** build it\n');
+    write(dir, '.planning/STATE.md', '---\nstatus: executing\n---\n# State\n\n**Phase:** 1\n**Status:** executing\n');
+    write(dir, '.planning/phases/01-foundation/01-01-PLAN.md', '# plan\n');
+    // ws1: mid-chain (no roadmap yet)
+    write(dir, '.planning/workstreams/ws1/REQUIREMENTS.md', '# Requirements\n\n- [ ] W1\n');
+    write(dir, '.planning/workstreams/ws1/STATE.md', '# State\n');
+    write(dir, '.planning/workstreams/ws1/config.json', '{}\n');
+    const fenceWithArgs = (args) => forkBash().split('\n$ARGUMENTS\nGSD_ARGS_END').join(`\n${args}\nGSD_ARGS_END`);
+    const r = (args) => sh(dir, `${fenceWithArgs(args)}\nprintf "ROUTE=%s\\n" "$STRATEGY_ROUTE"`).match(/^ROUTE=(.*)$/m)[1];
+    assert.equal(r(''), '', 'the root project is building: no strategy route');
+    assert.equal(r('--ws ws1'), 'security-strategy');
+    assert.equal(r('--ws "ws1"'), 'security-strategy');
+  });
+
   test('a project with a roadmap is not mid-chain: resume takes upstream\'s routes (and consumes the handoff there)', (t) => {
     const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gsd-b1-'));
     t.after(() => cleanup(dir));

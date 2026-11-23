@@ -147,6 +147,17 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
     }
   }
 
+  // Matrix 1230-A K6: transition's suite-health step resolved the root planning tree when --ws was only typed.
+  test('transition suite_health_compare with a typed --ws reads the workstream phase\'s SUMMARY', () => {
+    for (const [scope, mark] of [[path.join('.planning', 'phases', '01-core'), 'ROOTMARK'], [path.join('.planning', 'workstreams', 'ws1', 'phases', '01-core'), 'WSMARK']]) {
+      fs.mkdirSync(path.join(dir, scope), { recursive: true });
+      fs.writeFileSync(path.join(dir, scope, `01-01-SUMMARY-${mark}.md`.replace(`-${mark}`, '')), `---\nsuite-metrics:\n  test_count: 1\n---\n# ${mark}\n`);
+    }
+    const step = (args) => fence(WF('transition.md'), '_GSD_PLACEHOLDER=', args).split('phases/XX-current"').join('phases/01-core"');
+    assert.match(run(dir, step('--ws "ws1"')), /workstreams[\\/]ws1[\\/]phases[\\/]01-core[\\/]01-01-SUMMARY\.md/);
+    assert.match(run(dir, step('')), /\.planning[\\/]phases[\\/]01-core[\\/]01-01-SUMMARY\.md/);
+  });
+
   test('/gsd-testing-strategy Step 2 reads the TESTING-STANDARDS.md it writes and commits (the scoped one), a repo-root file only as fallback', () => {
     const step2 = fence(WF('testing-strategy.md'), 'TESTING_STANDARDS=');
     fs.writeFileSync(path.join(dir, 'TESTING-STANDARDS.md'), 'ROOTMARK repo-wide standards\n');

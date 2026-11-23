@@ -110,7 +110,11 @@ cat "${PROJECT_PATH}"
 **Re-anchor (when `.planning/MASTER-CONTEXT.md` exists):**
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path 2>/dev/null)
 [ -n "$PROJECT_PATH" ] && ls "${PROJECT_PATH%/*}/MASTER-CONTEXT.md" 2>/dev/null || true   # next to PROJECT.md: .planning/, or .planning/<name> under GSD_PROJECT
 ```
 
