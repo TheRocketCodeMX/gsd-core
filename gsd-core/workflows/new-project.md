@@ -1062,6 +1062,8 @@ This ensures new projects get the default GSD workflow-enforcement guidance and 
 **Commit project context (ROADMAP.md / STATE.md do not exist yet — they are written later by `/gsd:roadmap`):**
 
 ```bash
+RUNTIME="{runtime}"; case "$RUNTIME" in ""|*[{}]*) echo "Fill RUNTIME with the runtime detected above (each fence is its own shell)." >&2; exit 1;; esac
+INSTRUCTION_FILE=$(gsd_run query project-instruction-file --runtime "$RUNTIME"); : "${INSTRUCTION_FILE:?}"
 gsd_run query commit "docs: finalize project context" --files "{project_path}" "{requirements_path}" "$INSTRUCTION_FILE"
 ```
 
