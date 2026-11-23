@@ -35,13 +35,34 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `requirements_exists`, `init_incomplete`, `has_interrupted_agent`, `interrupted_agent_id`, `commit_docs`.
 
 <!-- FORK:strategy BEGIN -->
-**Strategy chain in progress (roadmap pending) — checked BEFORE the `init_incomplete` route below.** The roadmap is generated once, at the end of the strategy chain, by `/gsd:roadmap`, so a fresh project that is mid-chain has PROJECT.md but no ROADMAP.md / STATE.md yet — that is expected, not an interrupted bootstrap. If `project_exists` is true, `roadmap_exists` is false, `state_exists` is false, AND PROJECT.md contains a `## Strategy Plan` section, the strategy chain is still running:
+**Strategy chain in progress (roadmap pending) — checked BEFORE the `init_incomplete` route below.** The roadmap is generated once, at the end of the strategy chain, by `/gsd:roadmap`, so a project that is mid-chain has PROJECT.md with a `## Strategy Plan` but no ROADMAP.md yet (and no STATE.md, except inside a workstream). That is expected, not an interrupted bootstrap. This fence decides it in its own shell, and whether `/gsd:pause-work` recorded a pause (it always writes the root `.planning/HANDOFF.json`, #6431):
+
+```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1); GSD_WS="${_TWS:-$GSD_WS}"
+MID_CHAIN=false; NEXT_STRATEGY=""; PAUSED=false
+if [ "$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick roadmap_exists 2>/dev/null)" = "false" ] \
+  && [ "$(gsd_run query project strategy-plan --pick found 2>/dev/null)" = "true" ]; then
+  MID_CHAIN=true; NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # next step neither done nor skipped, or empty
+fi
+[ -f .planning/HANDOFF.json ] && PAUSED=true
+echo "mid_chain=$MID_CHAIN paused=$PAUSED next_strategy=${NEXT_STRATEGY:-roadmap}"
+```
+
+**If `mid_chain=false`:** continue with the routes below.
+
+**If `mid_chain=true` and `paused=true`** (paused mid-chain): restore the handoff, do not exit here and do not take the `init_incomplete` route. Skip `load_state` and the phase lines of `present_status` (no roadmap places a phase yet), run `check_incomplete_work` and surface the handoff as it says, then offer: 1. Continue the strategy chain → `/gsd-{next_strategy}` (`/gsd:roadmap` when it is `roadmap`); 2. Generate the roadmap now → `/gsd:roadmap`; 3. Discard the handoff and reassess. Once the user chooses, run `consume_handoff` and show the chosen command directly, so `/gsd:next` routes into the chain again.
+
+**If `mid_chain=true` and `paused=false`:**
 
 ```
 Strategy chain in progress — roadmap pending.
 
-There is no STATE.md to resume from yet: the roadmap is generated once, at the end of the strategy chain.
-Continue with your next strategy step, or run /gsd:roadmap to generate the roadmap now
+There is no roadmap to resume from yet: it is generated once, at the end of the strategy chain.
+Continue with your next strategy step (/gsd-{next_strategy}), or run /gsd:roadmap to generate the roadmap now
 (it will use whatever strategy artifacts exist so far, then point you into the build loop).
 ```
 
