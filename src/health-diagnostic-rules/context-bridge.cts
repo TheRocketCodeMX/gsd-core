@@ -2,7 +2,7 @@
  * Context Bridge rule (#6430): one code, W032, reporting that a plugin-only Claude Code install has no context
  * warnings. The plugin registers `gsd-context-monitor.js` (`hooks/hooks.json`) but not the statusline that feeds
  * it: the monitor reads the bridge file `/tmp/claude-ctx-{session_id}.json`, and `gsd-statusline.js` is its only
- * writer, so the 35% and 25% remaining warnings never fire and nothing says so. The maintainer chose to disclose
+ * writer, so its usage-driven messages never fire (FORK: no threshold named) and nothing says so. The maintainer chose to disclose
  * the gap rather than ship a plugin statusLine or a monitor fallback signal; the opt-in hooks that only
  * `bin/install.js` registers share the gap (named in the remedy).
  *
@@ -122,8 +122,8 @@ function checkContextBridge(snapshot: PlanningSnapshot): Diagnostic[] {
       severity: SEVERITY.WARNING,
       message:
         'Context warnings are inactive: the gsd-core Claude Code plugin registers the context monitor hook but not the ' +
-        'statusline that writes the metrics it reads (/tmp/claude-ctx-{session_id}.json), so the 35% and 25% remaining ' +
-        'warnings never fire. The opt-in hooks (hooks.workflow_guard, hooks.community, graphify.auto_update) are registered ' +
+        'statusline that writes the metrics it reads (/tmp/claude-ctx-{session_id}.json), so its usage-driven context ' +
+        'messages never fire. The opt-in hooks (hooks.workflow_guard, hooks.community, graphify.auto_update) are registered ' +
         'only by the npm installer and are inactive on a plugin-only install too.',
       remedy: adviseRemedy(
         `Install the statusline and the opt-in hooks with the npm installer: npx ${PACKAGE_NAME}@latest --global ` +

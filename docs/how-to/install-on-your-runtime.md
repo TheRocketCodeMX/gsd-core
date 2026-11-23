@@ -100,7 +100,7 @@ claude plugin update gsd-core
 
 The plugin wires gsd-core's always-on guard and update hooks automatically via `hooks/hooks.json`. No manual hook registration is required.
 
-The plugin does **not** provide context warnings: it registers the context monitor hook but not the statusline that feeds it, so the 35% and 25% remaining-context warnings need the npm install (`npx @therocketcode/gsd-core@latest --global`, with `--force-statusline` to replace a statusLine that is already set), which registers `gsd-statusline`. The opt-in hooks (`hooks.workflow_guard`, `hooks.community`, `graphify.auto_update`) are likewise registered only by the npm installer, so their config switches do nothing on a plugin-only install. `/gsd-health` reports this as `W032` when the plugin is enabled and no statusline is wired.
+The plugin does **not** provide the usage-driven context nudges: it registers the context monitor hook but not the statusline that feeds it, so the knowledge-flush suggestions at high context usage need the npm install (`npx @therocketcode/gsd-core@latest --global`, with `--force-statusline` to replace a statusLine that is already set), which registers `gsd-statusline`. The opt-in hooks (`hooks.workflow_guard`, `hooks.community`, `graphify.auto_update`) are likewise registered only by the npm installer, so their config switches do nothing on a plugin-only install. `/gsd-health` reports this as `W032` when the plugin is enabled and no statusline is wired.
 
 **Prerequisites**
 

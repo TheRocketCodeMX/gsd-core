@@ -575,7 +575,8 @@
     "kind: unit\\s+#[^\\n]*agentic_certification",
     "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
     "^suite-metrics:$",
-    "<suite_metrics_guidance>"
+    "<suite_metrics_guidance>",
+    "An executor never authors it; only `verify-work/steps/agentic-certification\\.md` writes it"
    ]
   },
   {
@@ -1078,7 +1079,8 @@
    "feature": "identity",
    "mode": "anchors-only",
    "anchors": [
-    "auto-advance-endings\\.test\\.cjs"
+    "auto-advance-endings\\.test\\.cjs",
+    "fork-fence-own-shell\\.test\\.cjs"
    ]
   },
   {
@@ -1121,7 +1123,8 @@
    "anchors": [
     "roadmap-after-strategy\\.test\\.cjs",
     "milestone-name-duplication\\.test\\.cjs",
-    "context-enrichment\\.test\\.cjs"
+    "context-enrichment\\.test\\.cjs",
+    "context-bridge \\(#6430"
    ]
   },
   {
@@ -1731,7 +1734,8 @@
     "kind: unit\\s+#[^\\n]*agentic_certification",
     "`verification\\[\\]\\.kind`[^\\n]*agentic_certification",
     "^suite-metrics:$",
-    "<suite_metrics_guidance>"
+    "<suite_metrics_guidance>",
+    "An executor never authors it; only `verify-work/steps/agentic-certification\\.md` writes it"
    ]
   },
   {
@@ -2087,6 +2091,32 @@
    "mode": "anchors-only",
    "anchors": [
     "FORK_APPROVAL_LABELS_LINE"
+   ]
+  },
+  {
+   "path": "src/health-diagnostic-rules/context-bridge.cts",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "FORK: no threshold named",
+    "so its usage-driven context "
+   ]
+  },
+  {
+   "path": "docs/how-to/install-on-your-runtime.md",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "usage-driven context nudges",
+    "knowledge-flush suggestions at high context usage"
+   ]
+  },
+  {
+   "path": "docs/COMMANDS.md",
+   "feature": "context-monitor",
+   "mode": "anchors-only",
+   "anchors": [
+    "its usage-driven knowledge-flush suggestions never fire"
    ]
   }
  ]
