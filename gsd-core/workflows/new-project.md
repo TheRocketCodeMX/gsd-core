@@ -1027,6 +1027,8 @@ Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=s
 **Persist the choice for the deferred roadmap.** The roadmap is no longer created here — it is generated after the strategy chain by `/gsd:roadmap` (`gsd-roadmap`), which runs in a later session and cannot see this shell variable. Record the choice as a marker in PROJECT.md so the deferred roadmap applies the correct per-phase template:
 
 ```bash
+PROJECT_MODE="{project_mode}"   # mvp | standard, the choice above (this fence is its own shell)
+case "$PROJECT_MODE" in mvp|standard) ;; *) echo "PROJECT_MODE must be mvp or standard, got: $PROJECT_MODE" >&2; exit 1;; esac
 grep -qi 'roadmap-mode:' "{project_path}" 2>/dev/null || printf '\n<!-- roadmap-mode: %s -->\n' "$PROJECT_MODE" >> "{project_path}"
 ```
 

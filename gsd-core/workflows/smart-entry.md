@@ -66,8 +66,11 @@ Parse `SNAPSHOT` as JSON. It has the shape:
 **Strategy chain in progress (roadmap pending) — checked BEFORE the menu is presented (#87).** The roadmap is generated once, at the end of the strategy chain, by `/gsd:roadmap`. So a project that is mid-chain has PROJECT.md (with a `## Strategy Plan`) and REQUIREMENTS.md but no ROADMAP.md / STATE.md yet. `smart-entry` classifies that shape as `needs-first-phase` ("plan your first phase") although no roadmap exists to plan a phase from. Same route as `progress` / `resume-project`'s mid-chain check:
 
 ```bash
+SNAPSHOT=$(gsd_run smart-entry --json 2>/dev/null)   # re-read: each fence is its own shell
 STRATEGY_ROUTE=""
-if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
+if printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"paused"'; then
+  :   # a recorded pause routes to /gsd-resume-work first (upstream #6431); no strategy step jumps ahead of it
+elif printf '%s' "$SNAPSHOT" | grep -Eq '"situation": *"needs-first-phase"' \
   && printf '%s' "$SNAPSHOT" | grep -Eq '"has_roadmap": *false' \
   && [ "$(gsd_run query project strategy-plan --pick found 2>/dev/null)" = "true" ]; then
   NEXT_STRATEGY=$(gsd_run query project strategy-plan --raw 2>/dev/null)   # next step neither done nor skipped (ledgered skips excluded), or empty

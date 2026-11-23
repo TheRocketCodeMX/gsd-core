@@ -274,6 +274,8 @@ const DOCS_GUARD_TESTS = {
   // (content invariants, F1/F3) and docs/README.md (F4, the index link).
   'tests/exit-code-registry.test.cjs': ['docs/reference/exit-codes.md', 'docs/README.md'],
   'tests/external-job-waiting.test.cjs': ['docs/reference/planning-artifacts.md'],
+  // FORK: fork-fence-own-shell.test.cjs reads the additive list in FORK-DELTA to scope its fence scan (align-1.23.0).
+  'tests/fork-fence-own-shell.test.cjs': ['docs/FORK-DELTA.md'],
   // FORK: fork-delta-manifest.test.cjs reads these docs as a guard input (align-1.13.0 docs-guard registration).
   'tests/fork-delta-manifest.test.cjs': ['docs/FORK-DELTA.md', 'docs/FORK-PATCHES.json'],
   // Rows 8/9 (negative controls) read real docs/registries/eos.json and

@@ -52,11 +52,14 @@ function forkBash() {
   return lines.slice(open + 1, close).join('\n');
 }
 
-/** Run the detect step's SNAPSHOT line + the fork block in `cwd`; return STRATEGY_ROUTE. */
+/**
+ * Run the fork block ALONE in `cwd` (a fresh shell, as the runtime runs every fenced block, #381):
+ * align-1.23.0 — it re-reads the snapshot itself instead of relying on the detect step's SNAPSHOT.
+ * Returns STRATEGY_ROUTE.
+ */
 function route(cwd) {
   const script = [
     `gsd_run() { node ${JSON.stringify(TOOLS_PATH)} "$@"; }`,
-    'SNAPSHOT=$(gsd_run smart-entry --json 2>/dev/null)',
     forkBash(),
     'printf "ROUTE=%s\\n" "$STRATEGY_ROUTE"',
   ].join('\n');
@@ -169,6 +172,12 @@ describe('matrix1201-B F4: smart-entry surfaces a milestone strategy step before
 
   test('new milestone, every step done → unchanged (no roadmap fallback: the roadmap exists)', () => {
     write(tmpDir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | done |'));
+    assert.equal(route(tmpDir), '');
+  });
+
+  test('a recorded pause (HANDOFF.json, upstream #6431) → unchanged: resume comes before the strategy step', () => {
+    write(tmpDir, '.planning/PROJECT.md', PLAN('| model-domain | done |\n| security-strategy | recommended |'));
+    write(tmpDir, '.planning/HANDOFF.json', '{"phase":"3"}\n');
     assert.equal(route(tmpDir), '');
   });
 

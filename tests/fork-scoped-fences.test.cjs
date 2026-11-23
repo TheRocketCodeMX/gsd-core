@@ -158,7 +158,10 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
       assert.ok(fences.length > 0, `${skill}: no planning.inspect fence`);
       for (const b of fences) assert.ok(b.includes('$ARGUMENTS') && b.includes('_TWS='), `${skill}: a planning.inspect fence ignores a typed --ws:\n${b}`);
     }
-    run(dir, `ASVS_LEVEL=2\n${fence(WF('security-strategy.md'), 'config-set workflow.security_asvs_level', '--auto --ws ws1')}`);
+    // align-1.23.0: the fence assigns ASVS_LEVEL from its {asvs_level} placeholder (each fence is its own shell, #381).
+    const asvs = fence(WF('security-strategy.md'), 'config-set workflow.security_asvs_level', '--auto --ws ws1');
+    assert.ok(asvs.includes('ASVS_LEVEL="{asvs_level}"'), 'the ASVS fence assigns the level itself');
+    run(dir, asvs.split('{asvs_level}').join('2'));
     assert.match(fs.readFileSync(path.join(dir, '.planning', 'workstreams', 'ws1', 'config.json'), 'utf8'), /"security_asvs_level": 2/);
     fs.writeFileSync(path.join(dir, '.planning', 'SECURITY-STRATEGY.md'), '# shared security posture\n');
     run(dir, fence(WF('security-strategy.md'), 'strategy-done security-strategy', '--auto --ws ws1'));
@@ -175,6 +178,8 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
 
   for (const [label, args, env, scope] of [
     ['--ws ws1', '--ws ws1', {}, path.join('.planning', 'workstreams', 'ws1')],
+    // align-1.23.0, upstream #6218: a quoted --ws value selects its workstream (the fork fences use upstream's parse).
+    ['--ws "ws1" (quoted)', '--ws "ws1"', {}, path.join('.planning', 'workstreams', 'ws1')],
     ['GSD_PROJECT=beta', '', { GSD_PROJECT: 'beta' }, path.join('.planning', 'beta')],
   ]) {
     test(`/gsd-roadmap Step 4 commit under ${label} stages that scope's ROADMAP, STATE and REQUIREMENTS`, () => {

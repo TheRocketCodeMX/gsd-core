@@ -69,7 +69,7 @@ For the selected node, read its `Source` section (only that section) and teach *
 After a concept is taught and the learner has done the beat-5 check:
 
 ```bash
-# NODE_ID = the concept just taught; LEAN ∈ over | under | on-target (the beat-5 verdict)
+NODE_ID="{node_id}"; LEAN="{lean}"   # the concept just taught; LEAN ∈ over | under | on-target (the beat-5 verdict)
 gsd_run learn progress-update --id "$NODE_ID" --status completed --lean "$LEAN"
 ```
 
