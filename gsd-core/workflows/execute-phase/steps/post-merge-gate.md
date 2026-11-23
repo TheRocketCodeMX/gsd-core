@@ -171,9 +171,9 @@ SUITE_ELAPSED_MS=$(( $(node -e 'process.stdout.write(String(Date.now()))') - SUI
 # different SHELL. The variable does not survive, and an empty value used to fall
 # through to "post-merge tests failed (exit )", leaving a green wave's plans
 # in-progress. Record the result at a deterministic path so that step re-derives it
-# rather than reading absence as failure. The step consumes and deletes this file.
+# rather than reading absence as failure. 5.7 deletes this file after its wave steps.
 # Ensure GSD's ephemeral scratch is git-ignored BEFORE the file is written, so a
-# crash between here and the consume-and-delete in post-wave-tracking-update.md
+# crash between here and the consume-and-delete in execute-phase.md 5.7
 # cannot orphan an untracked `.planning/.gsd-*` file that trips ship's clean-tree
 # preflight (greenfield F9). Idempotent; harmless when `.planning/` is itself
 # gitignored (commit_docs=No). `.gsd-*` scopes it to GSD's own scratch, never a

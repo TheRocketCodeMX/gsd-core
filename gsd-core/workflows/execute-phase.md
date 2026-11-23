@@ -954,7 +954,11 @@ increases monotonically across waves. `{status}` is `complete` (success),
 
    When **any** executor in this wave ran with `isolation="worktree"`, it skipped STATE.md and ROADMAP.md updates (last-merge-wins). The orchestrator is the single writer: after the merge, update shared artifacts once for every completed plan in the wave (worktree plans **and** sequential plans that deferred tracking writes).
 
-   Read and execute `gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md`. It guards the write on the post-merge gate result — re-derived from the gate's own record, because Step B ran in a different shell (#381) — runs `roadmap update-plan-progress` for each completed plan, and commits ROADMAP.md/STATE.md only when they changed. Then read and execute `execute-phase/steps/post-wave-requirements.md` (shared requirement IDs, #6102).
+   Read and execute `gsd-core/workflows/execute-phase/steps/post-wave-tracking-update.md`. It guards the write on the post-merge gate result — re-derived from the gate's own record, because Step B ran in a different shell (#381) — runs `roadmap update-plan-progress` for each completed plan, and commits ROADMAP.md/STATE.md only when they changed. Then read and execute `execute-phase/steps/post-wave-requirements.md` (shared requirement IDs, #6102). Then consume the gate record, kept until both steps ran:
+
+   ```bash
+   rm -f .planning/.gsd-post-merge-gate.json 2>/dev/null || true
+   ```
 
    **If no plan in this wave used worktrees** (project-level `USE_WORKTREES=false` OR `WAVE_WORKTREE_PLANS` is empty): sequential agents already updated STATE.md and ROADMAP.md themselves — skip this step.
 

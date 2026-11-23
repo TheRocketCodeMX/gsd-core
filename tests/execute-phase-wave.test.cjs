@@ -1096,10 +1096,22 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
     );
   });
 
-  test('the tracking step re-derives TEST_EXIT from the record, then consumes it', () => {
+  // matrix1230-B R1: the tracking step used to delete the record, so upstream's shared-requirements step
+  // (#6102), which runs right after it, had no gate result left to read. The record now survives the
+  // tracking step and 5.7 consumes it once both wave steps ran.
+  test('the tracking step re-derives TEST_EXIT from the record and leaves it for the requirements step', () => {
     const block = trackingBlock();
     assert.ok(block.includes(RECORD), 'the tracking step must read the recorded gate result');
-    assert.match(block, /rm -f\s+\.planning\/\.gsd-post-merge-gate\.json/, 'the record must be consumed');
+    assert.doesNotMatch(block, /rm -f\s+\.planning\/\.gsd-post-merge-gate\.json/, 'the tracking step must not delete the record');
+  });
+
+  test('5.7 consumes the record after BOTH the tracking and the shared-requirements steps', () => {
+    const at57 = workflowSrc.indexOf('5.7. **Post-wave shared artifact update');
+    const tracking = workflowSrc.indexOf('post-wave-tracking-update.md', at57);
+    const requirements = workflowSrc.indexOf('post-wave-requirements.md', at57);
+    const consume = workflowSrc.indexOf('rm -f .planning/.gsd-post-merge-gate.json', at57);
+    assert.ok(at57 !== -1 && tracking > at57 && requirements > tracking, 'tracking, then requirements');
+    assert.ok(consume > requirements && consume < workflowSrc.indexOf('5.75.', at57), 'the record is consumed after both, inside 5.7');
   });
 
   // Behavioral: run the real block in a fresh shell, exactly as the runtime does.
@@ -1161,9 +1173,10 @@ describe('execute-phase 5.7: post-merge gate result crosses the block boundary (
     assert.ok(out.includes('STUB gsd_run'), `Got:\n${out}`);
   });
 
-  test('the record is consumed so it cannot leak into the next wave', () => {
+  test('run alone, the tracking step leaves the record for the step after it (R1)', () => {
     runTracking(tmp, { record: 0 });
-    assert.ok(!fs.existsSync(path.join(tmp, RECORD)), 'the gate record must be removed after use');
+    assert.ok(fs.existsSync(path.join(tmp, RECORD)), 'the gate record must survive the tracking step');
+    assert.match(fs.readFileSync(path.join(tmp, RECORD), 'utf8'), /"test_exit":0/);
   });
 });
 });
