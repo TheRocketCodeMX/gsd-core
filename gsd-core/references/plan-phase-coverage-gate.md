@@ -33,4 +33,4 @@ Options:
 
 If `TEXT_MODE` is true, present as a plain-text numbered list. Otherwise use AskUserQuestion. Selecting "Proceed anyway" continues to step 13b but records the override in STATE.md so verify-phase can re-surface it.
 
-**Why this gate blocks:** failing here is cheap. The plans are the contract between discuss-phase and execute-phase; if a decision isn't visible in any plan, no executor will implement it. Catching that now beats discovering it after thousands of dollars of execution.
+**Why this gate blocks:** failing here is cheap; a decision absent from the plans is never implemented.

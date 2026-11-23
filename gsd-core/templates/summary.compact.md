@@ -110,7 +110,7 @@ Each task was committed atomically:
 
 **Plan metadata:** `lmn012o` (docs: complete plan)
 
-_Note: TDD tasks may have multiple commits (test → feat → refactor)_
+_Note: TDD tasks may have multiple commits (test → feat or fix → refactor)_
 
 ## Files Created/Modified
 - `path/to/file.ts` - What it does
@@ -189,7 +189,7 @@ None - no external service configuration required.
 | `id` | Stable identifier (`D1`, `D2`…) for cross-referencing from UAT.md and audit reports. Must be unique within the SUMMARY. |
 | `description` | The deliverable in human-readable form — what would have been a prose bullet. |
 | `requirement` | Links back to a REQUIREMENTS.md REQ-ID (joins `requirements-completed`). Optional. |
-| `verification[].kind` | Enum: `unit \| integration \| e2e \| automated_ui \| agentic_certification \| manual_procedural \| other`. `agentic_certification` is a certification run against a real environment (`certification.md`) — its `ref` is the run's evidence bundle (transcript, plus screenshots/console captures where the driver was probed capable), never a test path. It buys admission to this table and nothing else: the deterministic contract below is unchanged. |
+| `verification[].kind` | Enum: `unit \| integration \| e2e \| automated_ui \| agentic_certification \| manual_procedural \| other`. `agentic_certification` is a certification run against a real environment (`certification.md`) — its `ref` is the run's evidence bundle (transcript, plus screenshots/console captures where the driver was probed capable), never a test path. An executor never authors it; only `verify-work/steps/agentic-certification.md` writes it. It buys admission to this table and nothing else: the deterministic contract below is unchanged. |
 | `verification[].ref` | Test path + descriptor (`file#test name`), Playwright screenshot ref, or command invocation. Required per entry. |
 | `verification[].status` | `pass \| fail \| unknown` — populated from the latest test run. |
 | `human_judgment` | Explicit boolean; REQUIRED. `true` always routes to a human. |

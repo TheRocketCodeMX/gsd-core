@@ -1135,12 +1135,13 @@ describe('suite-metrics capture — the executor records what it actually ran', 
     // that owns the change, instead of in an upstream test. (v1.13.0: upstream's
     // own pin moved 414 → 419 — the fork's line is now the same as upstream's;
     // v1.16.0: upstream #4834/#4772 moved it 419 → 421, same as upstream's pin;
-    // v1.19.0: upstream #5143 moved it 421 → 425 — the capture block above it — same as upstream's pin.)
-    const line = read(EXECUTE_PLAN).split('\n')[424];
+    // v1.19.0: upstream #5143 moved it 421 → 425 — the capture block above it — same as upstream's pin;
+    // v1.23.0: upstream #6363 moved it 425 → 431 (the #2517 omit-on-inherit spawn lines above it) — same as upstream's pin.)
+    const line = read(EXECUTE_PLAN).split('\n')[430];
     assert.match(
       line,
       /Every deliverable MUST be classified/,
-      'execute-plan.md line 425 must still be the allowlisted `validated downstream by` line'
+      'execute-plan.md line 431 must still be the allowlisted `validated downstream by` line'
     );
   });
 });

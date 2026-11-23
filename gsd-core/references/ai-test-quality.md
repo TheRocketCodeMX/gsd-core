@@ -43,8 +43,9 @@ Reject any generated test matching these; the list is deliberately machine-check
 A quick pre-run sweep over the generated files:
 
 ```bash
-grep -nE 'expect\(true\)|toEqual\(result\)|toMatchSnapshot\(\)|\.skip\(|sleep\(|toHaveBeenCalled' $TEST_FILES
-grep -nE '(jest|vi)\.mock\(' $TEST_FILES   # every hit must point at an allow-listed seam
+TEST_FILES="{generated_test_files}"   # space-separated paths of the generated tests
+grep -nE 'expect\(true\)|toEqual\(result\)|toMatchSnapshot\(\)|\.skip\(|sleep\(|toHaveBeenCalled' $(printf '%s' "$TEST_FILES") </dev/null
+grep -nE '(jest|vi)\.mock\(' $(printf '%s' "$TEST_FILES") </dev/null   # every hit must point at an allow-listed seam
 ```
 
 Hits are not auto-failures — they are review-blocking until justified against this list.
