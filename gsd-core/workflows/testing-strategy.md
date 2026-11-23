@@ -16,12 +16,14 @@ Recommend a test strategy matched to the architecture: WHAT to test, at WHICH le
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 RESPONSE_LANG=$(gsd_run query config-get response_language --raw 2>/dev/null || true)
 TDD_MODE=$(gsd_run query config-get workflow.tdd_mode --raw 2>/dev/null || echo "false")
-ls .planning/PROJECT.md >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
-ls .planning/adr/*.md >/dev/null 2>&1 && echo "HAS_ADR" || echo "NO_ADR"
-ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
+ls "${PROJECT_PATH}" >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+echo "PROJECT_DIR=${PROJECT_DIR}"   # every .planning/<artifact> this skill names for a project-level file (PROJECT.md, the strategy docs, adr/, the discussion log) is this directory: .planning, or .planning/<name> under GSD_PROJECT
+ls "${PROJECT_DIR}/adr"/*.md >/dev/null 2>&1 && echo "HAS_ADR" || echo "NO_ADR"
+ls "${PROJECT_DIR}/TEST-STRATEGY.md" >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ```
 
 **If `NO_PROJECT`:** Stop — "No project found. Run /gsd:new-project first." Exit.
@@ -39,14 +41,23 @@ ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ## Step 2: Load context
 
 ```bash
-cat .planning/PROJECT.md 2>/dev/null || true
-cat .planning/REQUIREMENTS.md 2>/dev/null || true
-cat .planning/DOMAIN-MODEL.md 2>/dev/null || true
-cat .planning/adr/*.md 2>/dev/null || true
-cat TESTING-STANDARDS.md 2>/dev/null || true
-cat .planning/codebase/TESTING.md 2>/dev/null || true
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_PATH}" 2>/dev/null || true
+cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null || true
+cat "${PROJECT_DIR}/DOMAIN-MODEL.md" 2>/dev/null || true
+cat "${PROJECT_DIR}/adr"/*.md 2>/dev/null || true
+# Standards: the project's own file beside PROJECT.md (the one this skill writes and commits); else a repo-wide root file, read-only.
+TSTD_PATH="${PROJECT_DIR}/TESTING-STANDARDS.md"; [ -f "$TSTD_PATH" ] || TSTD_PATH="$PWD/TESTING-STANDARDS.md"; [ -f "$TSTD_PATH" ] || TSTD_PATH=none
+echo "TESTING_STANDARDS=${TSTD_PATH}"; [ "$TSTD_PATH" = none ] || cat "$TSTD_PATH"
+cat "${PLANNING_ROOT}/codebase/TESTING.md" 2>/dev/null || true
 gsd_run query project mode 2>/dev/null   # Origin/Design/Code-quality — robust + placeholder-aware (is_placeholder distinguishes a filled value from the template stub)
-ls .planning/codebase/TESTING.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+ls "${PLANNING_ROOT}/codebase/TESTING.md" >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
 **Read `@~/.claude/gsd-core/references/test-strategy.md` now** — it defines behavior-over-implementation, sociable-by-default, test-once-at-cheapest-level, shape-follows-architecture (size axis), the gnarly-bits list, persistent-vs-transient e2e, and coverage-as-floor + mutation.
@@ -137,7 +148,7 @@ A capability the project does not have is recorded as `N/A — no {email|LLM|aut
 
 - **Coverage = floor, not a target.** Record that. If the user demands a coverage *target* (e.g. 100%), reframe it as a floor and warn that an excessively high floor forces low-value tests of trivial glue — the real quality signal is **mutation score** on the gnarly bits. **Mutation testing (Stryker)** applies to the critical modules (the gnarly bits from Step 4 + the core domain logic).
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
-- **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them — by **appending**; existing Notes content is user-extendable and is never overwritten. **If it's absent:** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline and **write them to `TESTING-STANDARDS.md` (create it)** — the standards file is their home; TEST-STRATEGY's Notes just points at it. Reference defaults are never written into an existing Notes section: on an Update that path clobbers the project's own recorded invariants with boilerplate.
+- **If Step 2 printed a `TESTING_STANDARDS=` file:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them — by **appending**; existing Notes content is user-extendable and is never overwritten. **If it's absent:** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline and **write them to `{PROJECT_DIR}/TESTING-STANDARDS.md` (create it)** — the standards file is their home; TEST-STRATEGY's Notes just points at it. Extend only `{PROJECT_DIR}/TESTING-STANDARDS.md`; a repo-root file Step 2 fell back to is read-only (carry it into Notes). Reference defaults are never written into an existing Notes section: on an Update that path clobbers the project's own recorded invariants with boilerplate.
 
 ## Step 6.5: Born fast + the suite-health baseline
 
@@ -187,18 +198,20 @@ Render `@~/.claude/gsd-core/templates/test-strategy.md` (fill `[DATE]`, `[PROJEC
 - the **CI execution map** — which tiers run at the PR gate, and which — if any — can't fit there and why; `/gsd:cicd-strategy` reads "Doesn't fit the PR gate" as its C1 input, so don't pre-assert extra stages here;
 - certification goes on the template's own **"Not a pipeline tier"** line — never into "Doesn't fit the PR gate": it runs outside CI by design and must not be mapped to any CI stage.
 
-Write to `.planning/TEST-STRATEGY.md`.
+Write to `{PROJECT_DIR}/TEST-STRATEGY.md` (the directory Step 1 printed).
 
 ## Step 8: Commit
 
 ```bash
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
-  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  # A run that created TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
-  TSTD=$([ -f .planning/TESTING-STANDARDS.md ] && echo ".planning/TESTING-STANDARDS.md")
-  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files .planning/TEST-STRATEGY.md .planning/PROJECT.md $DLOG $TSTD
+  DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
+  # A run that created or extended the project's TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
+  TSTD=$([ -f "${PROJECT_DIR}/TESTING-STANDARDS.md" ] && echo "${PROJECT_DIR}/TESTING-STANDARDS.md")
+  gsd_run query commit "docs: add test strategy (shape follows architecture)" --files "${PROJECT_DIR}/TEST-STRATEGY.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"} ${TSTD:+"$TSTD"}
 else
   echo "TEST-STRATEGY.md written but not committed (commit_docs is false)."
 fi
@@ -222,7 +235,7 @@ Next: /gsd:infrastructure-strategy   (where the system runs) → /gsd:cicd-strat
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=testing-strategy` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
+**Roadmap reconciliation** (only when `{planning_root}/ROADMAP.md` already exists (`{planning_root}`: the active scope's root, from `planning.inspect`) — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** ROADMAP.md predates this strategy. Scan it against the test shape — if a phase relies on test infrastructure or a test level this strategy invalidates or reshapes (e.g. a phase planning e2e for what's now demoted to integration, or one missing the test infra a gnarly-bit tier needs), SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh — the roadmapper re-reads discovery artifacts). Never leave a known strategy↔roadmap contradiction unspoken.
 
 </process>
 

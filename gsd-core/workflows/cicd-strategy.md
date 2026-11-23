@@ -16,12 +16,14 @@ Recommend a right-sized CI/CD strategy matched to the test strategy, the target 
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 RESPONSE_LANG=$(gsd_run query config-get response_language --raw 2>/dev/null || true)
-ls .planning/PROJECT.md >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
-ls .planning/TEST-STRATEGY.md >/dev/null 2>&1 && echo "HAS_TEST_STRATEGY" || echo "NO_TEST_STRATEGY"
-ls .planning/INFRA-STRATEGY.md >/dev/null 2>&1 && echo "HAS_INFRA_STRATEGY" || echo "NO_INFRA_STRATEGY"
-ls .planning/CICD-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
+ls "${PROJECT_PATH}" >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+echo "PROJECT_DIR=${PROJECT_DIR}"   # every .planning/<artifact> this skill names for a project-level file (PROJECT.md, the strategy docs, adr/, the discussion log) is this directory: .planning, or .planning/<name> under GSD_PROJECT
+ls "${PROJECT_DIR}/TEST-STRATEGY.md" >/dev/null 2>&1 && echo "HAS_TEST_STRATEGY" || echo "NO_TEST_STRATEGY"
+ls "${PROJECT_DIR}/INFRA-STRATEGY.md" >/dev/null 2>&1 && echo "HAS_INFRA_STRATEGY" || echo "NO_INFRA_STRATEGY"
+ls "${PROJECT_DIR}/CICD-STRATEGY.md" >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ```
 
 **If `NO_PROJECT`:** Stop — "No project found. Run /gsd:new-project first." Exit.
@@ -37,13 +39,20 @@ ls .planning/CICD-STRATEGY.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ```bash
 # #5548: drop inherited repo-location vars (set inside git hooks) so cwd, not GIT_DIR, picks ROOT.
 unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_OBJECT_DIRECTORY GIT_DIR GIT_WORK_TREE GIT_IMPLICIT_WORK_TREE GIT_GRAFT_FILE GIT_INDEX_FILE GIT_NO_REPLACE_OBJECTS GIT_REPLACE_REF_BASE GIT_PREFIX GIT_SHALLOW_FILE GIT_COMMON_DIR
-cat .planning/TEST-STRATEGY.md 2>/dev/null || true
-cat .planning/INFRA-STRATEGY.md 2>/dev/null || true
-cat .planning/SECURITY-STRATEGY.md 2>/dev/null || true   # authoritative for data classification → BLAST RADIUS. Never re-interview what this already answers.
-cat .planning/adr/*.md 2>/dev/null || true
-cat .planning/PROJECT.md 2>/dev/null || true
-cat .planning/codebase/STACK.md 2>/dev/null || true
-ls .planning/codebase/STACK.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"   # plus the ## Mode block cat'd above — Origin is authoritative
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_DIR}/TEST-STRATEGY.md" 2>/dev/null || true
+cat "${PROJECT_DIR}/INFRA-STRATEGY.md" 2>/dev/null || true
+cat "${PROJECT_DIR}/SECURITY-STRATEGY.md" 2>/dev/null || true   # authoritative for data classification → BLAST RADIUS. Never re-interview what this already answers.
+cat "${PROJECT_DIR}/adr"/*.md 2>/dev/null || true
+cat "${PROJECT_PATH}" 2>/dev/null || true
+cat "${PLANNING_ROOT}/codebase/STACK.md" 2>/dev/null || true
+ls "${PLANNING_ROOT}/codebase/STACK.md" >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"   # plus the ## Mode block cat'd above — Origin is authoritative
 # ── MEASURE, don't ask (§ Step 2.5). A number derived from the repo beats a number the user guesses.
 echo "MERGES_90D=$(git log --since='90 days ago' --first-parent --oneline HEAD 2>/dev/null | wc -l)"   # ÷13 → merges/week (the C3 trigger)
 echo "CONTRIBUTORS_90D=$(git shortlog -sn --since='90 days ago' HEAD 2>/dev/null | wc -l)"              # the TBD 15-vs-16 threshold (HEAD is required — without a revision shortlog reads stdin and always returns 0)
@@ -223,16 +232,18 @@ After each elicitation round append it to `.planning/PROJECT-DISCUSSION-LOG.md` 
 
 Render `@~/.claude/gsd-core/templates/cicd-strategy.md` (fill `[DATE]`, `[PROJECT_TITLE]`). Fill: the **Rungs** block first (CI rung, delivery rung, measured suite wall clock, merges/week, production users, deploy cadence), then platform + why, auth method (OIDC config incl. the `sub` condition), the secrets table, the pipeline map (**one stage unless a C1 trigger fired — name it in the row**), matrix decision, the flaky policy, the Axis-D rung + its forcing fact, the supply-chain checklist incl. retention and concurrency, cost guardrails, anti-patterns acknowledged, deferred items **with the observable fact that promotes each**, and handoff notes for plan-phase.
 
-Write to `.planning/CICD-STRATEGY.md`.
+Write to `{PROJECT_DIR}/CICD-STRATEGY.md` (the directory Step 1 printed).
 
 ## Step 10: Commit
 
 ```bash
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done cicd-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
-  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: add CI/CD strategy (pipeline follows test strategy)" --files .planning/CICD-STRATEGY.md .planning/PROJECT.md $DLOG
+  DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: add CI/CD strategy (pipeline follows test strategy)" --files "${PROJECT_DIR}/CICD-STRATEGY.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"}
 else
   echo "CICD-STRATEGY.md written but not committed (commit_docs is false)."
 fi

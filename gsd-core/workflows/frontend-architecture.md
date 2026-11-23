@@ -18,11 +18,13 @@ Recommend a frontend architecture matched to the backend topology and the produc
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@therocketcode/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @therocketcode/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @therocketcode/gsd-core - it is either a different package or an @therocketcode/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 RESPONSE_LANG=$(gsd_run query config-get response_language --raw 2>/dev/null || true)
-ls .planning/PROJECT.md >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
-ls .planning/adr/*.md >/dev/null 2>&1 && echo "HAS_ADR" || echo "NO_ADR"
-ls .planning/FRONTEND-ARCHITECTURE.md >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
+ls "${PROJECT_PATH}" >/dev/null 2>&1 && echo "PROJECT_FOUND" || echo "NO_PROJECT"
+echo "PROJECT_DIR=${PROJECT_DIR}"   # every .planning/<artifact> this skill names for a project-level file (PROJECT.md, the strategy docs, adr/, the discussion log) is this directory: .planning, or .planning/<name> under GSD_PROJECT
+ls "${PROJECT_DIR}/adr"/*.md >/dev/null 2>&1 && echo "HAS_ADR" || echo "NO_ADR"
+ls "${PROJECT_DIR}/FRONTEND-ARCHITECTURE.md" >/dev/null 2>&1 && echo "EXISTS" || echo "NEW"
 ```
 
 **If `NO_PROJECT`:** Stop — "No project found. Run /gsd:new-project first." Exit.
@@ -40,8 +42,15 @@ ls .planning/FRONTEND-ARCHITECTURE.md >/dev/null 2>&1 && echo "EXISTS" || echo "
 Determine whether this project actually has a frontend (a browser/mobile/desktop UI), vs a backend-only service / CLI / data pipeline:
 
 ```bash
-cat .planning/PROJECT.md 2>/dev/null | head -60
-cat .planning/REQUIREMENTS.md 2>/dev/null | grep -iE 'ui|screen|page|frontend|web app|mobile|dashboard|component' | head
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_PATH}" 2>/dev/null | head -60
+cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null | grep -iE 'ui|screen|page|frontend|web app|mobile|dashboard|component' | head
 ls package.json >/dev/null 2>&1 && grep -iE 'react|vue|svelte|angular|next|nuxt|solid|astro|expo|flutter' package.json 2>/dev/null | head
 ```
 
@@ -52,9 +61,16 @@ ls package.json >/dev/null 2>&1 && grep -iE 'react|vue|svelte|angular|next|nuxt|
 ## Step 3: Load context + detect mode
 
 ```bash
-cat .planning/adr/*.md 2>/dev/null | tail -200    # backend topology drives FE shape
-cat .planning/DOMAIN-MODEL.md 2>/dev/null || true  # feature modules mirror bounded contexts
-ls .planning/codebase/*.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+cat "${PROJECT_DIR}/adr"/*.md 2>/dev/null | tail -200    # backend topology drives FE shape
+cat "${PROJECT_DIR}/DOMAIN-MODEL.md" 2>/dev/null || true  # feature modules mirror bounded contexts
+ls "${PLANNING_ROOT}/codebase"/*.md >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
 ```
 
 **Read `@~/.claude/gsd-core/references/frontend-architecture.md` now** — the FE floor, the rung table (triggers + traps), state management, rendering, the design-system criteria + insulation, and "the FE is a driving adapter (no hexagon around the SPA)". **Read `fe-be-seam.md`** for the contract/error-copy split this skill decides the FE side of, and **`application-telemetry.md`** for the FE-signal logging/analytics side.
@@ -102,16 +118,18 @@ After each elicitation round, append it to `.planning/PROJECT-DISCUSSION-LOG.md`
 
 **Recommend, don't dictate.** Present via `AskUserQuestion` (header "Frontend"): your recommended FE architecture in one paragraph (floor + the chosen rungs + the verified libraries + the design-system/insulation decision + the seam side), how it follows the backend topology, and 1–2 alternatives with trade-offs. options: "Accept", "Adjust (I'll tell you what)", "Show alternatives".
 
-Once approved, render `@~/.claude/gsd-core/templates/frontend-architecture.md` and write to `.planning/FRONTEND-ARCHITECTURE.md`. Capture *why* + trade-offs, the dated library choices, and the over-/under-engineering check (each non-floor rung ↔ its concrete trigger).
+Once approved, render `@~/.claude/gsd-core/templates/frontend-architecture.md` and write to `{PROJECT_DIR}/FRONTEND-ARCHITECTURE.md` (the directory Step 1 printed). Capture *why* + trade-offs, the dated library choices, and the over-/under-engineering check (each non-floor rung ↔ its concrete trigger).
 
 ## Step 8: Commit
 
 ```bash
+GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done frontend-architecture 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
-  DLOG=$([ -f .planning/PROJECT-DISCUSSION-LOG.md ] && echo ".planning/PROJECT-DISCUSSION-LOG.md")
-  gsd_run query commit "docs: record frontend architecture" --files .planning/FRONTEND-ARCHITECTURE.md .planning/PROJECT.md $DLOG
+  DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
+  gsd_run query commit "docs: record frontend architecture" --files "${PROJECT_DIR}/FRONTEND-ARCHITECTURE.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"}
 else
   echo "FRONTEND-ARCHITECTURE.md written but not committed (commit_docs is false)."
 fi
@@ -133,7 +151,7 @@ Next: /gsd:testing-strategy   (test shape follows architecture) → plan-phase
 
 **Auto-advance (chain):** after this skill, follow `@~/.claude/gsd-core/workflows/strategy-chain/modes/advance.md` with `CURRENT=frontend-architecture` — in `--auto` it dispatches the next `## Strategy Plan` step (honoring skips) onward to the build loop; interactive runs use the `Next:` pointer above.
 
-**Roadmap reconciliation** (only when `.planning/ROADMAP.md` already exists — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** scan ROADMAP.md against the FE architecture — if a phase assumes a FE structure/state/rendering this decision reshapes, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh). Never leave a known contradiction unspoken.
+**Roadmap reconciliation** (only when `{planning_root}/ROADMAP.md` already exists (`{planning_root}`: the active scope's root, from `planning.inspect`) — on a greenfield chain that reaches this step before a roadmap is written, skip silently: there is nothing to reconcile against)**:** scan ROADMAP.md against the FE architecture — if a phase assumes a FE structure/state/rendering this decision reshapes, SAY SO explicitly and offer `/gsd:phase --edit` (or a roadmap refresh). Never leave a known contradiction unspoken.
 
 </process>
 

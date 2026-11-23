@@ -32,12 +32,12 @@ re-derive it:
 already loaded (the `init.verify-work` query). It is resolved there through the same
 federated config precedence the CLI uses, so this step spawns no process and carries no
 runtime launcher — a file read on every `verify-work` run should not cost 4.5 KB of
-launcher to answer one enum. `TEST_STRATEGY` is `.planning/TEST-STRATEGY.md`.
+launcher to answer one enum. `TEST_STRATEGY` is the `TEST-STRATEGY.md` beside PROJECT.md (`.planning/<name>/` under `GSD_PROJECT`).
 
-- `.planning/TEST-STRATEGY.md` `## Certification` — the tier (CERT-0 / CERT-1
+- `TEST_STRATEGY` `## Certification` — the tier (CERT-0 / CERT-1
   (limited) / CERT-1 / CERT-2), the dated per-operation probe results, the chosen
   mechanism, and the brief source.
-- `.planning/TEST-STRATEGY.md` `## Certification substrate` — seed accounts, email
+- `TEST_STRATEGY` `## Certification substrate` — seed accounts, email
   safety, LLM policy, auth. These are the run's **preconditions**.
 - `workflow.certification` — `required` (the default), `offer`, or `off`.
 

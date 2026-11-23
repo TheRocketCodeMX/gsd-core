@@ -120,9 +120,10 @@ describe('legacy orderings — verify-work before any strategy re-run', () => {
 
   test('Step 8 commits TESTING-STANDARDS.md when the run created it', () => {
     const s = read(STRATEGY);
-    assert.match(s, /TSTD=\$\(\[ -f \.planning\/TESTING-STANDARDS\.md \]/,
+    // align-1.22.0: both files sit beside PROJECT.md, resolved per scope (upstream #5861 mechanism).
+    assert.match(s, /TSTD=\$\(\[ -f "\$\{PROJECT_DIR\}\/TESTING-STANDARDS\.md" \]/,
       're-gate 5 N1: the F2b fix created the file and the commit left it untracked');
-    assert.match(s, /--files \.planning\/TEST-STRATEGY\.md \.planning\/PROJECT\.md \$DLOG \$TSTD/,
+    assert.match(s, /--files "\$\{PROJECT_DIR\}\/TEST-STRATEGY\.md" "\$\{PROJECT_PATH\}" \$\{DLOG:\+"\$DLOG"\} \$\{TSTD:\+"\$TSTD"\}/,
       'the pathspec list carries it');
   });
 });

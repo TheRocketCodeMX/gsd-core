@@ -34,7 +34,7 @@ Every expected cross-phase connection must resolve to WIRED (verified end-to-end
 <!-- FORK:fidelity BEGIN -->
 **When the seam/telemetry artifacts exist** (`FRONTEND-ARCHITECTURE.md` / `fe-be-seam.md` / `application-telemetry.md`): also verify the FE↔BE **error contract** is wired across the boundary (the BE returns the machine-`code` envelope; the FE branches on it with a fallback — not a shape mismatch), **trace correlation** propagates FE→BE (one `trace_id`), and instrumented **telemetry events** flow end-to-end (emitted → ingested). A contract/trace/telemetry break across phases is a BLOCKER.
 
-**When a provided design is an active source** (PROJECT.md `## Mode`): the cross-phase user flows you trace (Step 5) must match the design's flows + screens per `.planning/DESIGN-INVENTORY.md` (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`) — a flow that diverges from the design's, or a screen the design specifies that no phase delivers, is a BLOCKER. For a legacy/refactor mixture, preserved end-to-end behavior is the oracle except where the design mandates the change.
+**When a provided design is an active source** (PROJECT.md `## Mode`): the cross-phase user flows you trace (Step 5) must match the design's flows + screens per `DESIGN-INVENTORY.md` beside PROJECT.md (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`) — a flow that diverges from the design's, or a screen the design specifies that no phase delivers, is a BLOCKER. For a legacy/refactor mixture, preserved end-to-end behavior is the oracle except where the design mandates the change.
 <!-- FORK:fidelity END -->
 </adversarial_stance>
 
@@ -99,12 +99,17 @@ For each phase, extract what it provides and what it should consume.
 
 **From SUMMARYs, extract:**
 
+@~/.claude/gsd-core/references/gsd-run-resolver.md
+
 ```bash
 # #2962: zsh aborts the block on an unmatched for-list glob (nomatch); bash passes it through. nullglob both.
 shopt -s nullglob 2>/dev/null; setopt NULL_GLOB 2>/dev/null
 
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+
 # Key exports from each phase
-for summary in .planning/phases/*/*-SUMMARY.md; do
+for summary in "${PLANNING_ROOT}"/phases/*/*-SUMMARY.md; do
   echo "=== $summary ==="
   grep -A 10 "Key Files\|Exports\|Provides" "$summary" 2>/dev/null
 done

@@ -82,6 +82,7 @@ GSD_ARGS=${GSD_ARGS%$'\n'}
 GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
 INIT=$(gsd_run query init.new-milestone ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 ROADMAP_PATH=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};process.stdout.write(String(o.roadmap_path||''))" "$INIT")
+PROJECT_PATH=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};process.stdout.write(String(o.project_path||''))" "$INIT"); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"   # strategy artifacts sit next to PROJECT.md
 MILESTONE_MODE=false; case " $GSD_ARGS " in *" --milestone "*) MILESTONE_MODE=true;; esac
 MODE=create
 if [ -f "$ROADMAP_PATH" ]; then
@@ -90,7 +91,7 @@ if [ -f "$ROADMAP_PATH" ]; then
   else
     MODE=elaborate   # unmarked roadmap present
     ELAB=skip
-    for f in .planning/adr/*.md .planning/SECURITY-STRATEGY.md .planning/FRONTEND-ARCHITECTURE.md .planning/TEST-STRATEGY.md .planning/INFRA-STRATEGY.md .planning/CICD-STRATEGY.md; do
+    for f in "${PROJECT_DIR}"/adr/*.md "${PROJECT_DIR}"/SECURITY-STRATEGY.md "${PROJECT_DIR}"/FRONTEND-ARCHITECTURE.md "${PROJECT_DIR}"/TEST-STRATEGY.md "${PROJECT_DIR}"/INFRA-STRATEGY.md "${PROJECT_DIR}"/CICD-STRATEGY.md; do
       [ -e "$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
     done
     [ "$ELAB" = skip ] && MODE=current   # unmarked but no strategy artifacts → treat as current (coarse is intentional)
@@ -112,7 +113,8 @@ GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/
 # Fences are separate shells: Step 1's AUTO_MODE is gone here. Re-derive it exactly as Step 1 does.
 AUTO_MODE=false; case " $GSD_ARGS " in *" --auto "*|*" --autonomous "*) AUTO_MODE=true;; esac
 [ "$AUTO_MODE" = true ] || AUTO_MODE=$(gsd_run query check auto-mode --pick active ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "false")
-PROJECT_MODE=$(grep -oiE 'roadmap-mode:[[:space:]]*[a-z]+' .planning/PROJECT.md 2>/dev/null | head -1 | grep -oiE '(mvp|standard)' | tr 'A-Z' 'a-z')
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"
+PROJECT_MODE=$(grep -oiE 'roadmap-mode:[[:space:]]*[a-z]+' "$PROJECT_PATH" 2>/dev/null | head -1 | grep -oiE '(mvp|standard)' | tr 'A-Z' 'a-z')
 if [ -z "$PROJECT_MODE" ]; then [ "$AUTO_MODE" = true ] && PROJECT_MODE=mvp || PROJECT_MODE=standard; fi
 ```
 
@@ -144,8 +146,14 @@ Agent(prompt="
 - {requirements_path} (v1 Requirements)
 - {research_dir}/SUMMARY.md (Research findings - if exists)
 - {config_path} (Granularity and mode settings)
-- .planning/adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md (locked strategy decisions - read every one that exists)
+- DOMAIN-MODEL.md, adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md, LEGACY-INVENTORY.md, DESIGN-INVENTORY.md in the directory of {project_path} (locked strategy decisions and literal-source oracles - read every one that exists)
 </required_reading>
+
+<write_targets>
+- ROADMAP.md: {roadmap_path}
+- STATE.md: {state_path}
+- REQUIREMENTS.md: {requirements_path}
+</write_targets>
 
 ${AGENT_SKILLS_ROADMAPPER}
 </planning_context>
@@ -166,7 +174,12 @@ Create the roadmap:
 **MODE=elaborate** (a coarse roadmap predates the strategy artifacts — mirrors `workflows/plan-phase/modes/strategy-elaboration.md`):
 
 ```text
-Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon {roadmap_path} phases + adjust boundaries against the now-locked strategy artifacts (.planning/adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Elaborate roadmap against strategy")
+Agent(prompt="<objective>Run ELABORATE-MODE (per your elaborate-mode spec): detail near-horizon {roadmap_path} phases + adjust boundaries against the now-locked strategy artifacts beside {project_path} (adr/*, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), preserving structure/numbering/requirement-mappings/user-edits, and write the idempotency marker `**Elaborated against strategy:** <artifacts> (<date>)`. Return ROADMAP ELABORATED + a change summary.</objective>
+<write_targets>
+- ROADMAP.md: {roadmap_path}
+- STATE.md: {state_path}
+- REQUIREMENTS.md: {requirements_path}
+</write_targets>", subagent_type="gsd-roadmapper", model="{ROADMAPPER_MODEL}", description="Elaborate roadmap against strategy")
 ```
 
 **MODE=extend** (a new milestone's requirements on top of an existing roadmap):
@@ -182,8 +195,14 @@ Agent(prompt="
 - {milestones_path} (if exists)
 - {config_path} (phase_id_convention, granularity)
 - {research_dir}/SUMMARY.md (if exists)
-- strategy artifacts (.planning/adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md) — read every one that exists
+- strategy artifacts beside {project_path} (DOMAIN-MODEL.md, adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md, LEGACY/DESIGN-INVENTORY.md) — read every one that exists
 </required_reading>
+
+<write_targets>
+- ROADMAP.md: {roadmap_path}
+- STATE.md: {state_path}
+- REQUIREMENTS.md: {requirements_path}
+</write_targets>
 
 ${AGENT_SKILLS_ROADMAPPER}
 </planning_context>
@@ -227,7 +246,7 @@ EXTEND the existing roadmap for the current milestone — do NOT regenerate:
 ---
 ```
 
-**Approval:** In **auto** mode, skip the gate — auto-approve. In **interactive** mode, AskUserQuestion (header "Roadmap"): "Approve" (commit + continue) / "Adjust phases" (get notes, re-spawn the roadmapper with a `<revision>` block editing files in place, loop until approved) / "Review full file" (`cat "{roadmap_path}"`, re-ask).
+**Approval:** In **auto** mode, skip the gate — auto-approve. In **interactive** mode, AskUserQuestion (header "Roadmap"): "Approve" (commit + continue) / "Adjust phases" (get notes, re-spawn the roadmapper with a `<revision>` block editing files in place and the same `<write_targets>` block, loop until approved) / "Review full file" (`cat "{roadmap_path}"`, re-ask).
 
 **Commit** (after approval or in auto) with the message matching the mode:
 

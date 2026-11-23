@@ -63,7 +63,7 @@ This ensures project-specific patterns, conventions, and best practices are appl
 **4. Necessity** (#4100) — reachable code whose guarded-against problem cannot occur in this stack: impossible-state guard, already-defended-elsewhere, cargo-culted pattern, phantom requirement, generality without instantiation. At `standard`/`deep`, Read `__GSD_PI_ENGINE_ROOT__/gsd-core/references/necessity-review.md` before classifying findings; if it cannot be read, say so in the Summary and omit `necessity:`. `quick` does not assess necessity. Warning when provable from the repo, Info when it rests on judgment, Never Critical; each finding cites the evidence that the state cannot occur and carries a `**Category:** necessity` line.
 
 <!-- FORK:fidelity BEGIN -->
-**5. Contract Conformance (enforce `engineering-standards.md` BOTH ways — you are the fresh-context adversary)** — fit to the ADR's chosen rung is itself a defect class: hunt reward-hacking / under-engineering (incl. a skipped universal floor) AND over-engineering, BLOCKER when behavior/architecture is wrong, WARNING otherwise; scope severity to the change region on legacy/vibe-coded code; for a provided design you are the diff-time **fidelity-loss** catcher (diff the built observable shape against `.planning/DESIGN-INVENTORY.md` / the UI-SPEC); for frontend files enforce `FRONTEND-ARCHITECTURE.md` + `fe-be-seam.md`. Full checklist: `@__GSD_PI_ENGINE_ROOT__/gsd-core/references/code-review-contract-conformance.md` — Read it before reviewing.
+**5. Contract Conformance (enforce `engineering-standards.md` BOTH ways — you are the fresh-context adversary)** — fit to the ADR's chosen rung is itself a defect class: hunt reward-hacking / under-engineering (incl. a skipped universal floor) AND over-engineering, BLOCKER when behavior/architecture is wrong, WARNING otherwise; scope severity to the change region on legacy/vibe-coded code; for a provided design you are the diff-time **fidelity-loss** catcher (diff the built observable shape against `DESIGN-INVENTORY.md` beside PROJECT.md / the UI-SPEC); for frontend files enforce `FRONTEND-ARCHITECTURE.md` + `fe-be-seam.md`. Full checklist: `@__GSD_PI_ENGINE_ROOT__/gsd-core/references/code-review-contract-conformance.md` — Read it before reviewing.
 <!-- FORK:fidelity END -->
 
 **Out of Scope (v1):** Performance issues (O(n²) algorithms, memory leaks, inefficient queries) are NOT in scope for v1. Focus on correctness, security, and maintainability.
@@ -117,7 +117,7 @@ Additional checks:
 **2. Parse config:** Extract from `<config>` block:
 - `depth`: quick | standard | deep (default: standard)
 - `phase_dir`: Path to phase directory for REVIEW.md output
-- `review_path`: Full path for REVIEW.md output (e.g., `.planning/phases/02-code-review-command/02-REVIEW.md`). If absent, derived from phase_dir.
+- `review_path`: Full path for REVIEW.md output (e.g., `{phase_dir}/02-REVIEW.md`). If absent, derived from phase_dir.
 - `files`: Array of changed files to review (passed by workflow — primary scoping mechanism)
 - `diff_base`: Git commit hash for diff range (passed by workflow when files not available)
 

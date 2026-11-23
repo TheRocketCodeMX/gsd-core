@@ -26,7 +26,7 @@ The hook is part of the [`context` capability](../gsd-core/references/context-li
 
 Debounce: `DEBOUNCE_CALLS` (5) tool uses between repeated warnings. A `warn → urge` escalation bypasses the debounce and fires once.
 
-`used_pct` is read from the statusline bridge file as written. Since upstream #4985 the statusline puts it on the auto-compact scale (a percentage of the point where Claude Code auto-compacts, or of the model window when auto-compact is off), so 90/95 mean "close to compaction", which is the moment a knowledge flush is worth suggesting.
+`used_pct` is read from the statusline bridge file as written. Since upstream #4985 the statusline puts it on the auto-compact scale (a percentage of the point where Claude Code auto-compacts, or of the model window when auto-compact is off), so 90/95 mean "close to compaction", which is the moment a knowledge flush is worth suggesting. The statusline takes that point from the auto-compact window (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, read the way Claude Code reads it: plain or grouped digits, or a case-insensitive `k` or `M` suffix, so `500k` is 500,000 and `1.5M` is 1,500,000, clamped to 100k–1M, upstream #6131; else the `/autocompact` setting, else the model window), so a suffixed window no longer makes these warnings fire early.
 
 ## Tone contract (CI-linted)
 

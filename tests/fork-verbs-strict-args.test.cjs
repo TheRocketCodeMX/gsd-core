@@ -118,6 +118,12 @@ describe('fork gsd-tools invocations survive strict argument parsing', () => {
     ['query', 'init.phase-op', '1'],
     // hooks/gsd-grounding-index-refresh.js spawns this exact argv
     ['query', 'generate-claude-md', '--auto', '--cwd', '.'],
+    // align-1.22.0: fork fences resolve the active scope through upstream #5861's verbs
+    ['query', 'init.resume', '--pick', 'project_path'],
+    ['query', 'planning.inspect', '--pick', 'generated_from.planning_root'],
+    ['query', 'config-path', '--raw'],
+    ['query', 'init.new-milestone'],
+    ['query', 'init.complete-milestone'],
   ];
 
   for (const argv of ROWS) {
@@ -133,9 +139,12 @@ describe('fork gsd-tools invocations survive strict argument parsing', () => {
     for (const argv of [
       ['query', 'project', 'strategy-plan', '--raw', '--ws', 'notif'],
       ['query', 'roadmap.analyze', '--ws=notif', '--pick', 'next_phase'],
+      ['query', 'init.resume', '--ws=notif', '--pick', 'project_path'],
+      ['query', 'planning.inspect', '--ws=notif', '--pick', 'generated_from.planning_root'],
+      ['query', 'config-path', '--raw', '--ws=notif'],
     ]) {
       const r = runGsdTools(['--json-errors', ...argv], project, env);
-      assert.equal(usageRejection(r, ['--ws', '--ws=notif', '--pick', 'strategy-plan']), null, argv.join(' '));
+      assert.equal(usageRejection(r, ['--ws', '--ws=notif', '--pick', '--raw', 'strategy-plan']), null, argv.join(' '));
     }
   });
 

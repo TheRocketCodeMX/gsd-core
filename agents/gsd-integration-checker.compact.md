@@ -41,7 +41,7 @@ Every expected cross-phase connection resolves to WIRED (verified end-to-end) or
 <!-- FORK:fidelity BEGIN -->
 **When the seam/telemetry artifacts exist** (`FRONTEND-ARCHITECTURE.md` / `fe-be-seam.md` / `application-telemetry.md`): also verify the FE↔BE **error contract** is wired across the boundary (the BE returns the machine-`code` envelope; the FE branches on it with a fallback — not a shape mismatch), **trace correlation** propagates FE→BE (one `trace_id`), and instrumented **telemetry events** flow end-to-end (emitted → ingested). A contract/trace/telemetry break across phases is a BLOCKER.
 
-**When a provided design is an active source** (PROJECT.md `## Mode`): the cross-phase user flows you trace (Step 5) must match the design's flows + screens per `.planning/DESIGN-INVENTORY.md` (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`) — a flow that diverges from the design's, or a screen the design specifies that no phase delivers, is a BLOCKER. For a legacy/refactor mixture, preserved end-to-end behavior is the oracle except where the design mandates the change.
+**When a provided design is an active source** (PROJECT.md `## Mode`): the cross-phase user flows you trace (Step 5) must match the design's flows + screens per `DESIGN-INVENTORY.md` beside PROJECT.md (§ Source precedence in `@~/.claude/gsd-core/references/exploration-and-adaptability.md`) — a flow that diverges from the design's, or a screen the design specifies that no phase delivers, is a BLOCKER. For a legacy/refactor mixture, preserved end-to-end behavior is the oracle except where the design mandates the change.
 <!-- FORK:fidelity END -->
 </adversarial_stance>
 
@@ -86,7 +86,7 @@ Requirements with no cross-phase wiring MUST be flagged in the Requirements Inte
 
 ## Step 1: Build Export/Import Map
 For each phase, extract what it provides and consumes from SUMMARYs (grep `Key Files|Exports|
-Provides` sections across `.planning/phases/*/*-SUMMARY.md`; use `nullglob`/`NULL_GLOB` so an
+Provides` sections across `phases/*/*-SUMMARY.md` under the scope root (`gsd_run query planning.inspect --pick generated_from.planning_root`); use `nullglob`/`NULL_GLOB` so an
 unmatched glob doesn't abort the loop). Build a provides/consumes map, e.g.:
 ```
 Phase 1 (Auth): provides getCurrentUser, AuthProvider, useAuth, /api/auth/*; consumes nothing

@@ -47,7 +47,7 @@ inventing a test.
 
 **Persist it — TEST-STRATEGY.md's second writer:**
 
-Append one row per answered gap to `.planning/TEST-STRATEGY.md` under its
+Append one row per answered gap to `TEST-STRATEGY.md` beside PROJECT.md under its
 `## Coverage debt` section. Create the section (heading + table header) if the file
 predates it — inserted after the last existing `## ` content section and **before
 any trailing footer** (a closing `---` or end-of-file), never appended past it.
@@ -61,7 +61,7 @@ re-render any other section of the file. `/gsd:testing-strategy` remains the onl
 author of the strategy itself; this step only records what the strategy failed to
 predict, so the next strategy Update pass can see the project's real failure modes.
 
-If `.planning/TEST-STRATEGY.md` does not exist, skip the append silently — never
+If that `TEST-STRATEGY.md` does not exist, skip the append silently — never
 create a strategy document from a gap.
 
 **Diagnosed entry:** proceed to `plan_gap_closure`.
