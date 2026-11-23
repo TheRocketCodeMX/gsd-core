@@ -1710,7 +1710,7 @@
    "feature": "strategy",
    "mode": "anchors-only",
    "anchors": [
-    "`agentic_certification`: that entry belongs to a certification run",
+    "No `agentic_certification` \\(a transcript\\)",
     "\\*\\*Suite metrics \\(suite health\\)\\.\\*\\*"
    ]
   },

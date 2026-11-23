@@ -9,7 +9,7 @@
     "block": 1
   },
   "bin/install.js": {
-    "block": 56
+    "block": 57
   },
   "eslint-rules/lib/comment-ratchet.cjs": {
     "block": 1
@@ -146,7 +146,7 @@
     "directive": 1
   },
   "gsd-core/bin/lib/legacy-cleanup.cjs": {
-    "block": 2
+    "block": 3
   },
   "gsd-core/bin/lib/profile-pipeline-command-router.cjs": {
     "block": 2
@@ -167,7 +167,7 @@
     "block": 1
   },
   "hooks/gsd-context-monitor.js": {
-    "block": 5
+    "block": 1
   },
   "hooks/gsd-cursor-post-tool.js": {
     "block": 1
@@ -189,6 +189,9 @@
   },
   "hooks/gsd-ensure-canonical-path.js": {
     "block": 2
+  },
+  "hooks/gsd-grounding-index-refresh.js": {
+    "block": 1
   },
   "hooks/gsd-prompt-guard.js": {
     "block": 2
@@ -680,11 +683,11 @@
     "block": 9
   },
   "src/broken-windows.cts": {
-    "block": 5,
+    "block": 7,
     "directive": 2
   },
   "src/capability-activation.cts": {
-    "directive": 3,
+    "directive": 2,
     "block": 2
   },
   "src/capability-consent.cts": {
@@ -767,7 +770,7 @@
   },
   "src/commands.cts": {
     "directive": 27,
-    "block": 10
+    "block": 11
   },
   "src/commonjs-marker.cts": {
     "block": 2,
@@ -797,6 +800,10 @@
   "src/configuration.cts": {
     "block": 1
   },
+  "src/context-command-router.cts": {
+    "block": 1,
+    "directive": 9
+  },
   "src/context-composer.cts": {
     "block": 1
   },
@@ -805,6 +812,9 @@
   },
   "src/context-utilization.cts": {
     "block": 1
+  },
+  "src/context.cts": {
+    "directive": 3
   },
   "src/core-utils.cts": {
     "block": 5,
@@ -910,6 +920,10 @@
   "src/gate-gap-analysis-plan-post.cts": {
     "directive": 1
   },
+  "src/gate-grounding-plan.cts": {
+    "block": 1,
+    "directive": 2
+  },
   "src/gate-phase-context.cts": {
     "directive": 3,
     "block": 1
@@ -959,6 +973,13 @@
   },
   "src/graphify.cts": {
     "directive": 4
+  },
+  "src/grounding-command-router.cts": {
+    "block": 1,
+    "directive": 3
+  },
+  "src/grounding.cts": {
+    "directive": 1
   },
   "src/gsd-tool-dir.cts": {
     "block": 1
@@ -1046,7 +1067,7 @@
     "directive": 1
   },
   "src/init.cts": {
-    "directive": 26,
+    "directive": 27,
     "block": 16
   },
   "src/install-effort-resolver.cts": {
@@ -1122,6 +1143,10 @@
     "directive": 2,
     "block": 5
   },
+  "src/learn-command-router.cts": {
+    "block": 1,
+    "directive": 4
+  },
   "src/learnings.cts": {
     "block": 1,
     "directive": 2
@@ -1165,7 +1190,7 @@
   },
   "src/model-resolver.cts": {
     "block": 7,
-    "directive": 6
+    "directive": 5
   },
   "src/normalize-test-command.cts": {
     "block": 1
@@ -1276,7 +1301,7 @@
     "directive": 1
   },
   "src/profile-output.cts": {
-    "directive": 2
+    "directive": 3
   },
   "src/profile-pipeline.cts": {
     "directive": 3
@@ -1284,9 +1309,16 @@
   "src/prohibition-enforcement.cts": {
     "block": 8
   },
+  "src/project-command-router.cts": {
+    "block": 1,
+    "directive": 2
+  },
   "src/project-context.cts": {
     "block": 2,
     "directive": 2
+  },
+  "src/project.cts": {
+    "directive": 3
   },
   "src/prompt-budget.cts": {
     "block": 1,
@@ -1384,7 +1416,7 @@
   },
   "src/runtime-slash.cts": {
     "block": 2,
-    "directive": 2
+    "directive": 1
   },
   "src/section-manifest.cts": {
     "block": 2,
@@ -1664,6 +1696,9 @@
   "tests/audit-fix-command.test.cjs": {
     "directive": 1
   },
+  "tests/auto-advance-endings.test.cjs": {
+    "block": 1
+  },
   "tests/backwards-compat-phase-id.test.cjs": {
     "block": 1
   },
@@ -1761,6 +1796,9 @@
     "block": 1
   },
   "tests/ci-timeout-report-rolling-pr.test.cjs": {
+    "block": 1
+  },
+  "tests/cicd-rung-ladder.test.cjs": {
     "block": 1
   },
   "tests/cjs-command-router-adapter.test.cjs": {
@@ -2084,8 +2122,14 @@
   "tests/emitted-caps-gate.test.cjs": {
     "block": 1
   },
+  "tests/emitted-certification-fidelity.test.cjs": {
+    "block": 1
+  },
   "tests/emitted-provenance.test.cjs": {
     "block": 3
+  },
+  "tests/emitted-skill-argument-hint.test.cjs": {
+    "block": 1
   },
   "tests/ensure-runtime-build.test.cjs": {
     "directive": 1
@@ -2173,6 +2217,9 @@
   "tests/feat-2646-deferred-items-audit-scanner.test.cjs": {
     "block": 1
   },
+  "tests/feat-context-hook.test.cjs": {
+    "directive": 1
+  },
   "tests/features-index-gate.test.cjs": {
     "block": 2
   },
@@ -2180,6 +2227,13 @@
     "block": 1
   },
   "tests/file-overlap-partitioner.test.cjs": {
+    "block": 1
+  },
+  "tests/fix-2289-context-monitor-event-allowlist.test.cjs": {
+    "block": 1,
+    "directive": 1
+  },
+  "tests/fix-regate6-uat-superseded-and-certifier-token.test.cjs": {
     "block": 1
   },
   "tests/fixtures/deny-network.cjs": {
@@ -2196,6 +2250,9 @@
   },
   "tests/forensics.test.cjs": {
     "directive": 1
+  },
+  "tests/fork-delta-manifest.test.cjs": {
+    "block": 1
   },
   "tests/fragment-single-edit-propagation.install.test.cjs": {
     "block": 8
@@ -2593,7 +2650,7 @@
     "block": 6
   },
   "tests/install.test.cjs": {
-    "block": 12,
+    "block": 13,
     "directive": 2
   },
   "tests/installed-surface-resolver.test.cjs": {
@@ -2923,10 +2980,6 @@
   "tests/perf-316-state-lock-buffer-alloc.test.cjs": {
     "block": 1
   },
-  "tests/perf-317-context-monitor-fs.test.cjs": {
-    "block": 10,
-    "directive": 1
-  },
   "tests/perf-407-planning-lock-buffer-alloc.test.cjs": {
     "block": 1
   },
@@ -3173,6 +3226,10 @@
   "tests/readfilesync-trace-parity.test.cjs": {
     "block": 1
   },
+  "tests/realign-2-0-0-update-matrix.install.test.cjs": {
+    "block": 1,
+    "directive": 1
+  },
   "tests/reapply-patches.test.cjs": {
     "directive": 2,
     "block": 2
@@ -3333,7 +3390,7 @@
     "block": 1
   },
   "tests/runtime-launcher-parity.test.cjs": {
-    "block": 3,
+    "block": 4,
     "directive": 1
   },
   "tests/runtime-marker-resolution.test.cjs": {
@@ -3398,9 +3455,12 @@
     "directive": 1
   },
   "tests/shell-command-projection-dispatch.test.cjs": {
-    "block": 2
+    "block": 3
   },
   "tests/shell-command-projection-md-normalize.test.cjs": {
+    "block": 1
+  },
+  "tests/ship-certification-sweep-contract.test.cjs": {
     "block": 1
   },
   "tests/shipped-reference-cites.test.cjs": {
@@ -3470,6 +3530,9 @@
     "directive": 10,
     "block": 22
   },
+  "tests/strategy-config-and-marker-contracts.test.cjs": {
+    "block": 1
+  },
   "tests/subagent-timeout.test.cjs": {
     "directive": 1
   },
@@ -3502,6 +3565,12 @@
   },
   "tests/template.test.cjs": {
     "directive": 1
+  },
+  "tests/testing-certification-wiring.test.cjs": {
+    "block": 1
+  },
+  "tests/testing-certification.test.cjs": {
+    "block": 2
   },
   "tests/thinking-partner.test.cjs": {
     "directive": 1
@@ -3643,7 +3712,7 @@
   },
   "tests/workflow-size-budget.test.cjs": {
     "directive": 3,
-    "block": 2
+    "block": 3
   },
   "tests/workspace.test.cjs": {
     "directive": 2

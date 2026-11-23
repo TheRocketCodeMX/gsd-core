@@ -125,7 +125,7 @@ Read and execute `gsd-core/workflows/plan-phase/steps/closed-phase-gate.md` — 
 
 ## 1.6. Roadmap elaboration gate (strategy → build; fires once per milestone)
 
-If `{roadmap_path}` exists WITHOUT the elaboration marker (`grep -q 'Elaborated against strategy' "{roadmap_path}"` fails) AND any strategy artifact exists beside PROJECT.md (`adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`): read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy — it carries the detection bash, the auto/offer split, and the `gsd-roadmapper` elaborate-mode spawn); re-read ROADMAP.md and continue. Else proceed — per-phase planning consumes the artifacts via canonical_refs.
+If `{roadmap_path}` lacks the elaboration marker (`grep -q 'Elaborated against strategy' "{roadmap_path}"` fails) AND a strategy artifact exists beside PROJECT.md: read `workflows/plan-phase/modes/strategy-elaboration.md` now (lazy: the artifact list and detection bash, the auto/offer split, the `gsd-roadmapper` elaborate spawn); re-read ROADMAP.md and continue. Else proceed (planning reads the artifacts via canonical_refs).
 
 ## 2. Parse and Normalize Arguments
 
@@ -1391,7 +1391,7 @@ if [ "$GATE_CFG" != "false" ]; then
   fi
 fi
 # check.grounding-plan enforces workflow.grounding_gate itself (off => passed+skipped; #1169)
-GR=$(gsd_run query check.grounding-plan "${PHASE_DIR}")
+GR=$(gsd_run query check.grounding-plan "{phase_dir}")
 echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
 ```
 

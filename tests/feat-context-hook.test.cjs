@@ -275,16 +275,17 @@ describe('feat: context-monitor calm knowledge-flush hook', () => {
         assert.equal(parse(out), null, `subagent input must stay silent on ${event || 'no event'}`);
       }
       assert.equal(fs.existsSync(warnedPath(sid)), false, 'a subagent must not write the parent session debounce file');
-      for (const agentId of ['', null, 0, 123, true, [], {}]) {
-        // eslint-disable-next-line local/no-raw-rmsync-in-tests -- single bridge file in os.tmpdir(), not a project dir; cleanup() is dir-scoped
-        try { fs.rmSync(warnedPath(sid), { force: true }); } catch { /* ignore */ }
-        const out = parse(runHook({ sid, cwd: dir, extra: { agent_id: agentId } }));
-        assert.ok(out, `agent_id ${JSON.stringify(agentId)} is not a subagent: the nudge still fires`);
+      // Each control below runs on its own fresh session so its first nudge is never debounced.
+      for (const extra of [...['', null, 0, 123, true, [], {}].map((agent_id) => ({ agent_id })), { agent_type: 'gsd-executor' }]) {
+        const csid = uniqueSession();
+        try {
+          writeMetrics(csid, 96);
+          const out = parse(runHook({ sid: csid, cwd: dir, extra }));
+          assert.ok(out, `${JSON.stringify(extra)} is not a subagent input: the nudge still fires`);
+        } finally {
+          purge(csid);
+        }
       }
-      // eslint-disable-next-line local/no-raw-rmsync-in-tests -- single bridge file in os.tmpdir(), not a project dir; cleanup() is dir-scoped
-      try { fs.rmSync(warnedPath(sid), { force: true }); } catch { /* ignore */ }
-      const top = parse(runHook({ sid, cwd: dir, extra: { agent_type: 'gsd-executor' } }));
-      assert.ok(top, 'a top-level --agent session (agent_type only) is still monitored');
       const pre = parse(runHook({ sid, cwd: dir, event: 'PreCompact', extra: { agent_type: 'gsd-executor' } }));
       assert.ok(pre, 'a top-level --agent session still gets the PreCompact reminder');
     } finally {
