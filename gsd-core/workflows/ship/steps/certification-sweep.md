@@ -23,7 +23,7 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
    # over the phase's real outcome. The FIRST in-`## Tests` line is the record;
    # a second is emitted as `:DUPLICATE:` and flagged, never silently dropped
    # the way `grep -m1` dropped it.
-   # Glob-free list (an unmatched for-list glob aborts the whole fence under zsh): the group
+   # Not a for-list glob (an unmatched one aborts the whole fence under zsh): the group
    # redirect also silences the shell's own no-match message.
    UATS=$( { ls -1 "${PLANNING_ROOT}"/phases/*/*-UAT.md; } 2>/dev/null )
    printf "%s\n" "$UATS" | while IFS= read -r uat; do

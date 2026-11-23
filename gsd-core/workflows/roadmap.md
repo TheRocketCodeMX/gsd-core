@@ -91,7 +91,7 @@ if [ -f "$ROADMAP_PATH" ]; then
   else
     MODE=elaborate   # unmarked roadmap present
     ELAB=skip
-    ls "${PROJECT_DIR}/adr" 2>/dev/null | grep -q '\.md$' && ELAB=stale   # glob-free: an unmatched for-list glob aborts the fence under zsh
+    [ -n "$( { ls -1 "${PROJECT_DIR}"/adr/*.md; } 2>/dev/null )" ] && ELAB=stale   # not a for-list glob: an unmatched one aborts the fence under zsh
     for f in SECURITY-STRATEGY.md FRONTEND-ARCHITECTURE.md TEST-STRATEGY.md INFRA-STRATEGY.md CICD-STRATEGY.md; do
       [ -e "${PROJECT_DIR}/$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
     done

@@ -173,7 +173,7 @@ describe('fork fences assign what they read (each fence is its own shell, #381)'
  * that matches nothing aborts the WHOLE fence (a glob in a plain command only fails that command).
  * `/gsd-roadmap`'s mode detection, plan-phase's elaboration check and ship's certification sweep lost
  * their output that way on a project without `adr/*.md` / UAT files. Fork fences list such files
- * glob-free (`ls <dir> | grep`, or a grouped `{ ls glob; } 2>/dev/null` inside `$( )`) or set the
+ * through a grouped `{ ls glob; } 2>/dev/null` inside `$( )` or set the
  * null-glob option first, as upstream's resume-project fences do.
  */
 function globForLists(body) {
@@ -196,7 +196,7 @@ describe('fork fences never iterate a bare glob (an unmatched one aborts the fen
   test('no fork fence has a glob in a for-list without the null-glob option', () => {
     const offenders = [];
     for (const f of fences) for (const h of globForLists(f.body)) offenders.push(`${f.rel}:${f.line} — ${h}`);
-    assert.deepEqual(offenders, [], 'list the files glob-free (ls <dir> | grep, or $( { ls glob; } 2>/dev/null )) and loop over that');
+    assert.deepEqual(offenders, [], 'list the files through $( { ls glob; } 2>/dev/null ) and loop over that');
   });
 
   test('the scan catches the shape it guards and accepts the rewrites (positive control)', () => {

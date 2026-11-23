@@ -12,7 +12,7 @@ PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --p
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"   # strategy artifacts sit next to PROJECT.md
 ELAB=skip
 if [ -f "${PLANNING_ROOT}/ROADMAP.md" ] && ! grep -q 'Elaborated against strategy' "${PLANNING_ROOT}/ROADMAP.md"; then
-  ls "${PROJECT_DIR}/adr" 2>/dev/null | grep -q '\.md$' && ELAB=stale   # glob-free: an unmatched for-list glob aborts the fence under zsh
+  [ -n "$( { ls -1 "${PROJECT_DIR}"/adr/*.md; } 2>/dev/null )" ] && ELAB=stale   # not a for-list glob: an unmatched one aborts the fence under zsh
   for f in SECURITY-STRATEGY.md FRONTEND-ARCHITECTURE.md TEST-STRATEGY.md INFRA-STRATEGY.md CICD-STRATEGY.md; do
     [ -e "${PROJECT_DIR}/$f" ] && { ELAB=stale; break; }   # any present → roadmap may predate it
   done
