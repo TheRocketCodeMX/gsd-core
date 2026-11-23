@@ -32,7 +32,7 @@
   {
     "file": "gsd-core/workflows/verify-work.md",
     "rule": "L2",
-    "command": "gsd_run query commit \"test({phase_num}): certification artifacts\" --files \".planning/phases/XX-name/{phase_num}-CERTIFICATION-BRIEF.md\" \".planning/phases/XX-name/{phase_num}-CERTIFICATION-SCRIPT.*\" \".planning/phases/XX-name/{phase_num}-CERTIFICATION-RESULT.md\" \".planning/phases/XX-name/certification-evidence/\"",
-    "reason": "FORK (strategy, align-1.16.0) per #5105: a commit records bytes and never rewrites them, and the certification artifacts (BRIEF/SCRIPT/RESULT/evidence) are neither declared covered_files nor *-PLAN/*-SUMMARY artifacts (allCurrentArtifactsCovered), so committing them after the fingerprint is inert to it by construction."
+    "command": "gsd_run query commit \"test({phase_num}): certification artifacts\" --files \"{phase_dir}/{phase_num}-CERTIFICATION-BRIEF.md\" \"{phase_dir}/{phase_num}-CERTIFICATION-SCRIPT.*\" \"{phase_dir}/{phase_num}-CERTIFICATION-RESULT.md\" \"{phase_dir}/certification-evidence/\"",
+    "reason": "FORK (strategy, align-1.16.0) per #5105: a commit records bytes and never rewrites them, and the certification artifacts (BRIEF/SCRIPT/RESULT/evidence) are neither declared covered_files nor *-PLAN/*-SUMMARY artifacts (allCurrentArtifactsCovered), so committing them after the fingerprint is inert to it by construction. align-1.22.0: the paths are the init-resolved {phase_dir} (upstream #5861 scoped paths), not the root .planning/phases literal."
   }
 ]

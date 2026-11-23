@@ -180,7 +180,7 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "\\.planning/adr/"
+    "`adr/\\*\\.md` and `DOMAIN-MODEL\\.md` beside PROJECT\\.md"
    ]
   },
   {
@@ -333,11 +333,9 @@
   },
   {
    "path": "bin/install.js",
-   "feature": "uninstall-scoped-settings",
+   "feature": "hook-lib-roster",
    "mode": "anchors-only",
    "anchors": [
-    "settingsFilesToClean",
-    "_uninstallScopedSettingsFile",
     "hook-exit\\.js",
     "filename-classification\\.js",
     "'config-read\\.js', 'git-head-tree\\.js', 'secret-read-exemptions\\.js'"
@@ -2072,6 +2070,23 @@
    "anchors": [
     "unseenSites: 3, unseenSitesTrackedBy: '#6063'",
     "perf-317-context-monitor-fs\\.test\\.cjs, which this fork deletes"
+   ]
+  },
+  {
+   "path": "tests/gsd-write-guard.test.cjs",
+   "feature": "strategy",
+   "mode": "anchors-only",
+   "anchors": [
+    "own no roadmapper spawn in this fork",
+    "\\['roadmap\\.md', 3\\]"
+   ]
+  },
+  {
+   "path": "tests/registry-docs-approved-issue-parity.test.cjs",
+   "feature": "release",
+   "mode": "anchors-only",
+   "anchors": [
+    "FORK_APPROVAL_LABELS_LINE"
    ]
   }
  ]

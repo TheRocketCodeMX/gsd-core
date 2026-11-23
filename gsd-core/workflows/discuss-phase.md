@@ -240,15 +240,21 @@ Check `has_plans` and `plan_count` from init. **If `has_plans` is true:**
 Read project-level and prior phase context to avoid re-asking decided questions.
 
 ```bash
-cat .planning/PROJECT.md 2>/dev/null || true
-cat .planning/REQUIREMENTS.md 2>/dev/null || true
-cat .planning/STATE.md 2>/dev/null || true
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+GSD_WS="${GSD_WS:-}"
+PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path)
+cat "${PROJECT_PATH}" 2>/dev/null || true
+cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null || true
+cat "${PLANNING_ROOT}/STATE.md" 2>/dev/null || true
 ```
 
 Read at most **3** prior CONTEXT.md files (most recent 3 phases before current). If `.planning/DECISIONS-INDEX.md` exists, read that instead — it is a bounded rolling summary that supersedes per-phase reads.
 
 ```bash
-(find .planning/phases -name "*-CONTEXT.md" 2>/dev/null || true) | sort -r
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+(find "${PLANNING_ROOT}/phases" -name "*-CONTEXT.md" 2>/dev/null || true) | sort -r
 ```
 
 For each CONTEXT.md read: extract `<decisions>` (locked preferences), `<specifics>` (particular references), and patterns (e.g., "user prefers minimal UI", "user rejected single-key shortcuts").
@@ -308,7 +314,7 @@ Analyze the phase to identify gray areas. Use both `prior_decisions` and `codeba
 
 1b. **Initialize canonical refs accumulator** — Start building `<canonical_refs>` for CONTEXT.md. Sources:
    - **Now:** Copy `Canonical refs:` from ROADMAP.md for this phase. Expand each to a full relative path. Check REQUIREMENTS.md and PROJECT.md for specs/ADRs referenced.
-   - **Project discovery artifacts (if present):** add `.planning/DOMAIN-MODEL.md`, `.planning/adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`, plus the **literal sources** `LEGACY-INVENTORY.md` + `DESIGN-INVENTORY.md` (re-grounded by the builders, not just abstracted). These apply to EVERY phase: planning and implementation MUST follow the domain model, the architecture decision (+ FE + security), and the test strategy — and test tasks pull the specific `gsd-core/references/<test-infra>.md` files TEST-STRATEGY links for the level being written.
+   - **Project discovery artifacts (if present):** add, from beside PROJECT.md (`${PROJECT_PATH}`), `DOMAIN-MODEL.md`, `adr/*.md`, `SECURITY-STRATEGY.md`, `FRONTEND-ARCHITECTURE.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md`, plus the **literal sources** `LEGACY-INVENTORY.md` + `DESIGN-INVENTORY.md` (re-grounded by the builders, not just abstracted). These apply to EVERY phase: planning and implementation MUST follow the domain model, the architecture decision (+ FE + security), and the test strategy — and test tasks pull the specific `gsd-core/references/<test-infra>.md` files TEST-STRATEGY links for the level being written.
    - **`scout_codebase`:** If existing code references docs (e.g., comments citing ADRs), add those.
    - **`discuss_areas`:** When the user says "read X", "check Y", or references any doc/spec/ADR — add it immediately. These are often the MOST important refs.
 
@@ -487,11 +493,13 @@ Confirm: "Committed: docs(${padded_phase}): capture phase context"
 Update STATE.md with session info:
 
 ```bash
-gsd_run query state.record-session \
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
+gsd_run query state.record-session ${GSD_WS:+--ws=${GSD_WS##* }} \
   --stopped-at "Phase ${PHASE} context gathered" \
   --resume-file "${phase_dir}/${padded_phase}-CONTEXT.md"
 
-gsd_run query commit "docs(state): record phase ${PHASE} context session" --files .planning/STATE.md
+gsd_run query commit "docs(state): record phase ${PHASE} context session" --files "${PLANNING_ROOT}/STATE.md"
 ```
 </step>
 

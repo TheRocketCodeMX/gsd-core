@@ -106,7 +106,7 @@ Parse: frontmatter (phase, plan, type, autonomous, wave, depends_on), objective,
 
 <!-- FORK:fidelity BEGIN -->
 **Mode awareness** (PROJECT.md `## Mode` — Origin × Design-input × Code-quality; honor every active source per `@~/.claude/gsd-core/references/exploration-and-adaptability.md` § Source precedence — never build a data shape from a paraphrase when the literal source is in reach):
-- **From-design** (a provided design): the design is the authority on the **observable shape** — the user-facing fields, screens, and flows. Match the design oracle (`.planning/DESIGN-INVENTORY.md`'s field list, and/or the phase UI-SPEC) as a **fidelity contract**: don't add a user-facing field the design lacks (and requirements don't add), don't drop one it shows. You MAY model those fields internally per DDD (a rich `Address` value object, normalization, a column split) — that's internal-modeling, not an observable change. When the distilled spec is thin and the literal design is reachable, re-ground in it rather than inventing. Don't deviate from the oracle without a recorded reason.
+- **From-design** (a provided design): the design is the authority on the **observable shape** — the user-facing fields, screens, and flows. Match the design oracle (the field list of `DESIGN-INVENTORY.md` beside PROJECT.md (`.planning/<name>/` under `GSD_PROJECT`), and/or the phase UI-SPEC) as a **fidelity contract**: don't add a user-facing field the design lacks (and requirements don't add), don't drop one it shows. You MAY model those fields internally per DDD (a rich `Address` value object, normalization, a column split) — that's internal-modeling, not an observable change. When the distilled spec is thin and the literal design is reachable, re-ground in it rather than inventing. Don't deviate from the oracle without a recorded reason.
 - **Origin ≠ greenfield / Code-quality = legacy or vibe-coded** (changing existing code): match the surrounding code's grain, keep changes incremental, and honor the plan's characterization-test gate where present — when a task changes behavior-bearing legacy, the pinned current behavior is the oracle (do not "clean up" behavior silently). For a **vibe-coded** region the authority is *intent*, not the prototype's behavior — harden it; don't carry its bugs forward. See `@~/.claude/gsd-core/references/brownfield-adaptation.md`.
 <!-- FORK:fidelity END -->
 </step>
@@ -517,7 +517,7 @@ if [ "$IS_PROTECTED" = "__GSD_RUN_UNAVAILABLE__" ] || [ -z "$IS_PROTECTED" ]; th
 fi
 if [ "$IS_PROTECTED" != "false" ]; then
   echo "FATAL: refusing to commit — HEAD is on '$ACTUAL_BRANCH' (protected/default branch)." >&2
-  echo "Re-home onto a phase/agent branch (#2924, #3819); override: git.allow_default_branch_commits:true in .planning/config.json." >&2
+  echo "Re-home onto a phase/agent branch (#2924, #3819); override: git.allow_default_branch_commits:true in the project config.json." >&2
   exit 1
 fi
 # #4799: set SEQUENTIAL=true ONLY if your prompt has a `<sequential_execution>` block (the
@@ -660,13 +660,13 @@ file individually. If a file appears untracked but is not part of your task, lea
 </destructive_git_prohibition>
 
 <summary_creation>
-After all tasks complete, create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`.
+After all tasks complete, create `{phase}-{plan}-SUMMARY.md` at `{phase_dir}/` (the scoped phase directory from init).
 
 Use the Write tool to create files — never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
 
 **Write contract (hard rules — must follow):**
 
-This file is the canonical output of this step. The orchestrator reads `.planning/phases/XX-name/{phase}-{plan}-SUMMARY.md` from disk after you return; it does NOT read your return message for the file content.
+This file is the canonical output of this step. The orchestrator reads `{phase_dir}/{phase}-{plan}-SUMMARY.md` from disk after you return; it does NOT read your return message for the file content.
 
 1. **Default: write the whole file in a single `Write` call.** On most runtimes this is correct and reliable — do this unless rule 4 applies.
 2. **Do NOT return the SUMMARY.md content in your response.** Your return message is a brief confirmation; the content lives on disk.
@@ -848,8 +848,10 @@ gsd_run query state.add-blocker --text "Blocker description"
 <final_commit>
 This commit must re-run the Step 0 assertion above (#3819).
 ```bash
+PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
+: "${PLANNING_ROOT:?}"
 gsd_run query commit "docs({phase}-{plan}): complete [plan-name] plan" --files \
-  .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md .planning/STATE.md .planning/ROADMAP.md .planning/REQUIREMENTS.md
+  "${PLANNING_ROOT}/phases/XX-name/{phase}-{plan}-SUMMARY.md" "${PLANNING_ROOT}/STATE.md" "${PLANNING_ROOT}/ROADMAP.md" "${PLANNING_ROOT}/REQUIREMENTS.md"
 ```
 
 Separate from per-task commits — captures execution results only.
@@ -860,7 +862,7 @@ one of these shapes:
 - `{committed: true, hash, reason: 'committed'}` — commit succeeded; record
   the hash in the completion format.
 - `{committed: false, skipped: true, reason: 'skipped_commit_docs_false'}` —
-  the user has `commit_docs: false` in `.planning/config.json`. **This is an
+  the user has `commit_docs: false` in `{planning_root}/config.json` (`{planning_root}`: the active scope's root, from `planning.inspect`). **This is an
   intentional success path.** Record "skipped (commit_docs disabled)" in the
   completion format and move on.
 - `{committed: false, skipped: true, reason: 'skipped_gitignored'}` —

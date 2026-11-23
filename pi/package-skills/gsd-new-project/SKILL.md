@@ -26,12 +26,12 @@ Initialize a new project through unified flow: questioning → research (optiona
 
 **Creates:**
 - `.planning/PROJECT.md` — project context
-- `.planning/config.json` — workflow preferences
+- `{planning_root}/config.json` — workflow preferences (`{planning_root}`: the active scope's root, from `planning.inspect`)
 - `.planning/research/` — domain research (optional)
-- `.planning/REQUIREMENTS.md` — scoped requirements
+- `{planning_root}/REQUIREMENTS.md` — scoped requirements
 - `## Strategy Plan` in PROJECT.md — the strategy steps this project needs
 
-`.planning/ROADMAP.md` and `.planning/STATE.md` are not created here: `/skill:gsd-roadmap` writes them at the end of the strategy chain.
+`{planning_root}/ROADMAP.md` and `{planning_root}/STATE.md` are not created here: `/skill:gsd-roadmap` writes them at the end of the strategy chain.
 
 **After this command:** Run the first step your `## Strategy Plan` recommends (the closing panel names it; the chain ends by creating the roadmap with `/skill:gsd-roadmap`), or `/skill:gsd-roadmap` itself when no strategy step is recommended; once the roadmap exists, run `/skill:gsd-discuss-phase 1` to clarify the approach (or `/skill:gsd-plan-phase 1` to plan directly); then `/skill:gsd-execute-phase 1` to execute.
 </objective>

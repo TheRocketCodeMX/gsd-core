@@ -94,10 +94,10 @@ Your RESEARCH.md is consumed by `gsd-planner`:
 <tool_strategy>
 
 <!-- FORK:fidelity BEGIN -->
-**Source grounding (before any web research).** If PROJECT.md `## Mode` records a provided design (`gsd_run query project mode` → `has_provided_design: true`) or `.planning/LEGACY-INVENTORY.md` / `.planning/DESIGN-INVENTORY.md` exists, **read those literal sources first** (per `@__GSD_PI_ENGINE_ROOT__/gsd-core/references/design-ingestion.md` / the inventory) and ground the phase's research in them. Never research the web for what the provided design or old code already answers, and never recommend an approach that contradicts the design's observable shape or the legacy's behavior-to-preserve (§ Source precedence in `exploration-and-adaptability.md`).
+**Source grounding (before any web research).** If PROJECT.md `## Mode` records a provided design (`gsd_run query project mode` → `has_provided_design: true`) or `LEGACY-INVENTORY.md` / `DESIGN-INVENTORY.md` exists beside PROJECT.md (`.planning/<name>/` under `GSD_PROJECT`), **read those literal sources first** (per `@__GSD_PI_ENGINE_ROOT__/gsd-core/references/design-ingestion.md` / the inventory) and ground the phase's research in them. Never research the web for what the provided design or old code already answers, and never recommend an approach that contradicts the design's observable shape or the legacy's behavior-to-preserve (§ Source precedence in `exploration-and-adaptability.md`).
 <!-- FORK:fidelity END -->
 <!-- FORK:context BEGIN -->
-**ADR + domain grounding (before any web research).** Read the latest `.planning/adr/*.md` and `.planning/DOMAIN-MODEL.md` if they exist BEFORE researching: recommendations must fit the decided rung and subdomain types. If research argues for breaking a rung, flag it explicitly in RESEARCH.md — never silently contradict the ADR.
+**ADR + domain grounding (before any web research).** Read the latest `adr/*.md` and `DOMAIN-MODEL.md` beside PROJECT.md if they exist BEFORE researching: recommendations must fit the decided rung and subdomain types. If research argues for breaking a rung, flag it explicitly in RESEARCH.md — never silently contradict the ADR.
 <!-- FORK:context END -->
 
 ## Research Plan via Code Seam
@@ -273,7 +273,7 @@ directory is a high-risk signal. Flag such packages `[SUS]` even if the seam rat
 
 ## RESEARCH.md Structure
 
-**Location:** `.planning/phases/XX-name/{phase_num}-RESEARCH.md`
+**Location:** `{phase_dir}/{phase_num}-RESEARCH.md`
 
 ```markdown
 # Phase [X]: [Name] - Research
@@ -549,7 +549,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 Extract from init JSON: `phase_dir`, `padded_phase`, `phase_number`, `commit_docs`.
 
-Also read `.planning/config.json` — include Validation Architecture section in RESEARCH.md unless `workflow.nyquist_validation` is explicitly `false`. If the key is absent or `true`, include the section.
+Also read `{planning_root}/config.json` (`{planning_root}`: the active scope's root, from `planning.inspect`) — include Validation Architecture section in RESEARCH.md unless `workflow.nyquist_validation` is explicitly `false`. If the key is absent or `true`, include the section.
 
 Then read CONTEXT.md if exists:
 ```bash
@@ -584,7 +584,7 @@ If `exists` is `false`, continue to Step 1.5 without graph context.
 
 If the status response has `stale: true`, note for later: "Graph is {age_hours}h old -- treat semantic relationships as approximate." Include this annotation inline with any graph context injected below.
 
-The same response carries `graph_path` — the resolved graph location. Substitute it for `<graph>` below. `graph_path` comes from `graphify.graph_path` in `.planning/config.json`, a config surface already trusted elsewhere; if it ever carried attacker-controlled content, the literal double-quoted substitution below would need escaping.
+The same response carries `graph_path` — the resolved graph location. Substitute it for `<graph>` below. `graph_path` comes from `graphify.graph_path` in `{planning_root}/config.json`, a config surface already trusted elsewhere; if it ever carried attacker-controlled content, the literal double-quoted substitution below would need escaping.
 
 Query the graph for each major capability in the phase scope (2-3 queries per D-05, discovery-focused). Prefer the `graphify` CLI when it is on PATH; fall back to the built-in reader otherwise:
 

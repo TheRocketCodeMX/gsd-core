@@ -28,7 +28,7 @@ this run, mark it complete when Pass 4 lands its row.
 
 <required_reading>
 @~/.claude/gsd-core/references/test-strategy.md
-`.planning/TEST-STRATEGY.md` — the project's own strategy. Without it there is nothing
+`TEST-STRATEGY.md` beside PROJECT.md (`.planning/<name>/` under `GSD_PROJECT`) — the project's own strategy. Without it there is nothing
 to audit the suite *against*, and this flow degenerates into a stopwatch. Stop and say so.
 </required_reading>
 
@@ -86,7 +86,7 @@ record it in Pass 4 and stop; do not go looking for tests to delete.
 ## Pass 3: Suite audit against the strategy
 
 Only now do tests change, and every change is **justified by the strategy, never merely
-"made faster"**: each one cites `.planning/TEST-STRATEGY.md` — the level emphasis per
+"made faster"**: each one cites `TEST-STRATEGY.md` — the level emphasis per
 subdomain, what-not-to-test, and the no-duplicate-coverage rule. Five classes, each a
 **strategy violation first and a performance cost second**:
 
@@ -107,7 +107,7 @@ tests is a strategy decision, not a tune-up decision.
 ## Pass 4: Re-baseline — append the row, record the fix-class
 
 Re-measure the whole suite once, timed, exactly as Pass 1 did, and **append a new dated
-row** to `.planning/TEST-STRATEGY.md`'s `## Suite health` table:
+row** to `TEST-STRATEGY.md`'s `## Suite health` table:
 
 ```markdown
 | YYYY-MM-DD | {test_count} | {wall_clock_ms} | {containers_started \| —} | {config-drift \| test-debt \| mixed (dominant: …) \| none (volume/mix — routed to C1)} |
@@ -158,7 +158,7 @@ Suite tune-up complete — {trigger} cleared.
   Fix-class: {config-drift | test-debt | mixed (dominant: …)}
   Changes: {config edits} · {tests moved/demoted/deleted, each with its strategy citation}
 
-  New Suite-health row appended to .planning/TEST-STRATEGY.md (history preserved).
+  New Suite-health row appended to TEST-STRATEGY.md (history preserved).
 ```
 
 If the trigger did **not** clear, say so plainly and append the row anyway with the real

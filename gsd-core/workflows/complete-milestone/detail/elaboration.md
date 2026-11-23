@@ -57,7 +57,7 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 
    # quick_tasks (--dir) — the scanner's `slug` strips a leading
    # YYYYMMDD-/YYYY-MM-DD- date prefix for display; `--dir` needs the
-   # ORIGINAL .planning/quick/<dir>/ name, so reconstruct it from `date`+`slug`.
+   # ORIGINAL quick/<dir>/ directory name, so reconstruct it from `date`+`slug`.
    while IFS= read -r dir; do
      [ -z "$dir" ] && continue
      if ! gsd_run query audit-open acknowledge --category quick_tasks --milestone "$MILESTONE_VERSION" --dir "$dir"; then
@@ -141,7 +141,8 @@ GSD_ARGS=${GSD_ARGS%$'\n'}
    INIT_CAP=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
    if [[ "$INIT_CAP" == @file:* ]]; then INIT_CAP=$(cat "${INIT_CAP#@file:}"); fi
    # The workstream (from --ws or the active pointer) is the one init resolved STATE.md under.
-   CAPSULE=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const m=String(o.state_path||'').match(/\/\.planning\/workstreams\/([^/]+)\/STATE\.md$/);process.stdout.write(String(o.project_root||'.')+'/.planning/milestones/next/'+(m?m[1]+'-':'')+process.argv[2]+'-CAPSULE.md')" "$INIT_CAP" "$NEXT_LABEL")
+   # milestones/next/ sits beside PROJECT.md (project_path): the root .planning/, or .planning/<name> under GSD_PROJECT.
+   CAPSULE=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};const m=String(o.state_path||'').match(/\/workstreams\/([^/]+)\/STATE\.md$/);const d=o.project_path?require('path').dirname(String(o.project_path)):String(o.project_root||'.')+'/.planning';process.stdout.write(d+'/milestones/next/'+(m?m[1]+'-':'')+process.argv[2]+'-CAPSULE.md')" "$INIT_CAP" "$NEXT_LABEL")
    echo "forward_capsule: $CAPSULE"
    ```
    If that capsule does not exist, create it from `~/.claude/gsd-core/templates/milestone-capsule.md` (fill the frontmatter `milestone`/`context_provenance` and `## Why this milestone`). Sanitize values via `sanitizeForDisplay()` as above. Then stage it so the close's own final commit (`git_commit_milestone`) carries it — the safety commit's `query commit --files` is path-scoped and leaves it staged:

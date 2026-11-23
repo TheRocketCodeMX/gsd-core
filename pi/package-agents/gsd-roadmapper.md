@@ -475,8 +475,8 @@ The post-write `## ROADMAP CREATED` return carries this preview block (renamed f
 ## ROADMAP CREATED
 
 **Files written:**
-- .planning/ROADMAP.md
-- .planning/STATE.md
+- {roadmap_path}
+- {state_path}
 
 ### Roadmap Preview
 
@@ -527,11 +527,11 @@ Orchestrator provides:
 - config.json (granularity setting)
 
 <!-- FORK:strategy BEGIN -->
-**Also read these project-level discovery artifacts if they exist** (e.g. on a new milestone, or when discovery was run before the roadmap):
-- `.planning/DOMAIN-MODEL.md` — group phases so each delivers a coherent subdomain capability; keep core-subdomain work cohesive rather than scattered across unrelated phases.
-- the latest `.planning/adr/*.md` — let the architecture topology inform phase dependencies (e.g. shared ports/adapters land before the features that use them).
-- `.planning/LEGACY-INVENTORY.md` (rewrite/refactor) — map every salvage disposition + each "never lose a feature" capability to a phase, so coverage is carried into the roadmap structure rather than rediscovered at plan time; a capability the roadmap never delivers is a coverage gap.
-- `.planning/DESIGN-INVENTORY.md` (provided design) — let the covered surfaces + screens/flows inform phase grouping; a design surface no phase delivers is a coverage gap.
+**Also read these project-level discovery artifacts if they exist** (e.g. on a new milestone, or when discovery was run before the roadmap). They sit beside the PROJECT.md your prompt names (`.planning/<name>/` under `GSD_PROJECT`):
+- `DOMAIN-MODEL.md` — group phases so each delivers a coherent subdomain capability; keep core-subdomain work cohesive rather than scattered across unrelated phases.
+- the latest `adr/*.md` — let the architecture topology inform phase dependencies (e.g. shared ports/adapters land before the features that use them).
+- `LEGACY-INVENTORY.md` (rewrite/refactor) — map every salvage disposition + each "never lose a feature" capability to a phase, so coverage is carried into the roadmap structure rather than rediscovered at plan time; a capability the roadmap never delivers is a coverage gap.
+- `DESIGN-INVENTORY.md` (provided design) — let the covered surfaces + screens/flows inform phase grouping; a design surface no phase delivers is a coverage gap.
 <!-- FORK:strategy END -->
 
 Parse and confirm understanding before proceeding.
@@ -595,7 +595,7 @@ If gaps found, include in draft for user decision.
 Write files first, then return. This ensures artifacts persist even if context is lost.
 
 **Arm the write-guard sentinel before each curated write, when the target already exists.** On a
-`/gsd:new-milestone` run `.planning/ROADMAP.md` and `.planning/STATE.md` still hold the *outgoing*
+`/gsd:new-milestone` run the target ROADMAP.md and STATE.md still hold the *outgoing*
 milestone's content, and the replacement carries only the new milestone's phases — a legitimate,
 intentional shrink that the `gsd-write-guard` PreToolUse hook (#2255) hard-blocks on curated
 `.planning/` artifacts. A hook inherits the *runtime's* environment, so no per-step env var can reach
@@ -604,16 +604,26 @@ single-use, so arm it immediately before each Write — one arming can never cov
 `/gsd:new-project` run neither target exists, the guard exempts the write (ENOENT), and the `[ -f ]`
 test skips the arming so no unconsumed token is left on disk.
 
+**Write targets.** Write ROADMAP.md, STATE.md and REQUIREMENTS.md at the paths your prompt names, in
+its `<write_targets>` block or its `Produce:` list; `{roadmap_path}`, `{state_path}` and
+`{requirements_path}` below stand for those paths. Under a workstream or a named project they sit
+inside that scope's directory, and the root `.planning/` copies belong to a different project or
+workstream: writing or arming them would overwrite its files. Only when the prompt names no target,
+use `.planning/ROADMAP.md`, `.planning/STATE.md` and `.planning/REQUIREMENTS.md`. The sentinel file
+itself always lives at the outer `.planning/.gsd-allow-shrink` and names the target path.
+
 1. **Write ROADMAP.md** using output format — arm first, then Write:
 
    ```bash
-   [ -f .planning/ROADMAP.md ] && printf '.planning/ROADMAP.md\n' > .planning/.gsd-allow-shrink
+   ROADMAP_TARGET="{roadmap_path}"
+   [ -f "$ROADMAP_TARGET" ] && printf '%s\n' "$ROADMAP_TARGET" > .planning/.gsd-allow-shrink
    ```
 
 2. **Write STATE.md** using output format — arm first, then Write:
 
    ```bash
-   [ -f .planning/STATE.md ] && printf '.planning/STATE.md\n' > .planning/.gsd-allow-shrink
+   STATE_TARGET="{state_path}"
+   [ -f "$STATE_TARGET" ] && printf '%s\n' "$STATE_TARGET" > .planning/.gsd-allow-shrink
    ```
 
 3. **Update REQUIREMENTS.md traceability section**
@@ -628,7 +638,7 @@ Return `## ROADMAP CREATED` with summary of what was written.
 
 If orchestrator provides revision feedback:
 - Parse specific concerns
-- Update files in place (Edit, not rewrite from scratch)
+- Update files in place at the Step 7 write targets (Edit, not rewrite from scratch)
 - Re-validate coverage
 - Return `## ROADMAP REVISED` with changes made
 
@@ -644,11 +654,11 @@ When files are written and returning to orchestrator:
 ## ROADMAP CREATED
 
 **Files written:**
-- .planning/ROADMAP.md
-- .planning/STATE.md
+- {roadmap_path}
+- {state_path}
 
 **Updated:**
-- .planning/REQUIREMENTS.md (traceability section)
+- {requirements_path} (traceability section)
 
 ### Summary
 
@@ -696,9 +706,9 @@ After incorporating user feedback and updating files:
 - {change 2}
 
 **Files updated:**
-- .planning/ROADMAP.md
-- .planning/STATE.md (if needed)
-- .planning/REQUIREMENTS.md (if traceability changed)
+- {roadmap_path}
+- {state_path} (if needed)
+- {requirements_path} (if traceability changed)
 
 ### Updated Summary
 
