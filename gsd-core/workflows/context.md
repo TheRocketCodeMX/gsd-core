@@ -63,11 +63,11 @@ $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
 GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
-N="{N}"   # the phase this run resolves (run the block once per phase; each fence is its own shell)
-INIT=$(gsd_run query init.phase-op "${N}" ${GSD_WS:+--ws=${GSD_WS##* }}); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
+PHASE_N="{N}"   # the phase this run resolves (run the block once per phase; each fence is its own shell)
+INIT=$(gsd_run query init.phase-op "${PHASE_N}" ${GSD_WS:+--ws=${GSD_WS##* }}); [[ "$INIT" == @file:* ]] && INIT=$(cat "${INIT#@file:}")
 # The capsule: the phase's existing CONTEXT.md (init context_path), else <phase_dir>/<padded_phase>-CONTEXT.md.
 CAPSULE=$(node -e "let o={};try{o=JSON.parse(process.argv[1])}catch{};process.stdout.write(o.context_path||(o.phase_dir&&o.padded_phase?o.phase_dir+'/'+o.padded_phase+'-CONTEXT.md':''))" "$INIT")
-[ -n "$CAPSULE" ] || { echo "phase ${N} not found — no capsule path" >&2; exit 1; }
+[ -n "$CAPSULE" ] || { echo "phase ${PHASE_N} not found — no capsule path" >&2; exit 1; }
 # Decide absence MECHANICALLY with test -f; consult provenance ONLY for existing files.
 if [ ! -f "$CAPSULE" ]; then echo "ABSENT"; else gsd_run context provenance --file "$CAPSULE" 2>/dev/null; fi
 ```
@@ -98,8 +98,8 @@ $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
 GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
-N="{N}"   # per capsule: the phase just written
-gsd_run context verify --phase "${N}" ${GSD_WS:+--ws=${GSD_WS##* }}   # per capsule; after a milestone seed: gsd_run context verify --milestone ${GSD_WS:+--ws=${GSD_WS##* }} (covers MASTER too)
+PHASE_N="{N}"   # per capsule: the phase just written
+gsd_run context verify --phase "${PHASE_N}" ${GSD_WS:+--ws=${GSD_WS##* }}   # per capsule; after a milestone seed: gsd_run context verify --milestone ${GSD_WS:+--ws=${GSD_WS##* }} (covers MASTER too)
 ```
 
 Fix every claim that fails at birth — correct the path/substring or demote the claim — and re-run until clean. Then commit (`query commit` honors `commit_docs`):
@@ -121,7 +121,7 @@ Requires a phase (`--phase <N>`, default: the active phase from STATE.md). Guard
 1. Extract the capsule's **Verified Facts** claims across all layers (latest layer supersedes).
 2. Spawn **2–3 explorer subagents** ("Explore" type) in parallel, splitting the claims between them. Prompt each: "For each claim, CONFIRM or REFUTE it against the live codebase. Do not trust the claim — hunt for counter-evidence first. Return per claim: verdict, evidence (path + exact substring), and the corrected claim when refuted."
 3. Append the findings as a `## Scout corrections (<date>)` layer, opening with the line: *corrections below override the corresponding claims above.* Refuted/corrected claims get full entries with fresh anchors; confirmed claims share one summary line.
-4. Commit: `gsd_run query commit "docs(context): scout corrections phase ${N}" --files "${CAPSULE_FILE}"`.
+4. Commit: `gsd_run query commit "docs(context): scout corrections phase {N}" --files "{capsule_path}"`.
 
 **When offered:** pre-discussion, when provenance quality is `rich` AND the capsule is older than `context_lifecycle.verify_max_age_commits` commits — offered, never forced. AskUserQuestion (header "Scout") — "Capsule is rich but aging. Confirm-or-refute its facts against the live code first?" → "Scout" / "Skip" (TEXT_MODE: numbered list).
 

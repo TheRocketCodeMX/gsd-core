@@ -204,7 +204,7 @@ describe('context.md fences honour --ws (matrix119-B F1)', () => {
   };
   const step1 = fenceWith('_GSD_SHIM_NAME=');
   const flush = fenceWith('docs(context): flush knowledge checkpoint');
-  const seedVerify = fenceWith('gsd_run context verify --phase "${N}"');
+  const seedVerify = fenceWith('gsd_run context verify --phase "${PHASE_N}"');
   const shell = os.platform() === 'win32' ? null : 'bash';
   const CAP = '## Verified Facts\n\n- ok [anchor: ext:x "y"]\n';
 
@@ -314,9 +314,9 @@ describe('context.md fences honour --ws (matrix119-B F1)', () => {
     try {
       // align-1.23.0: the fence assigns N from its {N} placeholder (each fence is its own shell, #381);
       // the orchestrator fills it, as it fills every other placeholder. Upstream #6218: a quoted --ws selects too.
-      assert.ok(seedVerify.includes('N="{N}"'), 'the verify fence assigns N itself');
+      assert.ok(seedVerify.includes('PHASE_N="{N}"'), 'the verify fence assigns PHASE_N itself');
       for (const args of ['seed --phase 4 --ws community', 'seed --phase 4 --ws "community"', "seed --phase 4 --ws 'community'"]) {
-        const out = run(dir, seedVerify.split('N="{N}"').join('N="4"'), args);
+        const out = run(dir, seedVerify.split('PHASE_N="{N}"').join('PHASE_N="4"'), args);
         assert.doesNotMatch(out, /no matching CONTEXT file found/, args);
         assert.match(out, /workstreams\/community\/phases\/04-threads\/04-CONTEXT\.md/, args);
       }

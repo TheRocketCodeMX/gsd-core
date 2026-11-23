@@ -206,3 +206,27 @@ describe('fork fences never iterate a bare glob (an unmatched one aborts the fen
     assert.equal(globForLists(['for d in $(ls "${D}" 2>/dev/null); do :; done']).length, 0);
   });
 });
+
+/**
+ * Pre-ship matrix1230-B F3: `N="{N}"` next to `${N}` in one fence invites a naive fill of `{N}` to turn
+ * `${N}` into `$4` (a harness did exactly that: "update tracking after wave "). A fork fence never names a
+ * shell variable after one of its own `{placeholder}` tokens.
+ */
+function placeholderCollisions(body) {
+  const text = body.join('\n');
+  const placeholders = new Set([...text.matchAll(/(?<!\$)\{([A-Za-z_]\w*)\}/g)].map((m) => m[1]));
+  return [...placeholders].filter((p) => new RegExp(`\\$\\{${p}[}:#%/+=?-]`).test(text) || new RegExp(`\\$${p}\\b`).test(text));
+}
+
+describe('fork fences keep {placeholder} names apart from shell variable names (matrix1230-B F3)', () => {
+  test('no fork fence reads ${X} or $X for one of its own {X} placeholders', () => {
+    const offenders = [];
+    for (const f of forkFences()) for (const p of placeholderCollisions(f.body)) offenders.push(`${f.rel}:${f.line} — {${p}} and \$${p}`);
+    assert.deepEqual(offenders, [], 'rename the shell variable (PHASE_N="{N}", WAVE_N="{N}")');
+  });
+
+  test('positive control', () => {
+    assert.deepEqual(placeholderCollisions(['N="{N}"', 'echo "wave ${N}"']), ['N']);
+    assert.deepEqual(placeholderCollisions(['WAVE_N="{N}"', 'echo "wave ${WAVE_N}"']), []);
+  });
+});
