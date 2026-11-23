@@ -1,0 +1,1533 @@
+"use strict";
+/**
+ * Broken-windows ledger — optionally enforced cross-phase defect register (issue #1950).
+ *
+ * Manages `.planning/WINDOWS.md`: a cross-phase ledger of small defects (stubs,
+ * TODOs, skipped tests, lint warnings, unrun verifies, unmet truths, deviations).
+ * When `workflow.windows_enforce` is true, `/gsd-ship` blocks while any entry is
+ * `open`; an entry can be `waived` only with a recorded reason or `fixed`.
+ *
+ * LEAF MODULE — imports node:fs + node:path, the leaf frontmatter-fence.cjs (the one
+ * frontmatter fence owner), plus two compiled sibling lib modules require()d at runtime:
+ * workstream-inventory.cjs (the #4487 milestone stamp) and capability-lock.cjs (the #3780
+ * cross-process ledger lock). No other src/ imports.
+ *
+ * Storage format (`.planning/WINDOWS.md`):
+ *   ---
+ *   schema_version: 1
+ *   open_count: N
+ *   waived_count: N
+ *   fixed_count: N
+ *   total_count: N
+ *   last_updated: <ISO-8601>
+ *   ---
+ *   # Broken Windows Ledger
+ *   <human-readable prose>
+ *   ````json
+ *   [ <entries array, canonical JSON> ]
+ *   ````
+ *
+ * Frontmatter holds scalar counts (the FAST path the ship gate reads via jq
+ * without parsing JSON). The JSON code block is the AUTHORITATIVE entries
+ * source. The two must agree; read paths cross-check and fail closed on drift.
+ *
+ * Exports:
+ *   Constants: REASON, LEDGER_FILE_NAME, SCHEMA_VERSION, KINDS
+ *   Pure:      emptyLedger, parseLedger, renderLedger, appendWindow,
+ *              markWaived, markFixed, amendWindow, reconcileLedger,
+ *              openCount, findByStatus
+ *   I/O:       cmdWindowsStatus, cmdWindowsAppend, cmdWindowsWaive,
+ *              cmdWindowsMarkFixed, cmdWindowsAmend, cmdWindowsReconcile
+ *
+ * Closing an entry is MECHANICAL — the operator never hand-edits the file:
+ *   `windows fixed <id> "<reason>"`  records WHY it closed (reason column)
+ *   `windows amend <id> --description/--reason/--file/--line`  rewrites an
+ *                                    existing entry (any status) in place
+ *   `windows reconcile`              re-derives the frontmatter counts from
+ *                                    the entries — the ONE lenient read path,
+ *                                    for repairing drift a hand edit already
+ *                                    caused. Every other read stays fail-closed.
+ *
+ * Reasoning shape — every cmd* function returns JSON suitable for `--raw`:
+ *   success: { ok: true,  ledger: <Ledger>, ... }
+ *   failure: { ok: false, reason: <REASON.*>, message: <string> }
+ * Failure throws an ExitError-shaped error carrying REASON so the gsd-tools
+ * dispatcher's `--json-errors` mode emits it as a structured code (CONTRIBUTING.md
+ * "Prohibited: Raw Text Matching"). The frozen REASON enum is the typed surface
+ * tests assert against.
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.WindowsError = exports.KINDS = exports.REASON = exports.SCHEMA_VERSION = exports.LEDGER_FILE_NAME = void 0;
+exports.emptyLedger = emptyLedger;
+exports.openCount = openCount;
+exports.findByStatus = findByStatus;
+exports.appendWindow = appendWindow;
+exports.markWaived = markWaived;
+exports.markFixed = markFixed;
+exports.amendWindow = amendWindow;
+exports.parseLedger = parseLedger;
+exports.reconcileLedger = reconcileLedger;
+exports.renderLedger = renderLedger;
+exports.renderTable = renderTable;
+exports.extractTableRegion = extractTableRegion;
+exports.withLedgerLock = withLedgerLock;
+exports.cmdWindowsStatus = cmdWindowsStatus;
+exports.cmdWindowsAppend = cmdWindowsAppend;
+exports.cmdWindowsWaive = cmdWindowsWaive;
+exports.cmdWindowsMarkFixed = cmdWindowsMarkFixed;
+exports.cmdWindowsAmend = cmdWindowsAmend;
+exports.cmdWindowsReconcile = cmdWindowsReconcile;
+const node_fs_1 = __importDefault(require("node:fs"));
+const node_path_1 = __importDefault(require("node:path"));
+const frontmatter_fence_cjs_1 = require("./frontmatter-fence.cjs");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const workstreamInventory = require("./workstream-inventory.cjs");
+// ─── Constants ─────────────────────────────────────────────────────────────
+exports.LEDGER_FILE_NAME = 'WINDOWS.md';
+exports.SCHEMA_VERSION = 1;
+/**
+ * Frozen reason enum. Tests assert against these — they are the typed surface
+ * per CONTRIBUTING.md. Adding a new code requires updating this enum, the I/O
+ * entry point that emits it, AND the test that locks Object.keys(REASON).sort()
+ * — three coordinated changes that keep code and tests from drifting.
+ */
+exports.REASON = Object.freeze({
+    WINDOWS_OK: 'windows_ok',
+    WINDOWS_LEDGER_MISSING: 'windows_ledger_missing',
+    WINDOWS_LEDGER_MALFORMED: 'windows_ledger_malformed',
+    WINDOWS_ID_NOT_FOUND: 'windows_id_not_found',
+    WINDOWS_DUPLICATE_ID: 'windows_duplicate_id',
+    WINDOWS_ALREADY_RESOLVED: 'windows_already_resolved',
+    WINDOWS_WAIVE_REASON_EMPTY: 'windows_waive_reason_empty',
+    WINDOWS_INVALID_KIND: 'windows_invalid_kind',
+    WINDOWS_INVALID_FILE: 'windows_invalid_file',
+    WINDOWS_INVALID_TEXT: 'windows_invalid_text',
+    WINDOWS_INVALID_ID: 'windows_invalid_id',
+    WINDOWS_APPEND_MISSING_FIELD: 'windows_append_missing_field',
+    WINDOWS_USAGE: 'windows_usage',
+    // #3689: the rendered markdown table disagreed with the fenced JSON (the
+    // sole source of truth) at the pre-write seam — refuse rather than silently
+    // reconcile by overwriting the operator's hand-edit or dropping a row.
+    WINDOWS_LEDGER_TABLE_DRIFT: 'windows_ledger_table_drift',
+    // #3780: the read-compute-write cycle is serialized on a cross-process
+    // ledger lock; this fires only when another writer held the lock past the
+    // whole bounded retry budget — a typed, actionable refusal instead of a
+    // silently-lost mutation reported as success.
+    WINDOWS_LEDGER_LOCK: 'windows_ledger_lock',
+});
+/** Allowed window kinds. Aligned with the issue's enumerated sources. */
+exports.KINDS = Object.freeze([
+    'stub',
+    'todo',
+    'fixme',
+    'skipped-test',
+    'lint-warning',
+    'unmet-truth',
+    'unrun-verify',
+    'deviation',
+]);
+const KIND_SET = new Set(exports.KINDS);
+/** Fields amendWindow accepts — the single source for the "at least one" check. */
+const AMENDABLE_FIELDS = ['description', 'reason', 'file', 'line'];
+// ─── Errors ────────────────────────────────────────────────────────────────
+/**
+ * Error carrying a REASON code. gsd-tools.cjs's `--json-errors` mode catches
+ * this and emits `{ ok: false, reason: err.reason, message: err.message }` to
+ * stderr; otherwise the message goes to stderr as plain text and the exit
+ * code is non-zero.
+ */
+class WindowsError extends Error {
+    reason;
+    constructor(reason, message) {
+        super(message);
+        this.name = 'WindowsError';
+        this.reason = reason;
+    }
+}
+exports.WindowsError = WindowsError;
+// ─── Pure: constructors + counts ───────────────────────────────────────────
+function emptyLedger(now) {
+    return {
+        schema_version: exports.SCHEMA_VERSION,
+        open_count: 0,
+        waived_count: 0,
+        fixed_count: 0,
+        total_count: 0,
+        last_updated: now,
+        entries: [],
+    };
+}
+function openCount(ledger) {
+    return ledger.open_count;
+}
+function findByStatus(ledger, status) {
+    return ledger.entries.filter((e) => e.status === status);
+}
+function recomputeCounts(ledger) {
+    let open = 0, waived = 0, fixed = 0;
+    for (const e of ledger.entries) {
+        if (e.status === 'open')
+            open++;
+        else if (e.status === 'waived')
+            waived++;
+        else if (e.status === 'fixed')
+            fixed++;
+    }
+    return {
+        ...ledger,
+        open_count: open,
+        waived_count: waived,
+        fixed_count: fixed,
+        total_count: ledger.entries.length,
+    };
+}
+function validateKind(kind) {
+    if (typeof kind !== 'string' || !KIND_SET.has(kind)) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_KIND, `Invalid window kind: ${JSON.stringify(kind)}. Allowed: ${exports.KINDS.join(', ')}.`);
+    }
+}
+function validateDescription(description) {
+    if (typeof description !== 'string' || description.trim() === '') {
+        throw new WindowsError(exports.REASON.WINDOWS_APPEND_MISSING_FIELD, 'Window description must be a non-empty string.');
+    }
+    rejectBacktickRun(description, 'description');
+    return description;
+}
+/**
+ * Reject any string field that contains a 4-backtick run. The ledger's JSON
+ * code block uses a 4-backtick fence; a 4-backtick run inside stringified
+ * entry text would terminate the fence early and brick the next parse
+ * (issue #1950 review H1). JSON.stringify does not escape backticks, so we
+ * must catch them at validate time.
+ */
+function rejectBacktickRun(value, field) {
+    if (value.includes(FORBIDDEN_BACKTICK_RUN)) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_TEXT, `Window ${field} contains a 4-backtick run, which would corrupt the ledger's JSON code fence.`);
+    }
+}
+/**
+ * Normalize an optional rationale string (the `reason` column).
+ *
+ * Whitespace-only collapses to '' — an operator who typed spaces recorded no
+ * rationale, and storing '   ' would render as a reason that says nothing.
+ * A 4-backtick run is rejected for the same fence-integrity reason as
+ * description (rejectBacktickRun): JSON.stringify does not escape backticks,
+ * so a reason carrying '````' would terminate the ledger's code fence early
+ * and brick the next parse. markWaived writes operator text into this column
+ * too, so the check lives here rather than at any single call site.
+ */
+function normalizeReason(reason, field = 'reason') {
+    if (reason == null)
+        return '';
+    if (typeof reason !== 'string') {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_TEXT, `Window ${field} must be a string when provided.`);
+    }
+    rejectBacktickRun(reason, field);
+    return reason.trim() === '' ? '' : reason;
+}
+function validateFile(file) {
+    if (file == null || file === '')
+        return '';
+    if (typeof file !== 'string') {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_FILE, 'Window file must be a string when provided.');
+    }
+    // Reject path traversal — the ledger is a project-local artifact; absolute or
+    // parent-escaping paths serve no legitimate purpose and could mislead a human
+    // reviewer into investigating the wrong location. Reject NUL bytes too.
+    if (file.includes('\0')) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_FILE, 'Window file contains a NUL byte.');
+    }
+    if (node_path_1.default.isAbsolute(file) || /(^|[/\\])\.\.([/\\]|$)/.test(file)) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_FILE, `Window file rejects path traversal/absolute paths: ${file}`);
+    }
+    return file;
+}
+function validateLine(line) {
+    if (line == null || line === '')
+        return null;
+    // Strict: number or numeric string only; reject garbage like "abc" (which
+    // Number() would silently coerce to NaN → null, hiding type drift). Issue
+    // #1950 review M2.
+    const n = typeof line === 'number' ? line : Number(line);
+    if (!Number.isInteger(n) || n < 1) {
+        throw new WindowsError(exports.REASON.WINDOWS_APPEND_MISSING_FIELD, `Window line must be a positive integer when provided (got: ${JSON.stringify(line)}).`);
+    }
+    return n;
+}
+function nextId(entries) {
+    let max = 0;
+    for (const e of entries)
+        if (e.id > max)
+            max = e.id;
+    return max + 1;
+}
+/**
+ * Append a window to the ledger. Assigns the next dense id (max+1), sets
+ * status=open, timestamps via opts.now.
+ *
+ * Concurrency (issue #1950 review L2, superseded by #3780): as a PURE
+ * function this operates on whatever ledger snapshot it is passed and cannot
+ * see concurrent writers — serialization is the CALLER's job. The I/O entry
+ * points below (cmdWindowsAppend/Waive/MarkFixed) now discharge that duty by
+ * holding the cross-process ledger lock across their whole
+ * read-compute-write cycle, so the previously-documented loss (two parallel
+ * writers, second rename wins, first entry silently gone) can no longer
+ * occur through the CLI.
+ */
+function appendWindow(ledger, input, opts = { now: new Date().toISOString() }) {
+    validateKind(input.kind);
+    const description = validateDescription(input.description);
+    const file = validateFile(input.file);
+    const line = validateLine(input.line);
+    const id = nextId(ledger.entries);
+    const entry = {
+        id,
+        kind: input.kind,
+        phase: String(input.phase ?? ''),
+        file,
+        line,
+        description,
+        status: 'open',
+        reason: '',
+        recorded_at: opts.now,
+        resolved_at: null,
+        milestone: input.milestone ?? null,
+    };
+    const entries = [...ledger.entries, entry];
+    const result = recomputeCounts({ ...ledger, entries, last_updated: opts.now });
+    return { ledger: result, entry };
+}
+function findEntryOrFail(ledger, id) {
+    const entry = ledger.entries.find((e) => e.id === id);
+    if (!entry) {
+        throw new WindowsError(exports.REASON.WINDOWS_ID_NOT_FOUND, `No window with id ${id}.`);
+    }
+    return entry;
+}
+function assertOpen(entry) {
+    if (entry.status !== 'open') {
+        throw new WindowsError(exports.REASON.WINDOWS_ALREADY_RESOLVED, `Window ${entry.id} is already ${entry.status} (resolved_at=${entry.resolved_at}).`);
+    }
+}
+function markWaived(ledger, id, reason, opts = { now: new Date().toISOString() }) {
+    if (typeof reason !== 'string' || reason.trim() === '') {
+        throw new WindowsError(exports.REASON.WINDOWS_WAIVE_REASON_EMPTY, 'Waive requires a non-empty recorded reason.');
+    }
+    const recordedReason = normalizeReason(reason, 'waive reason');
+    const entry = findEntryOrFail(ledger, id);
+    assertOpen(entry);
+    const newStatus = 'waived';
+    const entries = ledger.entries.map((e) => e.id === id
+        ? { ...e, status: newStatus, reason: recordedReason, resolved_at: opts.now }
+        : e);
+    return recomputeCounts({ ...ledger, entries, last_updated: opts.now });
+}
+/**
+ * Mark an entry fixed, optionally recording WHY it closed.
+ *
+ * The reason is optional here (unlike waive, where it is mandatory): a fix is
+ * self-justifying in a way a deferral is not. But without a place to put it,
+ * operators wrote the rationale into WINDOWS.md by hand — and a hand edit
+ * drifts the frontmatter counts, which fail-closes every later read of the
+ * ledger (see parseLedger's cross-check). Giving `fixed` the same reason
+ * column `waived` already has removes the motive for the hand edit.
+ *
+ * Signature is backward compatible in both shapes:
+ *   markFixed(ledger, id, { now })                 // pre-reason callers
+ *   markFixed(ledger, id, 'why it closed', { now })
+ * A call with no reason leaves the entry's existing reason untouched.
+ */
+function markFixed(ledger, id, reasonOrOpts, maybeOpts) {
+    // The overloaded third parameter is a type hole once this compiles to CJS:
+    // a caller passing a number, a boolean, an array or an explicit null used to
+    // have their argument SILENTLY discarded (a number/boolean fell through both
+    // branches; an array satisfied `typeof === 'object'` and was read as opts,
+    // taking `now` from a nonexistent property). A closure reason that vanishes
+    // without a word is the failure this whole reason column exists to end, so
+    // an unexpected type fails loudly instead.
+    if (reasonOrOpts !== undefined &&
+        typeof reasonOrOpts !== 'string' &&
+        !(typeof reasonOrOpts === 'object' && reasonOrOpts !== null && !Array.isArray(reasonOrOpts))) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_TEXT, `markFixed third argument must be a reason string or an options object; got ${reasonOrOpts === null ? 'null' : Array.isArray(reasonOrOpts) ? 'array' : typeof reasonOrOpts}.`);
+    }
+    const reasonGiven = typeof reasonOrOpts === 'string' ? reasonOrOpts : undefined;
+    const opts = (typeof reasonOrOpts === 'object' && reasonOrOpts !== null ? reasonOrOpts : maybeOpts) ??
+        { now: new Date().toISOString() };
+    const reason = normalizeReason(reasonGiven, 'fixed reason');
+    const entry = findEntryOrFail(ledger, id);
+    assertOpen(entry);
+    const newStatus = 'fixed';
+    const entries = ledger.entries.map((e) => e.id === id
+        ? { ...e, status: newStatus, reason: reason === '' ? e.reason : reason, resolved_at: opts.now }
+        : e);
+    return recomputeCounts({ ...ledger, entries, last_updated: opts.now });
+}
+/**
+ * Rewrite fields of an EXISTING entry, whatever its status.
+ *
+ * This is the mechanical replacement for the hand edit. Two shapes need it:
+ * a row that closes only by HALVES (narrow the description to the surviving
+ * half and leave it open), and a row whose closure was annotated by hand
+ * (move the annotation into the reason column, tool-written).
+ *
+ * Status is deliberately NOT amendable — resolution transitions belong to
+ * waive/fixed, which stamp resolved_at and enforce assertOpen. amendWindow
+ * never touches status, resolved_at, or recorded_at, so a re-worded entry
+ * keeps its true history.
+ *
+ * One field is status-sensitive: the reason of a WAIVED entry may be re-worded
+ * but never emptied — see the guard below.
+ */
+function amendWindow(ledger, id, fields = {}, opts = { now: new Date().toISOString() }) {
+    const given = (k) => Object.prototype.hasOwnProperty.call(fields, k) && fields[k] !== undefined;
+    if (!AMENDABLE_FIELDS.some(given)) {
+        throw new WindowsError(exports.REASON.WINDOWS_USAGE, `Amend requires at least one field to change (${AMENDABLE_FIELDS.map((f) => `--${f}`).join(', ')}).`);
+    }
+    const entry = findEntryOrFail(ledger, id);
+    const amended = { ...entry };
+    // Every amended field goes through the SAME validators the append path uses
+    // — an amend must not be a back door around traversal/fence/line checks.
+    if (given('description'))
+        amended.description = validateDescription(fields.description);
+    if (given('reason')) {
+        const nextReason = normalizeReason(fields.reason, 'reason');
+        // A waived entry is EXEMPT from the ship gate, and its recorded reason is
+        // the entire justification for that exemption. Amend may RE-WORD it; it may
+        // not empty it, which would leave a gate-exempt row carrying no rationale —
+        // precisely the state markWaived refuses to create in the first place. The
+        // reason stays optional on open/fixed rows, where nothing is being excused.
+        if (nextReason === '' && entry.status === 'waived') {
+            throw new WindowsError(exports.REASON.WINDOWS_WAIVE_REASON_EMPTY, `Window ${entry.id} is waived: its reason justifies skipping the ship gate and cannot be cleared. ` +
+                `Re-word it with a non-empty --reason instead.`);
+        }
+        amended.reason = nextReason;
+    }
+    if (given('file'))
+        amended.file = validateFile(fields.file);
+    if (given('line'))
+        amended.line = validateLine(fields.line);
+    const entries = ledger.entries.map((e) => (e.id === id ? amended : e));
+    return recomputeCounts({ ...ledger, entries, last_updated: opts.now });
+}
+// ─── Pure: parse / render ──────────────────────────────────────────────────
+// JSON-FENCE strategy (issue #1950 review H1): a description containing the
+// 3-backtick markdown fence sequence would terminate the code block early
+// inside JSON.stringify output (which does not escape backticks), corrupting
+// the file and bricking the next parse. We use a 4-backtick fence which
+// cannot collide with anything JSON.stringify can emit on its own (JSON has
+// no 4-backtick operator), AND validate that no entry's text fields contain
+// a 4-backtick run, so the rendered file is provably reparseable.
+const JSON_FENCE_OPEN = '````json';
+const JSON_FENCE_CLOSE = '````';
+const FORBIDDEN_BACKTICK_RUN = '````';
+/** Landmarks bounding the human-readable header prose (see stripHeaderProse). */
+const LEDGER_TITLE = '# Broken Windows Ledger';
+const TABLE_HEAD_MARKER = '| id |';
+/**
+ * #3689: the ledger table's fixed header row literal. `renderTable` emits it
+ * on both the empty and non-empty branches; `extractTableRegion` anchors on
+ * it to bound the table region. Hoisted to one constant so the two surfaces
+ * cannot drift (see "Generative Fix Divergence" — CONTRIBUTING.md).
+ */
+const TABLE_HEADER_LINE = '| id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |';
+/**
+ * Locate the entries JSON block by CommonMark fence rules rather than a fixed
+ * literal width. Both parseJsonBlock (strict) and writeLedgerAtomic's #2893
+ * prose preservation (lenient) go through this one function so read tolerance
+ * and splice tolerance cannot drift (#3657). A backtick-only line can never
+ * occur inside a body: JSON.stringify renders strings single-line-escaped, so
+ * an inline run inside a description is never a close-fence candidate.
+ *
+ * Disambiguation (#3657 security review): an entry description may contain
+ * newlines and 3-backtick runs (append validation rejects only 4+ runs), and
+ * renderTable renders descriptions into the prose ABOVE the JSON block — so
+ * hostile or accidental text can plant a second json fence above the real
+ * one. renderLedger always emits the entries block as the FINAL fenced
+ * section, so spans are scanned in REVERSE: prefer the latest span whose
+ * entries length equals the frontmatter total_count (the real block always
+ * satisfies it — parseLedger cross-checks that invariant), else the latest
+ * span whose body is a JSON array, else the first span so corrupt bodies keep
+ * their fail-closed parse errors. A mirror planted below with identical
+ * length and identical entries is indistinguishable by construction — and
+ * harmless.
+ */
+function locateJsonBlock(raw, expectedTotal) {
+    const spans = [];
+    for (const open of raw.matchAll(/^(`{3,})json[ \t]*\r?$/gm)) {
+        const width = open[1].length;
+        const bodyStart = (open.index ?? 0) + open[0].length;
+        for (const close of raw.slice(bodyStart).matchAll(/^(`{3,})[ \t]*\r?$/gm)) {
+            if (close[1].length < width)
+                continue;
+            const bodyEnd = bodyStart + (close.index ?? 0);
+            const closeLineEnd = raw.indexOf('\n', bodyEnd);
+            spans.push({
+                bodyStart,
+                bodyEnd,
+                afterClose: closeLineEnd === -1 ? raw.length : closeLineEnd + 1,
+            });
+            break; // CommonMark: the first qualifying close ends this fence block
+        }
+    }
+    if (spans.length === 0) {
+        const sawOpen = /^(`{3,})json[ \t]*\r?$/m.test(raw);
+        return { ok: false, reason: sawOpen ? 'unterminated' : 'missing-open' };
+    }
+    const parseBody = (s) => {
+        try {
+            return JSON.parse(raw.slice(s.bodyStart, s.bodyEnd).trim());
+        }
+        catch {
+            return undefined;
+        }
+    };
+    if (expectedTotal !== undefined) {
+        for (let i = spans.length - 1; i >= 0; i--) {
+            const body = parseBody(spans[i]);
+            if (Array.isArray(body) && body.length === expectedTotal) {
+                return { ok: true, span: spans[i] };
+            }
+        }
+    }
+    for (let i = spans.length - 1; i >= 0; i--) {
+        if (Array.isArray(parseBody(spans[i]))) {
+            return { ok: true, span: spans[i] };
+        }
+    }
+    return { ok: true, span: spans[0] };
+}
+/**
+ * Minimal strict frontmatter parser for flat scalar keys. Only supports the
+ * shape this module emits: `key: <number|string>` per line. Throws on any
+ * structural deviation — fail-closed on drift.
+ */
+function parseFrontmatterStrict(raw) {
+    // The block is the one the one fence owner finds (`locateFrontmatterFence`).
+    const fence = (0, frontmatter_fence_cjs_1.locateFrontmatterFence)(raw);
+    if (!fence) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, 'Ledger missing frontmatter opening ---');
+    }
+    if (!fence.closed) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, 'Ledger missing frontmatter closing ---');
+    }
+    const yamlBody = raw.slice(fence.openEnd, fence.bodyEnd);
+    const out = {};
+    for (const rawLine of yamlBody.split(/\r?\n/)) {
+        // #3116: strip a trailing CR per line (`.` never matches CR, so the key: value regex
+        // below would fail on it) without touching the rest of `raw`, which parseJsonBlock also
+        // slices by byte offset.
+        const line = rawLine.replace(/\r$/, '');
+        if (line.trim() === '')
+            continue;
+        const m = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
+        if (!m) {
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger frontmatter line is not key: value: ${JSON.stringify(line)}`);
+        }
+        const [, key, valueStr] = m;
+        const trimmed = valueStr.trim();
+        if (/^-?\d+$/.test(trimmed)) {
+            out[key] = Number(trimmed);
+        }
+        else if (/^-?\d+\.\d+$/.test(trimmed)) {
+            out[key] = Number(trimmed);
+        }
+        else {
+            // String — strip surrounding quotes if present.
+            out[key] =
+                (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+                    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+                    ? trimmed.slice(1, -1)
+                    : trimmed;
+        }
+    }
+    return out;
+}
+function parseJsonBlock(raw, expectedTotal) {
+    const span = locateJsonBlock(raw, expectedTotal);
+    if (!span.ok) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, span.reason === 'missing-open'
+            ? 'Ledger missing JSON code block for entries.'
+            : 'Ledger JSON code block not terminated.');
+    }
+    const jsonText = raw.slice(span.span.bodyStart, span.span.bodyEnd).trim();
+    let parsed;
+    try {
+        parsed = JSON.parse(jsonText);
+    }
+    catch (e) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger JSON block failed to parse: ${e.message}`);
+    }
+    if (!Array.isArray(parsed)) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, 'Ledger JSON block must be an array.');
+    }
+    const entries = parsed.map(validateEntryShape);
+    assertUniqueIds(entries);
+    return entries;
+}
+/**
+ * Reject duplicate entry ids — corruption, not drift.
+ *
+ * `id` is the addressing key of every mutation verb: waive/fixed/amend all
+ * rewrite via `entries.map(e => e.id === id ? ... : e)`, so two rows sharing an
+ * id means one `windows fixed 3` closes BOTH of them, silently resolving a
+ * window nobody looked at. Per-entry shape validation cannot see this — it is a
+ * property of the collection — so the check lives here, in the shared parse
+ * path, and therefore fires under the strict read AND under reconcile: reconcile
+ * repairs derived counts, never the authoritative entries, and picking a winner
+ * between two same-id rows would destroy the record the ledger exists to keep.
+ */
+function assertUniqueIds(entries) {
+    const seen = new Set();
+    for (const e of entries) {
+        if (seen.has(e.id)) {
+            throw new WindowsError(exports.REASON.WINDOWS_DUPLICATE_ID, `Ledger has more than one entry with id ${e.id}. Ids address every mutation verb, ` +
+                `so a duplicate makes one command rewrite several rows. Give each entry a unique id ` +
+                `(reconcile cannot repair this — it re-derives counts, not entries).`);
+        }
+        seen.add(e.id);
+    }
+}
+function validateEntryShape(e, i) {
+    if (typeof e !== 'object' || e === null) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} is not an object.`);
+    }
+    const o = e;
+    const required = ['id', 'kind', 'phase', 'file', 'description', 'status', 'reason', 'recorded_at'];
+    for (const k of required) {
+        if (!(k in o)) {
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} missing required field: ${k}`);
+        }
+    }
+    if (typeof o.id !== 'number' || !Number.isInteger(o.id) || o.id < 1) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} has invalid id.`);
+    }
+    if (typeof o.kind !== 'string' || !KIND_SET.has(o.kind)) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} has invalid kind: ${JSON.stringify(o.kind)}`);
+    }
+    if (typeof o.status !== 'string' || !['open', 'waived', 'fixed'].includes(o.status)) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} has invalid status: ${JSON.stringify(o.status)}`);
+    }
+    if (typeof o.description !== 'string' || typeof o.reason !== 'string') {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger entry ${i} has non-string description/reason.`);
+    }
+    const phaseStr = typeof o.phase === 'string'
+        ? o.phase
+        : (o.phase == null ? '' : typeof o.phase === 'number' || typeof o.phase === 'boolean' ? String(o.phase) : '');
+    const recordedStr = typeof o.recorded_at === 'string'
+        ? o.recorded_at
+        : (o.recorded_at == null ? '' : typeof o.recorded_at === 'number' || typeof o.recorded_at === 'boolean' ? String(o.recorded_at) : '');
+    const resolvedStr = typeof o.resolved_at === 'string'
+        ? o.resolved_at
+        : (o.resolved_at == null ? null : typeof o.resolved_at === 'number' || typeof o.resolved_at === 'boolean' ? String(o.resolved_at) : null);
+    return {
+        id: o.id,
+        kind: o.kind,
+        phase: phaseStr,
+        file: typeof o.file === 'string' ? o.file : '',
+        line: o.line == null ? null : (Number(o.line) || null),
+        description: o.description,
+        status: o.status,
+        reason: o.reason,
+        recorded_at: recordedStr,
+        resolved_at: resolvedStr,
+        // #4487: NOT in `required` above -- an entry recorded before this field
+        // existed has no `milestone` key at all, and that must parse cleanly.
+        // Preserve the absence itself -- by not materializing the property at
+        // all, via the conditional spread below, rather than assigning it
+        // `milestone: undefined` (an object literal property set to `undefined`
+        // is still an OWN property; `'milestone' in entry` reads true either
+        // way) -- so a genuinely absent key stays absent both to `in` and to
+        // JSON.stringify on re-render. Collapsing absence to an explicit null
+        // instead would stamp every legacy entry with permanent
+        // `"milestone": null` noise the moment the ledger is next touched. A
+        // genuinely-recorded-but-unresolvable milestone (set by appendWindow)
+        // is still an explicit null and round-trips as one.
+        ...('milestone' in o ? { milestone: typeof o.milestone === 'string' ? o.milestone : null } : {}),
+    };
+}
+/**
+ * #5418: when the frontmatter counts disagree with the parsed entries, the usual
+ * cause is a hand-edited table: a row added to the rendered table (and the counts
+ * bumped to match) while the fenced JSON block, the sole source of entries, was left
+ * behind. Names the row ids the table and the JSON block disagree about so the
+ * counts message does not point at the (correct) frontmatter. Returns '' when there
+ * is nothing to add. Best-effort by design: it runs while a WindowsError is already
+ * on its way out, so it must never throw and replace that error.
+ */
+/** Row ids spelled out in the divergence note; the rest are counted. */
+const ROW_ID_LIST_LIMIT = 20;
+function describeTableJsonDivergence(raw, entries) {
+    try {
+        // The hint is the PARSED entry count, not frontmatter total_count: the latter
+        // is the number that is wrong here.
+        const table = extractTableRegion(raw, entries.length);
+        if (table === null)
+            return '';
+        const rowId = (line) => (line.split('|')[1] ?? '').trim();
+        // Ids are positive integers (the JSON side enforces it), so a first cell that is
+        // not one — the `_(none)_` empty-ledger placeholder, a continuation line of a
+        // multi-line description, control characters — is not a row id and is never
+        // echoed into the message.
+        const tableIds = new Set();
+        const tableLines = table.split('\n');
+        for (let i = 2; i < tableLines.length; i++) {
+            if (!tableLines[i].startsWith('|'))
+                continue;
+            const id = rowId(tableLines[i]);
+            if (/^\d{1,15}$/.test(id))
+                tableIds.add(id);
+        }
+        const jsonIds = new Set(entries.map((e) => String(e.id)));
+        const byNumber = (a, b) => Number(a) - Number(b);
+        const list = (ids) => {
+            const shown = ids.slice(0, ROW_ID_LIST_LIMIT).join(', ');
+            return ids.length > ROW_ID_LIST_LIMIT ? `${shown} and ${ids.length - ROW_ID_LIST_LIMIT} more` : shown;
+        };
+        const tableOnly = [...tableIds].filter((id) => !jsonIds.has(id)).sort(byNumber);
+        const jsonOnly = [...jsonIds].filter((id) => !tableIds.has(id)).sort(byNumber);
+        const parts = [];
+        if (tableOnly.length > 0) {
+            parts.push(`row id(s) in the table but not in the fenced JSON block: ${list(tableOnly)}`);
+        }
+        if (jsonOnly.length > 0) {
+            parts.push(`row id(s) in the fenced JSON block but not in the table: ${list(jsonOnly)}`);
+        }
+        if (parts.length === 0)
+            return '';
+        return ` The table and the fenced JSON block disagree (${parts.join('; ')}). The JSON block is the ` +
+            'authoritative entries source: add the missing entries there (or remove the stray table rows) ' +
+            'and keep the frontmatter counts in step with it.';
+    }
+    catch {
+        return '';
+    }
+}
+function parseLedger(raw) {
+    return parseLedgerCore(raw, { strictCounts: true });
+}
+/**
+ * Shared parse core.
+ *
+ * `strictCounts: true` is the ONLY shape any read path uses — frontmatter and
+ * entries must agree or the whole ledger fails closed (an unparseable ledger
+ * is itself a broken window, and the ship gate must not pass on one).
+ * `strictCounts: false` exists for exactly one caller, reconcileLedger, which
+ * repairs that disagreement on explicit operator invocation. Everything else
+ * about the parse — schema version, frontmatter shape, entry shape, fence
+ * integrity — is identical in both modes: reconcile relaxes the count
+ * cross-check and nothing else.
+ */
+function parseLedgerCore(raw, opts) {
+    const fm = parseFrontmatterStrict(raw);
+    if (fm.schema_version !== exports.SCHEMA_VERSION) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger schema_version must be ${exports.SCHEMA_VERSION}; got ${JSON.stringify(fm.schema_version)}.`);
+    }
+    const requiredCounts = ['open_count', 'waived_count', 'fixed_count', 'total_count'];
+    for (const k of requiredCounts) {
+        const v = fm[k];
+        if (typeof v !== 'number' || !Number.isInteger(v)) {
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger ${k} must be an integer; got ${JSON.stringify(v)}.`);
+        }
+    }
+    if (typeof fm.last_updated !== 'string') {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger last_updated must be a string; got ${JSON.stringify(fm.last_updated)}.`);
+    }
+    const entries = parseJsonBlock(raw, typeof fm.total_count === 'number' ? fm.total_count : undefined);
+    const ledger = {
+        schema_version: exports.SCHEMA_VERSION,
+        open_count: typeof fm.open_count === 'number' ? fm.open_count : 0,
+        waived_count: typeof fm.waived_count === 'number' ? fm.waived_count : 0,
+        fixed_count: typeof fm.fixed_count === 'number' ? fm.fixed_count : 0,
+        total_count: typeof fm.total_count === 'number' ? fm.total_count : 0,
+        last_updated: typeof fm.last_updated === 'string' ? fm.last_updated : '',
+        entries,
+    };
+    // Cross-check: frontmatter counts must agree with entries-derived counts.
+    const recomputed = recomputeCounts(ledger);
+    if (opts.strictCounts &&
+        (recomputed.open_count !== ledger.open_count ||
+            recomputed.waived_count !== ledger.waived_count ||
+            recomputed.fixed_count !== ledger.fixed_count ||
+            recomputed.total_count !== ledger.total_count)) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger counts disagree with entries: frontmatter open/waived/fixed/total=` +
+            `${ledger.open_count}/${ledger.waived_count}/${ledger.fixed_count}/${ledger.total_count}` +
+            ` but entries yield ${recomputed.open_count}/${recomputed.waived_count}/${recomputed.fixed_count}/${recomputed.total_count}.` +
+            describeTableJsonDivergence(raw, entries) +
+            ` Repair with \`gsd-tools windows reconcile\` (re-derives the counts from the entries).`);
+    }
+    return ledger;
+}
+function countsOf(ledger) {
+    return {
+        open_count: ledger.open_count,
+        waived_count: ledger.waived_count,
+        fixed_count: ledger.fixed_count,
+        total_count: ledger.total_count,
+    };
+}
+/**
+ * Self-heal a ledger whose frontmatter counts drifted from its entries.
+ *
+ * The entries ARE the ledger; the frontmatter counts are a derived index the
+ * gate reads without parsing JSON. When a hand edit desynchronizes them, every
+ * read fails closed and the ledger becomes unwritable by its own tool — a knot
+ * that tightens itself. Reconcile cuts it by re-deriving the counts.
+ *
+ * What it does NOT do: repair corruption. A broken JSON block, a bad schema
+ * version or an invalid entry still throws — those are data loss, not drift,
+ * and silently "fixing" them would destroy the record the ledger exists to keep.
+ *
+ * `normalized` is computed INDEPENDENTLY of `repaired` and reports the other
+ * repair axis: the counts were ALREADY true, but the file's bytes are not what
+ * renderLedger emits (a mangled fence, a stale table) — re-rendering is safe
+ * because the JSON block is authoritative. The two are disjoint by
+ * construction, so a caller can tell "your counts lied" from "your bytes
+ * drifted"; folding them together made every repair also claim a normalization.
+ */
+function reconcileLedger(raw, opts = { now: new Date().toISOString() }) {
+    const declared = parseLedgerCore(raw, { strictCounts: false });
+    const before = countsOf(declared);
+    const recomputed = recomputeCounts(declared);
+    const repaired = recomputed.open_count !== before.open_count ||
+        recomputed.waived_count !== before.waived_count ||
+        recomputed.fixed_count !== before.fixed_count ||
+        recomputed.total_count !== before.total_count;
+    const ledger = repaired ? { ...recomputed, last_updated: opts.now } : declared;
+    const normalized = !repaired && stripHeaderProse(renderLedger(ledger)) !== stripHeaderProse(raw);
+    return { ledger, repaired, normalized, before };
+}
+/**
+ * Elide the human-readable header prose so two renderings compare on STATE.
+ *
+ * The header is guidance text, not ledger data — and it changes whenever the
+ * tool's own guidance changes (this version added the `amend` and `reconcile`
+ * lines). Comparing raw bytes made reconcile rewrite EVERY ledger written by a
+ * previous version, on a file whose counts and entries were already true:
+ * churn in every repo's diff, attributed to a repair verb that repaired
+ * nothing. Region elided: from the `# Broken Windows Ledger` title up to the
+ * table header (or the JSON fence, when a hand-edited file carries no table),
+ * so everything authoritative — frontmatter, table, entries — still compares
+ * byte-for-byte. A file with no recognizable title is compared whole: an
+ * unrecognizable shape IS a normalization candidate.
+ */
+function stripHeaderProse(text) {
+    const titleIdx = text.indexOf(LEDGER_TITLE);
+    if (titleIdx === -1)
+        return text;
+    const tableIdx = text.indexOf(TABLE_HEAD_MARKER, titleIdx);
+    const fenceIdx = text.indexOf(JSON_FENCE_OPEN, titleIdx);
+    const endIdx = tableIdx !== -1 && (fenceIdx === -1 || tableIdx < fenceIdx) ? tableIdx : fenceIdx;
+    if (endIdx === -1)
+        return text;
+    return text.slice(0, titleIdx) + text.slice(endIdx);
+}
+function renderLedger(ledger) {
+    const fm = [
+        '---',
+        `schema_version: ${ledger.schema_version}`,
+        `open_count: ${ledger.open_count}`,
+        `waived_count: ${ledger.waived_count}`,
+        `fixed_count: ${ledger.fixed_count}`,
+        `total_count: ${ledger.total_count}`,
+        `last_updated: ${ledger.last_updated}`,
+        '---',
+        '',
+    ].join('\n');
+    const header = [
+        LEDGER_TITLE,
+        '',
+        '> Cross-phase defect register. With `workflow.windows_enforce` enabled, `/gsd-ship` blocks while `open_count > 0`.',
+        '> Waive with `gsd-tools windows waive <id> "<reason>"` (reason required).',
+        '> Mark fixed with `gsd-tools windows fixed <id> "<reason>"` (reason optional, recorded).',
+        '> Re-word an entry with `gsd-tools windows amend <id> --description "..." --reason "..."`.',
+        '> Never hand-edit this file: `gsd-tools windows reconcile` repairs counts a hand edit drifted.',
+        '',
+    ].join('\n');
+    const table = renderTable(ledger.entries);
+    const jsonBlock = [JSON_FENCE_OPEN, JSON.stringify(ledger.entries, null, 2), JSON_FENCE_CLOSE, ''].join('\n');
+    return [fm, header, table, '', jsonBlock].join('\n');
+}
+function renderTable(entries) {
+    if (entries.length === 0) {
+        return [
+            TABLE_HEADER_LINE,
+            '|----|-------|------|------|------|-------------|--------|--------|-------------|-------------|',
+            '| _(none)_ |  |  |  |  | _No windows recorded._ |  |  |  |  |',
+        ].join('\n');
+    }
+    const rows = [
+        TABLE_HEADER_LINE,
+        '|----|-------|------|------|------|-------------|--------|--------|-------------|-------------|',
+    ];
+    for (const e of entries) {
+        // Escape backslash FIRST, then pipe — markdown table cells treat `\` as
+        // the escape introducer, so a description containing `\|` would render
+        // as an escaped pipe (i.e. a literal `|` inside the cell) and split the
+        // column. Escaping `\` → `\\` first makes the subsequent `\|` replacement
+        // unambiguous. (CodeQL: js/incomplete-sanitization — issue #1950 PR #2441.)
+        const cell = (s) => String(s ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/\|/g, '\\|');
+        rows.push([
+            '|', cell(e.id), '|', cell(e.phase), '|', cell(e.kind), '|',
+            cell(e.file), '|', cell(e.line ?? ''), '|',
+            cell(e.description), '|', cell(e.status), '|',
+            cell(e.reason), '|', cell(e.recorded_at), '|', cell(e.resolved_at), '|',
+        ].join(' '));
+    }
+    return rows.join('\n');
+}
+/**
+ * #3689: extract the exact markdown table region a rendered ledger emits —
+ * the text `renderTable` produced, byte-for-byte — from a raw ledger file.
+ * Used by `writeLedgerAtomic`'s drift guard to compare the on-disk table
+ * against `renderTable(<on-disk JSON entries>)` without a table parser.
+ *
+ * Locates the JSON block with the same tolerant `locateJsonBlock` helper the
+ * rest of the module uses (#3657), so a formatter-normalized 3-backtick
+ * fence still resolves. Everything before the opening fence line, with
+ * trailing blank lines dropped, is the candidate region.
+ *
+ * #3689: the region is bounded by finding the LAST occurrence of the fixed
+ * `TABLE_HEADER_LINE` literal (anchored at a line start) within that
+ * candidate text, then taking everything from there through its end — NOT
+ * by scanning backward for a contiguous run of `|`-prefixed lines. A `|`
+ * prefix scan cannot bound the region: `validateDescription` rejects only
+ * empty strings and 4-backtick runs, so a description may contain a raw
+ * `\n`, and `renderTable`'s `cell()` escapes `\` and `|` but not newlines.
+ * Such a description renders a row that physically spans multiple file
+ * lines, and the continuation line does not start with `|` — a prefix scan
+ * either truncates the table or, when the row's tail is the last pre-fence
+ * line, returns null immediately, bricking every subsequent write with
+ * `WINDOWS_LEDGER_TABLE_DRIFT` on a ledger nobody hand-edited. Anchoring on
+ * the header instead includes any such row whole, so `renderTable`
+ * regenerates byte-identical text for it and the drift comparison passes.
+ *
+ * Returns null when the JSON block cannot be located, or no header line is
+ * present.
+ *
+ * `expectedTotal` (#3689 review finding 2) is threaded straight into
+ * `locateJsonBlock` so callers with trailing prose can disambiguate the real
+ * ledger block from an unrelated fenced JSON array a user pasted below the
+ * closing fence — without it, `locateJsonBlock`'s no-hint fallback picks the
+ * LATEST array-shaped span, which is the prose block, not the ledger, and
+ * every drift comparison then binds to the wrong table/JSON pairing.
+ */
+function extractTableRegion(raw, expectedTotal) {
+    const span = locateJsonBlock(raw, expectedTotal);
+    if (!span.ok)
+        return null;
+    // bodyStart sits right before the newline (or CR) ending the opening fence
+    // line; walk back to the start of that line.
+    const fenceLineStart = raw.lastIndexOf('\n', span.span.bodyStart - 1) + 1;
+    const before = raw.slice(0, fenceLineStart).replace(/\r\n/g, '\n');
+    let trimmedEnd = before.length;
+    while (trimmedEnd > 0 && before[trimmedEnd - 1] === '\n') {
+        trimmedEnd--;
+    }
+    const candidate = before.slice(0, trimmedEnd);
+    // Find the LAST occurrence of TABLE_HEADER_LINE anchored at a line start —
+    // a plain string scan rather than a regex, since the module is a leaf
+    // (imports only node:fs/node:path) and cannot pull in the shared
+    // escapeRegex() helper for a one-off fixed-literal search.
+    let headerIndex = -1;
+    let searchFrom = candidate.length;
+    for (;;) {
+        const idx = candidate.lastIndexOf(TABLE_HEADER_LINE, searchFrom);
+        if (idx === -1)
+            break;
+        const atLineStart = idx === 0 || candidate[idx - 1] === '\n';
+        const atLineEnd = idx + TABLE_HEADER_LINE.length === candidate.length ||
+            candidate[idx + TABLE_HEADER_LINE.length] === '\n';
+        if (atLineStart && atLineEnd) {
+            headerIndex = idx;
+            break;
+        }
+        // #3689: lastIndexOf clamps a negative position into [0, length] per
+        // spec, so `searchFrom = -1` would re-search from 0 and re-find the same
+        // rejected match at idx===0 forever. Stop explicitly once there is
+        // nowhere left to search — this makes the bound strictly decrease each
+        // iteration, so the loop terminates within candidate.length steps.
+        if (idx === 0)
+            break;
+        searchFrom = idx - 1;
+    }
+    if (headerIndex === -1)
+        return null;
+    return candidate.slice(headerIndex);
+}
+/**
+ * #3689: diff two `renderTable` outputs by row id (the first cell of each
+ * data row), skipping the header + separator lines (always exactly two).
+ * A row whose line text differs between the two tables, or that is present
+ * in only one of them, contributes its id to the result — this is what lets
+ * the drift-guard error message name the specific drifted/table-only row(s)
+ * rather than just saying "the table disagrees".
+ */
+function diffTableRowIds(expectedTable, actualTable) {
+    const rowId = (line) => (line.split('|')[1] ?? '').trim();
+    const dataRows = (table) => {
+        const lines = table.split('\n');
+        const map = new Map();
+        for (let i = 2; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.startsWith('|'))
+                continue;
+            map.set(rowId(line), line);
+        }
+        return map;
+    };
+    const expectedRows = dataRows(expectedTable);
+    const actualRows = dataRows(actualTable);
+    const ids = new Set();
+    for (const [id, line] of expectedRows) {
+        if (actualRows.get(id) !== line)
+            ids.add(id);
+    }
+    for (const id of actualRows.keys()) {
+        if (!expectedRows.has(id))
+            ids.add(id);
+    }
+    return Array.from(ids).sort();
+}
+// ─── I/O entry points ──────────────────────────────────────────────────────
+function ledgerPath(cwd) {
+    return node_path_1.default.join(cwd, '.planning', exports.LEDGER_FILE_NAME);
+}
+/**
+ * The SHARED hardened cross-process lock primitive (single source of truth
+ * for capability-lifecycle + capability-consent, extracted so locks cannot
+ * diverge). Required LAZILY: capability-lock captures the process start time
+ * at module load — a `ps` subprocess on macOS, PowerShell on win32 — and
+ * this module is loaded by lock-free readers (`windows status`, the
+ * /gsd-ship gate) that must not pay that per-invocation cost (#3780
+ * review). `require` is cached, so writers pay it once per process.
+ */
+let _lockMod = null;
+function ledgerLock() {
+    if (_lockMod === null) {
+        /* eslint-disable @typescript-eslint/no-require-imports */
+        _lockMod = require('./capability-lock.cjs');
+        /* eslint-enable @typescript-eslint/no-require-imports */
+    }
+    return _lockMod;
+}
+/**
+ * Budget mirrors capability-consent's CONSENT_LOCK_MAX_ATTEMPTS: two
+ * genuinely-racing writers must SERIALIZE, not fail. The ledger's critical
+ * section is sub-millisecond and the primitive backs off ~25-50ms per
+ * attempt, so 50 attempts is orders of magnitude beyond any real contention
+ * while keeping the worst case (a holder that never releases until the
+ * primitive's own liveness/deadman protocol reclaims it) bounded at ~2s
+ * before the typed refusal below.
+ */
+const LEDGER_LOCK_MAX_ATTEMPTS = 50;
+function ledgerLockPath(cwd) {
+    return node_path_1.default.join(cwd, '.planning', '.WINDOWS.lock');
+}
+function acquireLedgerLock(cwd) {
+    return ledgerLock().acquireLock(ledgerLockPath(cwd), {
+        maxAttempts: LEDGER_LOCK_MAX_ATTEMPTS,
+        // A contended fresh/live holder is WAITED FOR (back off + retry), not
+        // failed-fast — racing wave-level executors serialize (issue #3780).
+        waitForFresh: true,
+    });
+}
+function releaseLedgerLock(handle) {
+    ledgerLock().releaseLock(handle);
+}
+/**
+ * Run `fn` (a full ledger read-compute-write cycle) while holding the
+ * cross-process ledger lock. Throws a typed WindowsError — never falls back
+ * to an unlocked mutation — when the lock cannot be acquired within the
+ * budget, mirroring capability-consent finding 3: a locked store must refuse
+ * the write rather than silently race for it. Readers (cmdWindowsStatus, the
+ * ship gate) deliberately do NOT take this lock: the atomic rename already
+ * gives them a whole-file snapshot.
+ *
+ * EXPORTED (#3780) because `withLedgerLock` is the ONE serialization seam
+ * for WINDOWS.md: every writer of the ledger — the cmd* entry points here
+ * and any sibling module with its own read-compute-write cycle on the same
+ * file (refactor-trigger-command-router's strict-window record/resolve) —
+ * must hold this lock, or the lost-update race #3780 fixed survives on that
+ * path.
+ */
+function withLedgerLock(cwd, fn) {
+    const handle = acquireLedgerLock(cwd);
+    if (!handle) {
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_LOCK, `Another writer holds the ledger lock at ${ledgerLockPath(cwd)}; WINDOWS.md ` +
+            'mutations are serialized per project. Re-run the command once the other ' +
+            'writer finishes — the lock is reclaimed automatically if its holder died.');
+    }
+    try {
+        return fn();
+    }
+    finally {
+        releaseLedgerLock(handle);
+    }
+}
+function readLedgerOrNull(cwd) {
+    const p = ledgerPath(cwd);
+    let raw;
+    try {
+        raw = node_fs_1.default.readFileSync(p, 'utf8');
+    }
+    catch (e) {
+        // ENOENT is the only "no ledger yet" case. Every other fs error (EACCES,
+        // EPERM, EIO, ENOTDIR, EBADF, ...) must NOT be silently coerced to "empty
+        // ledger" — that would fail the ship gate OPEN on an unreadable ledger,
+        // contradicting the workflow's documented "fail closed on unreadable"
+        // invariant (issue #1950 review H2). Propagate as malformed so the gate
+        // blocks and the operator sees a real diagnostic.
+        const code = (e && typeof e === 'object' && 'code' in e)
+            ? String(e.code)
+            : '';
+        if (code === 'ENOENT')
+            return null;
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Could not read ledger at ${p} (${code || 'unknown fs error'}): ${e.message}.`);
+    }
+    // parseLedger throws WindowsError on malformed content — caller surfaces it.
+    return parseLedger(raw);
+}
+function ensurePlanningDir(cwd) {
+    const dir = node_path_1.default.join(cwd, '.planning');
+    if (!node_fs_1.default.existsSync(dir)) {
+        node_fs_1.default.mkdirSync(dir, { recursive: true });
+    }
+}
+/**
+ * Errnos that Windows throws transiently on rename when a reader or antivirus
+ * scanner holds the target. We retry through these; anything else propagates.
+ *
+ * NOTE (issue #1950 review L3): the retry uses a short busy-wait rather than
+ * setTimeout — this is a synchronous CLI path with no event loop to yield on,
+ * and the cumulative wait is bounded at 25+50+100+200 = 375ms across 5 attempts.
+ * If a future caller moves this onto an async path, swap to awaitable sleeps.
+ */
+const RENAME_RETRY_ERRNOS = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RENAME_MAX_ATTEMPTS = 5;
+const RENAME_BACKOFF_MS = 25;
+function renameWithRetry(tmp, target) {
+    let lastErr;
+    for (let attempt = 0; attempt < RENAME_MAX_ATTEMPTS; attempt++) {
+        try {
+            node_fs_1.default.renameSync(tmp, target);
+            return;
+        }
+        catch (err) {
+            lastErr = err;
+            const code = (err && typeof err === 'object' && 'code' in err) ? String(err.code) : '';
+            if (code && RENAME_RETRY_ERRNOS.has(code) && attempt < RENAME_MAX_ATTEMPTS - 1) {
+                // Exponential-ish backoff: 25ms, 50ms, 100ms, 200ms.
+                const delay = RENAME_BACKOFF_MS * Math.pow(2, attempt);
+                const start = Date.now();
+                while (Date.now() - start < delay) {
+                    // Busy-wait a very short time — Windows transient locks usually clear in <100ms.
+                }
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastErr;
+}
+/**
+ * @param opts.regenerateTable — FORK (windows-ledger): set by `windows reconcile`, the
+ * one verb whose contract is to REGENERATE the rendered table from the fenced JSON
+ * (the sole source of truth). The #3689 table-drift guard below exists to stop
+ * every OTHER verb from silently overwriting a hand-edited table; for reconcile a
+ * missing or drifted table region is the input, not a refusal.
+ */
+function writeLedgerAtomic(cwd, ledger, opts = {}) {
+    ensurePlanningDir(cwd);
+    const p = ledgerPath(cwd);
+    const tmp = `${p}.${process.pid}.tmp`;
+    // #2893: preserve any prose below the JSON ledger block. renderLedger
+    // reconstructs frontmatter + header + table + JSON — it does not include
+    // trailing prose that users may have written below the closing fence.
+    // Without this, every append/waive/fixed silently destroys that prose.
+    let trailingProse = '';
+    // #3689: read the pre-image once into `existing` outside the catch, rather
+    // than doing every subsequent step inside a bare try/catch, so that a
+    // WindowsError thrown by the drift guard below propagates instead of being
+    // swallowed by the ENOENT handler meant only for "no ledger yet".
+    let existing = null;
+    try {
+        existing = node_fs_1.default.readFileSync(p, 'utf8');
+    }
+    catch (e) {
+        // #1950-H2 / #3689: ENOENT is the only "no ledger yet" case — mirror
+        // readLedgerOrNull's discipline exactly. A bare catch here would let
+        // EACCES/EIO/ENOTDIR/etc. fall through as "no pre-image", silently
+        // skipping BOTH the #2893 prose preservation and the drift guard below
+        // and proceeding to overwrite an unreadable file — a guard bypassable by
+        // making the pre-image unreadable is not a guard.
+        const code = (e && typeof e === 'object' && 'code' in e)
+            ? String(e.code)
+            : '';
+        if (code !== 'ENOENT') {
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Could not read ledger at ${p} (${code || 'unknown fs error'}): ${e.message}.`);
+        }
+        // File doesn't exist yet (first write) — no prose to preserve, and
+        // nothing on disk to disagree with, so the drift guard below is skipped.
+    }
+    if (existing !== null) {
+        // #3689 review finding 2 / #3689 bug discovery: both the #2893 prose
+        // span AND the drift guard below must disambiguate `locateJsonBlock`
+        // against the SAME pre-image ledger block, so this is computed ONCE,
+        // hoisted above both uses. expectedTotal MUST be derived from the
+        // PRE-IMAGE's own frontmatter (never `ledger.total_count`, which is
+        // already post-mutation — e.g. N+1 on an append): #2893 exists precisely
+        // because operators may paste prose below the closing fence, and that
+        // prose can itself contain a fenced JSON array of a different length.
+        // Passing the post-mutation total here (as a since-fixed #3689 review
+        // pass once did for the guard alone) makes locateJsonBlock's expectedTotal
+        // scan find nothing against the pre-image — no span has N+1 entries yet —
+        // so it silently falls through to the no-hint fallback, which binds to
+        // the LATEST array-shaped span: the prose block, not the ledger. Left
+        // unfixed, that means the #2893 prose-preservation span itself would
+        // resolve to the prose fence's `afterClose`, silently dropping
+        // everything between the real ledger block and the prose block —
+        // including the operator's own prose ABOVE that array — on every
+        // append. This is exactly the failure #2893 was written to prevent,
+        // reintroduced through the disambiguation hint; it is caught here by
+        // deriving the hint from the pre-image, not the post-mutation ledger,
+        // for BOTH call sites below. If the pre-image frontmatter cannot be
+        // parsed unambiguously, that is itself the ambiguous case — fail closed
+        // rather than falling back to the no-hint scan.
+        let preImageExpectedTotal;
+        try {
+            const preFm = parseFrontmatterStrict(existing);
+            if (typeof preFm.total_count !== 'number' || !Number.isInteger(preFm.total_count)) {
+                throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger frontmatter total_count in ${p} is not an integer; refusing to write — ` +
+                    'the ledger JSON block cannot be identified unambiguously.');
+            }
+            preImageExpectedTotal = preFm.total_count;
+        }
+        catch (e) {
+            if (e instanceof WindowsError)
+                throw e;
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Ledger frontmatter in ${p} could not be parsed (${e.message}); refusing ` +
+                'to write — the ledger JSON block cannot be identified unambiguously.');
+        }
+        // #2893: search for the CLOSING fence starting AFTER the opening fence.
+        // The span is located with the same tolerant + disambiguated fence rules
+        // parseJsonBlock uses (#3657), so a formatter-normalized 3-backtick ledger
+        // keeps its prose too — a literal-width search here would find no block
+        // and silently drop everything below the ledger on the next write. The
+        // hint passed here is `preImageExpectedTotal` (pre-image derived, see
+        // above) — NOT `ledger.total_count` — so this binds to the same span the
+        // drift guard below does.
+        const span = locateJsonBlock(existing, preImageExpectedTotal);
+        if (span.ok) {
+            const afterFence = existing.slice(span.span.afterClose);
+            // Drop leading newlines; keep the rest as prose.
+            trailingProse = afterFence.replace(/^(?:\r?\n)+/, '');
+        }
+        // #3689 review finding 2: refuse the write if the on-disk table has
+        // drifted from the on-disk JSON — the source of truth — BEFORE anything
+        // is regenerated. Baseline is the ON-DISK entries, not `ledger` (already
+        // the post-mutation state: an appended entry or a changed status);
+        // comparing against `ledger` would report drift on every legitimate
+        // write.
+        if (!opts.regenerateTable) {
+            const onDiskEntries = parseJsonBlock(existing, preImageExpectedTotal);
+            const expectedTable = renderTable(onDiskEntries);
+            const actualTable = extractTableRegion(existing, preImageExpectedTotal);
+            if (actualTable === null) {
+                throw new WindowsError(exports.REASON.WINDOWS_LEDGER_TABLE_DRIFT, `Ledger table region could not be located in ${p}; refusing to write. Edit the ` +
+                    'fenced JSON block directly — the sole source of truth — or delete the corrupted ' +
+                    'table region and let gsd-tools regenerate it; never hand-edit the rendered table.');
+            }
+            if (actualTable !== expectedTable) {
+                const driftedIds = diffTableRowIds(expectedTable, actualTable);
+                // #3689 review finding 3: a header/separator-only drift (e.g. a
+                // hand-edited column name or mangled separator) produces no data-row
+                // diffs, so driftedIds is empty — naming nothing would read "...for
+                // row id(s): .". Say what actually differs instead.
+                const driftDescription = driftedIds.length > 0
+                    ? `for row id(s): ${driftedIds.join(', ')}`
+                    : "in its header or separator row (no data row differs from the expected rendering)";
+                throw new WindowsError(exports.REASON.WINDOWS_LEDGER_TABLE_DRIFT, `Ledger table in ${p} disagrees with the fenced JSON entries (the sole source of ` +
+                    `truth) ${driftDescription}. Edit the fenced JSON block ` +
+                    'directly, or discard the table edit and re-run the command so gsd-tools ' +
+                    'regenerates the table; never hand-edit the rendered table.');
+            }
+        }
+    }
+    const rendered = renderLedger(ledger);
+    const content = trailingProse ? `${rendered}${trailingProse}` : rendered;
+    node_fs_1.default.writeFileSync(tmp, content, 'utf8');
+    try {
+        renameWithRetry(tmp, p);
+    }
+    catch (err) {
+        // Clean up the orphaned tmp file so repeated failures don't accumulate
+        // `.planning/WINDOWS.md.<pid>.tmp` files (issue #1950 review M1). Best-effort:
+        // unlink failures (e.g., already gone) are swallowed.
+        try {
+            node_fs_1.default.unlinkSync(tmp);
+        }
+        catch { /* best-effort cleanup */ }
+        throw err;
+    }
+}
+function nowIso() {
+    return new Date().toISOString();
+}
+/** Emit a JSON result to stdout in the canonical shape. */
+function emit(obj) {
+    process.stdout.write(JSON.stringify(obj, null, 2));
+}
+/** `gsd-tools windows status [--raw]`. */
+function cmdWindowsStatus(cwd, opts = {}) {
+    let ledger;
+    try {
+        ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+    }
+    catch (e) {
+        if (e instanceof WindowsError)
+            throw e;
+        throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Unexpected error reading ledger: ${e.message}`);
+    }
+    void opts; // status output is JSON in both human and raw modes (single shape)
+    emit({ ok: true, ledger });
+}
+/** `gsd-tools windows append --kind K --phase N [--file F] [--line L] --description D`. */
+function cmdWindowsAppend(cwd, args, opts = {}) {
+    void opts;
+    const parsed = parseArgs(args, {
+        flags: ['--kind', '--phase', '--file', '--line', '--description'],
+        required: ['--kind', '--phase', '--description'],
+    });
+    // #3780: the whole read-compute-write cycle — snapshot, milestone stamp,
+    // id allocation, atomic rename — holds the ledger lock, so two parallel
+    // invocations can no longer compute the same nextId from the same snapshot
+    // and silently lose the first append to the second rename.
+    withLedgerLock(cwd, () => {
+        let ledger;
+        try {
+            ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+        }
+        catch (e) {
+            if (e instanceof WindowsError)
+                throw e;
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, e.message);
+        }
+        // #4487: stamp the workstream's resolved milestone at record time -- the
+        // same STATE.md-first, ROADMAP-fallback resolution workstream-inventory.cts
+        // already uses. Best-effort: an unreadable/missing STATE.md or ROADMAP.md
+        // resolves to null, same as an entry recorded before this field existed.
+        const milestone = workstreamInventory.readCurrentMilestoneVersion(node_path_1.default.join(cwd, '.planning', 'STATE.md'), node_path_1.default.join(cwd, '.planning', 'ROADMAP.md'));
+        const result = appendWindow(ledger, {
+            kind: parsed.values['--kind'],
+            phase: parsed.values['--phase'] ?? '',
+            file: parsed.values['--file'] ?? '',
+            line: parsed.values['--line'] == null ? null : Number(parsed.values['--line']),
+            description: parsed.values['--description'] ?? '',
+            milestone,
+        }, { now: nowIso() });
+        writeLedgerAtomic(cwd, result.ledger);
+        emit({ ok: true, ledger: result.ledger, entry: result.entry });
+    });
+}
+/** `gsd-tools windows waive <id> "<reason>"`. */
+function cmdWindowsWaive(cwd, args, opts = {}) {
+    void opts;
+    const { positionals } = parseArgs(args, {
+        flags: [],
+        required: [],
+        positionals: 2,
+        maxPositionals: 2,
+    });
+    const idStr = positionals[0];
+    const reason = positionals[1];
+    const id = parseIdOrThrow(idStr);
+    // #3780: same serialization as append — a concurrent append holding a stale
+    // snapshot would otherwise overwrite the waive and resurrect the entry.
+    withLedgerLock(cwd, () => {
+        let ledger;
+        try {
+            ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+        }
+        catch (e) {
+            if (e instanceof WindowsError)
+                throw e;
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, e.message);
+        }
+        const updated = markWaived(ledger, id, reason ?? '', { now: nowIso() });
+        writeLedgerAtomic(cwd, updated);
+        emit({ ok: true, ledger: updated });
+    });
+}
+/** `gsd-tools windows fixed <id> ["<reason>"]` — the reason is optional. */
+function cmdWindowsMarkFixed(cwd, args, opts = {}) {
+    void opts;
+    // One REQUIRED positional (the id); a second, when present, is the reason.
+    // A third is refused, not joined — see parseArgs's surplus-positional guard.
+    const { positionals } = parseArgs(args, {
+        flags: [],
+        required: [],
+        positionals: 1,
+        maxPositionals: 2,
+    });
+    const id = parseIdOrThrow(positionals[0]);
+    const reason = positionals[1];
+    // #3780: same serialization as append — a concurrent writer holding a
+    // stale snapshot would otherwise overwrite the resolved status.
+    withLedgerLock(cwd, () => {
+        let ledger;
+        try {
+            ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+        }
+        catch (e) {
+            if (e instanceof WindowsError)
+                throw e;
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, e.message);
+        }
+        const updated = markFixed(ledger, id, reason ?? '', { now: nowIso() });
+        writeLedgerAtomic(cwd, updated);
+        emit({ ok: true, ledger: updated });
+    });
+}
+/** `gsd-tools windows amend <id> [--description D] [--reason R] [--file F] [--line L]`. */
+function cmdWindowsAmend(cwd, args, opts = {}) {
+    void opts;
+    const parsed = parseArgs(args, {
+        flags: ['--description', '--reason', '--file', '--line'],
+        required: [],
+        positionals: 1,
+    });
+    const id = parseIdOrThrow(parsed.positionals[0]);
+    const fields = {};
+    if (parsed.values['--description'] !== undefined)
+        fields.description = parsed.values['--description'];
+    if (parsed.values['--reason'] !== undefined)
+        fields.reason = parsed.values['--reason'];
+    if (parsed.values['--file'] !== undefined)
+        fields.file = parsed.values['--file'];
+    if (parsed.values['--line'] !== undefined)
+        fields.line = parsed.values['--line'];
+    // #3780: amend mutates the ledger — serialize on the same lock.
+    withLedgerLock(cwd, () => {
+        let ledger;
+        try {
+            ledger = readLedgerOrNull(cwd) ?? emptyLedger(nowIso());
+        }
+        catch (e) {
+            if (e instanceof WindowsError)
+                throw e;
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, e.message);
+        }
+        const updated = amendWindow(ledger, id, fields, { now: nowIso() });
+        writeLedgerAtomic(cwd, updated);
+        emit({ ok: true, ledger: updated });
+    });
+}
+/**
+ * `gsd-tools windows reconcile` — the explicit repair verb.
+ *
+ * Reads the ledger through the lenient count path (the only caller allowed to),
+ * re-derives the counts, and rewrites only when something actually changed.
+ */
+function cmdWindowsReconcile(cwd, args, opts = {}) {
+    void opts;
+    parseArgs(args, { flags: [], required: [], positionals: 0 });
+    const p = ledgerPath(cwd);
+    // #3780: reconcile rewrites the ledger — serialize on the same lock.
+    withLedgerLock(cwd, () => {
+        let raw;
+        try {
+            raw = node_fs_1.default.readFileSync(p, 'utf8');
+        }
+        catch (e) {
+            const code = (e && typeof e === 'object' && 'code' in e)
+                ? String(e.code)
+                : '';
+            if (code === 'ENOENT') {
+                throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MISSING, `No ledger at ${p} — nothing to reconcile.`);
+            }
+            throw new WindowsError(exports.REASON.WINDOWS_LEDGER_MALFORMED, `Could not read ledger at ${p} (${code || 'unknown fs error'}): ${e.message}.`);
+        }
+        const result = reconcileLedger(raw, { now: nowIso() });
+        if (result.repaired || result.normalized) {
+            writeLedgerAtomic(cwd, result.ledger, { regenerateTable: true });
+        }
+        emit({
+            ok: true,
+            repaired: result.repaired,
+            normalized: result.normalized,
+            before: result.before,
+            ledger: result.ledger,
+        });
+    });
+}
+function parseIdOrThrow(raw) {
+    if (raw == null || raw === '') {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_ID, 'Window id is required.');
+    }
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) {
+        throw new WindowsError(exports.REASON.WINDOWS_INVALID_ID, `Window id must be a positive integer (got: ${JSON.stringify(raw)}).`);
+    }
+    return n;
+}
+/** Minimal argv parser — flag values via `--flag value` or `--flag=value`. */
+function parseArgs(args, spec) {
+    const values = {};
+    const positionals = [];
+    const flagSet = new Set(spec.flags);
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a == null)
+            continue;
+        if (a.startsWith('--')) {
+            const eq = a.indexOf('=');
+            const flagName = eq === -1 ? a : a.slice(0, eq);
+            if (!flagSet.has(flagName)) {
+                throw new WindowsError(exports.REASON.WINDOWS_USAGE, `Unknown flag: ${flagName}`);
+            }
+            if (eq !== -1) {
+                values[flagName] = a.slice(eq + 1);
+            }
+            else {
+                const next = args[i + 1];
+                if (next == null || next.startsWith('--')) {
+                    if (!(flagName in values))
+                        values[flagName] = undefined;
+                }
+                else {
+                    values[flagName] = next;
+                    i++;
+                }
+            }
+        }
+        else {
+            positionals.push(a);
+        }
+    }
+    for (const r of spec.required) {
+        if (values[r] == null || values[r] === '') {
+            throw new WindowsError(exports.REASON.WINDOWS_USAGE, `Missing required flag: ${r}`);
+        }
+    }
+    const want = spec.positionals ?? 0;
+    if (positionals.length < want) {
+        throw new WindowsError(exports.REASON.WINDOWS_USAGE, `Expected ${want} positional argument(s); got ${positionals.length}.`);
+    }
+    // A SURPLUS positional is almost always an unquoted multi-word reason:
+    // `windows fixed 1 closed by refactor` used to record the single word
+    // "closed" and drop the rest, writing a rationale nobody typed. Joining the
+    // words would be guessing; the operator's shell already has the answer, so
+    // we say what to type instead. (Explicit beats guessy — CONTRIBUTING.md.)
+    const max = spec.maxPositionals ?? want;
+    if (positionals.length > max) {
+        throw new WindowsError(exports.REASON.WINDOWS_USAGE, `Expected at most ${max} positional argument(s); got ${positionals.length} ` +
+            `(${positionals.map((p) => JSON.stringify(p)).join(' ')}). ` +
+            `Quote multi-word text as ONE argument, e.g. \`windows fixed 1 "closed by refactor"\`.`);
+    }
+    return { values, positionals };
+}
