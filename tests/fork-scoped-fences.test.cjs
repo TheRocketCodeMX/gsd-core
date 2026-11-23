@@ -150,8 +150,11 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
       'without a typed --ws the shell\'s GSD_WS still applies');
     for (const [skill, needle] of [['model-domain', 'HAS_MAPS'], ['recommend-architecture', 'HAS_MAPS'], ['frontend-architecture', 'HAS_MAPS'],
       ['discover-product', 'planning.inspect'], ['infrastructure-strategy', 'planning.inspect'], ['cicd-strategy', 'planning.inspect']]) {
-      const src = fs.readFileSync(WF(`${skill}.md`), 'utf8');
-      const fences = [...src.matchAll(/^```bash\n([\s\S]*?)^```$/gm)].map((m) => m[1]).filter((b) => b.includes(needle) && /planning\.inspect/.test(b));
+      const lines = splitLines(fs.readFileSync(WF(`${skill}.md`), 'utf8'));
+      const fences = scanFencedBlocks(lines)
+        .filter((f) => f.closeLineIdx !== -1 && (f.infoString || '').trim() === 'bash')
+        .map((f) => lines.slice(f.openLineIdx + 1, f.closeLineIdx).join('\n'))
+        .filter((body) => body.includes(needle) && body.includes('planning.inspect'));
       assert.ok(fences.length > 0, `${skill}: no planning.inspect fence`);
       for (const b of fences) assert.ok(b.includes('$ARGUMENTS') && b.includes('_TWS='), `${skill}: a planning.inspect fence ignores a typed --ws:\n${b}`);
     }
