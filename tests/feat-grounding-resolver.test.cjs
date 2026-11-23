@@ -35,6 +35,16 @@ describe('grounding resolver', () => {
     cleanup(dir);
   });
 
+  test('a ledgered skip of a recommended row is skipped, not also pending', () => {
+    const dir = mkProject({
+      'PROJECT.md': '## Strategy Plan\n\n| Step | Status |\n|---|---|\n| infrastructure-strategy | recommended |\n| cicd-strategy | recommended |\n\n### Skip-ledger\n- infrastructure-strategy — skipped (local-only, 2026-06-26)\n',
+    });
+    const r = grounding.resolveRequiredSources(dir);
+    assert.deepEqual(r.skipped, ['infrastructure-strategy']);
+    assert.deepEqual(r.pending, ['cicd-strategy'], 'the skipped step must not be reported pending as well');
+    cleanup(dir);
+  });
+
   test('never-run project (no Strategy Plan) → empty required set', () => {
     const dir = mkProject({ 'PROJECT.md': '# Project\n\nno strategy plan here\n' });
     const r = grounding.resolveRequiredSources(dir);

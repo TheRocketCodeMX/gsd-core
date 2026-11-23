@@ -90,7 +90,8 @@ function resolveRequiredSources(cwd: string): ResolveResult {
           notes: `artifact exists but Strategy Plan row is unflipped — run \`gsd-tools project strategy-done ${step}\``,
         });
         warnings.push(`unflipped: ${step} — artifact exists (${path.basename(p)}) but Strategy Plan status is still 'recommended'; run \`project strategy-done ${step}\``);
-      } else {
+      } else if (!skipped.includes(step)) {
+        // A ledgered skip keeps its `recommended` status; it is exempt, not pending (matrix 1220-B F6).
         pending.push(step);
       }
     }
