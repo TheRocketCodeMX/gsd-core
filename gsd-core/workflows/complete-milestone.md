@@ -85,7 +85,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_MANAGER=$(gsd_run query init.manager ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_MANAGER" == @file:* ]]; then INIT_MANAGER=$(cat "${INIT_MANAGER#@file:}"); fi
 ```
@@ -263,7 +263,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_EARLY=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_EARLY" == @file:* ]]; then INIT_EARLY=$(cat "${INIT_EARLY#@file:}"); fi
 node -e "const m=JSON.parse(process.argv[1]).section_manifest; console.log('PROJECT_MD_REVIEW=' + (m==null||m.included.includes('project-md-evolution-review') ? 'run' : 'skip'))" "$INIT_EARLY"
@@ -348,7 +348,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_REORG=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_REORG" == @file:* ]]; then INIT_REORG=$(cat "${INIT_REORG#@file:}"); fi
 _gsd_field() { node -e "const o=JSON.parse(process.argv[1]); const v=o[process.argv[2]]; process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
@@ -370,7 +370,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_REORG=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_REORG" == @file:* ]]; then INIT_REORG=$(cat "${INIT_REORG#@file:}"); fi
 _gsd_field() { node -e "const o=JSON.parse(process.argv[1]); const v=o[process.argv[2]]; process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
@@ -413,7 +413,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_REORG=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_REORG" == @file:* ]]; then INIT_REORG=$(cat "${INIT_REORG#@file:}"); fi
 _gsd_field() { node -e "const o=JSON.parse(process.argv[1]); const v=o[process.argv[2]]; process.stdout.write(v==null?'':String(v))" "$1" "$2"; }
@@ -439,7 +439,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1)
+GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1)
 INIT_REORG=$(gsd_run query init.complete-milestone ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT_REORG" == @file:* ]]; then INIT_REORG=$(cat "${INIT_REORG#@file:}"); fi
 _gsd_field() { node -e "const o=JSON.parse(process.argv[1]); const v=o[process.argv[2]]; process.stdout.write(v==null?'':String(v))" "$1" "$2"; }

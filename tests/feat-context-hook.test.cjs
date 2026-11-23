@@ -69,8 +69,8 @@ function makeProject({ gsdActive = true, config = null } = {}) {
 }
 
 // Spawn the hook. Always exits 0; returns the raw stdout string.
-function runHook({ sid, cwd, event }) {
-  const payload = { session_id: sid, cwd };
+function runHook({ sid, cwd, event, extra }) {
+  const payload = { session_id: sid, cwd, ...(extra || {}) };
   if (event) payload.hook_event_name = event;
   const r = runNode([HOOK], { input: JSON.stringify(payload), timeoutMs: PROBE_TIMEOUT_MS });
   assertSeamExit(assert, r);
@@ -257,6 +257,38 @@ describe('feat: context-monitor calm knowledge-flush hook', () => {
           `emitted message must not contain "${banned}": ${msg}`
         );
       }
+    }
+  });
+
+  // Case 9 (upstream #6360, ported align-1.23.0): a subagent's hook input carries the
+  // PARENT's session_id plus agent_id. The calm nudge is main-session-only, so a
+  // subagent input is silent on every event and never reads or spends the parent's
+  // debounce file; agent_type alone (a top-level `claude --agent` session) and a
+  // non-string or empty agent_id are still monitored.
+  test('#6360: subagent input (agent_id) is silent on every event and leaves the parent debounce alone', () => {
+    const sid = uniqueSession();
+    const dir = makeProject();
+    try {
+      writeMetrics(sid, 96);
+      for (const event of [undefined, 'PostToolUse', 'AfterTool', 'PreCompact', 'Stop', 'SubagentStop']) {
+        const out = runHook({ sid, cwd: dir, event, extra: { agent_id: 'agent-abc123', agent_type: 'gsd-executor' } });
+        assert.equal(parse(out), null, `subagent input must stay silent on ${event || 'no event'}`);
+      }
+      assert.equal(fs.existsSync(warnedPath(sid)), false, 'a subagent must not write the parent session debounce file');
+      for (const agentId of ['', null, 0, 123, true, [], {}]) {
+        // eslint-disable-next-line local/no-raw-rmsync-in-tests -- single bridge file in os.tmpdir(), not a project dir; cleanup() is dir-scoped
+        try { fs.rmSync(warnedPath(sid), { force: true }); } catch { /* ignore */ }
+        const out = parse(runHook({ sid, cwd: dir, extra: { agent_id: agentId } }));
+        assert.ok(out, `agent_id ${JSON.stringify(agentId)} is not a subagent: the nudge still fires`);
+      }
+      // eslint-disable-next-line local/no-raw-rmsync-in-tests -- single bridge file in os.tmpdir(), not a project dir; cleanup() is dir-scoped
+      try { fs.rmSync(warnedPath(sid), { force: true }); } catch { /* ignore */ }
+      const top = parse(runHook({ sid, cwd: dir, extra: { agent_type: 'gsd-executor' } }));
+      assert.ok(top, 'a top-level --agent session (agent_type only) is still monitored');
+      const pre = parse(runHook({ sid, cwd: dir, event: 'PreCompact', extra: { agent_type: 'gsd-executor' } }));
+      assert.ok(pre, 'a top-level --agent session still gets the PreCompact reminder');
+    } finally {
+      purge(sid, dir);
     }
   });
 });

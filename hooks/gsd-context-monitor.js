@@ -17,7 +17,8 @@
 // 2. This hook (PostToolUse) reads those metrics and, when used_pct crosses a
 //    threshold, injects a calm flush suggestion as additionalContext.
 // 3. On PreCompact it always emits a final flush + re-anchor reminder.
-// 4. Stop / SubagentStop are silent. Subagents (no metrics file) are silent.
+// 4. Stop / SubagentStop are silent. A subagent (an input carrying agent_id,
+//    #6360) is silent on every event and touches no session file.
 //
 // Gates: only fires when GSD is active (.planning/STATE.md under cwd) and the
 // context-lifecycle hook is enabled in .planning/config.json.
@@ -112,6 +113,14 @@ process.stdin.on('end', () => {
     const event = data.hook_event_name;
     const cwd = data.cwd || process.cwd();
 
+    // Upstream #6360 (ported align-1.23.0): a subagent's hook input carries the
+    // PARENT's session_id plus a non-empty agent_id. Every path below is keyed on
+    // session_id (bridge metrics, debounce file) or speaks to the main session
+    // (the PreCompact flush reminder), so a subagent exits here, on every event,
+    // before any of them is read or written. A top-level `claude --agent`
+    // session (agent_type only, no agent_id) is monitored as before.
+    if (typeof data.agent_id === 'string' && data.agent_id !== '') return;
+
     // Stop / SubagentStart / SubagentStop → nothing to say.
     if (event === 'Stop' || event === 'SubagentStart' || event === 'SubagentStop') return;
 
@@ -143,7 +152,7 @@ process.stdin.on('end', () => {
     const tmpDir = os.tmpdir();
     const metricsPath = path.join(tmpDir, `claude-ctx-${sessionId}.json`);
 
-    // No metrics file → subagent or fresh session; stay silent.
+    // No metrics file → fresh session or no statusline bridge; stay silent.
     if (!fs.existsSync(metricsPath)) return;
 
     const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));

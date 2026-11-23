@@ -14,7 +14,7 @@ The hook is part of the [`context` capability](../gsd-core/references/context-li
 - The statusline hook writes context metrics to `{os.tmpdir()}/claude-ctx-{session_id}.json`.
 - On `PostToolUse` this hook reads those metrics and, when `used_pct` crosses a threshold, injects one calm flush suggestion as `additionalContext`.
 - On `PreCompact` it always emits a final flush + re-anchor reminder (append unsaved knowledge to the capsule + `MASTER-CONTEXT.md`; after compaction, re-anchor first).
-- `Stop` / `SubagentStop` are silent. Subagents (no metrics file) are silent — the nudge is main-session-only.
+- `Stop` / `SubagentStop` are silent. Subagents are silent on every event, including `PreCompact` — the nudge is main-session-only. In Claude Code a subagent's hook input carries the **parent's** `session_id`, so the only reading the hook could find is the parent's; an input whose `agent_id` is a non-empty string therefore exits before it reads the bridge or reads or writes the debounce file (upstream #6360). A top-level `claude --agent` session (`agent_type` only) is monitored as before.
 
 ### Thresholds and debounce
 
