@@ -66,8 +66,7 @@ ls .github/dependabot.yml >/dev/null 2>&1 && echo "HAS_DEPENDABOT" || echo "NO_D
 
 **Read `@~/.claude/gsd-core/references/cicd-strategy.md` now** — it defines the GHA-default platform decision, OIDC-with-pinned-`sub`, the secrets split, **the CI rung ladder (Axis C: C0–C3) with the ≤10-min PR budget**, when a scheduled job earns its keep, the matrix gate, the flaky canon, the merge-queue trigger, **the delivery rung ladder (Axis D: D0–D5)**, the free-six supply-chain table stakes, the anti-pattern table, and the meta-tell.
 
-**Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft-from-docs and present for confirmation — cite the source, don't re-interview. Reserve questions for genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
-
+**Grounding maturity governs elicitation depth.** When upstream artifacts (spec, ADR, strategies, research) already answer a step, draft from them and confirm — cite the source, don't re-interview. Ask only at genuine decision points and contradictions. Honor a posture stated in `$ARGUMENTS` without re-asking.
 
 **If `NO_TEST_STRATEGY`:** first check the skip-ledger — `gsd_run query project strategy-skipped testing-strategy --raw` (true = a deliberate skip). **If `true`: note once ("test strategy deliberately skipped — generic tiers") and do NOT re-offer** (skip-ledger exception, `strategy-chain.md`). Otherwise tell the user "No test strategy found — consider `/gsd:testing-strategy` first." If they decline, proceed with generic tiers (small/unit + medium/integration + a lean e2e smoke set, **all in the one C0 job** until a C1 trigger fires) and note the gap in the output. From TEST-STRATEGY.md, extract: the per-subdomain level emphasis, the persistent e2e smoke list (the 3–7 flows), and the mutation-testing targets. From INFRA-STRATEGY.md / ADR / PROJECT.md, extract: target cloud + deploy target, repo host, team size, and whether a production environment exists at all. **Blast radius comes from `SECURITY-STRATEGY.md`** (data classification, regulated flows, ASVS level) — fall back to INFRA/ADR/PROJECT only when it is absent.
 
@@ -237,8 +236,12 @@ Write to `{PROJECT_DIR}/CICD-STRATEGY.md` (the directory Step 1 printed).
 ## Step 10: Commit
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
-COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +["'\'']?([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw ${GSD_WS:+--ws=${GSD_WS##* }} 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done cicd-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).

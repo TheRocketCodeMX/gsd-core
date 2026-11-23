@@ -126,6 +126,27 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
     });
   }
 
+  // Matrix 1230-B F2: the commit fences re-derived commit_docs without the workstream, so commit_docs:false set
+  // only in workstreams/<ws>/config.json was ignored when --ws was typed (no GSD_WORKSTREAM, no pointer). Each
+  // commit fence now parses the typed --ws and resolves commit_docs in that scope (config-get --ws).
+  for (const [skill, artifact] of STRATEGY_COMMITS) {
+    for (const wsArg of ['--ws ws1', '--ws "ws1"']) {
+      test(`/gsd-${skill} commit step alone with a typed ${wsArg} honours the workstream's commit_docs`, () => {
+        const commitFence = (args) => fence(WF(`${skill}.md`), `strategy-done ${skill}`, args);
+        const target = path.join(dir, '.planning', ...artifact.split('/'));   // PROJECT.md and the strategy docs are shared under workstreams
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `# shared ${artifact}\n`);
+        fs.writeFileSync(path.join(dir, '.planning', 'workstreams', 'ws1', 'config.json'), '{"commit_docs":false}\n');
+        const head = gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+        assert.match(run(dir, commitFence(`--auto ${wsArg}`)), /written but not committed \(commit_docs is false\)/);
+        assert.equal(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head, `${skill}: committed although ws1 sets commit_docs false`);
+        // The root project (no --ws) still commits: its own config says true.
+        run(dir, commitFence('--auto'));
+        assert.notEqual(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head, `${skill}: the root scope must still commit`);
+      });
+    }
+  }
+
   test('/gsd-testing-strategy Step 2 reads the TESTING-STANDARDS.md it writes and commits (the scoped one), a repo-root file only as fallback', () => {
     const step2 = fence(WF('testing-strategy.md'), 'TESTING_STANDARDS=');
     fs.writeFileSync(path.join(dir, 'TESTING-STANDARDS.md'), 'ROOTMARK repo-wide standards\n');
