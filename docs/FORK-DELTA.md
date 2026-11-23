@@ -476,6 +476,7 @@ Marker/anchor details live in [`FORK-PATCHES.json`](FORK-PATCHES.json) (one entr
 
 - `gsd-core/workflows/execute-phase/steps/codebase-drift-gate.md` — the shim-launcher line was moved to the top of its bash fence (pure reorder + branding).
 - `.secretscanignore` — only the allowlist `owner=` handle changed (`@TheRocketCodeMX/maintainers` → `@TheRocketCodeMX/maintainers`). Note: this form is NOT covered by `scripts/sync-upstream.sh`'s patterns — re-apply by hand or extend the script.
+- `.claude-plugin/marketplace.json`, `.github/workflows/release.yml` — upstream #5796's prebuilt-`plugin`-branch flow, **adopted in full** (align-1.22.0, owner decision): only the coordinates are the fork's (`TheRocketCodeMX/gsd-core`, ref `plugin`, the npm package lines). No gating variable; finalize needs the `GSD_BOT_PR_TOKEN` secret to publish `plugin` (runbook § Release, step 2).
 - `.claude-plugin/plugin.json` — version field + branding only (version is fork-managed). (`gemini-extension.json` was removed with the Gemini CLI sunset in the v1.9.0 realignment.) <!-- gsd-allow-retired-runtime-name: historical note about a file removed with the runtime sunset -->
 
 ---
