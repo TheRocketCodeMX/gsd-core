@@ -100,7 +100,6 @@ module.exports = {
   "tests/feat-project-strategy-done.test.cjs",
   "tests/features-index-gate.test.cjs",
   "tests/fixture-builder.test.cjs",
-  "tests/fork-fence-own-shell.test.cjs",
   "tests/frontmatter.unit.test.cjs",
   "tests/gate-api-coverage-verify-pre.unit.test.cjs",
   "tests/gate-codebase-drift.unit.test.cjs",

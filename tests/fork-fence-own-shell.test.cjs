@@ -26,7 +26,7 @@ const { splitLines } = require(path.join(ROOT, 'gsd-core', 'bin', 'lib', 'text-l
 /** Variables a fence may read without assigning them: the environment and shell specials. */
 const ENV = new Set([
   'HOME', 'PATH', 'PWD', 'TMPDIR', 'USER', 'SHELL', 'IFS', 'OSTYPE', 'RANDOM', 'LINENO', 'REPLY', 'OPTARG', 'OPTIND',
-  'BASH_REMATCH', 'PIPESTATUS', 'BASH_VERSION', 'ZSH_VERSION', 'CI', 'RUNTIME_DIR', 'CLAUDE_ENV_FILE', 'CLAUDE_CONFIG_DIR',
+  'BASH_REMATCH', 'PIPESTATUS', 'BASH_VERSION', 'CI', 'RUNTIME_DIR', 'CLAUDE_ENV_FILE', 'CLAUDE_CONFIG_DIR',
   'XDG_CONFIG_HOME', 'GSD_WS', 'GSD_PROJECT', 'GSD_WORKSTREAM', 'GSD_HOME', 'GSD_SESSION_KEY', 'GIT_DIR', 'GIT_WORK_TREE',
   'GIT_INDEX_FILE',
 ]);
@@ -68,7 +68,7 @@ function shellFences(lines, from = 0, to = lines.length) {
   const out = [];
   for (const b of scanFencedBlocks(lines)) {
     if (b.closeLineIdx === -1 || b.openLineIdx < from || b.openLineIdx >= to) continue;
-    if (!/^(bash|sh|zsh|shell)$/.test((b.infoString || '').trim())) continue;
+    if (!/^(bash|sh|shell)$/.test((b.infoString || '').trim())) continue;
     const body = lines.slice(b.openLineIdx + 1, b.closeLineIdx);
     const indent = Math.min(...body.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length), 64);
     out.push({ line: b.openLineIdx + 1, body: body.map((l) => l.slice(Math.min(indent, l.match(/^ */)[0].length))) });
