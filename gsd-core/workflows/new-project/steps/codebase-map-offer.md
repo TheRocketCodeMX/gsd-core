@@ -1,5 +1,5 @@
 <!-- FORK:strategy BEGIN -->
-**If `needs_codebase_map` is true** (from init — existing code detected but no codebase map): **but first, if `.planning/LEGACY-INVENTORY.md` already exists, exploration is DONE** — a prior `/gsd:legacy-inventory` run produced it; do NOT re-route to the exploration router. Set Origin/Code-quality for Step 4 from its `**Mode:**` header (rewrite-* → Origin: rewrite/refactor; vibe-coded-harden → Code-quality: vibe-coded-to-harden) and continue to Step 3. Otherwise:
+**If `needs_codebase_map` is true** (from init — existing code detected but no codebase map): **but first, if `LEGACY-INVENTORY.md` already exists beside `{project_path}`, exploration is DONE** — a prior `/gsd:legacy-inventory` run produced it; do NOT re-route to the exploration router. Set Origin/Code-quality for Step 4 from its `**Mode:**` header (rewrite-* → Origin: rewrite/refactor; vibe-coded-harden → Code-quality: vibe-coded-to-harden) and continue to Step 3. Otherwise:
 
 This routes BOTH the right exploration AND the `## Mode` Origin/Code-quality recorded in Step 4 — the three intents are not the same (see `@~/.claude/gsd-core/references/strategy-flow.md`).
 <!-- FORK:strategy END -->

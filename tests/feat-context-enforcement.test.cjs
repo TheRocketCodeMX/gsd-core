@@ -58,8 +58,8 @@ describe('gsd-verifier.md: strategy-fit gate names all four strategy artifacts',
 describe('gsd-phase-researcher.md: reads ADR + DOMAIN-MODEL.md before researching', () => {
   const content = fs.readFileSync(path.join(ROOT, 'agents', 'gsd-phase-researcher.md'), 'utf8');
 
-  test('matches .planning/adr/ path', () => {
-    assert.match(content, /\.planning\/adr\//);
+  test('names the project\'s adr/ beside PROJECT.md (scoped under GSD_PROJECT, align-1.22.0)', () => {
+    assert.match(content, /`adr\/\*\.md` and `DOMAIN-MODEL\.md` beside PROJECT\.md/);
   });
 
   test('matches DOMAIN-MODEL.md', () => {
@@ -67,7 +67,7 @@ describe('gsd-phase-researcher.md: reads ADR + DOMAIN-MODEL.md before researchin
   });
 
   test('instructs reading these BEFORE researching', () => {
-    assert.match(content, /\.planning\/adr\/[^\n]*BEFORE researching|BEFORE researching[^\n]*\.planning\/adr\//s);
+    assert.match(content, /`adr\/\*\.md`[^\n]*BEFORE researching|BEFORE researching[^\n]*`adr\/\*\.md`/s);
   });
 });
 

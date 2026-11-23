@@ -157,7 +157,7 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
   // These pin the MECHANISM so it can't regress to prose-deep again.
 
   test('READ: both gate spawn prompts hand the oracle to the Read-only gate agents', () => {
-    has(WF('execute-phase/steps/verify-phase-goal.md'), 'DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md'); // verifier spawn (align-1.16.0: upstream extracted it into this step)
+    has(WF('execute-phase/steps/verify-phase-goal.md'), 'DESIGN-INVENTORY.md beside PROJECT.md and {phase_dir}/*-UI-SPEC.md'); // verifier spawn (align-1.16.0: upstream extracted it into this step)
     has(WF('plan-phase.md'), 'design oracle — REQUIRED input for the design-fidelity check'); // plan-checker spawn
   });
 
@@ -166,7 +166,8 @@ describe('SEAMS: trigger → write → read are mechanically wired (not prose-on
     // v1.9.0: the planner-fallback bullet was condensed — the oracle path and the
     // write-before-shape mandate now sit in one sentence ("No oracle yet → ingest
     // this phase's design slice and write it before finalizing the data shape").
-    has(WF('plan-phase.md'), '.planning/DESIGN-INVENTORY.md');
+    // align-1.22.0: the oracle sits beside PROJECT.md (`.planning/<name>/` under GSD_PROJECT), not at a root literal.
+    has(WF('plan-phase.md'), '`DESIGN-INVENTORY.md` beside PROJECT.md (the design field oracle');
     has(WF('plan-phase.md'), 'write it before finalizing the data shape'); // planner fallback
   });
 

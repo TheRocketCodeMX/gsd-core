@@ -59,7 +59,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"
 # ASVS_LEVEL ∈ 1 | 2 | 3 (from the posture decision above); the scope Step 8 commits
 gsd_run query config-set workflow.security_asvs_level "$ASVS_LEVEL" ${GSD_WS:+--ws=${GSD_WS##* }}
 ```
@@ -89,7 +89,7 @@ IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
 $ARGUMENTS
 GSD_ARGS_END
 GSD_ARGS=${GSD_ARGS%$'\n'}
-_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+GSD_WS="${GSD_WS:-}"; _TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-$GSD_WS}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 CONFIG_PATH=$(gsd_run query config-path --raw ${GSD_WS:+--ws=${GSD_WS##* }})
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done security-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`

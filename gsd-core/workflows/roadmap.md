@@ -146,7 +146,7 @@ Agent(prompt="
 - {requirements_path} (v1 Requirements)
 - {research_dir}/SUMMARY.md (Research findings - if exists)
 - {config_path} (Granularity and mode settings)
-- adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md in the directory of {project_path} (locked strategy decisions - read every one that exists)
+- DOMAIN-MODEL.md, adr/*.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md, LEGACY-INVENTORY.md, DESIGN-INVENTORY.md in the directory of {project_path} (locked strategy decisions and literal-source oracles - read every one that exists)
 </required_reading>
 
 <write_targets>
@@ -195,7 +195,7 @@ Agent(prompt="
 - {milestones_path} (if exists)
 - {config_path} (phase_id_convention, granularity)
 - {research_dir}/SUMMARY.md (if exists)
-- strategy artifacts beside {project_path} (adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md) — read every one that exists
+- strategy artifacts beside {project_path} (DOMAIN-MODEL.md, adr/*, SECURITY/FRONTEND/TEST/INFRA/CICD-STRATEGY.md, LEGACY/DESIGN-INVENTORY.md) — read every one that exists
 </required_reading>
 
 <write_targets>

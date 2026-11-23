@@ -51,7 +51,7 @@ Then execute the matching mode below, end-to-end. `GSD_WS` (`--ws <name>` or emp
 
 **Scope:** `--phase <N>` → that phase only. Otherwise (or with `--milestone`) → every phase of the active milestone, plus MASTER-CONTEXT when warranted (step 6).
 
-**1. Ingest** (skip what doesn't exist): ROADMAP.md (active-milestone phases + goals), PROJECT.md, STATE.md, all strategy artifacts (`.planning/adr/*.md`, DOMAIN-MODEL.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), `research/` (SUMMARY.md first), and investigation/deep-design docs they point at.
+**1. Ingest** (skip what doesn't exist): ROADMAP.md (active-milestone phases + goals), PROJECT.md, STATE.md, all strategy artifacts beside PROJECT.md (`adr/*.md`, DOMAIN-MODEL.md, SECURITY-STRATEGY.md, FRONTEND-ARCHITECTURE.md, TEST-STRATEGY.md, INFRA-STRATEGY.md, CICD-STRATEGY.md), `research/` (SUMMARY.md first), and investigation/deep-design docs they point at.
 
 **2. The writing rule (non-negotiable):** THE ORCHESTRATOR WRITES CAPSULES ITSELF — never delegate capsule writing to fresh-context agents: their empty context is the very thing this feature exists to fix, and a capsule authored by an agent that just skimmed the artifacts is hollow-but-plausible — worse than none. Where the runtime offers **context-inheriting forks** you MAY fork per phase to parallelize; otherwise write sequentially inline. (Explore agents may *check* facts — never author the capsule.)
 

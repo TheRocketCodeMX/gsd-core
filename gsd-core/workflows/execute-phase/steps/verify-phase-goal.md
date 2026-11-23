@@ -145,7 +145,7 @@ Read these files before verification:
 - {phase_dir}/*-PLAN.md (All plans — understand intent, check must_haves)
 - {phase_dir}/*-SUMMARY.md (All summaries — cross-reference claimed vs actual)
 - {requirements_path} (Requirement traceability)
-- .planning/DESIGN-INVENTORY.md and {phase_dir}/*-UI-SPEC.md (the design oracle — REQUIRED input for the Design-fit check when `## Mode` records a provided design; diff the built observable shape against these, never the raw design)
+- DESIGN-INVENTORY.md beside PROJECT.md and {phase_dir}/*-UI-SPEC.md (the design oracle — REQUIRED input for the Design-fit check when `## Mode` records a provided design; diff the built observable shape against these, never the raw design)
 <!-- FORK:context BEGIN -->
 - `## What Done Looks Like` in {phase_dir}/*-CONTEXT.md (when provenance present) — acceptance-shaping alongside roadmap success criteria; may ADD checks, never remove them.
 <!-- FORK:context END -->

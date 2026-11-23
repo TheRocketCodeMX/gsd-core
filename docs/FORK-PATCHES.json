@@ -180,7 +180,7 @@
    "mode": "markers",
    "markers": 1,
    "anchors": [
-    "\\.planning/adr/"
+    "`adr/\\*\\.md` and `DOMAIN-MODEL\\.md` beside PROJECT\\.md"
    ]
   },
   {

@@ -779,14 +779,14 @@ Planner prompt:
 - {roadmap_path} (Roadmap)
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
-- **Every file under `## Canonical References` inside {context_path}** — MANDATORY reads ("Downstream agents MUST read these before planning"). A DOMAIN-MODEL.md / architecture ADR / TEST-STRATEGY.md there BINDS the plan: subdomain classification, per-subdomain rung, per-subdomain test levels — and pull TEST-STRATEGY's linked test-infra references into the relevant test tasks' `@`-context. Also read `.planning/DOMAIN-MODEL.md`, the latest `.planning/adr/*.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md` directly if they exist — project-wide, they always apply.
+- **Every file under `## Canonical References` inside {context_path}** — MANDATORY reads ("Downstream agents MUST read these before planning"). A DOMAIN-MODEL.md / architecture ADR / TEST-STRATEGY.md there BINDS the plan: subdomain classification, per-subdomain rung, per-subdomain test levels — and pull TEST-STRATEGY's linked test-infra references into the relevant test tasks' `@`-context. Also read `DOMAIN-MODEL.md`, the latest `adr/*.md`, `TEST-STRATEGY.md`, `INFRA-STRATEGY.md`, `CICD-STRATEGY.md` beside PROJECT.md directly if they exist — project-wide, they always apply.
 - {research_path} (Technical Research)
 - {PATTERNS_PATH} (Pattern Map — analog files and code excerpts, if exists)
 - {verification_path} (Verification Gaps - if --gaps)
 - {uat_path} (UAT Gaps - if --gaps)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews; actionable findings must be incorporated or explicitly deferred/rejected in PLAN.md)
 - {AI_SPEC_PATH} (AI Design Contract — framework and evaluation strategy, if exists)
-- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists) and `.planning/DESIGN-INVENTORY.md` (the design field oracle, if exists). **From-design:** a provided design owns the observable shape — match the oracle's user-facing fields (no invent/drop; internal value-objects fine; `planner-source-audit.md` DESIGN source). No oracle yet → ingest this phase's design slice and write it before finalizing the data shape.
+- {UI_SPEC_PATH} (UI Design Contract — visual/interaction specs, if exists) and `DESIGN-INVENTORY.md` beside PROJECT.md (the design field oracle, if exists). **From-design:** a provided design owns the observable shape — match the oracle's user-facing fields (no invent/drop; internal value-objects fine; `planner-source-audit.md` DESIGN source). No oracle yet → ingest this phase's design slice and write it before finalizing the data shape.
 - {SPEC_PATH} (Phase SPEC — carries the ## Edge Coverage section to lift resolved edges from, if exists)
 - {SPIKE_FINDINGS_PATH} (Spike Findings — validated patterns, constraints, landmines from experiments, if exists)
 - {SKETCH_FINDINGS_PATH} (Sketch Findings — validated design decisions, CSS patterns, visual direction, if exists)
@@ -1067,7 +1067,7 @@ Checker prompt:
 - {requirements_path} (Requirements)
 - {context_path} (USER DECISIONS from /gsd:discuss-phase)
 - {research_path} (Technical Research — includes Validation Architecture)
-- .planning/DESIGN-INVENTORY.md and {PHASE_DIR}/*-UI-SPEC.md (the design oracle — REQUIRED input for the design-fidelity check when `## Mode` records a provided design)
+- DESIGN-INVENTORY.md beside PROJECT.md and {PHASE_DIR}/*-UI-SPEC.md (the design oracle — REQUIRED input for the design-fidelity check when `## Mode` records a provided design)
 - {reviews_path} (Cross-AI Review Feedback - if --reviews; verify actionable findings are represented in PLAN.md)
 </required_reading>
 

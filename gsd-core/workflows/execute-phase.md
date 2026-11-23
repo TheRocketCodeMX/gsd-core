@@ -743,7 +743,7 @@ increases monotonically across waves. `{status}` is `complete` (success),
        ` : ''}
        - ${PROJECT_ROOT}/CLAUDE.md (Project instructions, if exists — follow project-specific guidelines and coding conventions)
        - ${PROJECT_ROOT}/.claude/skills/ or ${PROJECT_ROOT}/.agents/skills/ (Project skills, if either exists — list skills, read SKILL.md for each, follow relevant rules during implementation)
-       - ${PROJECT_ROOT}/.planning/adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md under .planning/ (if they exist — the chosen rung and test levels; any autonomous deviation must honor them: build to the rung fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
+       - adr/*.md, DOMAIN-MODEL.md, TEST-STRATEGY.md beside ${PROJECT_ROOT}/{project_rel} (if they exist — the chosen rung and test levels; any autonomous deviation must honor them: build to the rung fully, neither under- nor over-engineering, per @~/.claude/gsd-core/references/engineering-standards.md)
 <!-- FORK:context BEGIN -->
        - If {phase_dir}/{padded}-CONTEXT.md carries `context_provenance` (`gsd_run context provenance`), read ONLY `## Locked Decisions` + `## Phase-Scoped Pitfalls` (+ superseding `## Scout corrections` / `## Orchestrator curation`) — they bind autonomous deviation like the ADR. (Skip if the ≥500K full-CONTEXT branch applied.)
 <!-- FORK:context END -->
