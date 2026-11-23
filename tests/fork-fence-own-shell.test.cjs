@@ -167,3 +167,42 @@ describe('fork fences assign what they read (each fence is its own shell, #381)'
     assert.deepEqual(crossFenceReads(['echo "${UNSET_BUT_DEFAULTED:-x}"', "echo '$LITERAL'"]), []);
   });
 });
+
+/**
+ * Pre-ship matrix1230-A K4: under a shell whose default NOMATCH option is on, a glob in a `for` list
+ * that matches nothing aborts the WHOLE fence (a glob in a plain command only fails that command).
+ * `/gsd-roadmap`'s mode detection, plan-phase's elaboration check and ship's certification sweep lost
+ * their output that way on a project without `adr/*.md` / UAT files. Fork fences list such files
+ * glob-free (`ls <dir> | grep`, or a grouped `{ ls glob; } 2>/dev/null` inside `$( )`) or set the
+ * null-glob option first, as upstream's resume-project fences do.
+ */
+function globForLists(body) {
+  const hits = [];
+  let nullGlob = false;
+  for (const raw of body) {
+    if (/\bsetopt\s+NULL_GLOB\b/i.test(raw)) nullGlob = true;
+    if (/^\s*#/.test(raw)) continue;
+    const line = raw.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""').replace(/(^|\s)#\s.*$/, '');
+    const m = line.match(/\bfor\s+[A-Za-z_]\w*\s+in\s+([^;]*)/);
+    if (!m || nullGlob) continue;
+    if (/[*?]|\[[^\]]*\]/.test(m[1].replace(/\$\{[^}]*\}|\$\([^)]*\)/g, ''))) hits.push(raw.trim().slice(0, 140));
+  }
+  return hits;
+}
+
+describe('fork fences never iterate a bare glob (an unmatched one aborts the fence under NOMATCH, matrix1230-A K4)', () => {
+  const fences = forkFences();
+
+  test('no fork fence has a glob in a for-list without the null-glob option', () => {
+    const offenders = [];
+    for (const f of fences) for (const h of globForLists(f.body)) offenders.push(`${f.rel}:${f.line} — ${h}`);
+    assert.deepEqual(offenders, [], 'list the files glob-free (ls <dir> | grep, or $( { ls glob; } 2>/dev/null )) and loop over that');
+  });
+
+  test('the scan catches the shape it guards and accepts the rewrites (positive control)', () => {
+    assert.equal(globForLists(['for f in "${D}"/adr/*.md "${D}"/X.md; do', '  [ -e "$f" ] && break', 'done']).length, 1);
+    assert.equal(globForLists(['for f in X.md Y.md; do [ -e "${D}/$f" ] && break; done']).length, 0);
+    assert.equal(globForLists(['shopt -s nullglob 2>/dev/null; setopt NULL_GLOB 2>/dev/null', 'for f in .planning/*.md; do :; done']).length, 0);
+    assert.equal(globForLists(['for d in $(ls "${D}" 2>/dev/null); do :; done']).length, 0);
+  });
+});

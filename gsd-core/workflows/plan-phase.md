@@ -1392,7 +1392,7 @@ if [ "$GATE_CFG" != "false" ]; then
 fi
 # check.grounding-plan enforces workflow.grounding_gate itself (off => passed+skipped; #1169)
 GR=$(gsd_run query check.grounding-plan "{phase_dir}")
-echo "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { echo "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
+printf '%s' "$GR" | jq -e '(.passed // .data.passed) == true' >/dev/null || { printf '%s' "$GR" | jq -r '(.message // "Grounding gate failed.")'; echo "Fix ## Grounding (gsd_run query grounding required)."; exit 1; }
 ```
 
 The handler returns JSON `{ passed, skipped, total, covered, uncovered[{id,text,category}], message }`. On a caller error (non-file context, `could-not-parse`, a bad phase dir or one with no plans) `total` and `covered` are `null`, `uncovered` is omitted, `passed` stays `false`; a missing context argument answers `total: 0`.
