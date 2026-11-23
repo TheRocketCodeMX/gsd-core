@@ -47,7 +47,8 @@ function run(dir, script, extraEnv = {}) {
       .filter((p) => !p.includes(`${path.sep}.claude${path.sep}gsd-core${path.sep}bin`))].join(path.delimiter),
     ...extraEnv,
   };
-  for (const k of ['GSD_PROJECT', 'GSD_WORKSTREAM', 'GSD_SESSION_KEY', 'CLAUDE_ENV_FILE']) if (!(k in extraEnv)) delete env[k];
+  // Each fence runs in a fresh shell at runtime (#381): nothing a previous fence or the caller set may leak in.
+  for (const k of ['GSD_PROJECT', 'GSD_WORKSTREAM', 'GSD_WS', 'GSD_SESSION_KEY', 'CLAUDE_ENV_FILE', 'COMMIT_DOCS', 'PROJECT_DIR', 'PROJECT_PATH']) if (!(k in extraEnv)) delete env[k];
   const r = runHook('-c', [script], { interpreter: 'bash', cwd: dir, env });
   assert.equal(r.exitCode, 0, `fence exited ${r.exitCode}\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
   return r.stdout;
@@ -81,7 +82,7 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
   test('model-domain Step 7 under GSD_PROJECT=beta commits the named project\'s DOMAIN-MODEL.md and PROJECT.md, not the root\'s', () => {
     fs.writeFileSync(path.join(dir, '.planning', 'beta', 'DOMAIN-MODEL.md'), '# beta domain\n');
     fs.writeFileSync(path.join(dir, '.planning', 'DOMAIN-MODEL.md'), '# root domain — must stay untracked\n');
-    run(dir, `COMMIT_DOCS=true\n${fence(WF('model-domain.md'), 'strategy-done model-domain')}`, { GSD_PROJECT: 'beta' });
+    run(dir, fence(WF('model-domain.md'), 'strategy-done model-domain'), { GSD_PROJECT: 'beta' });
     assert.deepEqual(lastCommitFiles(dir), ['.planning/beta/DOMAIN-MODEL.md', '.planning/beta/PROJECT.md']);
     assert.match(fs.readFileSync(path.join(dir, '.planning', 'beta', 'PROJECT.md'), 'utf8'), /\| model-domain \| done \|/,
       'strategy-done flips the named project\'s Strategy Plan row');
@@ -91,8 +92,74 @@ describe('fork fences resolve the active scope (align-1.22.0, upstream #5861 mec
 
   test('model-domain Step 7 in a flat project commits .planning/DOMAIN-MODEL.md (behaviour unchanged)', () => {
     fs.writeFileSync(path.join(dir, '.planning', 'DOMAIN-MODEL.md'), '# root domain\n');
-    run(dir, `COMMIT_DOCS=true\n${fence(WF('model-domain.md'), 'strategy-done model-domain')}`);
+    run(dir, fence(WF('model-domain.md'), 'strategy-done model-domain'));
     assert.deepEqual(lastCommitFiles(dir), ['.planning/DOMAIN-MODEL.md', '.planning/PROJECT.md']);
+  });
+
+  // Matrix 1220-B F1: Step 1 sets COMMIT_DOCS, but the commit step runs in a new shell. Each commit fence
+  // must re-derive it, or it never commits and claims "commit_docs is false".
+  const STRATEGY_COMMITS = [
+    ['model-domain', 'DOMAIN-MODEL.md'], ['legacy-inventory', 'LEGACY-INVENTORY.md'], ['discover-product', 'PRODUCT-BRIEF.md'],
+    ['recommend-architecture', 'adr/NNNN-architecture.md'], ['security-strategy', 'SECURITY-STRATEGY.md'],
+    ['frontend-architecture', 'FRONTEND-ARCHITECTURE.md'], ['testing-strategy', 'TEST-STRATEGY.md'],
+    ['infrastructure-strategy', 'INFRA-STRATEGY.md'], ['cicd-strategy', 'CICD-STRATEGY.md'],
+  ];
+  for (const [skill, artifact] of STRATEGY_COMMITS) {
+    test(`/gsd-${skill} commit step, run alone in a clean shell, commits under GSD_PROJECT=beta and honours commit_docs false`, () => {
+      const commitFence = fence(WF(`${skill}.md`), `strategy-done ${skill}`);
+      const target = path.join(dir, '.planning', 'beta', ...artifact.split('/'));
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `# beta ${artifact}\n`);
+      const before = gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+      const out = run(dir, commitFence, { GSD_PROJECT: 'beta' });
+      assert.ok(!out.includes('not committed'), `${skill}: the commit step skipped with commit_docs true:\n${out}`);
+      assert.notEqual(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), before, `${skill}: no commit was made`);
+      const files = lastCommitFiles(dir);
+      assert.ok(files.includes(`.planning/beta/${artifact}`), `${skill}: commit lacks the artifact: ${files.join(', ')}`);
+      assert.deepEqual(files.filter((f) => !f.startsWith('.planning/beta/')), [], `${skill}: out-of-scope files committed`);
+
+      fs.writeFileSync(path.join(dir, '.planning', 'beta', 'config.json'), '{"commit_docs":false}\n');
+      fs.writeFileSync(target, `# beta ${artifact}, revised\n`);
+      const head = gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+      assert.match(run(dir, commitFence, { GSD_PROJECT: 'beta' }), /written but not committed \(commit_docs is false\)/);
+      assert.equal(gitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim(), head, `${skill}: committed although commit_docs is false`);
+    });
+  }
+
+  test('/gsd-testing-strategy Step 2 reads the TESTING-STANDARDS.md it writes and commits (the scoped one), a repo-root file only as fallback', () => {
+    const step2 = fence(WF('testing-strategy.md'), 'TESTING_STANDARDS=');
+    fs.writeFileSync(path.join(dir, 'TESTING-STANDARDS.md'), 'ROOTMARK repo-wide standards\n');
+    fs.writeFileSync(path.join(dir, '.planning', 'beta', 'TESTING-STANDARDS.md'), 'BETAMARK project standards\n');
+    const beta = run(dir, step2, { GSD_PROJECT: 'beta' });
+    assert.match(beta, /^TESTING_STANDARDS=.*\.planning[\\/]beta[\\/]TESTING-STANDARDS\.md$/m);
+    assert.ok(beta.includes('BETAMARK') && !beta.includes('ROOTMARK'), `the named project's standards, not the repo root's:\n${beta}`);
+    const flat = run(dir, step2);
+    assert.match(flat, /^TESTING_STANDARDS=.*[\\/]TESTING-STANDARDS\.md$/m);
+    assert.ok(flat.includes('ROOTMARK'), 'a flat project without .planning/TESTING-STANDARDS.md falls back to the repo-wide file');
+    fs.writeFileSync(path.join(dir, '.planning', 'TESTING-STANDARDS.md'), 'FLATMARK project standards\n');
+    const flat2 = run(dir, step2);
+    assert.ok(flat2.includes('FLATMARK') && !flat2.includes('ROOTMARK'), 'the project file wins over the repo-wide one');
+  });
+
+  // Matrix 1220-B F3: the strategy chain (advance.md) dispatches the next skill with `--auto --ws <name>`;
+  // the typed workstream must reach the skill's REQUIREMENTS/codebase reads, over the shell's GSD_WS.
+  test('a typed --ws reaches a strategy skill\'s REQUIREMENTS read (the chain forwards it) and the ASVS config write/commit', () => {
+    const step2 = (args) => fence(WF('testing-strategy.md'), 'TESTING_STANDARDS=', args);
+    assert.match(run(dir, step2('--auto --ws ws1')), /^# REQUIREMENTS\.md \.planning[\\/]workstreams[\\/]ws1$/m);
+    assert.match(run(dir, step2('--auto'), { GSD_WS: '--ws ws1' }), /^# REQUIREMENTS\.md \.planning[\\/]workstreams[\\/]ws1$/m,
+      'without a typed --ws the shell\'s GSD_WS still applies');
+    for (const [skill, needle] of [['model-domain', 'HAS_MAPS'], ['recommend-architecture', 'HAS_MAPS'], ['frontend-architecture', 'HAS_MAPS'],
+      ['discover-product', 'planning.inspect'], ['infrastructure-strategy', 'planning.inspect'], ['cicd-strategy', 'planning.inspect']]) {
+      const src = fs.readFileSync(WF(`${skill}.md`), 'utf8');
+      const fences = [...src.matchAll(/^```bash\n([\s\S]*?)^```$/gm)].map((m) => m[1]).filter((b) => b.includes(needle) && /planning\.inspect/.test(b));
+      assert.ok(fences.length > 0, `${skill}: no planning.inspect fence`);
+      for (const b of fences) assert.ok(b.includes('$ARGUMENTS') && b.includes('_TWS='), `${skill}: a planning.inspect fence ignores a typed --ws:\n${b}`);
+    }
+    run(dir, `ASVS_LEVEL=2\n${fence(WF('security-strategy.md'), 'config-set workflow.security_asvs_level', '--auto --ws ws1')}`);
+    assert.match(fs.readFileSync(path.join(dir, '.planning', 'workstreams', 'ws1', 'config.json'), 'utf8'), /"security_asvs_level": 2/);
+    fs.writeFileSync(path.join(dir, '.planning', 'SECURITY-STRATEGY.md'), '# shared security posture\n');
+    run(dir, fence(WF('security-strategy.md'), 'strategy-done security-strategy', '--auto --ws ws1'));
+    assert.deepEqual(lastCommitFiles(dir), ['.planning/SECURITY-STRATEGY.md', '.planning/workstreams/ws1/config.json']);
   });
 
   test('a strategy skill\'s Step 1 announces the project directory per scope', () => {

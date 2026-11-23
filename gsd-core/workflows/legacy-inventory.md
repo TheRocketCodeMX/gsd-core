@@ -80,6 +80,7 @@ Render `@~/.claude/gsd-core/templates/legacy-inventory.md` → `{PROJECT_DIR}/LE
 
 ```bash
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done legacy-inventory 2>/dev/null || true  # flip the Strategy Plan row (when present) — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).

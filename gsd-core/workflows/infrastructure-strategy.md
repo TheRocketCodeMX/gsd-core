@@ -37,7 +37,11 @@ ls "${PROJECT_DIR}/INFRA-STRATEGY.md" >/dev/null 2>&1 && echo "EXISTS" || echo "
 ## Step 2: Load context
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 cat "${PROJECT_PATH}" 2>/dev/null || true
@@ -120,6 +124,7 @@ Write to `{PROJECT_DIR}/INFRA-STRATEGY.md` (the directory Step 1 printed).
 
 ```bash
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done infrastructure-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).

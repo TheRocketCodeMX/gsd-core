@@ -41,14 +41,20 @@ ls "${PROJECT_DIR}/TEST-STRATEGY.md" >/dev/null 2>&1 && echo "EXISTS" || echo "N
 ## Step 2: Load context
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 cat "${PROJECT_PATH}" 2>/dev/null || true
 cat "${PLANNING_ROOT}/REQUIREMENTS.md" 2>/dev/null || true
 cat "${PROJECT_DIR}/DOMAIN-MODEL.md" 2>/dev/null || true
 cat "${PROJECT_DIR}/adr"/*.md 2>/dev/null || true
-cat TESTING-STANDARDS.md 2>/dev/null || true
+# Standards: the project's own file beside PROJECT.md (the one this skill writes and commits); else a repo-wide root file, read-only.
+TSTD_PATH="${PROJECT_DIR}/TESTING-STANDARDS.md"; [ -f "$TSTD_PATH" ] || TSTD_PATH="$PWD/TESTING-STANDARDS.md"; [ -f "$TSTD_PATH" ] || TSTD_PATH=none
+echo "TESTING_STANDARDS=${TSTD_PATH}"; [ "$TSTD_PATH" = none ] || cat "$TSTD_PATH"
 cat "${PLANNING_ROOT}/codebase/TESTING.md" 2>/dev/null || true
 gsd_run query project mode 2>/dev/null   # Origin/Design/Code-quality — robust + placeholder-aware (is_placeholder distinguishes a filled value from the template stub)
 ls "${PLANNING_ROOT}/codebase/TESTING.md" >/dev/null 2>&1 && echo "HAS_MAPS" || echo "NO_MAPS"
@@ -142,7 +148,7 @@ A capability the project does not have is recorded as `N/A — no {email|LLM|aut
 
 - **Coverage = floor, not a target.** Record that. If the user demands a coverage *target* (e.g. 100%), reframe it as a floor and warn that an excessively high floor forces low-value tests of trivial glue — the real quality signal is **mutation score** on the gnarly bits. **Mutation testing (Stryker)** applies to the critical modules (the gnarly bits from Step 4 + the core domain logic).
 - **TDD stance:** mandate behavior-level tests + **small uniform increments** + a regression floor with a real RED step. Test-first vs test-after is the `workflow.tdd_mode` knob (currently **${TDD_MODE}**) — surface it; don't force test-first as dogma. **Exception:** where `TESTING-STANDARDS.md` mandates a red-first/test-first phase for a module, that project standard governs and overrides the knob there.
-- **If `TESTING-STANDARDS.md` exists:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them — by **appending**; existing Notes content is user-extendable and is never overwritten. **If it's absent:** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline and **write them to `TESTING-STANDARDS.md` (create it)** — the standards file is their home; TEST-STRATEGY's Notes just points at it. Reference defaults are never written into an existing Notes section: on an Update that path clobbers the project's own recorded invariants with boilerplate.
+- **If Step 2 printed a `TESTING_STANDARDS=` file:** confirm its standards remain in force, and **carry any project-specific standards beyond the reference's defaults (e.g. clock-seam concurrency, no-elapsed-time assertions, delete-bad-tests, the `fast-check` property tier) into TEST-STRATEGY.md's Notes** so downstream skills see them — by **appending**; existing Notes content is user-extendable and is never overwritten. **If it's absent:** adopt the reference's defaults (real-code-only, no vacuous assertions, typed surface, `fast-check` property tier, Stryker ≥80 on critical modules) as the project baseline and **write them to `{PROJECT_DIR}/TESTING-STANDARDS.md` (create it)** — the standards file is their home; TEST-STRATEGY's Notes just points at it. Extend only `{PROJECT_DIR}/TESTING-STANDARDS.md`; a repo-root file Step 2 fell back to is read-only (carry it into Notes). Reference defaults are never written into an existing Notes section: on an Update that path clobbers the project's own recorded invariants with boilerplate.
 
 ## Step 6.5: Born fast + the suite-health baseline
 
@@ -198,11 +204,12 @@ Write to `{PROJECT_DIR}/TEST-STRATEGY.md` (the directory Step 1 printed).
 
 ```bash
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done testing-strategy 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
   DLOG=$([ -f "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md" ] && echo "${PROJECT_DIR}/PROJECT-DISCUSSION-LOG.md")
-  # A run that created TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
+  # A run that created or extended the project's TESTING-STANDARDS.md (reference defaults land there, never in Notes) commits it too.
   TSTD=$([ -f "${PROJECT_DIR}/TESTING-STANDARDS.md" ] && echo "${PROJECT_DIR}/TESTING-STANDARDS.md")
   gsd_run query commit "docs: add test strategy (shape follows architecture)" --files "${PROJECT_DIR}/TEST-STRATEGY.md" "${PROJECT_PATH}" ${DLOG:+"$DLOG"} ${TSTD:+"$TSTD"}
 else

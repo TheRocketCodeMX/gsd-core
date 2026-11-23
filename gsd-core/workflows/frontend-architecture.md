@@ -42,7 +42,11 @@ ls "${PROJECT_DIR}/FRONTEND-ARCHITECTURE.md" >/dev/null 2>&1 && echo "EXISTS" ||
 Determine whether this project actually has a frontend (a browser/mobile/desktop UI), vs a backend-only service / CLI / data pipeline:
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 cat "${PROJECT_PATH}" 2>/dev/null | head -60
@@ -57,7 +61,11 @@ ls package.json >/dev/null 2>&1 && grep -iE 'react|vue|svelte|angular|next|nuxt|
 ## Step 3: Load context + detect mode
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 cat "${PROJECT_DIR}/adr"/*.md 2>/dev/null | tail -200    # backend topology drives FE shape
@@ -116,6 +124,7 @@ Once approved, render `@~/.claude/gsd-core/templates/frontend-architecture.md` a
 
 ```bash
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done frontend-architecture 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).

@@ -37,7 +37,11 @@ Exit.
 ## Step 2: Load context (internal grounding — do not show the user yet)
 
 ```bash
-GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 cat "${PROJECT_DIR}/PRODUCT-BRIEF.md" 2>/dev/null || true
@@ -56,6 +60,11 @@ From the project docs, build an internal draft:
 **Brownfield mode (existing code).** Greenfield (define from docs/vision) is the default below. Trigger brownfield when `## Mode` records Origin = brownfield-extend / rewrite-refactor (authoritative), or — when `## Mode` is absent — `.planning/codebase/*.md` exists OR real source is present: **reverse-engineer the domain from the code first, then reconcile** — don't model from a blank slate (see `@~/.claude/gsd-core/references/brownfield-adaptation.md`, "Reverse-engineer, don't re-invent"):
 
 ```bash
+IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
+$ARGUMENTS
+GSD_ARGS_END
+GSD_ARGS=${GSD_ARGS%$'\n'}
+_TWS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/--ws \1/p' | head -n 1); GSD_WS="${_TWS:-${GSD_WS:-}}"
 PLANNING_ROOT=$(gsd_run query planning.inspect ${GSD_WS:+--ws=${GSD_WS##* }} --pick generated_from.planning_root)
 : "${PLANNING_ROOT:?}"
 gsd_run query project mode 2>/dev/null   # Origin — robust + placeholder-aware (replaces the fragile sed read)
@@ -174,6 +183,7 @@ Write to `{PROJECT_DIR}/DOMAIN-MODEL.md` (the directory Step 1 printed). **Do no
 
 ```bash
 GSD_WS="${GSD_WS:-}"; PROJECT_PATH=$(gsd_run query init.resume ${GSD_WS:+--ws=${GSD_WS##* }} --pick project_path); : "${PROJECT_PATH:?}"; PROJECT_DIR="${PROJECT_PATH%/*}"
+COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")  # own shell: re-derive
 gsd_run project strategy-done model-domain 2>/dev/null || true  # flip the Strategy Plan row — the grounding gate keys on `done`
 if [ "$COMMIT_DOCS" = "true" ]; then
   # The discussion log is part of the durable record — commit it with the docs it explains (empty when absent/disabled).
