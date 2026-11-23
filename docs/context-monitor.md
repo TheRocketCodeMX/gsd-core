@@ -34,13 +34,13 @@ Debounce: `DEBOUNCE_CALLS` (5) tool uses between repeated warnings. A `warn → 
 
 ## Gates and safety
 
-- **GSD-active gate:** fires only when `.planning/STATE.md` exists under the cwd.
-- **Enable gate:** fires only when the context-lifecycle hook is enabled in `.planning/config.json`.
-- Every fs op is guarded; any error → silent exit 0. The hook never crashes the session and never spawns child processes. A 3s stdin timeout guards against pipe hangs (#775).
+- **GSD-active gate:** fires only when a `STATE.md` exists under the cwd's `.planning/`: at its root, in the active scope, or in any named project (`.planning/<name>/`) or workstream (`.planning/workstreams/<name>/`), so a repo whose projects are all named or all workstreams is covered.
+- **Enable gate and thresholds:** read from the active scope's config, the value `config-get` reports. The scope is resolved with upstream's own owner (`planning-workspace`): `GSD_PROJECT`, then `GSD_WORKSTREAM` or the workstream pointer as gsd-tools resolves it from the hook's own environment. A workstream config inherits a key it does not set from the root config; a named project does not (as `config-get`). A flat project (none of those, no `.planning/workstreams/`) reads `.planning/config.json` without loading the library.
+- Every fs op is guarded; any error → silent exit 0. The hook never crashes the session and never spawns child processes: when the runtime library is not built (a raw plugin or git checkout) it does not compile it and reads only `.planning/config.json`. A 3s stdin timeout guards against pipe hangs (#775).
 
 ## Configuration
 
-Keys live in the `context_lifecycle` config slice (flat `context_lifecycle.*` or nested form both read):
+Keys live in the `context_lifecycle` config slice of the active scope's config (flat `context_lifecycle.*` or nested form both read; in a named project or workstream the nested form wins, as `config-get` reads it):
 
 | Key | Default | Meaning |
 |---|---|---|

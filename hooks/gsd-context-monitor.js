@@ -20,14 +20,16 @@
 // 4. Stop / SubagentStop are silent. A subagent (an input carrying agent_id,
 //    #6360) is silent on every event and touches no session file.
 //
-// Gates: only fires when GSD is active (.planning/STATE.md under cwd) and the
-// context-lifecycle hook is enabled in .planning/config.json.
+// Gates: only fires when GSD is active (a STATE.md at the .planning root, in the
+// active scope, or in any named project or workstream) and the context-lifecycle
+// hook is enabled in the active scope's config (resolveScope below).
 //
 // Debounce: DEBOUNCE_CALLS tool uses between warn messages to avoid spam;
 // severity escalation (warn -> urge) bypasses the debounce and fires once.
 //
 // Safety: this hook must NEVER crash the session. Every fs op is guarded; any
-// error results in a silent exit 0. It never spawns child processes.
+// error results in a silent exit 0. It never spawns child processes (it never
+// compiles an unbuilt runtime library: that case keeps the root-only read).
 
 const fs = require('fs');
 const os = require('os');
@@ -48,19 +50,76 @@ const DEBOUNCE_CALLS = 5;    // min tool uses between warn messages
 // Config defaults (overridable via .planning/config.json context_lifecycle.*).
 const DEFAULTS = { enabled: true, warnPct: 90, urgePct: 95 };
 
-// Read context-lifecycle hook config from {cwd}/.planning/config.json. Keys may
-// be flat ("context_lifecycle.hook_enabled") or nested (context_lifecycle: {...});
-// read both defensively. Any error (absent file, bad JSON) → defaults.
-function readConfig(cwd) {
+// matrix1230-A K1: the active planning scope, resolved by upstream's own owners
+// (planning-workspace: GSD_PROJECT, then GSD_WORKSTREAM or the session/shared
+// workstream pointer, read with the non-mutating peek) — the scope config-get
+// answers for. A flat project (no GSD_PROJECT, no GSD_WORKSTREAM, no
+// .planning/workstreams/) never loads the library. An unbuilt library (raw
+// plugin or git checkout) is never compiled from here; any failure → the root.
+function resolveScope(cwd) {
+  const root = { dir: path.join(cwd, '.planning'), ws: null, pw: null };
+  const project = (process.env.GSD_PROJECT || '').trim();
+  const wsEnv = (process.env.GSD_WORKSTREAM || '').trim();
+  if (!project && !wsEnv && !fs.existsSync(path.join(cwd, '.planning', 'workstreams'))) return root;
   try {
-    const configPath = path.join(cwd, '.planning', 'config.json');
-    const raw = JSON.parse(readConfigFileBounded(configPath, { required: true }));
-    const nested = (raw && typeof raw.context_lifecycle === 'object') ? raw.context_lifecycle : {};
-    const get = (flatKey, nestedKey) => {
-      if (raw && raw[flatKey] !== undefined) return raw[flatKey];
-      if (nested[nestedKey] !== undefined) return nested[nestedKey];
-      return undefined;
-    };
+    const seam = require('../gsd-core/bin/ensure-runtime-build.cjs');
+    if (!seam.isBuilt(path.join(__dirname, '..', 'gsd-core', 'bin', 'lib'))) return root;
+    seam.ensureRuntimeBuild();   // the build seam's fast path: the library is built (checked above)
+    const pw = require('../gsd-core/bin/lib/planning-workspace.cjs');
+    const ws = wsEnv || pw.peekActiveWorkstream(cwd) || null;
+    return { dir: pw.planningDir(cwd, ws), ws, pw };
+  } catch {
+    return root;
+  }
+}
+
+// matrix1230-A K7: a repo whose projects are all named (.planning/<name>/) or
+// all workstreams has no root STATE.md; it is still a GSD project.
+function gsdActive(cwd, scope) {
+  const planning = path.join(cwd, '.planning');
+  if (fs.existsSync(path.join(planning, 'STATE.md')) || fs.existsSync(path.join(scope.dir, 'STATE.md'))) return true;
+  let entries;
+  try { entries = fs.readdirSync(planning, { withFileTypes: true }).slice(0, 256); } catch { return false; }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const sub = path.join(planning, e.name);
+    if (e.name !== 'workstreams') { if (fs.existsSync(path.join(sub, 'STATE.md'))) return true; continue; }
+    try {
+      if (fs.readdirSync(sub, { withFileTypes: true }).slice(0, 256)
+        .some((w) => w.isDirectory() && fs.existsSync(path.join(sub, w.name, 'STATE.md')))) return true;
+    } catch { /* unreadable → not this one */ }
+  }
+  return false;
+}
+
+// Read context-lifecycle hook config. Keys may be flat
+// ("context_lifecycle.hook_enabled") or nested (context_lifecycle: {...}); read
+// both defensively. Outside a named project or workstream: {cwd}/.planning/config.json,
+// flat over nested. In one: upstream's scoped ladder (readScopedConfigValue,
+// the value config-get reports: the scope's own key, else the root's under a
+// workstream only), nested over flat. Any error (absent file, bad JSON) → defaults.
+function readConfig(cwd, scope) {
+  try {
+    let get;
+    if (scope && scope.pw) {
+      const read = (keyPath) => {
+        const r = scope.pw.readScopedConfigValue(cwd, keyPath, scope.ws);
+        return r.present ? r.value : undefined;
+      };
+      get = (flatKey, nestedKey) => {
+        const nestedValue = read(['context_lifecycle', nestedKey]);
+        return nestedValue !== undefined ? nestedValue : read([flatKey]);
+      };
+    } else {
+      const configPath = path.join(cwd, '.planning', 'config.json');
+      const raw = JSON.parse(readConfigFileBounded(configPath, { required: true }));
+      const nested = (raw && typeof raw.context_lifecycle === 'object') ? raw.context_lifecycle : {};
+      get = (flatKey, nestedKey) => {
+        if (raw && raw[flatKey] !== undefined) return raw[flatKey];
+        if (nested[nestedKey] !== undefined) return nested[nestedKey];
+        return undefined;
+      };
+    }
     // Master switch: context_lifecycle.enabled silences EVERYTHING when false.
     // The hook fires only when master AND hook_enabled are both on (both default true).
     const master = get('context_lifecycle.enabled', 'enabled');
@@ -124,10 +183,11 @@ process.stdin.on('end', () => {
     // Stop / SubagentStart / SubagentStop → nothing to say.
     if (event === 'Stop' || event === 'SubagentStart' || event === 'SubagentStop') return;
 
-    // GSD-active gate: no .planning/STATE.md under cwd → stay silent (all events).
-    if (!fs.existsSync(path.join(cwd, '.planning', 'STATE.md'))) return;
+    // GSD-active gate: no STATE.md in any planning scope under cwd → stay silent (all events).
+    const scope = resolveScope(cwd);
+    if (!gsdActive(cwd, scope)) return;
 
-    const cfg = readConfig(cwd);
+    const cfg = readConfig(cwd, scope);
     if (!cfg.enabled) return;
 
     // PreCompact always emits (regardless of metrics/thresholds).
