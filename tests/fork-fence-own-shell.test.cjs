@@ -221,7 +221,7 @@ function placeholderCollisions(body) {
 describe('fork fences keep {placeholder} names apart from shell variable names (matrix1230-B F3)', () => {
   test('no fork fence reads ${X} or $X for one of its own {X} placeholders', () => {
     const offenders = [];
-    for (const f of forkFences()) for (const p of placeholderCollisions(f.body)) offenders.push(`${f.rel}:${f.line} — {${p}} and \$${p}`);
+    for (const f of forkFences()) for (const p of placeholderCollisions(f.body)) offenders.push(`${f.rel}:${f.line} — {${p}} and $${p}`);
     assert.deepEqual(offenders, [], 'rename the shell variable (PHASE_N="{N}", WAVE_N="{N}")');
   });
 
